@@ -42,6 +42,19 @@ public sealed class FenixPerfReader
     /// </summary>
     public async Task<PerfSpeeds?> ReadSpeedsAsync(bool forceApproach)
     {
+        // Zero-press fast path: our own reads leave MCDU 2 on a PERF page, so
+        // consecutive speed queries usually find APPR already displayed and
+        // parse it without pressing a single key. Gated to airborne (or VLS,
+        // which is always APPR-sourced): pre-flight the phase-correct source
+        // for F/S/O is the TAKE OFF page, so the ground case still walks.
+        // TOD reads never fast-path — past-cruise detection needs the page
+        // PERF opens on.
+        var peek = await ReadDisplayAsync();
+        if (peek != null && IdentifyPage(peek) == PerfPage.Approach)
+        {
+            if (forceApproach || !await IsOnGroundAsync())
+                return ParseSpeeds(peek, PerfPage.Approach);
+        }
         var (xml, page) = await OpenPerfAsync();
         if (xml == null || page == null) return null;
         if (!forceApproach && page == PerfPage.TakeOff)
@@ -226,6 +239,16 @@ public sealed class FenixPerfReader
     }
 
     private Task<string?> ReadDisplayAsync() => QueryDataRefAsync("aircraft.mcdu2.display");
+
+    private async Task<bool> IsOnGroundAsync()
+    {
+        // aircraft.ground is a bool dataRef ("True"/"False"). Unreadable →
+        // assume airborne: the fast path then serves APPR values, which is
+        // the harmless direction (the ground case only affects which page
+        // F/S/O come from, never navigation safety).
+        var v = await QueryDataRefAsync("aircraft.ground");
+        return string.Equals(v?.Trim(), "True", StringComparison.OrdinalIgnoreCase);
+    }
 
     private async Task<string?> QueryDataRefAsync(string name)
     {
