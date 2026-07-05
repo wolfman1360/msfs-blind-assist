@@ -13181,17 +13181,18 @@ public class FenixA320Definition : BaseAircraftDefinition
                 {
                     var td = await reader.ReadTodAsync();
                     msg = td == null ? "Could not read the MCDU"
+                        : td.PastTod ? "Past top of descent"
                         : td.Utc == null || td.DistanceNm == null
                             ? "Top of descent not computed yet"
                             : $"{td.DistanceNm} miles to top of descent, at {td.Utc} Zulu";
                 }
                 else
                 {
-                    // VLS/VAPP live only on the APPR page; F/S/O follow the
-                    // flight phase (takeoff-weight values while departing,
-                    // landing-weight values from cruise onward).
-                    bool appr = speed == FenixCharSpeed.Vls || await PerfPhaseWantsApproachAsync(reader);
-                    var sp = await reader.ReadSpeedsAsync(appr);
+                    // VLS/VAPP live only on the APPR page (forceApproach);
+                    // F/S/O come from whichever page PERF opens on when that
+                    // is TAKE OFF or GO AROUND, else the APPR page — the
+                    // reader is strictly forward-only (see FenixPerfReader).
+                    var sp = await reader.ReadSpeedsAsync(forceApproach: speed == FenixCharSpeed.Vls);
                     msg = sp == null ? "Could not read the MCDU" : speed switch
                     {
                         FenixCharSpeed.GreenDot => sp.O == null ? "Green Dot not computed yet" : $"Green Dot {sp.O} knots",
@@ -13222,17 +13223,6 @@ public class FenixA320Definition : BaseAircraftDefinition
             }
             catch (InvalidOperationException) { /* form torn down mid-read */ }
         });
-    }
-
-    private static async Task<bool> PerfPhaseWantsApproachAsync(Services.FenixPerfReader reader)
-    {
-        var phase = await reader.ReadFlightPhaseAsync() ?? "";
-        // Observed live: "PreFlight". Departure-side phases read takeoff-weight
-        // F/S/O from PERF TO; everything else (Cruise/Descent/Approach/GoAround/
-        // Done/unknown) reads landing-weight values from PERF APPR.
-        return !(phase.Contains("PreFlight", StringComparison.OrdinalIgnoreCase)
-              || phase.Contains("Take", StringComparison.OrdinalIgnoreCase)
-              || phase.Contains("Climb", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

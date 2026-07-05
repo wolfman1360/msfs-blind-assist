@@ -27,30 +27,61 @@ public sealed class FenixPerfReader
 
     public enum PerfPage { TakeOff = 0, Climb = 1, Cruise = 2, Descent = 3, Approach = 4, GoAround = 5 }
     public sealed record PerfSpeeds(int? F, int? S, int? O, int? Vls, int? Vapp, PerfPage Page);
-    public sealed record TodInfo(string? Utc, int? DistanceNm);
+    public sealed record TodInfo(string? Utc, int? DistanceNm, bool PastTod = false);
 
     public async Task<string?> ReadFlightPhaseAsync()
         => await QueryDataRefAsync("aircraft.fms.flightPhase");
 
-    /// <summary>Walk MCDU 2 to PERF TAKE OFF (or APPR) and parse F/S/O (+VLS/VAPP on APPR).</summary>
-    public async Task<PerfSpeeds?> ReadSpeedsAsync(bool approachPage)
+    /// <summary>
+    /// Read F/S/O (+VLS/VAPP when the APPR page is used). FORWARD-ONLY:
+    /// if PERF opens on TAKE OFF (PreFlight/TakeOff phase) the takeoff
+    /// values are read directly; on GO AROUND the GA page's own F/S/O are
+    /// read; otherwise the reader walks forward to APPR. When
+    /// <paramref name="forceApproach"/> is true (VLS/VAPP) only APPR
+    /// qualifies — null if APPR is behind the current page (GA active).
+    /// </summary>
+    public async Task<PerfSpeeds?> ReadSpeedsAsync(bool forceApproach)
     {
-        var xml = await NavigateToPerfPageAsync(approachPage ? PerfPage.Approach : PerfPage.TakeOff);
-        if (xml == null) return null;
-        return ParseSpeeds(xml, approachPage ? PerfPage.Approach : PerfPage.TakeOff);
+        var (xml, page) = await OpenPerfAsync();
+        if (xml == null || page == null) return null;
+        if (!forceApproach && page == PerfPage.TakeOff)
+            return ParseSpeeds(xml, PerfPage.TakeOff);
+        if (!forceApproach && page == PerfPage.GoAround)
+            return ParseSpeeds(xml, PerfPage.GoAround); // GA page carries its own F/S/O
+        if (page.Value > PerfPage.Approach)
+            return null; // APPR lies behind (GA active) — never navigate backward
+        xml = page == PerfPage.Approach ? xml
+            : await WalkForwardAsync(page.Value, PerfPage.Approach, xml);
+        return xml == null ? null : ParseSpeeds(xml, PerfPage.Approach);
     }
 
-    /// <summary>Walk MCDU 2 to PERF CRZ and parse the "TO (T/D)" UTC/DIST field.</summary>
+    /// <summary>
+    /// Read the CRZ page "TO (T/D)" UTC/DIST field. FORWARD-ONLY: when the
+    /// FMS is already past cruise (DES/APPR/GA page is current), returns
+    /// PastTod without pressing anything.
+    /// </summary>
     public async Task<TodInfo?> ReadTodAsync()
     {
-        var xml = await NavigateToPerfPageAsync(PerfPage.Cruise);
-        if (xml == null) return null;
-        return ParseTod(xml);
+        var (xml, page) = await OpenPerfAsync();
+        if (xml == null || page == null) return null;
+        if (page.Value > PerfPage.Cruise)
+            return new TodInfo(null, null, PastTod: true);
+        xml = page == PerfPage.Cruise ? xml
+            : await WalkForwardAsync(page.Value, PerfPage.Cruise, xml);
+        return xml == null ? null : ParseTod(xml);
     }
 
     // ---------- navigation ----------
+    //
+    // ⚠️ SAFETY INVARIANT — NEVER press LSK6L (the left line-6 key) on a
+    // PERF page. On the ground it is "PREV PHASE", but IN FLIGHT the active
+    // phase's PERF page renders "ACTIVATE APPR PHASE" there, and two presses
+    // (press + re-identify loop) ACTIVATE AND CONFIRM the approach phase —
+    // this happened live mid-climb on 2026-07-05 and forced the user's FMS
+    // into approach mode. All navigation is forward-only via LSK6R, and only
+    // after HasNextPhaseKey confirms the label "PHASE>" is actually rendered.
 
-    private async Task<string?> NavigateToPerfPageAsync(PerfPage target)
+    private async Task<(string?, PerfPage?)> OpenPerfAsync()
     {
         // PERF always recalls the current-phase PERF page, wherever MCDU 2 was
         // (it repaints on its own at phase changes / Fenix automations, so
@@ -64,16 +95,34 @@ public sealed class FenixPerfReader
             await PressKeyAsync("PERF");
             xml = await ReadDisplayAsync();
             page = xml == null ? null : IdentifyPage(xml);
-            if (page == null) return null;
         }
-        for (int i = 0; i < MaxPhasePresses && page != target; i++)
+        return (xml, page);
+    }
+
+    private async Task<string?> WalkForwardAsync(PerfPage current, PerfPage target, string xml)
+    {
+        for (int i = 0; i < MaxPhasePresses && current != target; i++)
         {
-            await PressKeyAsync(page < target ? "LSK6R" : "LSK6L"); // NEXT PHASE / PREV PHASE
-            xml = await ReadDisplayAsync();
-            page = xml == null ? null : IdentifyPage(xml);
-            if (page == null) return null;
+            if (!HasNextPhaseKey(xml)) return null; // no NEXT PHASE rendered — do not press blind
+            await PressKeyAsync("LSK6R");
+            var next = await ReadDisplayAsync();
+            var page = next == null ? null : IdentifyPage(next);
+            if (next == null || page == null) return null;
+            if (page.Value <= current) return null; // did not advance — abort, never retry backward
+            current = page.Value;
+            xml = next;
         }
-        return page == target ? xml : null;
+        return current == target ? xml : null;
+    }
+
+    /// <summary>True when the display renders the right-aligned "NEXT PHASE"
+    /// soft key (its label ends "PHASE>"; the PREV label is "&lt;PHASE" and
+    /// never matches). Pure, probe-tested.</summary>
+    public static bool HasNextPhaseKey(string xml)
+    {
+        foreach (var line in ExtractLines(xml))
+            if (line.Contains("PHASE>")) return true;
+        return false;
     }
 
     // ---------- pure parsers (probe-tested against real captures) ----------

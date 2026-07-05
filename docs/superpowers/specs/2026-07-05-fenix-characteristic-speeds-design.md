@@ -143,6 +143,30 @@ plan, in the user's current flight (Fenix A319 VIDP→VCBI):
 4. Regression spot-check: FBW A32NX Shift+1/Shift+D unchanged (different
    definition file, but verify once).
 
+## Post-incident revision (2026-07-05, same day — forward-only navigation)
+
+The first build navigated PERF phase pages in BOTH directions (LSK6R = NEXT
+PHASE, LSK6L = PREV PHASE), based on ground captures where line 6 left reads
+"PREV PHASE". **In flight, the ACTIVE phase's PERF page renders "ACTIVATE
+APPR PHASE" on that same key** — the ground captures could not show this.
+During the live test (Climb phase), a speeds hotkey targeting the TAKE OFF
+page pressed LSK6L twice (press + didn't-advance retry), which activated and
+confirmed the approach phase mid-climb on the user's aircraft. Recovery:
+re-enter the cruise FL on the PROG page.
+
+Revised rules, implemented in `FenixPerfReader` and probe-locked:
+
+- **LSK6L is never pressed. Ever.** Navigation is strictly forward via LSK6R.
+- LSK6R is only pressed after `HasNextPhaseKey` confirms the display actually
+  renders the right-aligned "PHASE>" label (pure parser, probe-tested).
+- A walk that fails to ADVANCE the page index aborts — no retries.
+- Speeds: PERF opens on TAKE OFF or GO AROUND → that page's own F/S/O;
+  anything else → forward to APPR (landing-weight predictions). The
+  flight-phase GraphQL pre-read is deleted — the page PERF opens on is the
+  phase truth.
+- TOD: PERF opens past CRZ (DES/APPR/GA) → announce "Past top of descent"
+  with zero key presses (`TodInfo.PastTod`).
+
 ## Non-goals
 
 - Shift+5 / Shift+6 on the Fenix (no data source — keys stay unhandled).

@@ -9,9 +9,9 @@ if (args.Contains("--live"))
 {
     var reader = new R();
     Console.WriteLine($"flightPhase = {await reader.ReadFlightPhaseAsync() ?? "(null)"}");
-    var to = await reader.ReadSpeedsAsync(approachPage: false);
-    Console.WriteLine($"TO page:   F={to?.F} S={to?.S} O={to?.O} (page {to?.Page})");
-    var ap = await reader.ReadSpeedsAsync(approachPage: true);
+    var to = await reader.ReadSpeedsAsync(forceApproach: false);
+    Console.WriteLine($"speeds:    F={to?.F} S={to?.S} O={to?.O} (from page {to?.Page})");
+    var ap = await reader.ReadSpeedsAsync(forceApproach: true);
     Console.WriteLine($"APPR page: F={ap?.F} S={ap?.S} O={ap?.O} VLS={ap?.Vls} VAPP={ap?.Vapp}");
     var td = await reader.ReadTodAsync();
     Console.WriteLine($"TOD: utc={td?.Utc ?? "(null)"} dist={td?.DistanceNm}");
@@ -49,6 +49,16 @@ Check("TOD utc=2231", td2.Utc == "2231"); Check("TOD dist=1209", td2.DistanceNm 
 string dashedCrz = crz.Replace("g2231", "g----").Replace("1209w", "----w");
 var td3 = R.ParseTod(dashedCrz);
 Check("dashed TOD utc null", td3.Utc == null); Check("dashed TOD dist null", td3.DistanceNm == null);
+
+// Forward-only navigation safety (the 2026-07-05 in-flight incident):
+// LSK6R may only be pressed when the display actually renders "PHASE>".
+Check("TO page renders NEXT PHASE key", R.HasNextPhaseKey(to_));
+Check("CRZ page renders NEXT PHASE key", R.HasNextPhaseKey(crz));
+Check("APPR page renders NEXT PHASE key", R.HasNextPhaseKey(appr));
+Check("PREV-only page has no NEXT key",
+    !R.HasNextPhaseKey("<root><title>GO AROUND</title><line>s PREV              </line><line>&lt;PHASE                  </line></root>"));
+Check("TodInfo PastTod defaults false", new R.TodInfo("2231", 1209).PastTod == false);
+Check("TodInfo PastTod settable", new R.TodInfo(null, null, true).PastTod);
 
 Console.WriteLine(failures == 0 ? "\nALL PASS" : $"\n{failures} FAILURES");
 Environment.Exit(failures == 0 ? 0 : 1);

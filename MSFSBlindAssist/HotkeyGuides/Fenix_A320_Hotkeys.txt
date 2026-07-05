@@ -41,8 +41,9 @@ Navigation:
   N          Read NAV 1 and NAV 2 radio info (frequency, ident, localizer, glideslope, DME)
 
 Characteristic Speeds (read live from the copilot's MCDU PERF pages —
-takeoff page while departing, approach page from cruise onward; the
-pilot's own MCDU is never touched):
+the takeoff page before liftoff, and in flight the approach page's
+landing-weight predictions; the pilot's own MCDU is never touched and
+the reader only ever steps forward through the PERF phase pages):
   Shift+1    Read Green Dot Speed (clean config)
   Shift+2    Read S Speed (slat retraction)
   Shift+3    Read F Speed (flap retraction)
