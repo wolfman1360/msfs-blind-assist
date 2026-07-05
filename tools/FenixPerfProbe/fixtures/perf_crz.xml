@@ -1,0 +1,16 @@
+<root>
+  <title>          CRZ           </title>
+  <line>sACT MODE   UTC DEST aEFOBw</line>
+  <line>gMANAGEDw   g0312w       a4.6w</line>
+  <line>s CI                     </line>
+  <line>c6w               sTOl g(T/D)w</line>
+  <line>s MANAGED   UTC      DIST</line>
+  <line>g s.77lw      g2231      1209w</line>
+  <line>s PRESEL                 </line>
+  <line>c*[ ]w                    </line>
+  <line>s          DES CABIN RATE</line>
+  <line>               sc-350wFT/MNl</line>
+  <line>s PREV              NEXT </line>
+  <line>&lt;PHASE            PHASE&gt;</line>
+  <scratchpad>NAV ACCUR UPGRAD        </scratchpad>
+</root>

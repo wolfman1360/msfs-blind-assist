@@ -1,0 +1,16 @@
+<root>
+  <title>    TAKE OFF RWY g29R    </title>
+  <line>s V1  FLP RETR           </line>
+  <line>c131     wF=g150w           </line>
+  <line>s VR  SLT RETR  TO SHIFT </line>
+  <line>c131     wS=g194w   [sMl]c[  ]*w</line>
+  <line>s V2     CLEAN  FLAPS/THS</line>
+  <line>c135     wO=g220w    c1/[   ]w</line>
+  <line>sTRANS ALT   FLEX TO TEMP</line>
+  <line>cs5000lw                 c55°w</line>
+  <line>sTHR RED/ACC  ENG OUT ACC</line>
+  <line>c s2270l/s2270lw          cs2270lw</line>
+  <line>s                   NEXT </line>
+  <line>                  PHASE&gt;</line>
+  <scratchpad>NAV ACCUR UPGRAD        </scratchpad>
+</root>

@@ -1,0 +1,16 @@
+<root>
+  <title>sDESTl     APPR           </title>
+  <line>s QNH    FLP RETR  FINAL </line>
+  <line>c[  ]w     F=g141w   gILS22-Zw</line>
+  <line>s TEMP   SLT RETR   BARO </line>
+  <line>c[ ]°     wS=g185w       c[ ]w</line>
+  <line>sMAG WIND   CLEAN  RADIO </line>
+  <line>c235°/8   wO=g220w       c[ ]w</line>
+  <line>sTRANS FL       LDG CONF </line>
+  <line>csFL115lw             csCONF3l*w</line>
+  <line>s VAPP      VLS          </line>
+  <line>cs131lw        g126w     cFULL w</line>
+  <line>s PREV              NEXT </line>
+  <line>&lt;PHASE            PHASE&gt;</line>
+  <scratchpad>NAV ACCUR UPGRAD        </scratchpad>
+</root>
