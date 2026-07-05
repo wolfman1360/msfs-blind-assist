@@ -13151,6 +13151,90 @@ public class FenixA320Definition : BaseAircraftDefinition
         }
     }
 
+    // ---- Characteristic speeds + TOD via MCDU 2 (Fenix GraphQL) ----
+    // The Fenix publishes GD/S/F/VLS/VAPP/TOD ONLY on MCDU PERF pages (its
+    // 481-dataRef public API has no direct values — verified 2026-07-05), so
+    // these hotkeys walk the F/O's MCDU there and parse the page. Shift+5/6
+    // (stall / VFE next) are deliberately NOT handled: the Fenix renders them
+    // nowhere, and a permanently-dead "not available" key was rejected.
+    private Services.FenixPerfReader? _perfReader;
+    private int _perfReadBusy; // Interlocked latch — one MCDU walk at a time
+
+    private enum FenixCharSpeed { GreenDot, SSpeed, FSpeed, Vls }
+
+    private void ReadFenixPerfValue(ScreenReaderAnnouncer announcer,
+        System.Windows.Forms.Form parentForm, FenixCharSpeed? speed, bool tod = false)
+    {
+        if (System.Threading.Interlocked.CompareExchange(ref _perfReadBusy, 1, 0) != 0)
+        {
+            announcer.AnnounceImmediate("MCDU read already in progress");
+            return;
+        }
+        _perfReader ??= new Services.FenixPerfReader();
+        var reader = _perfReader;
+        _ = Task.Run(async () =>
+        {
+            string msg;
+            try
+            {
+                if (tod)
+                {
+                    var td = await reader.ReadTodAsync();
+                    msg = td == null ? "Could not read the MCDU"
+                        : td.Utc == null || td.DistanceNm == null
+                            ? "Top of descent not computed yet"
+                            : $"{td.DistanceNm} miles to top of descent, at {td.Utc} Zulu";
+                }
+                else
+                {
+                    // VLS/VAPP live only on the APPR page; F/S/O follow the
+                    // flight phase (takeoff-weight values while departing,
+                    // landing-weight values from cruise onward).
+                    bool appr = speed == FenixCharSpeed.Vls || await PerfPhaseWantsApproachAsync(reader);
+                    var sp = await reader.ReadSpeedsAsync(appr);
+                    msg = sp == null ? "Could not read the MCDU" : speed switch
+                    {
+                        FenixCharSpeed.GreenDot => sp.O == null ? "Green Dot not computed yet" : $"Green Dot {sp.O} knots",
+                        FenixCharSpeed.SSpeed => sp.S == null ? "S speed not computed yet" : $"S speed {sp.S} knots",
+                        FenixCharSpeed.FSpeed => sp.F == null ? "F speed not computed yet" : $"F speed {sp.F} knots",
+                        _ => sp.Vls == null ? "VLS not computed yet"
+                             : sp.Vapp == null ? $"VLS {sp.Vls} knots"
+                             : $"VLS {sp.Vls} knots, VAPP {sp.Vapp} knots"
+                    };
+                }
+            }
+            catch (Exception ex) when (ex is System.Net.Http.HttpRequestException or TaskCanceledException)
+            {
+                msg = "Fenix connection not available";
+            }
+            catch
+            {
+                msg = "Could not read the MCDU";
+            }
+            finally
+            {
+                System.Threading.Interlocked.Exchange(ref _perfReadBusy, 0);
+            }
+            try
+            {
+                if (parentForm is { IsDisposed: false })
+                    parentForm.BeginInvoke(() => announcer.AnnounceImmediate(msg));
+            }
+            catch (InvalidOperationException) { /* form torn down mid-read */ }
+        });
+    }
+
+    private static async Task<bool> PerfPhaseWantsApproachAsync(Services.FenixPerfReader reader)
+    {
+        var phase = await reader.ReadFlightPhaseAsync() ?? "";
+        // Observed live: "PreFlight". Departure-side phases read takeoff-weight
+        // F/S/O from PERF TO; everything else (Cruise/Descent/Approach/GoAround/
+        // Done/unknown) reads landing-weight values from PERF APPR.
+        return !(phase.Contains("PreFlight", StringComparison.OrdinalIgnoreCase)
+              || phase.Contains("Take", StringComparison.OrdinalIgnoreCase)
+              || phase.Contains("Climb", StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>
     /// Handle hotkey actions for Fenix A320 (including AI display reading).
     /// </summary>
@@ -13291,6 +13375,29 @@ public class FenixA320Definition : BaseAircraftDefinition
             case HotkeyAction.FCUSetBaro:
                 hotkeyManager.ExitInputHotkeyMode();
                 ShowFenixBaroWindow(simConnect, announcer, parentForm);
+                return true;
+
+            // Characteristic speeds + TOD (output mode Shift+1/2/3/4 and
+            // Shift+D) — read from the F/O MCDU PERF pages. ReadSpeedVS and
+            // ReadSpeedVFE are intentionally ABSENT (no Fenix data source).
+            case HotkeyAction.ReadSpeedGD:
+                ReadFenixPerfValue(announcer, parentForm, FenixCharSpeed.GreenDot);
+                return true;
+
+            case HotkeyAction.ReadSpeedS:
+                ReadFenixPerfValue(announcer, parentForm, FenixCharSpeed.SSpeed);
+                return true;
+
+            case HotkeyAction.ReadSpeedF:
+                ReadFenixPerfValue(announcer, parentForm, FenixCharSpeed.FSpeed);
+                return true;
+
+            case HotkeyAction.ReadSpeedVLS:
+                ReadFenixPerfValue(announcer, parentForm, FenixCharSpeed.Vls);
+                return true;
+
+            case HotkeyAction.ReadDistanceToTOD:
+                ReadFenixPerfValue(announcer, parentForm, null, tod: true);
                 return true;
 
             case HotkeyAction.MonitorManager:

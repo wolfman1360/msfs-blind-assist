@@ -40,6 +40,16 @@ Heading:
 Navigation:
   N          Read NAV 1 and NAV 2 radio info (frequency, ident, localizer, glideslope, DME)
 
+Characteristic Speeds (read live from the copilot's MCDU PERF pages —
+takeoff page while departing, approach page from cruise onward; the
+pilot's own MCDU is never touched):
+  Shift+1    Read Green Dot Speed (clean config)
+  Shift+2    Read S Speed (slat retraction)
+  Shift+3    Read F Speed (flap retraction)
+  Shift+4    Read VLS and VAPP (approach page values)
+  Note: Shift+5 (stall speed) and Shift+6 (VFE Next) are not available
+  on the Fenix — the aircraft does not publish those values anywhere.
+
 Fuel:
   F          Read Fuel On Board (Pounds)
   Shift+F    Read Fuel On Board (Kilograms)
@@ -82,6 +92,11 @@ Transponder:
 
 Location:
   C          Read Nearest City
+
+Distance:
+  Shift+D    Read distance and UTC time to Top of Descent (from the
+             cruise PERF page; announces "not computed yet" until the
+             FMS has computed the descent)
 
 Tools:
 CTRL+h, Activate/deactivate Hand fly mode, Note, enables more hotkeys, advanced feature.
