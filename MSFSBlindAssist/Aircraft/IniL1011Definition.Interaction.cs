@@ -270,7 +270,7 @@ public partial class IniL1011Definition
     /// <summary>How long a readout key waits for each value before saying it is unavailable.</summary>
     public const int ReadoutTimeoutMs = 1500;
 
-    /// <summary>The wait for the flap handle and the gear lever (F and G): they ride the 1 Hz
+    /// <summary>The wait for the flap handle and the gear lever (the L and Shift+G readout keys): they ride the 1 Hz
     /// continuous batch, so a fresh read is answered by its NEXT delivery, up to a second away, and
     /// 1.5 s left little for a slow one. The value the MD-11 uses for its batch read-backs.</summary>
     public const int BatchReadoutTimeoutMs = 2500;
