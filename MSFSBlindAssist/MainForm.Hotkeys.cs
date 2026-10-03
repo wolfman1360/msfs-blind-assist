@@ -241,6 +241,11 @@ public partial class MainForm
                     // the A320 MCDU service/form serve it with only the view name changed.
                     ShowFlyByWireMCDUDialog();
                 }
+                else if (currentAircraft is IniL1011Definition)
+                {
+                    // The TriStar has no MCDU window (its INS/PMS is a later session); the Fenix
+                    // fallback below must not open on it.
+                }
                 else
                 {
                     ShowFenixMCDUDialog();
