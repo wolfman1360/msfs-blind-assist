@@ -1,4 +1,4 @@
-"""Reports what changed between two L-1011 control maps, for reviewing a regeneration.
+r"""Reports what changed between two L-1011 control maps, for reviewing a regeneration.
 
     git show HEAD:MSFSBlindAssist/Resources/l1011_control_map.json > %TEMP%\old_map.json
     python tools/l1011-gen/diff_maps.py %TEMP%\old_map.json MSFSBlindAssist/Resources/l1011_control_map.json
