@@ -76,6 +76,42 @@ public class L1011CircuitBreakersTests
     }
 
     [Fact]
+    public void A_push_rewrites_the_listed_rows_without_refiltering_them()
+    {
+        // "Pulled only" lists 2 and 3. Pushing 2 in must leave both rows where they are (the cursor
+        // stays on 2), not drop it and put the cursor on 3, where a second Space would push THAT in.
+        var breakers = new[]
+        {
+            new L1011Breaker { Index = 1, Title = "HYD IND QTY" },
+            new L1011Breaker { Index = 2, Title = "RADIO ALTM 2" },
+            new L1011Breaker { Index = 3, Title = "" },
+        };
+        var states = new[] { false, true, true };
+        var listed = L1011CircuitBreakers.Visible(breakers, states, null, pulledOnly: true);
+        Assert.Equal(new[] { "RADIO ALTM 2, breaker 2: pulled", "Breaker 3: pulled" },
+            L1011CircuitBreakers.ItemTexts(breakers, listed, states, pulledOnly: true));
+
+        states[1] = false;
+        Assert.Equal(new[] { "RADIO ALTM 2, breaker 2: in", "Breaker 3: pulled" },
+            L1011CircuitBreakers.ItemTexts(breakers, listed, states, pulledOnly: true));
+    }
+
+    [Fact]
+    public void An_empty_list_says_why()
+    {
+        var breakers = new[] { new L1011Breaker { Index = 1, Title = "HYD IND QTY" } };
+        Assert.Equal(new[] { "No pulled breakers" }, L1011CircuitBreakers.ItemTexts(breakers, Array.Empty<int>(), null, pulledOnly: true));
+        Assert.Equal(new[] { "No breakers match" }, L1011CircuitBreakers.ItemTexts(breakers, Array.Empty<int>(), null, pulledOnly: false));
+        Assert.Equal(new[] { "HYD IND QTY, breaker 1: unknown" }, L1011CircuitBreakers.ItemTexts(breakers, new[] { 0 }, null, pulledOnly: false));
+    }
+
+    [Fact]
+    public void A_pull_or_push_before_the_states_are_read_is_refused_with_a_way_out()
+    {
+        Assert.Equal("Breaker states unknown. Press Refresh.", L1011CircuitBreakers.StatesUnknownRefusal);
+    }
+
+    [Fact]
     public void Summary_wording()
     {
         Assert.Equal("981 breakers, all in", L1011CircuitBreakers.Summary(981, 0));

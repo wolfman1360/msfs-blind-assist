@@ -71,6 +71,26 @@ public static class L1011CircuitBreakers
         return result;
     }
 
+    /// <summary>
+    /// The window's rows for the breakers it lists (<paramref name="visible"/>, from <see cref="Visible"/>),
+    /// or the one line that says why the list is empty. A pull or push and its confirmation read
+    /// rewrite these texts over the SAME listed breakers, never a fresh <see cref="Visible"/>:
+    /// re-filtering then would drop a breaker just pushed in from "pulled only" and leave the cursor
+    /// on the next one, where a second Space would push THAT in.
+    /// </summary>
+    public static IReadOnlyList<string> ItemTexts(IReadOnlyList<L1011Breaker> breakers, IReadOnlyList<int> visible,
+        bool[]? states, bool pulledOnly)
+    {
+        var lines = visible.Select(i => ItemText(breakers[i], states?[i])).ToList();
+        if (lines.Count == 0)
+            lines.Add(pulledOnly ? "No pulled breakers" : "No breakers match");
+        return lines;
+    }
+
+    /// <summary>Spoken when a pull or push is asked for before the states have been read: which way
+    /// the click would go is unknown, so nothing is sent.</summary>
+    public const string StatesUnknownRefusal = "Breaker states unknown. Press Refresh.";
+
     /// <summary>Summary line: "981 breakers, all in" or "981 breakers, 2 pulled".</summary>
     public static string Summary(int total, int pulled) =>
         pulled == 0 ? $"{total} breakers, all in" : $"{total} breakers, {pulled} pulled";

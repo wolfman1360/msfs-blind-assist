@@ -10,7 +10,10 @@ namespace MSFSBlindAssist.Forms.L1011;
 /// once through the Coherent debugger (<see cref="L1011CircuitBreakers.BulkReadScript"/>) when the
 /// window opens and on Refresh; Space or Enter on a row pulls or pushes it in by replaying the
 /// cockpit's own click. The changed row updates in place, so the screen reader reads the new state
-/// itself and nothing is announced on top of it; only a failure is spoken.
+/// itself and nothing is announced on top of it; only a failure is spoken. The list is re-filtered
+/// only when the window opens, the search or "pulled only" changes, or Refresh is pressed: a pull,
+/// a push and its confirmation read rewrite the listed rows without adding or removing one, so the
+/// cursor never moves to another breaker (the Ctrl+M monitor managers' rule: never on a tick).
 /// </summary>
 public sealed class L1011CircuitBreakerForm : Form
 {
@@ -55,13 +58,13 @@ public sealed class L1011CircuitBreakerForm : Form
             AccessibleName = "Search",
             AccessibleDescription = "Type to list only the breakers whose name contains the text",
         };
-        _search.TextChanged += (_, _) => Rebuild();
+        _search.TextChanged += (_, _) => Refilter();
 
         _pulledOnly = new CheckBox
         {
             Text = "Show &pulled breakers only", Location = new Point(345, 10), Size = new Size(200, 24), TabIndex = 2,
         };
-        _pulledOnly.CheckedChanged += (_, _) => Rebuild();
+        _pulledOnly.CheckedChanged += (_, _) => Refilter();
 
         _list = new DisplayListBox
         {
@@ -87,7 +90,7 @@ public sealed class L1011CircuitBreakerForm : Form
         var toggle = new Button { Text = "Pull or push &in", Location = new Point(10, 385), Size = new Size(150, 28), TabIndex = 5 };
         toggle.Click += (_, _) => ToggleSelected();
         var refresh = new Button { Text = "&Refresh", Location = new Point(170, 385), Size = new Size(100, 28), TabIndex = 6 };
-        refresh.Click += async (_, _) => await ReadAsync(announceFailure: true);
+        refresh.Click += async (_, _) => await ReadAsync(announceFailure: true, refilter: true);
         var close = new Button { Text = "&Close", Location = new Point(440, 385), Size = new Size(100, 28), TabIndex = 7 };
         close.Click += (_, _) => Close();
         CancelButton = close;
@@ -98,14 +101,16 @@ public sealed class L1011CircuitBreakerForm : Form
     /// <summary>Shows the window with the list focused and reads every breaker's state.</summary>
     public async void ShowForm()
     {
-        Rebuild();
+        Refilter();
         Show();
         Activate();
         _list.Focus();
-        await ReadAsync(announceFailure: true);
+        await ReadAsync(announceFailure: true, refilter: true);
     }
 
-    private async Task ReadAsync(bool announceFailure)
+    /// <summary>Reads every breaker's state; <paramref name="refilter"/> lists the breakers again
+    /// (opening, Refresh), otherwise only the listed rows' text changes (a confirmation read).</summary>
+    private async Task ReadAsync(bool announceFailure, bool refilter)
     {
         if (_reading || _breakers.Count == 0)
             return;
@@ -125,7 +130,10 @@ public sealed class L1011CircuitBreakerForm : Form
                 return;
             }
             _states = states;
-            Rebuild();
+            if (refilter)
+                Refilter();
+            else
+                RefreshRows();
         }
         catch (Exception ex)
         {
@@ -137,15 +145,22 @@ public sealed class L1011CircuitBreakerForm : Form
         }
     }
 
-    private void Rebuild()
+    /// <summary>Lists the breakers the search and "pulled only" select, then writes their rows.</summary>
+    private void Refilter()
     {
         if (IsDisposed)
             return;
         _visible = L1011CircuitBreakers.Visible(_breakers, _states, _search.Text, _pulledOnly.Checked);
-        var lines = _visible.Select(i => L1011CircuitBreakers.ItemText(_breakers[i], _states?[i])).ToList();
-        if (lines.Count == 0)
-            lines.Add(_pulledOnly.Checked ? "No pulled breakers" : "No breakers match");
-        DisplayList.UpdateInPlace(_list, lines);
+        RefreshRows();
+    }
+
+    /// <summary>Rewrites the listed breakers' rows in place: no row is added or removed, so the
+    /// cursor stays on the breaker it was on.</summary>
+    private void RefreshRows()
+    {
+        if (IsDisposed)
+            return;
+        DisplayList.UpdateInPlace(_list, L1011CircuitBreakers.ItemTexts(_breakers, _visible, _states, _pulledOnly.Checked));
         if (_list.SelectedIndex < 0 && _list.Items.Count > 0)
             _list.SelectedIndex = 0;
         _status.Text = _states == null
@@ -158,9 +173,14 @@ public sealed class L1011CircuitBreakerForm : Form
         int row = _list.SelectedIndex;
         if (row < 0 || row >= _visible.Count)
             return;
+        if (_states == null)
+        {
+            _announcer.Announce(L1011CircuitBreakers.StatesUnknownRefusal);   // which way the click goes is unknown
+            return;
+        }
         int index = _visible[row];
         var breaker = _breakers[index];
-        bool pull = _states?[index] != true;
+        bool pull = !_states[index];
         var plan = L1011WritePlan.ForBreaker(breaker, pull);
         if (plan.Refusal != null || !_sim.CalcWriteCanLand)
         {
@@ -172,11 +192,8 @@ public sealed class L1011CircuitBreakerForm : Form
                 _sim.ExecuteCalculatorCodeUnique(calc.Rpn);
 
         // Show the commanded state at once (the screen reader reads the changed row), then confirm.
-        if (_states != null)
-        {
-            _states[index] = pull;
-            Rebuild();
-        }
+        _states[index] = pull;
+        RefreshRows();
         _ = ConfirmAsync();
     }
 
@@ -184,6 +201,6 @@ public sealed class L1011CircuitBreakerForm : Form
     {
         await Task.Delay(ConfirmReadDelayMs);
         if (!IsDisposed && Visible)
-            await ReadAsync(announceFailure: false);
+            await ReadAsync(announceFailure: false, refilter: false);
     }
 }
