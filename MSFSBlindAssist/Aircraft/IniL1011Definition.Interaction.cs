@@ -61,7 +61,7 @@ public partial class IniL1011Definition
         }
         if (plan.IsEmpty)
             return;   // already there; the screen reader has said so
-        if (!sim.CalcWriteCanLand)
+        if (!CanLand(sim))
         {
             announcer.Announce($"{row.Name} unavailable");
             SnapBack(row.Key, sim);
@@ -73,13 +73,8 @@ public partial class IniL1011Definition
     }
 
     /// <summary>A refused pick must not leave the combo on a position the aircraft never took: ask
-    /// for the value again so the next delivery puts it back. Only when connected — there is
-    /// nothing to ask otherwise, and the request path needs the SimConnect library loaded.</summary>
-    private static void SnapBack(string key, SimConnectManager sim)
-    {
-        if (sim.IsConnected)
-            sim.RequestVariable(key, forceUpdate: true);
-    }
+    /// for the value again (<see cref="ReRead"/>) so the next delivery puts it back.</summary>
+    private void SnapBack(string key, SimConnectManager sim) => ReRead(key, sim);
 
     /// <summary>
     /// Runs a plan's steps on the UI thread (each await resumes there, so SimConnect is never used
@@ -130,18 +125,42 @@ public partial class IniL1011Definition
         _owed.Clear();
     }
 
-    /// <summary>One hand-written write (<see cref="L1011Levers"/>): refused aloud when it cannot land.</summary>
-    private static void SendCustom(string name, string rpn, SimConnectManager sim, ScreenReaderAnnouncer announcer,
+    /// <summary>One hand-written write (<see cref="L1011Levers"/>): refused aloud when it cannot land,
+    /// and the row's combo snapped back. True when the write was sent.</summary>
+    private bool SendCustom(string key, string name, string rpn, SimConnectManager sim, ScreenReaderAnnouncer announcer,
         string? confirmation = null)
     {
-        if (!sim.CalcWriteCanLand)
+        if (!CanLand(sim))
         {
             announcer.Announce($"{name} unavailable");
-            return;
+            SnapBack(key, sim);
+            return false;
         }
         sim.ExecuteCalculatorCodeUnique(rpn);
         if (confirmation != null)
             announcer.Announce(confirmation);   // a typed value: the pilot needs the exact figure back
+        return true;
+    }
+
+    /// <summary>
+    /// The gear lever's own gauge refuses "up" on the ground: the write lands and nothing moves. Read
+    /// the lever again once it has settled (<see cref="L1011Levers.GearSettleMs"/>) so the combo
+    /// follows what the aircraft did. The await resumes on the UI thread; nothing is asked once the
+    /// definition has gone away.
+    /// </summary>
+    private async Task ReReadGearLeverAfterSettleAsync(SimConnectManager sim)
+    {
+        try
+        {
+            await SettleDelay(L1011Levers.GearSettleMs);
+            if (_disposed)
+                return;
+            ReRead(L1011Levers.GearLeverKey, sim);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("L1011", $"Gear lever re-read failed: {ex.Message}");
+        }
     }
 
     private void HandleCustomSet(L1011PlacedRow row, double value, SimConnectManager sim, ScreenReaderAnnouncer announcer)
@@ -152,23 +171,24 @@ public partial class IniL1011Definition
                 OpenCircuitBreakers?.Invoke();
                 return;
             case L1011Levers.FlapHandleKey:
-                SendCustom(row.Name, L1011Levers.FlapRpn((int)Math.Round(value)), sim, announcer);
+                SendCustom(row.Key, row.Name, L1011Levers.FlapRpn((int)Math.Round(value)), sim, announcer);
                 return;
             case L1011Levers.GearLeverKey:
-                SendCustom(row.Name, L1011Levers.GearRpn(value), sim, announcer);
+                if (SendCustom(row.Key, row.Name, L1011Levers.GearRpn(value), sim, announcer))
+                    _ = ReReadGearLeverAfterSettleAsync(sim);
                 return;
             case L1011Levers.SpeedBrakeKey:
-                SendCustom(row.Name, L1011Levers.SpeedBrakeRpn(value), sim, announcer);
+                SendCustom(row.Key, row.Name, L1011Levers.SpeedBrakeRpn(value), sim, announcer);
                 return;
             case L1011Levers.GroundSpoilersKey:
-                SendCustom(row.Name, L1011Levers.GroundSpoilersRpn(value), sim, announcer);
+                SendCustom(row.Key, row.Name, L1011Levers.GroundSpoilersRpn(value), sim, announcer);
                 return;
             case L1011Levers.ParkingBrakeKey:
-                SendCustom(row.Name, L1011Levers.ParkingBrakeRpn(value), sim, announcer);
+                SendCustom(row.Key, row.Name, L1011Levers.ParkingBrakeRpn(value), sim, announcer);
                 return;
             case L1011Levers.SquawkKey:
                 if (L1011Levers.SquawkBcd(value) is uint bcd)
-                    SendCustom(row.Name, L1011Levers.SquawkRpn(bcd), sim, announcer, L1011Levers.SquawkConfirmation(bcd));
+                    SendCustom(row.Key, row.Name, L1011Levers.SquawkRpn(bcd), sim, announcer, L1011Levers.SquawkConfirmation(bcd));
                 else
                     announcer.Announce($"{row.Name}: {L1011Levers.SquawkError}");
                 return;
@@ -177,7 +197,7 @@ public partial class IniL1011Definition
         if (L1011Levers.AltimeterIndex(row.Key) is int index)
         {
             if (L1011Levers.AltimeterMillibars(value) is double mb)
-                SendCustom(row.Name, L1011Levers.AltimeterRpn(index, mb), sim, announcer, L1011Levers.AltimeterConfirmation(row.Name, mb));
+                SendCustom(row.Key, row.Name, L1011Levers.AltimeterRpn(index, mb), sim, announcer, L1011Levers.AltimeterConfirmation(row.Name, mb));
             else
                 announcer.Announce($"{row.Name}: {L1011Levers.AltimeterRangeError}");
             return;
@@ -185,7 +205,7 @@ public partial class IniL1011Definition
         if (L1011Levers.NavEntry(row.Key) is int nav)
         {
             if (L1011Levers.NavFrequencyHz(value) is uint hz)
-                SendCustom(row.Name, L1011Levers.NavFrequencyRpn(nav, hz), sim, announcer,
+                SendCustom(row.Key, row.Name, L1011Levers.NavFrequencyRpn(nav, hz), sim, announcer,
                     L1011Levers.FrequencyConfirmation($"NAV {nav}", value, 2));
             else
                 announcer.Announce($"{row.Name}: {L1011Levers.NavRangeError}");
@@ -195,7 +215,7 @@ public partial class IniL1011Definition
         {
             var (radio, active) = com;
             if (L1011Levers.ComFrequencyHz(value) is uint hz)
-                SendCustom(row.Name, L1011Levers.ComFrequencyRpn(radio, hz, active), sim, announcer,
+                SendCustom(row.Key, row.Name, L1011Levers.ComFrequencyRpn(radio, hz, active), sim, announcer,
                     L1011Levers.FrequencyConfirmation($"COM {radio} {(active ? "active" : "standby")}", value, 3));
             else
                 announcer.Announce($"{row.Name}: {L1011Levers.ComRangeError}");

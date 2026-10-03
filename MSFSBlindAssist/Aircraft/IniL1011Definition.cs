@@ -58,6 +58,21 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
     /// <summary>Where the Ctrl+M mute list is read from; tests replace it.</summary>
     internal Func<Settings.UserSettings> SettingsSource { get; set; } = () => Settings.SettingsManager.Current;
 
+    /// <summary>Whether a write can reach the aircraft (<see cref="SimConnectManager.CalcWriteCanLand"/>); tests replace it.</summary>
+    internal Func<SimConnectManager, bool> CanLand { get; set; } = sim => sim.CalcWriteCanLand;
+
+    /// <summary>Asks for a row's value again so the next delivery puts its combo back. Only when
+    /// connected: there is nothing to ask otherwise, and the request path needs the SimConnect
+    /// library loaded. Tests replace it.</summary>
+    internal Action<string, SimConnectManager> ReRead { get; set; } = (key, sim) =>
+    {
+        if (sim.IsConnected)
+            sim.RequestVariable(key, forceUpdate: true);
+    };
+
+    /// <summary>The wait before the gear lever is re-read after a write; tests replace it.</summary>
+    internal Func<int, Task> SettleDelay { get; set; } = Task.Delay;
+
     public IniL1011Definition()
     {
         _map = L1011ControlMap.Load();

@@ -89,6 +89,11 @@ public static class L1011Levers
     public static string GearRpn(double target) =>
         target < 25 ? "(>K:GEAR_DOWN)" : target > 75 ? "(>K:GEAR_UP)" : "50 (>L:LEVER_LANDING_GEAR)";
 
+    /// <summary>How long after a gear-lever write the lever is read again, so the combo follows a
+    /// refusal by the aircraft's own gauge ("up" on the ground). One 1 Hz batch period plus margin:
+    /// a judgement, not a measurement.</summary>
+    public const int GearSettleMs = 1500;
+
     // ---- Speed brake, ground spoilers, parking brake --------------------------------------
 
     /// <summary>The speed-brake lever input the HANDLING gauge copies into SPOILERS HANDLE POSITION.</summary>
