@@ -208,6 +208,22 @@ def _same(v, kind_name):
     return v is not None and ('%s:%s' % (v.kind, v.name)).upper() == kind_name.upper()
 
 
+def _one_way_latch(t, i, v):
+    """For "(X) ! if{ 1 (>X) }" at t[i] with no els{: (start, end) of the "1 (>X)" tokens and the
+    index after the block; otherwise None."""
+    if v is None or v.write or i + 2 >= len(t) or t[i + 1] != '!' or t[i + 2] != 'if{':
+        return None
+    body, end = _block_end(t, i + 2)
+    if end < len(t) and t[end] == 'els{':
+        return None
+    if len(body) != 2 or not NUM_RE.match(body[0]) or float(body[0]) != 1:
+        return None
+    target = parse_var(body[1])
+    if target is None or not target.write or not _same(target, '%s:%s' % (v.kind, v.name)):
+        return None
+    return i + 3, i + 5, end
+
+
 def resolve_conditions(code, state, new_value, old_value, others_follow_state):
     """Rewrites a two-way click code for ONE known transition so that every condition this
     function can decide is replaced by the branch that would run.
@@ -219,13 +235,20 @@ def resolve_conditions(code, state, new_value, old_value, others_follow_state):
     variable read before the toggle is decided as if that variable matched the switch (the
     iniBuilds click code flips the stock system to the switch's new position this way:
     "(A:TURB ENG IGNITION SWITCH:1, bool) ! if{ 1 (>K:..SET1) } els{ 0 (>K:..SET1) }").
-    A condition it cannot decide is dropped together with both its branches."""
+    A one-way latch on another variable, "(X) ! if{ 1 (>X) }" (written to 1 only when it reads 0,
+    never back), is a write of 1 on every position. A condition it cannot decide is dropped
+    together with both its branches."""
     t = tokens(code)
     out = []
     cur = old_value
     i = 0
     while i < len(t):
         v = parse_var(t[i])
+        latch = _one_way_latch(t, i, v)
+        if latch is not None and not _same(v, state):
+            out.extend(t[latch[0]:latch[1]])
+            i = latch[2]
+            continue
         if v is not None and not v.write and _same(v, state) and i + 2 < len(t) and t[i + 1] == '!'                 and _same(parse_var(t[i + 2]), state) and parse_var(t[i + 2]).write:
             out.extend(t[i:i + 3])
             cur = new_value

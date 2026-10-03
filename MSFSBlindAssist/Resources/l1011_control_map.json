@@ -9035,7 +9035,8 @@
     ],
     "1": [
      "L:SWITCH_FWD_CARGO_EXT_MAIN=1",
-     "H:SWITCH_FWD_CARGO_EXT_MAIN"
+     "H:SWITCH_FWD_CARGO_EXT_MAIN",
+     "L:FWD_CARGO_EXT_MAIN_FIRED, bool=1"
     ]
    },
    "press": [],
@@ -9100,7 +9101,8 @@
     ],
     "1": [
      "L:SWITCH_FWD_CARGO_EXT_ALTN=1",
-     "H:SWITCH_FWD_CARGO_EXT_ALTN"
+     "H:SWITCH_FWD_CARGO_EXT_ALTN",
+     "L:FWD_CARGO_EXT_ALTN_FIRED, bool=1"
     ]
    },
    "press": [],
@@ -15118,7 +15120,6 @@
    "transitions": {
     "0": [
      "L:TOGGLE_RADIO_CPT_ADF_2=0",
-     "K:RADIO_ADF_IDENT_TOGGLE",
      "H:TOGGLE_RADIO_CPT_ADF_2",
      "H:TOGGLE_RADIO_CPT_ADF_2_0"
     ],

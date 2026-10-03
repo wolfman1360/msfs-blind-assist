@@ -154,6 +154,26 @@ class ResolveConditionsTests(unittest.TestCase):
         out = rpn.resolve_conditions(code, 'L:SWITCH_FE_SLAT_LOCK', '1', '0', True)
         self.assertEqual("1,'Slats'_n", [e for e in rpn.effects(out) if e.kind == 'K'][0].value)
 
+    CARGO = ("(L:SWITCH_FWD_CARGO_EXT_MAIN) ! (>L:SWITCH_FWD_CARGO_EXT_MAIN) (>H:SWITCH_FWD_CARGO_EXT_MAIN) "
+             "(L:FWD_CARGO_EXT_MAIN_FIRED, bool) ! if{ 1 (>L:FWD_CARGO_EXT_MAIN_FIRED, bool) }")
+
+    def test_one_way_latch_writes_one_on_every_position(self):
+        # The click latches FIRED to 1 the first time either way; it is never written back to 0.
+        for follow in (False, True):
+            for new, old in (('0', '1'), ('1', '0')):
+                ev = self._events_with(self.CARGO, 'L:SWITCH_FWD_CARGO_EXT_MAIN', new, old, follow)
+                self.assertIn(('L', 'FWD_CARGO_EXT_MAIN_FIRED', '1'), ev, (follow, new))
+                self.assertIn(('H', 'SWITCH_FWD_CARGO_EXT_MAIN', ''), ev, (follow, new))
+
+    def test_other_variables_are_unknown_unless_the_caller_says_they_follow(self):
+        ev = self._events_with(self.IGNITION, 'L:SWITCH_CONT_IGNITION', '1', '0', False)
+        self.assertFalse([e for e in ev if e[0] == 'K'])
+        self.assertIn(('H', 'SWITCH_CONT_IGNITION_1', ''), ev)
+
+    def _events_with(self, code, state, new, old, follow):
+        out = rpn.resolve_conditions(code, state, new, old, follow)
+        return [(e.kind, e.name, e.value) for e in rpn.effects(out) if e.kind in 'HKL']
+
     def test_unknown_condition_is_dropped_with_both_branches(self):
         out = rpn.resolve_conditions("(L:OTHER) 3 == if{ (>H:A) } els{ (>H:B) } (>H:C)", 'L:S', '1', '0', False)
         self.assertEqual(['C'], [e.name for e in rpn.effects(out)])

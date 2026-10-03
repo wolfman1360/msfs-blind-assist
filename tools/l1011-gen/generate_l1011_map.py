@@ -60,6 +60,14 @@ LATCH_BUTTONS = {
     'SWITCH_BUS_1_BREAKER', 'SWITCH_BUS_2_BREAKER', 'SWITCH_BUS_3_BREAKER',
 }
 
+# Two-position switches whose click code sets OTHER variables to the switch's new position by
+# reading them before the toggle ("(A:TURB ENG IGNITION SWITCH:1, bool) ! if{ 1 (>K:..SET1) }
+# els{ 0 (>K:..SET1) }"), so a condition on them can be decided as if they followed the switch.
+# Only where that was checked in the click code: elsewhere the same assumption reverses the
+# cockpit (the forward cargo extinguishers' FIRED latch) or guesses an unrelated condition (the
+# ADF ident's dependence on the ADF mode), so another variable's condition stays undecided.
+FOLLOWS_STATE = {'SWITCH_CONT_IGNITION'}
+
 # Fire-extinguisher discharge switches are momentary either side of a centre detent (position 1,
 # the template's SwitchState 1, flagged XMLVAR_MomentarySwitch_IsHeld) and spring back to it.
 SPRING_SWITCHES = {'SWITCH_ENG_1_DISCH': 1, 'SWITCH_ENG_2_DISCH': 1, 'SWITCH_ENG_3_DISCH': 1,
@@ -169,14 +177,15 @@ def _writes_state(text, state_var):
     return text.startswith(state_var + '=') or text.startswith(state_var + ',')
 
 
-def switch_transitions(behavior, state_var, values, set_br, click):
+def switch_transitions(behavior, state_var, values, set_br, click, follow_state=False):
     """{position: [effect text]} — the Set branch's literal writes for the position (or a plain
     write of the state variable), then what the cockpit's click code does on its way to that
     position. iniBuilds' own two-position click code ("(L:S) ! (>L:S) (>H:SYS) ...") is resolved
     for the transition with resolve_conditions, so a write that depends on the old or new
     position appears only for the position it belongs to. Event-dispatched template code
     ((M:Event) tests and goto labels) cannot be walked linearly; its events are taken as found
-    and the positional H: families are narrowed by filter_for_position."""
+    and the positional H: families are narrowed by filter_for_position. follow_state: the
+    control is in FOLLOWS_STATE (resolve_conditions' others_follow_state)."""
     two = len(values) == 2
     out = OrderedDict()
     for v in values:
@@ -188,7 +197,7 @@ def switch_transitions(behavior, state_var, values, set_br, click):
             texts.insert(0, '%s=%s' % (state_var, v))
         if two and state_var and '(M:Event)' not in click:
             old = values[1] if v == values[0] else values[0]
-            code = rpn.resolve_conditions(click, state_var, v, old, True)
+            code = rpn.resolve_conditions(click, state_var, v, old, follow_state)
         else:
             code = click
         mouse = expand_input_event_calls(behavior, rpn.effects(code))
@@ -263,7 +272,7 @@ def build_control(behavior, mr, ie, loc, label):
         entry['kind'] = 'switch'
         entry['state_var'], entry['state_unit'] = state_var, state_unit
         entry['positions'] = OrderedDict((v, positions.get(v, '')) for v in values)
-        entry['transitions'] = switch_transitions(behavior, state_var, values, set_br, click)
+        entry['transitions'] = switch_transitions(behavior, state_var, values, set_br, click, node in FOLLOWS_STATE)
         if any(e.kind in 'LA' and e.value == 'expr' for e in click_effects):
             entry['note'] = 'click code also computes a value; only literal writes are replayed'
         return entry
@@ -294,7 +303,8 @@ def build_control(behavior, mr, ie, loc, label):
         entry['state_var'] = '%s:%s' % (tv.kind, tv.name)
         entry['state_unit'] = tv.unit
         entry['positions'] = OrderedDict([('0', ''), ('1', '')])
-        entry['transitions'] = switch_transitions(behavior, entry['state_var'], ['0', '1'], {}, click)
+        entry['transitions'] = switch_transitions(behavior, entry['state_var'], ['0', '1'], {}, click,
+                                                  node in FOLLOWS_STATE)
         return entry
 
     # 6. Encoders: the wheel branches step the value.

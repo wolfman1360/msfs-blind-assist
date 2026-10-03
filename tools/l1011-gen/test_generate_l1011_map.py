@@ -29,6 +29,19 @@ BATTERY_SET = ("p0 1 min 0 max (>O:INSTRUMENT_TOGGLE_Battery_IE_ID_Position) "
 ON_OFF_TOOLTIP = ("(L:TOGGLE_Battery) 1 == if{ (R:1:L1011.TOOLTIPS.ACTION.ON) } "
                   "els{ (R:1:L1011.TOOLTIPS.ACTION.OFF) }")
 PUSH_SET = "p0 p0 if{ (L:INI_PULL_UP_CALLOUT_COMMAND, Bool) } els{ (L:INI_PULL_UP_CALLOUT_COMMAND, Bool) } 1 (>O:_ButtonAnimVar)"
+CARGO_CLICK = ("(L:SWITCH_FWD_CARGO_EXT_MAIN) ! (>L:SWITCH_FWD_CARGO_EXT_MAIN) (>H:SWITCH_FWD_CARGO_EXT_MAIN) "
+               "(L:FWD_CARGO_EXT_MAIN_FIRED, bool) ! if{ 1 (>L:FWD_CARGO_EXT_MAIN_FIRED, bool) }")
+# The stock ignition switch is set to the switch's new position by reading it BEFORE the toggle.
+IGNITION_CLICK = ("(A:TURB ENG IGNITION SWITCH:1, bool) ! if{ 1 (>K:TURBINE_IGNITION_SWITCH_SET1) } "
+                  "els{ 0 (>K:TURBINE_IGNITION_SWITCH_SET1) } (L:{v}) ! (>L:{v}) (>H:{v})")
+
+
+def two_position_switch(f, panel, var):
+    """A two-position switch with an input event whose Set code writes the L:var, and ON/OFF words."""
+    ie = 'INSTRUMENT_%s_IE_ID' % var
+    n = f.component(var, panel)
+    return n, ie, ("p0 1 min 0 max (>O:P) (O:P) s0 l0 0 == if{ 0 (>L:%s) g1 } l0 1 == if{ 1 (>L:%s) g1 } :1" % (var, var),
+                   "(L:%s) 1 == if{ (R:1:L1011.TOOLTIPS.ACTION.ON) } els{ (R:1:L1011.TOOLTIPS.ACTION.OFF) }" % var)
 
 
 def build_fixture():
@@ -107,6 +120,15 @@ def build_fixture():
     f.inputevent(n, 'INSTRUMENT_TOGGLE_CAB_PRESS_FWD_IE_ID',
                  "p0 2 min 0 max (>O:P) (O:P) s0 l0 0 == if{ 0 (>) g1 } l0 1 == if{ 1 (>) g1 } l0 2 == if{ 2 (>) g1 } :1",
                  None, 'numbers')
+
+    n, ie, (set_code, tooltip) = two_position_switch(f, panel, 'SWITCH_FWD_CARGO_EXT_MAIN')
+    f.mouserect(n, 'SWITCH_FWD_CARGO_EXT_MAIN', CARGO_CLICK, None, [ie])
+    f.inputevent(n, ie, set_code, tooltip, 'Boolean')
+
+    for var in ('SWITCH_CONT_IGNITION', 'SWITCH_OTHER_IGNITION'):
+        n, ie, (set_code, tooltip) = two_position_switch(f, panel, var)
+        f.mouserect(n, var, IGNITION_CLICK.replace('{v}', var), None, [ie])
+        f.inputevent(n, ie, set_code, tooltip, 'Boolean')
 
     extras = FixtureBuilder()
     eroot = extras.component('L1011_EXTRAS')
@@ -210,6 +232,25 @@ class GeneratorTests(unittest.TestCase):
         c = self.by_id['TOGGLE_CAB_PRESS_FWD']
         self.assertEqual('none', c['kind'])
         self.assertEqual('positions write nothing replayable', c['note'])
+
+    def test_a_cargo_extinguisher_fires_on_every_click(self):
+        # Every click flips the switch, fires the H: event and latches FIRED to 1 the first time.
+        c = self.by_id['SWITCH_FWD_CARGO_EXT_MAIN']
+        for v in ('0', '1'):
+            self.assertEqual(['L:SWITCH_FWD_CARGO_EXT_MAIN=%s' % v, 'H:SWITCH_FWD_CARGO_EXT_MAIN',
+                              'L:FWD_CARGO_EXT_MAIN_FIRED, bool=1'], c['transitions'][v])
+
+    def test_continuous_ignition_sets_the_stock_switches_to_its_position(self):
+        c = self.by_id['SWITCH_CONT_IGNITION']
+        self.assertEqual(['L:SWITCH_CONT_IGNITION=1', 'K:TURBINE_IGNITION_SWITCH_SET1=1', 'H:SWITCH_CONT_IGNITION'],
+                         c['transitions']['1'])
+        self.assertEqual(['L:SWITCH_CONT_IGNITION=0', 'K:TURBINE_IGNITION_SWITCH_SET1=0', 'H:SWITCH_CONT_IGNITION'],
+                         c['transitions']['0'])
+
+    def test_only_the_allowlisted_switch_assumes_other_variables_follow_it(self):
+        c = self.by_id['SWITCH_OTHER_IGNITION']
+        self.assertEqual(['L:SWITCH_OTHER_IGNITION=1', 'H:SWITCH_OTHER_IGNITION'], c['transitions']['1'])
+        self.assertEqual(['L:SWITCH_OTHER_IGNITION=0', 'H:SWITCH_OTHER_IGNITION'], c['transitions']['0'])
 
     def test_lamps_are_every_emissive_lvar(self):
         self.assertEqual(['AC_ESS_FAIL_LIGHT', 'ENG_FIRE_1'], self.map['lamps'])
