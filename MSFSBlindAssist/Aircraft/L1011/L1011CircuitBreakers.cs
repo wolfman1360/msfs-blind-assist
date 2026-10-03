@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 namespace MSFSBlindAssist.Aircraft.L1011;
@@ -14,8 +15,16 @@ public static class L1011CircuitBreakers
     /// <summary>Title needle of the hidden flight-engineer logic gauge (panel.cfg VCockpit04).</summary>
     public const string ViewNeedle = "L1011_ENGINEER_PANEL";
 
-    public static string DisplayName(L1011Breaker breaker) =>
-        string.IsNullOrWhiteSpace(breaker.Title) ? $"Breaker {breaker.Index}" : breaker.Title.Trim();
+    /// <summary>
+    /// "ENG START PWR, breaker 741" or "Breaker 12". A titled row carries its number too: 68 breakers
+    /// are titled "INOP" and three titles appear twice, so without it rows read the same and a named
+    /// breaker could not be found by its number.
+    /// </summary>
+    public static string DisplayName(L1011Breaker breaker)
+    {
+        string number = breaker.Index.ToString(CultureInfo.InvariantCulture);
+        return string.IsNullOrWhiteSpace(breaker.Title) ? $"Breaker {number}" : $"{breaker.Title.Trim()}, breaker {number}";
+    }
 
     public static string ItemText(L1011Breaker breaker, bool? pulled) =>
         $"{DisplayName(breaker)}: {(pulled == null ? "unknown" : pulled.Value ? "pulled" : "in")}";

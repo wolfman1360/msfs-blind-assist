@@ -6,7 +6,7 @@ using MSFSBlindAssist.Utils.Logging;
 namespace MSFSBlindAssist.Forms.L1011;
 
 /// <summary>
-/// The TriStar's circuit breakers as one searchable list ("HYD IND QTY: in"). States are read all at
+/// The TriStar's circuit breakers as one searchable list ("HYD IND QTY, breaker 4: in"). States are read all at
 /// once through the Coherent debugger (<see cref="L1011CircuitBreakers.BulkReadScript"/>) when the
 /// window opens and on Refresh; Space or Enter on a row pulls or pushes it in by replaying the
 /// cockpit's own click. The changed row updates in place, so the screen reader reads the new state
