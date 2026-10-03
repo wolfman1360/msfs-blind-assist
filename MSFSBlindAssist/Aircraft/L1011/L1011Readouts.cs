@@ -87,9 +87,19 @@ public static class L1011Readouts
     {
         if (readout.Units == SquawkUnits)
             return DecodeSquawk(value);
-        string number = value.ToString(readout.Format, CultureInfo.InvariantCulture);
+        string number = WithoutNegativeZero(value.ToString(readout.Format, CultureInfo.InvariantCulture));
         return readout.Suffix.Length == 0 ? number : $"{number} {readout.Suffix}";
     }
+
+    /// <summary>
+    /// An already-formatted number without the sign .NET leaves on a negative that rounds to zero
+    /// ("-0", "-0.0"), which a screen reader reads "minus zero"; any other string is returned unchanged.
+    /// </summary>
+    public static string WithoutNegativeZero(string formatted) =>
+        formatted.Length > 1 && formatted[0] == '-' && formatted.Any(char.IsAsciiDigit)
+            && formatted.All(c => !char.IsAsciiDigit(c) || c == '0')
+            ? formatted.Substring(1)
+            : formatted;
 
     /// <summary>TRANSPONDER CODE:1 arrives as a BCD16 word (0x2000 for 2000); each nibble is a digit.</summary>
     public static string DecodeSquawk(double raw)

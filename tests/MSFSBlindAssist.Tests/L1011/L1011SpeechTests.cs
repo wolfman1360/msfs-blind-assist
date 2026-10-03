@@ -25,6 +25,25 @@ public class L1011SpeechTests
     }
 
     [Fact]
+    public void A_reading_just_below_zero_never_says_minus_zero()
+    {
+        var saved = CultureInfo.CurrentCulture;
+        try
+        {
+            foreach (var culture in new[] { CultureInfo.InvariantCulture, new CultureInfo("de-DE") })
+            {
+                CultureInfo.CurrentCulture = culture;
+                Assert.Equal("Flap handle up, flaps 0 degrees", L1011Speech.Flaps(0, -0.2));
+                Assert.Equal("Gear lever up, gear in transit: left 0, nose 35, right 42 percent", L1011Speech.Gear(100, -0.2, 35, 41.6));
+            }
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = saved;
+        }
+    }
+
+    [Fact]
     public void Gear_reads_the_lever_then_the_legs()
     {
         Assert.Equal("Gear lever down, gear down", L1011Speech.Gear(0, 100, 100, 100));

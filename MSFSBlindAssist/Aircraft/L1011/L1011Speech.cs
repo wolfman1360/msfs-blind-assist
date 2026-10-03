@@ -18,7 +18,7 @@ public static class L1011Speech
         string handle = L1011Levers.FlapPositions.TryGetValue(Math.Round(handleIndex), out var w)
             ? w.ToLowerInvariant()
             : "between detents";
-        return $"Flap handle {handle}, flaps {Math.Round(angleDegrees).ToString("0", Inv)} degrees";
+        return $"Flap handle {handle}, flaps {L1011Readouts.WithoutNegativeZero(Math.Round(angleDegrees).ToString("0", Inv))} degrees";
     }
 
     /// <summary>
@@ -43,5 +43,5 @@ public static class L1011Speech
     /// <summary>"Altimeter 1013, 29.92": hectopascals, then inches.</summary>
     public static string Altimeter(double millibars) => L1011Levers.AltimeterConfirmation("Altimeter", millibars);
 
-    private static string Pct(double value) => Math.Round(value).ToString("0", Inv);
+    private static string Pct(double value) => L1011Readouts.WithoutNegativeZero(Math.Round(value).ToString("0", Inv));
 }
