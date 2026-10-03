@@ -1,0 +1,638 @@
+[Preflight - Cockpit safety inspection]
+Circuit breakers: checked
+Engine and APU fire handles: in
+Continuous ignition: unlatched
+Essential & no. 2 radio master switches: latch
+Gear lever: down
+Speed brake handle: fwd
+Flaps & flap handle: agree
+Throttles: closed
+Fuel & ignition switches: off
+Transponder: STBY
+Radar: off
+ATM switches: off
+AC hydraulic pump switches: unlatched
+Fuel tank pump switches: unlatched
+Master jettison & dump switches: unlatched
+Passenger oxygen manual switch: guarded & unlatched
+Standby power check - Battery switch: off
+Standby power check - Standby power: on
+Standby power check - Unarm light: on
+Standby power check - STBY pwr flowbar: on
+Standby power check - DC & AC ESS bus fail lights: on
+Standby power check - DC & AC STBY bus fail lights: out
+Standby power check - DC meter selector: STBY DC bus
+Standby power check - Check volts and amps: 26V TO 29v, 0a
+Standby power check - AC meter selector: inverter
+Standby power check - Check frequency and volts: 400Hz & 115v
+Battery: on
+Unarm light: out
+Standby power: arm
+STBY pwr flowbar: out
+DC & AC STBY bus fail lights: out
+AC ESS power selector: norm b3(g1)
+Flight engineer panel lights: set
+Overhead panel lights: set
+Main panel lights: set
+Center console flood lights: set
+Center console lights: set
+Engine & APU fire test - Detection loop selectors: both
+Engine & APU fire test - Loop a & b test: press
+Engine & APU fire test - Fire bell: on
+Engine & APU fire test - Loop a & b lights: on
+Engine & APU fire test - Master fire warning lights: on
+Engine & APU fire test - Fire det loop light: on
+Engine & APU fire test - Fire pull handle lights: on
+Engine & APU fire test - Loop a & b test: press TO release
+Engine & APU fire test - Detection loop selectors: a
+Engine & APU fire test - Loop a test: press
+Engine & APU fire test - Fire bell: on
+Engine & APU fire test - Loop a lights: on
+Engine & APU fire test - Master fire warning lights: on
+Engine & APU fire test - Fire det loop light: on
+Engine & APU fire test - Fire pull handle lights: on
+Engine & APU fire test - Loop a test: press TO release
+Engine & APU fire test - Detection loop selectors: b
+Engine & APU fire test - Loop b test: press
+Engine & APU fire test - Fire bell: on
+Engine & APU fire test - Loop b lights: on
+Engine & APU fire test - Master fire warning lights: on
+Engine & APU fire test - Fire det loop light: on
+Engine & APU fire test - Fire pull handle lights: on
+Engine & APU fire test - Loop b test: press TO release
+Engine & APU fire test - Detection loop selectors: both
+External electrical power connection - Gpu: connect
+External electrical power connection - External power light: avail
+External electrical power connection - AC meter selector: ext power
+External electrical power connection - Check voltage: 114V +/- 7v
+External electrical power connection - Check frequency: 400Hz +/- 4hz
+External electrical power connection - External power switch: on
+External electrical power connection - Bus tie breakers: close
+APU start - APU master power switch: on
+APU start - Bleed air shut off switch: unlatched
+APU start - Compressor mode selector: min
+APU start - One tank boost pump: on
+APU start - Engine 2 tank valve switch: on
+APU start - Start switch: press & release
+When APU start is complete - APU generator field & breaker switches: latch
+When APU start is complete - Bus tie breakers: close
+Air conditioning start - Fuselage isolation valve switch: latch
+Air conditioning start - Crossbleed valve switches: latch
+Air conditioning start - Pack flow control valve switches: unlatched
+Air conditioning start - Pack auto/manual control switches: auto
+Air conditioning start - Ground control ram/auto switch: as required
+Air conditioning start - Hot air isolation valve switches: unlatched
+Air conditioning start - Hot air valve switches: unlatched
+Air conditioning start - Zone trim switches: latched
+Air conditioning start - Zone temperature selectors: 12 O'clock
+Air conditioning start - Area overheat selector: a
+Air conditioning start - Area overheat test switch: press & hold
+Air conditioning start - Area ovht lights: on
+Air conditioning start - Wing anti-ice duct fail lights: on
+Air conditioning start - Area/duct overheat light: on
+Air conditioning start - Area overheat selector: b
+Air conditioning start - Area overheat test switch: press & hold
+Air conditioning start - Area ovht lights: on
+Air conditioning start - Wing anti-ice duct fail lights: on
+Air conditioning start - Area/duct overheat light: on
+Air conditioning start - Area overheat selector: both
+If ground air conditioning will be used - Ground air conditioning: on
+If APU bleed air will be used - Ground air conditioning: off
+If APU bleed air will be used - APU bleed air shut off switch: latch in
+Air conditioning start - Pack flow control valve switches: latch in
+Air conditioning start - APU mode selector: norm
+Air conditioning start - Hot air valve switches: latch in
+Air conditioning start - Hot air isolation valve switches: latch in
+Air conditioning start - Humidity control switch: as required
+All INS: align
+
+[Preflight - Flight engineer station preparation]
+Brake temperature panel check - Left gear 1f & 2f switches: latch in
+Brake temperature panel check - Test button: press & hold
+Brake temperature panel check - Test button: release
+Brake temperature panel check - Left gear 1f & 2f switch: unlatch
+Brake temperature panel check - Left gear 1r & 2r switches: latch in
+Brake temperature panel check - Test button: press & hold
+Brake temperature panel check - Test button: release
+Brake temperature panel check - Left gear 1r & 2r switch: unlatch
+Brake temperature panel check - Right gear 3f & 4f switches: latch in
+Brake temperature panel check - Test button: press & hold
+Brake temperature panel check - Test button: release
+Brake temperature panel check - Right gear 3f & 4f switch: unlatch
+Brake temperature panel check - Right gear 3r & 4r switches: latch in
+Brake temperature panel check - Test button: press & hold
+Brake temperature panel check - Test button: release
+Brake temperature panel check - Right gear 3r & 4r switch: unlatch
+Wheel well fire panel check - Detection loop selector: both
+Wheel well fire panel check - A & b test buttons: press
+Wheel well fire panel check - Fire bell: on
+Wheel well fire panel check - A & b loop lights: on
+Wheel well fire panel check - Master fire warning lights: on
+Wheel well fire panel check - Wheel well fire light: on
+Wheel well fire panel check - A & b test buttons: press
+Wheel well fire panel check - Detection loop selector: a
+Wheel well fire panel check - A test button: press
+Wheel well fire panel check - Fire bell: on
+Wheel well fire panel check - A loop lights: on
+Wheel well fire panel check - Master fire warning lights: on
+Wheel well fire panel check - Wheel well fire light: on
+Wheel well fire panel check - A test button: press
+Wheel well fire panel check - Detection loop selector: b
+Wheel well fire panel check - B test button: press
+Wheel well fire panel check - Fire bell: on
+Wheel well fire panel check - B loop lights: on
+Wheel well fire panel check - Master fire warning lights: on
+Wheel well fire panel check - Wheel well fire light: on
+Wheel well fire panel check - B test button: press
+Wheel well fire panel check - Detection loop selector: both
+Engine turbine cooling air panel check - A & b test buttons: press
+Engine turbine cooling air panel check - Eng 1, 2, 3 ovht lights: on
+Engine turbine cooling air panel check - Turb air ovht eng 1, 2, 3 lights: on
+Engine turbine cooling air panel check - A & b test buttons: press
+Fire extinguisher test panel check - Test button: press & hold
+Fire extinguisher test panel check - Main & altn lights: on
+Fire extinguisher test panel check - Test button: release
+Hydraulic panel check - Hydraulic fluid levels: in green band
+Hydraulic panel check - Reservoir lo qty & hi tem lights: out
+Hydraulic panel check - Engine pump shut off switches: latched
+Hydraulic panel check - Edp case drain hi tem lights: off
+Hydraulic panel check - Edp output lo pr lights: on
+Hydraulic panel check - ATM switches: off
+Hydraulic panel check - ATM tachometers: zero
+Hydraulic panel check - ATM lube hi tem & lo pr lights: out
+Hydraulic panel check - ATM pump case drain hi tem lights: out
+Hydraulic panel check - ATM pump output lo pr lights: out
+Hydraulic panel check - PTU switches: unlatched
+Hydraulic panel check - RAT unlocked light: out
+Hydraulic panel check - B AC pump switch: latch
+Hydraulic panel check - System b pressure: normal
+Hydraulic panel check - Norm brake accumulator low press light: out
+Hydraulic panel check - C AC pump switch: latch
+Hydraulic panel check - System c pressure: normal
+Hydraulic panel check - Altn brake accumulator low press light: out
+Hydraulic panel check - PTU switches: latch
+Hydraulic panel check - Minimum system a hydraulic pressure: 900 Psi
+Hydraulic panel check - Minimum system d hydraulic pressure: 1400 Psi
+Hydraulic panel check - AC pump & PTU switches: unlatch
+Hydraulic panel check - Hydraulic pressure gauges: zero
+Electrical panel check - IDG oil temperatures: normal
+Electrical panel check - Galley power bus switches: as required
+Electrical panel check - IDG low press lights: on
+Electrical panel check - AC meter selector: APU or ext pwr
+Electrical panel check - Engine generator field trip switches: press
+Electrical panel check - Brg, diff & flowbar lights: out
+Electrical panel check - Engine generator breaker close switches: press
+Electrical panel check - APU KW/KVAR meter: check
+Electrical panel check - Engines KW/KVAR meters: zero
+Electrical panel check - DC meter: check
+Electrical panel check - DC meter: bat
+Electrical panel check - AC ESS power selector: norm b3(g1)
+Electrical panel check - Flt sta bus fail lights: out
+Electrical panel check - Bus tie breakers: closed
+Fuel system panel check - Refuel power light: out
+Fuel system panel check - Fuel quantity test switch: press & hold
+Fuel system panel check - Fuel quantity test switch: release
+Fuel system panel check - 2L & 2r tank quantities: check
+Fuel system panel check - 1 & 3 Tank quantities: check
+Fuel system panel check - 1A & 3a tank quantities: check
+Fuel system panel check - 1A & 3a transfer switches: unlatched
+Fuel system panel check - Tank pump switches: all on, then off
+Fuel system panel check - Crossfeed switches: open, then close
+Fuel system panel check - All engine tank valve switches: latched
+Fuel jettison panel check - Master & tank jettison switches: unlatched
+Engine fuel panel check - Fuel control amplifier switches: unlatched
+Engine fuel panel check - Fuel used/fuel flow indicators: press & hold
+Engine fuel panel check - Fuel used/fuel flow indicators: release
+Engine fuel panel check - Fuel used reset switch: press
+Engine oil panel check - Filter pressure lights: out
+Engine oil panel check - Oil press ind test switch: press & hold
+Engine oil panel check - Oil press ind test switch: release
+Engine oil panel check - Oil temperature test switch: press & hold
+Engine oil panel check - Oil temperature test switch: release
+Engine oil panel check - Oil quantity: check
+Engine oil panel check - Oil quantity test switch: press & hold
+Engine oil panel check - Oil quantity test switch: release
+Engine status panel check - A (fan) switch: latch
+Engine status panel check - Filter selector: norm
+Engine status panel check - Test button: press & hold
+Engine status panel check - Test button: release
+Engine status panel check - Filter selector: low
+Engine status panel check - Test button: press & hold
+Engine status panel check - Test button: release
+Engine status panel check - Filter selector: med
+Engine status panel check - Test button: press & hold
+Engine status panel check - Test button: release
+Engine status panel check - Filter selector: high
+Engine status panel check - Test button: press & hold
+Engine status panel check - Test button: release
+Engine status panel check - A (fan) switch: unlatch
+Engine status panel check - B (turb) switch: latch
+Engine status panel check - Filter selector: norm
+Engine status panel check - Test button: press & hold
+Engine status panel check - Test button: release
+Engine status panel check - Filter selector: low
+Engine status panel check - Test button: press & hold
+Engine status panel check - Test button: release
+Engine status panel check - Filter selector: med
+Engine status panel check - Test button: press & hold
+Engine status panel check - Test button: release
+Engine status panel check - Filter selector: high
+Engine status panel check - Test button: press & hold
+Engine status panel check - Test button: release
+Engine status panel check - B (turb) switch: unlatch
+Engine status panel check - N2 test buttons: press & hold
+Engine status panel check - N2 test buttons: release
+Engine status panel check - Reverser pressure lights: out
+Clock: check
+Movie interrupt switch: unlatched
+Waste water panel check - Pump fwd light: out
+Waste water panel check - Drainmast heater switches: latched in
+Forward cargo compartment smoke panel check - Smoke detector channel selector: both
+Forward cargo compartment smoke panel check - Test switch: press & hold
+Forward cargo compartment smoke panel check - Test switch: release
+Smoke detection panel check - Smoke detection circuit selector: both
+Smoke detection panel check - Test switch: press & hold
+Smoke detection panel check - Test switch: release
+Flight engineer annunciator panel lights: check
+Aural warning test panel check - All modes: set individually
+Aural warning test panel check - Test switch: press & hold
+Aural warning test panel check - Test switch: release
+Slat monitor panel check - Monitor switch: latch
+Slat monitor panel check - Segment lights: off or on
+Slat monitor panel check - Position indicator: check
+Slat monitor panel check - Monitor switch: unlatch
+Slat monitor panel check - Lock switch: check
+Engine bleed control panel check - Hi pressure bleed switches: latched
+Engine bleed control panel check - Engine isolation valve switches: latched
+Engine bleed control panel check - Fuselage isolation valve switches: latched
+Engine bleed control panel check - Crossbleed valve switches: latched
+Engine bleed control panel check - Pack flow control switches: latched
+Engine bleed control panel check - Auto/mnl switches: auto
+Engine bleed control panel check - Hot air switches: latched
+Engine bleed control panel check - Hot air isolation switches: latched
+Engine bleed control panel check - Ground control ram auto switch: as required
+Engine bleed control panel check - Zone trim switches: latched
+Engine bleed control panel check - Zone temp selectors: set
+ECS monitor panel check - Cool air ovbd switch: latched
+ECS monitor panel check - Cargo heat switches: latched
+ECS monitor panel check - Temp selec switch: zone
+ECS monitor panel check - Zone temperatures: check
+ECS monitor panel check - Cabin temperature selector: mid cab
+ECS monitor panel check - ECS temperature selector: acm disch
+ECS monitor panel check - Pack selector: pack 2
+Cabin pressure control panel check - Mode sel: gnd chk
+Cabin pressure control panel check - Alt sel control panel: below airport elevation
+Cabin pressure control panel check - Mode sel: STBY
+Cabin pressure control panel check - STBY rate: dscd
+Cabin pressure control panel check - STBY rate: hold
+Cabin pressure control panel check - Mode sel: norm
+Cabin pressure control panel check - Alt sel control: set airport elevation
+Cabin pressure control panel check - Fwd & aft manual switches: latch in
+Cabin pressure control panel check - Fwd manual switch: check
+Cabin pressure control panel check - Aft manual switch: check
+Cabin pressure control panel check - Fwd & aft manual switches: unlatch
+Cabin pressure control panel check - Norm rate selector: set TO index
+Cabin pressure control panel check - Baro set control: set QNH
+Cabin pressure control panel check - Alt sel control: set cruise altitude
+
+[Preflight - Overhead preparation]
+INS 1: check alignment
+Fire pull handles: in
+INS 2: check alignment
+Compass 2: mag & sync
+Light test switch: latch
+Master radio switches: on
+F/o wiper: off
+Engine anti-ice switches: unlatched
+Wing anti-ice switches: unlatched
+Windshield heat panel set - Capt & f/o switches: latched
+Windshield heat panel set - Side window switches: latch in
+Windshield heat panel set - Test button: press & hold
+Windshield heat panel set - Test button: release
+Windshield heat panel set - Defog fan switch: as required
+Air data sensor heat switches: all off
+Mach feel switches 1 & 2: latched
+Hydraulic rudder travel limiter switch: latched
+Cockpit voice recorder test button: press & hold for 6 seconds
+Cockpit voice recorder test button: release
+Engine start lights: all out
+Ignition: a or b
+Instrument standby lights: brt
+All PFCS switches: latched
+PFCS stabilizer switches lights: inop
+All FCES switches: latched
+Yaw SAS & ACS fail lights: on
+Compass 1: mag & sync
+INS 3: check alignment
+Anti-skid set - Brake selector switch: norm sys b
+Anti-skid set - Parking brake: release
+Anti-skid set - Anti-skid switch: latch
+Anti-skid set - Norm test button: press & hold
+Anti-skid set - Norm test button: release
+Anti-skid set - Alt test button: press & hold
+Anti-skid set - Alt test button: release
+Anti-skid set - Anti-skid switch: unlatch
+Anti-skid set - Parking brake: set
+Auto brake: off
+Capt wiper: off
+Exterior lights - Wing landing: off
+Exterior lights - Nose wheel: off
+Exterior lights - Rwy turnoff: off
+Exterior lights - Logo: on
+Exterior lights - Position: on
+Exterior lights - Strobe: off
+Exterior lights - Anti-collision: off
+Exterior lights - Wing flood: off
+Exterior lights - Wheel well: off
+Emergency lights test - Emergency lighting switch: on
+Emergency lights test - Emergency lighting switch: off
+Emergency lights test - Emergency lighting switch: arm
+Standby power: armed
+Seat belts: on
+No smoking: on
+
+[Preflight - Main panel preparation]
+Radio/INS selector: as required
+Nav1: set
+Nav1 DME: norm
+Autopilot set - IAS: v2+70
+Autopilot set - Heading: runway heading
+Autopilot set - Flight directors: on
+Autopilot set - Autopilot masters: off
+Autopilot set - Course 1 & 2: set
+Autopilot set - Altitude: set & armed
+Autopilot set - TO/GA: engage
+Nav2: set
+Nav2 DME: norm
+Instrument comparator test - Test 1 switch: press & hold
+Instrument comparator test - Test 1 switch: release
+Instrument comparator test - Test 2 switch: press & hold
+Instrument comparator test - Test 2 switch: release
+AFCS mode test - Test 1 switch: press & hold
+AFCS mode test - Test 2 switch: release
+AFCS mode test - Test 2 switch: press & hold
+AFCS mode test - Test 2 switch: release
+Instrument panel set - Asi: no flags, 60kt
+Instrument panel set - ADI: erect, no flags
+Instrument panel set - Radio altimeter: 5 Feet, no flags
+Instrument panel set - Altimeter: set QNH, no flags
+Instrument panel set - Standby horizon: erect, no flags
+Instrument panel set - Standby asi: no flags, 60kt
+Instrument panel set - Standby altimeter: set QNH, no flags
+Instrument panel set - Rddmi: check heading, no flags
+Instrument panel set - HSI: set course, no flags
+Instrument panel set - Vsi: no flags
+Instrument panel set - Instrument source selector: normal
+Instrument panel set - Annunciators: checked
+Instrument panel set - Engine instruments: checked
+Instrument panel set - Landing gear: down, 3 green
+Instrument panel set - Brake system pressure: normal
+Instrument panel set - Brake system: norm sys b
+
+[Preflight - Center console preparation]
+INS 1 & 2: set
+PMS: set
+Pitch & roll disconnect handles: normal
+Parking brake: set
+Speed brake lever: forward
+Throttles: closed
+Flaps lever: check
+Fuel & ignition switches: off
+Communication radios: set
+Audio selector panel: set
+ADF: set
+Transponder: set & STBY
+Radar: STBY
+INS 3: set
+Rudder & aileron trim: zero
+
+[Pushback - Engine start]
+All INS: NAV
+Transponder: ta/ra
+Seatbelt sign: on
+Anti coll light: on
+Start ignition: a or b
+Door lights: out
+Galley power: off
+Fuel pump: minimum one on
+If APU air will be used for start - APU: min mode
+If APU air will be used for start - Packs: pack 2 on
+If APU air will be used for start - All engine isolation valves: latched
+If APU air will be used for start - Pneumatic pressure: 24 Psi minimum
+If ground air will be used for start - PFB air start unit: connect
+If ground air will be used for start - Packs: all off
+If ground air will be used for start - All engine isolation valves: latched
+If ground air will be used for start - Pneumatic pressure: 24 Psi minimum
+Engine 2 ground start switch: push
+At 20% N3: fuel & ignition on
+At 55% N3: gnd start switch released
+Engine parameters: check
+If APU air is used for the next start - Engine 2 isln valve: unlatch
+If APU air is used for the next start - Crossbleed valves: latched
+If external air is used for the next start - Engine 2 isln valve: unlatch
+If external air is used for the next start - Crossbleed valves: latched
+If crossbleed air is used for the next start - APU bleed air shut off switch: unlatch
+If crossbleed air is used for the next start - PFB air start unit: disconnect
+If crossbleed air is used for the next start - Start duct pressure: 25-30Psi
+If crossbleed air is used for the next start - If pressure below 25psi: pack 2 off
+Fuel pump: minimum one on
+Engine 1 ground start switch: push
+At 20% N3: fuel & ignition on
+At 55% N3: gnd start switch released
+Engine parameters: check
+If APU air is used for the next start - Engine 1 isln valve: unlatch
+If APU air is used for the next start - Crossbleed valves: latched
+If external air is used for the next start - Engine 1 isln valve: unlatch
+If external air is used for the next start - Crossbleed valves: latched
+If crossbleed air is used for the next start - APU bleed air shut off switch: unlatch
+If crossbleed air is used for the next start - PFB air start unit: disconnect
+If crossbleed air is used for the next start - Start duct pressure: 25-30Psi
+If crossbleed air is used for the next start - If pressure below 25psi: pack 2 off
+Fuel pump: minimum one on
+Engine 3 ground start switch: push
+At 20% N3: fuel & ignition on
+At 55% N3: gnd start switch released
+Engine parameters: check
+Engine generator field: close
+Engine generator breaker: close
+If APU air was used for start - APU generator breaker: trip
+If APU air was used for start - APU bleed air shut off switch: unlatch
+If APU air was used for start - APU stop button: press
+If APU air was used for start - APU master power: off
+If external air was used for start - External power switch: off
+If external air was used for start - PFB air start unit: disconnect
+If external air was used for start - Gpu: disconnect
+
+[Taxi out - After start]
+Engine bleed control panel - All engines hi press switches: latched
+Engine bleed control panel - All eng isol valve: latch
+Engine bleed control panel - Fuselage isolation valve switch: latched
+Engine bleed control panel - All cross bleed switches: latched
+Engine bleed control panel - Pack flow control switches: latch
+Hydraulic panel - Atms: on
+Hydraulic panel - Atms: auto
+Hydraulic panel - Warning lights: out
+Hydraulic panel - Hydraulic pressures: normal
+Electrical panel - Galley power: on
+Electrical panel - Engine generator field: close
+Electrical panel - Engine generator breaker: close
+Electrical panel - Generator loads: approximately equal
+Electrical panel - IDG temperatures: normal
+Electrical panel - IDG low pressure lights: out
+Electrical panel - All bus fail lights: out
+Electrical panel - ESS AC on alt light: out
+Electrical panel - AC meter selector: gen 3
+Electrical panel - DC meter selector: bat
+Electrical panel - Essential power selector: normal b3 (g1)
+Fuel panel - Fuel tank pumps: all on
+Fuel panel - Crossfeed valves: closed
+Fuel panel - If there is fuel in tanks 1a/3a: latch xfr
+Capt & f/o pitot heat: on
+Alpha probe heat: on
+Capt & f/o windshield heat: on
+Side window heat switches: on
+Engine anti-ice: as required
+Engine ignition: both
+Stabilizer trim: set for take off
+Speed brakes: check
+Flaps: set for take off
+Flight controls: check
+
+[Taxi out - Taxi]
+Nose wheel taxi light: on
+Rwy turnoff lights: as required
+Parking brake: release
+Brakes: check
+Speed: maximum 25 kt
+
+[Runway - Line up]
+Normal: pack 2 only - Normal: pack 2 only: pack 1 & 3 off
+All off - All off: all packs off
+Antiskid: on
+Autobrake: as required
+Strobe lights: on
+Landing lights: on
+Continuous ignition: on
+Temp probe heat: on
+Transponder: ta/ra
+Radar: on
+
+[Takeoff - Take off]
+Autopilot modes: check
+Thrust levers: vertical
+When engines stabilized: set thrust
+Engine 2 fail light: monitor
+At VR: rotate
+Initial speed target: v2+10
+Positive rate of climb: landing gear up
+At acceleration altitude - Pitch: set 10º
+At acceleration altitude - At V2+10: set flaps 10º
+At acceleration altitude - At V2+20: set flaps 4º
+At acceleration altitude - When flaps are at 4º: set climb thrust
+At acceleration altitude - At V2+60: set flaps up
+At acceleration altitude - Minimum clean speed: V2 + 70
+
+[Climb - Climb]
+Autobrake: off
+Nose wheel landing & taxi lights: off
+Rwy turnoff lights: off
+Continuous ignition: off
+Packs: on
+Passing 5,000ft agl - 1A & 3a xfr switches: open
+Fuel quantity not equal in tanks 1, 2l+2r, 3 - All crossfeed valves: open
+Fuel quantity not equal in tanks 1, 2l+2r, 3 - Tank 2l & 2r pumps: off
+Fuel quantity not equal in tanks 1, 2l+2r, 3 - Tank 1 & 3 pumps: on
+Fuel quantity equal in tanks 1, 2l+2r, 3 - All tank pumps: on
+Fuel quantity equal in tanks 1, 2l+2r, 3 - All crossfeed valves: closed
+At 10,000 ft - Seatbelt signs: off
+At 10,000 ft - Landing lights: off
+At transition altitude - Altimeters: set 1013/29.92
+
+[Descent - Descent]
+Landing data: prepared
+30 Mins before landing: seatbelt signs on
+At transition level - Altimeters: set QNH
+At transition level - Flt cab alt sel: set destination elevation
+At transition level - Baro set: set QNH
+At 10,000 ft - Landing lights: on
+
+[Approach - Approach]
+Fuel panel - 1A & 3a xfr switches: close
+Fuel panel - All tank pumps: on
+Fuel panel - All crossfeed valves: close
+Configuration - Minimum clean speed: vref+60
+Configuration - At minimum vref+60: flaps 4º
+Configuration - At minimum vref+40: flaps 10º
+Configuration - At minimum vref+30: flaps 22º
+Configuration - Landing gear: down
+Configuration - At minimum vref+20: flaps 33º
+Configuration - Autobrake: set
+Configuration - Nose wheel landing & taxi lights: on
+Configuration - Rwy turnoff lights: on
+Configuration - Continuous ignition: on
+
+[Approach - Go-around]
+Go-around thrust: apply
+Pitch target: 18º
+After descent stopped: flaps 22º
+Positive rate of climb: gear up
+At acceleration altitude - Pitch: set 10º
+At acceleration altitude - At vref+10: set flaps 10º
+At acceleration altitude - At vref+20: set flaps 4º
+At acceleration altitude - When flaps are at 4º: set climb thrust
+At acceleration altitude - At vref+60: set flaps up
+At acceleration altitude - At vref+70: vref + 70
+Autobrake: off
+Nose wheel landing & taxi lights: off
+Rwy turnoff lights: off
+Continuous ignition: off
+
+[Taxi in - After landing]
+Antiskid: off
+Autobrake: off
+Landing lights: off
+Strobe lights: off
+Continuous ignition: off
+Air data sensor heaters: all off
+Windshield heat panel - Capt & f/o: idle
+Windshield heat panel - Side windows: off
+Stabilizer trim: zero
+Speedbrake lever: forward
+Flaps: up
+Radar: off
+APU master power: on
+APU: start
+Fuel panel - All crossfeed valves: open
+Fuel panel - Tank pumps: one on
+Fuel panel - 1A & 3a xfr switches: unlatch
+
+[Parking - Parking]
+Nose wheel landing & taxi lights: off
+Rwy turnoff lights: off
+Parking brake: set
+If APU power will be used - APU generator field: close
+If APU power will be used - APU generator breaker: close
+If external power will be used - Gpu: connect
+If external power will be used - External power switch: on
+Fuel & ignition switches: off
+Anti coll light: off
+Seatbelts sign: off
+INS: all off
+Transponder: STBY
+Atms & AC hyd pumps: off
+Tank pumps: one on
+APU bleed air shut off valve: on
+
+[Parking - Securing]
+Emergency exit lights: off
+Standby power: off
+Master radio switches: off
+Galley power: off
+If APU power was used - APU generator breaker: trip
+If APU power was used - APU bleed air shutoff valve: unlatch
+If APU power was used - APU stop button: press
+If APU power was used - APU master power: off
+If external electrical power was used - External power switch: off
+If external electrical power was used - Gpu: disconnect
+Fuel tank pumps: off
+Battery switch: off
