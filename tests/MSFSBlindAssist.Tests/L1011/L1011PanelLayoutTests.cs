@@ -92,6 +92,39 @@ public class L1011PanelLayoutTests
         Assert.Equal("Fast left rotation", compass.Positions[0]);
     }
 
+    [Theory]
+    [InlineData("OFF", "Off")]
+    [InlineData("ALTITUDE MODE ON", "Altitude mode on")]
+    [InlineData("TA/RA", "TA/RA")]
+    [InlineData("APU GENERATOR", "APU generator")]
+    [InlineData("STANDBY DC BUS", "Standby DC bus")]
+    [InlineData("LOOP A", "Loop A")]
+    [InlineData("SYSTEM B", "System B")]
+    [InlineData("IGNITION SYSTEM A", "Ignition system A")]
+    [InlineData("A", "A")]
+    [InlineData("TANK 1A", "Tank 1A")]
+    [InlineData("N1 VIBRATION", "N1 vibration")]
+    [InlineData("BUS 3 (GENERATOR 1)", "Bus 3 (generator 1)")]
+    public void Position_words_keep_acronyms_and_single_letters_in_capitals(string tooltip, string spoken)
+    {
+        Assert.Equal(spoken, L1011PanelLayout.SpokenWord(tooltip));
+    }
+
+    [Fact]
+    public void Every_single_letter_in_a_placed_position_word_is_a_capital()
+    {
+        foreach (var row in Placement.RowsByPanel.Values.SelectMany(r => r).Where(r => r.Control?.Kind is L1011Kinds.Switch or L1011Kinds.Spring))
+        {
+            foreach (var word in row.Positions.Values)
+            {
+                var lower = word.Split(new[] { ' ', '/', '-', '(', ')' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Where(t => t.Length == 1 && char.IsLetter(t[0]) && !char.IsUpper(t[0]))
+                    .ToList();
+                Assert.True(lower.Count == 0, $"{row.Key}: \"{word}\"");
+            }
+        }
+    }
+
     [Fact]
     public void ParsePositions_reads_the_override_syntax()
     {

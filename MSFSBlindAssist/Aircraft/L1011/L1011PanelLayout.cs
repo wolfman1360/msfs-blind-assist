@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 
 namespace MSFSBlindAssist.Aircraft.L1011;
 
@@ -43,8 +44,8 @@ public sealed class L1011Placement
 /// Names are what a pilot says, with the discriminator first ("Engine 1 fire handle", "Tank 2 left
 /// pump 1"), because iniBuilds' titles are shared by whole families ("TANK PUMP SWITCH" ×8).
 /// Position words come from the aircraft's tooltips; a row's <see cref="L1011Row.Positions"/>
-/// supplies the few the aircraft lacks. Words marked "(verified in sim)" in docs/l1011.md were
-/// checked live; every other override is listed there as needing a check.
+/// supplies the few the aircraft lacks. Position words not yet checked live are tracked in the
+/// "Verify in the simulator" list of docs/l1011.md.
 ///
 /// The AFCS glareshield panel, the INS/PMS keypads and the EFB are placed by later sessions.
 /// </summary>
@@ -79,13 +80,49 @@ public static partial class L1011PanelLayout
         return result;
     }
 
-    /// <summary>Spoken form of one of iniBuilds' upper-case tooltip words ("ALTITUDE MODE ON" → "Altitude mode on").</summary>
+    /// <summary>Abbreviations pilots say as letters, from the tooltip words of the rows placed through <see cref="SpokenWord"/>.</summary>
+    private static readonly HashSet<string> SpokenAsLetters = new(StringComparer.OrdinalIgnoreCase) { "APU", "DC", "RA", "TA" };
+
+    /// <summary>
+    /// Spoken form of one of iniBuilds' upper-case tooltip words: sentence case ("ALTITUDE MODE ON" →
+    /// "Altitude mode on"), except that a single letter ("Loop A"), a token with a digit ("1A", "N1")
+    /// and an abbreviation said as letters ("TA/RA", "APU generator") keep their capitals. Tokens are
+    /// separated by spaces, '/', '-', '(' and ')', which are kept as they were.
+    /// </summary>
     public static string SpokenWord(string word)
     {
         if (string.IsNullOrWhiteSpace(word))
             return word;
-        string lower = word.Trim().ToLowerInvariant();
-        return char.ToUpperInvariant(lower[0]) + lower.Substring(1);
+        string trimmed = word.Trim();
+        var spoken = new StringBuilder(trimmed.Length);
+        bool first = true;
+        int i = 0;
+        while (i < trimmed.Length)
+        {
+            if (IsWordSeparator(trimmed[i]))
+            {
+                spoken.Append(trimmed[i++]);
+                continue;
+            }
+            int start = i;
+            while (i < trimmed.Length && !IsWordSeparator(trimmed[i]))
+                i++;
+            spoken.Append(SpokenToken(trimmed.Substring(start, i - start), first));
+            first = false;
+        }
+        return spoken.ToString();
+    }
+
+    private static bool IsWordSeparator(char c) => c is ' ' or '/' or '-' or '(' or ')';
+
+    private static string SpokenToken(string token, bool first)
+    {
+        if (token.Any(char.IsAsciiDigit))
+            return token;
+        if ((token.Length == 1 && char.IsLetter(token[0])) || SpokenAsLetters.Contains(token))
+            return token.ToUpperInvariant();
+        string lower = token.ToLowerInvariant();
+        return first ? char.ToUpperInvariant(lower[0]) + lower.Substring(1) : lower;
     }
 
     /// <summary>
