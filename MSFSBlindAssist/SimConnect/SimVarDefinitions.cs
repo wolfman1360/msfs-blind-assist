@@ -191,7 +191,7 @@ public class SimVarDefinition
     /// HandleUIVariableSet double.NaN instead of the historical 0. Opt-in, because 0 is a real value
     /// for some fields (an FCU heading of 0 is north) and every other field's handler was written
     /// against the 0; only set it where the handler refuses NaN (the A32NX-family FCU heading, speed
-    /// and altitude fields, through FcuValueEntry).
+    /// and altitude fields, through FcuValueEntry, and the TriStar's typed values).
     /// </summary>
     public bool UnparseableTextAsNaN { get; set; }
     /// <summary>

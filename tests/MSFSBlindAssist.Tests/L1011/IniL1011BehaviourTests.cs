@@ -140,6 +140,26 @@ public class IniL1011BehaviourTests
     }
 
     [Fact]
+    public void A_typed_value_that_is_not_a_number_is_an_error_and_confirms_nothing()
+    {
+        _def.CanLand = _ => true;   // the refusal must come from the value, not the calculator path
+        var typed = L1011Levers.Keys.Where(k => k.EndsWith("_SET", StringComparison.Ordinal)).ToList();
+        var expected = new List<string>();
+        foreach (var key in typed)
+        {
+            Assert.True(Set(key, double.NaN));
+            string name = _def.GetVariables()[key].DisplayName;
+            string error = key == L1011Levers.SquawkKey ? L1011Levers.SquawkError
+                : L1011Levers.AltimeterIndex(key) != null ? L1011Levers.AltimeterRangeError
+                : L1011Levers.NavEntry(key) != null ? L1011Levers.NavRangeError
+                : L1011Levers.ComRangeError;
+            expected.Add($"{name}: {error}");
+        }
+        Assert.Equal(expected, _speech.All);
+        Assert.Empty(_reReads);
+    }
+
+    [Fact]
     public void The_breaker_list_button_opens_the_window_and_says_nothing()
     {
         bool opened = false;

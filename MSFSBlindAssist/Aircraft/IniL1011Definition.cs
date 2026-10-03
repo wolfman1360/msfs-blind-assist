@@ -294,6 +294,9 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
                     DisplayName = row.Name,
                     Type = SimVarType.LVar,
                     UpdateFrequency = UpdateFrequency.Never,
+                    // An empty or mistyped box arrives as NaN, which every typed value refuses with
+                    // its error; the historical 0 would be a valid squawk ("Squawk 0000").
+                    UnparseableTextAsNaN = true,
                 };
         }
     }
