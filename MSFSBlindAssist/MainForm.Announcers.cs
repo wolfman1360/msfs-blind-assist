@@ -345,6 +345,14 @@ public partial class MainForm
                     return; // Skip announcement for disabled variable
                 }
 
+                // Check if disabled in the L-1011 Monitor Manager (the base variables the TriStar
+                // announces on the generic path: ground state, glideslope and the like).
+                if (currentAircraft.AircraftCode == "INI_L1011" &&
+                    Settings.SettingsManager.Current.L1011DisabledMonitorVariablesSet.Contains(e.VarName))
+                {
+                    return; // Skip announcement for disabled variable
+                }
+
                 // Check if disabled in the A380 Monitor Manager.
                 if (currentAircraft.AircraftCode == "FBW_A380" &&
                     Settings.SettingsManager.Current.A380DisabledMonitorVariablesSet.Contains(e.VarName))
