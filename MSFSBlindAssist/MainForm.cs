@@ -626,6 +626,8 @@ public partial class MainForm : Form
         // to happen here as well — otherwise every panel row opens without a state, and nothing
         // is described until the pilot's first press. Idempotent: a later switch re-attaches.
         if (currentAircraft is TFDiMD11Definition startupMd11) startupMd11.Attach(simConnectManager);
+        // The TriStar likewise: its writes, readout keys and breaker window need the manager.
+        if (currentAircraft is IniL1011Definition startupL1011) AttachL1011(startupL1011);
         simConnectManager.ConnectionStatusChanged += OnConnectionStatusChanged;
         // A calc path that never came up is a DEGRADED session on FBW aircraft — overhead
         // switches can silently revert and the FCU can ignore commands. Say so once, rather
@@ -1306,6 +1308,11 @@ public partial class MainForm : Form
             md11ExitDef.Dispose();
             Log.Debug("MD11", "App exit: definition disposed.");
         }
+
+        // The TriStar's windows, then its definition, also before Disconnect(): a button held by a
+        // press (a 2 s test hold) owes its release, which Dispose sends while the sim is connected.
+        DisposeL1011Windows();
+        if (currentAircraft is IniL1011Definition l1011ExitDef) l1011ExitDef.Dispose();
 
         // Stop listening BEFORE Disconnect(). Disconnect ends by raising ConnectionLost, whose
         // handler calls currentAircraft.OnSimContextReset() — so on this path it re-entered the

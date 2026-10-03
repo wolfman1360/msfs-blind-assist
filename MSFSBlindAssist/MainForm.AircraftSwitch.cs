@@ -157,6 +157,7 @@ public partial class MainForm
             "HW_A330" => new HeadwindA330Definition(),
             "IFLY_737MAX8" => new IFly737MAXDefinition(),
             "TFDI_MD11" => new TFDiMD11Definition(),
+            IniL1011Definition.Code => new IniL1011Definition(),
             // Future aircraft will be added here
             _ => new FlyByWireA320Definition() // Default to A320
         };
@@ -803,6 +804,11 @@ public partial class MainForm
         if (oldAircraft is TFDiMD11Definition oldMd11 && !ReferenceEquals(oldAircraft, newAircraft))
             oldMd11.Dispose();
 
+        // The TriStar's definition releases any button it is still holding (a 2 s test hold) and
+        // stops writing before the next aircraft takes over.
+        if (oldAircraft is IniL1011Definition oldL1011 && !ReferenceEquals(oldAircraft, newAircraft))
+            oldL1011.Dispose();
+
         // An armed liftoff → Hand Fly handoff must not survive the switch — its
         // confirm could otherwise fire against the new aircraft in the middle of
         // the re-registration churn below (same hygiene as the disconnect path
@@ -829,6 +835,8 @@ public partial class MainForm
         // every button shows a bare label (Attach used to run only from a press or a hotkey).
         if (newAircraft is TFDiMD11Definition newMd11)
             newMd11.Attach(simConnectManager);
+        if (newAircraft is IniL1011Definition newL1011)
+            AttachL1011(newL1011);
 
         taxiGuidanceManager.TurnLeadSeconds = newAircraft.TaxiTurnLeadSeconds;
 
@@ -1005,6 +1013,9 @@ public partial class MainForm
             md11MonitorManagerForm.Dispose();
             md11MonitorManagerForm = null;
         }
+
+        // The TriStar's monitor manager and breaker list, for the same stale-snapshot reason.
+        DisposeL1011Windows();
 
         // The MD-11 EFB client holds the ONE inspector socket Coherent allows for that view —
         // leaving it open would block the page for the rest of the process, so the next aircraft
@@ -1230,6 +1241,7 @@ public partial class MainForm
         headwindA330MenuItem.Checked = false;
         ifly737MaxMenuItem.Checked = false;
         tfdiMd11MenuItem.Checked = false;
+        iniL1011MenuItem.Checked = false;
 
         // Set the check on the current aircraft's menu item.
         // NOTE: HeadwindA330Definition derives from FlyByWireA320Definition, so it MUST
@@ -1269,6 +1281,10 @@ public partial class MainForm
         else if (currentAircraft is IFly737MAXDefinition)
         {
             ifly737MaxMenuItem.Checked = true;
+        }
+        else if (currentAircraft is IniL1011Definition)
+        {
+            iniL1011MenuItem.Checked = true;
         }
     }
 
