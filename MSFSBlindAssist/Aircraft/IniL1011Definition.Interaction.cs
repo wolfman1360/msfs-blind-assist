@@ -270,6 +270,15 @@ public partial class IniL1011Definition
     /// <summary>How long a readout key waits for each value before saying it is unavailable.</summary>
     public const int ReadoutTimeoutMs = 1500;
 
+    /// <summary>The wait for the flap handle and the gear lever (F and G): they ride the 1 Hz
+    /// continuous batch, so a fresh read is answered by its NEXT delivery, up to a second away, and
+    /// 1.5 s left little for a slow one. The value the MD-11 uses for its batch read-backs.</summary>
+    public const int BatchReadoutTimeoutMs = 2500;
+
+    /// <summary>How long a readout key waits for <paramref name="key"/>.</summary>
+    internal static int ReadoutTimeoutFor(string key) =>
+        key is L1011Levers.FlapHandleKey or L1011Levers.GearLeverKey ? BatchReadoutTimeoutMs : ReadoutTimeoutMs;
+
     /// <summary>Reads each key fresh (in order) and speaks the composed text, or "{what} unavailable".</summary>
     private static async Task SpeakAsync(SimConnectManager sim, ScreenReaderAnnouncer announcer, string what,
         Func<double[], string> compose, params string[] keys)
@@ -279,7 +288,7 @@ public partial class IniL1011Definition
             var values = new double[keys.Length];
             for (int i = 0; i < keys.Length; i++)
             {
-                double? v = await sim.ReadFreshAsync(keys[i], ReadoutTimeoutMs);
+                double? v = await sim.ReadFreshAsync(keys[i], ReadoutTimeoutFor(keys[i]));
                 if (v == null)
                 {
                     announcer.AnnounceImmediate($"{what} unavailable");

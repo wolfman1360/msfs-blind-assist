@@ -160,6 +160,17 @@ public class IniL1011BehaviourTests
     }
 
     [Fact]
+    public void The_flap_and_gear_levers_are_waited_for_a_whole_batch_period()
+    {
+        // F and G read the levers, which ride the 1 Hz continuous batch and answer on its next
+        // delivery; the gauges beside them are on-request reads that answer at once.
+        Assert.Equal(2500, IniL1011Definition.ReadoutTimeoutFor(L1011Levers.FlapHandleKey));
+        Assert.Equal(2500, IniL1011Definition.ReadoutTimeoutFor(L1011Levers.GearLeverKey));
+        Assert.Equal(IniL1011Definition.ReadoutTimeoutMs, IniL1011Definition.ReadoutTimeoutFor("L1011_RO_FLAPS_ANGLE"));
+        Assert.Equal(IniL1011Definition.ReadoutTimeoutMs, IniL1011Definition.ReadoutTimeoutFor("L1011_RO_GEAR_LEFT"));
+    }
+
+    [Fact]
     public void The_breaker_list_button_opens_the_window_and_says_nothing()
     {
         bool opened = false;
