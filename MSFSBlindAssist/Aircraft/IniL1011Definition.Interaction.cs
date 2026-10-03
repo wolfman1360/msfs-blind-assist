@@ -1,5 +1,6 @@
 using MSFSBlindAssist.Accessibility;
 using MSFSBlindAssist.Aircraft.L1011;
+using MSFSBlindAssist.Forms;
 using MSFSBlindAssist.Hotkeys;
 using MSFSBlindAssist.SimConnect;
 using MSFSBlindAssist.Utils.Logging;
@@ -263,8 +264,142 @@ public partial class IniL1011Definition
                 simConnect.RequestSingleValue((int)SimConnectManager.DATA_DEFINITIONS.DEF_GROSS_WEIGHT_KG,
                     "TOTAL WEIGHT", "pounds", "GROSS_WEIGHT_KG");
                 return true;
+            // Input mode Ctrl+B: one entry sets the captain's, first officer's and standby altimeters.
+            case HotkeyAction.FCUSetBaro:
+                hotkeyManager.ExitInputHotkeyMode();
+                ShowAltimetersDialog(simConnect, announcer, parentForm);
+                return true;
+            // Input mode Ctrl+N: NAV 1 and NAV 2, frequency and course.
+            case HotkeyAction.SetNavRadios:
+                hotkeyManager.ExitInputHotkeyMode();
+                _ = ShowNavRadiosDialogAsync(simConnect, announcer, parentForm);
+                return true;
         }
         return base.HandleHotkeyAction(action, simConnect, announcer, parentForm, hotkeyManager);
+    }
+
+    // =================================================================================
+    // Input mode Ctrl+B and Ctrl+N
+    // =================================================================================
+
+    /// <summary>Shows a tracked dialog, or brings it forward when a second press finds it open.
+    /// Tracked so an aircraft switch closes it (<see cref="BaseAircraftDefinition.DisposeTrackedWindows"/>):
+    /// its writes would otherwise reach whatever aircraft is loaded next.</summary>
+    private static Action<T> ShowOrActivate<T>(Form parentForm) where T : Form => form =>
+    {
+        if (form.Visible)
+            form.Activate();
+        else
+            form.Show(parentForm);
+    };
+
+    /// <summary>
+    /// Ctrl+B: the shared value dialog, accepting what the typed altimeter fields accept (inches or
+    /// hectopascals, <see cref="L1011Levers.AltimeterMillibars"/>). One entry sets all three
+    /// altimeters in one string. No STD or units buttons: the TriStar's altimeters are steam gauges.
+    /// Nothing is pre-filled (the shared dialog has no initial value). Refused before the dialog
+    /// opens, and again when a value is set, when the calculator path cannot land.
+    /// </summary>
+    private void ShowAltimetersDialog(SimConnectManager sim, ScreenReaderAnnouncer announcer, Form parentForm)
+    {
+        if (!CanLand(sim))
+        {
+            announcer.AnnounceImmediate(L1011Levers.Unavailable(L1011Levers.AltimetersName));
+            return;
+        }
+        ShowTrackedWindow(
+            () => new ValueInputForm("Altimeter Setting", "altimeter",
+                "28.20 to 31.30 inches, or 955 to 1060 hectopascals; sets captain, first officer and standby",
+                announcer,
+                input => L1011Levers.AltimeterEntryMillibars(input) != null
+                    ? (true, "")
+                    : (false, L1011Levers.AltimetersEntryError),
+                new List<ToggleButtonDef>(),
+                input => SetAllAltimeters(input, sim, announcer))
+            {
+                ShowCancelButton = false,
+            },
+            ShowOrActivate<ValueInputForm>(parentForm));
+    }
+
+    /// <summary>Writes Ctrl+B's entry to the three altimeters and confirms the value ("Altimeters
+    /// 1013, 29.92"); the dialog has already refused an entry it cannot use.</summary>
+    private void SetAllAltimeters(string input, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        if (L1011Levers.AltimeterEntryMillibars(input) is not double mb)
+            return;
+        if (_disposed || !CanLand(sim))
+        {
+            announcer.AnnounceImmediate(L1011Levers.Unavailable(L1011Levers.AltimetersName));
+            return;
+        }
+        sim.ExecuteCalculatorCodeUnique(L1011Levers.AllAltimetersRpn(mb));
+        announcer.AnnounceImmediate(L1011Levers.AltimeterConfirmation(L1011Levers.AltimetersName, mb));
+    }
+
+    /// <summary>How long Ctrl+N waits for the NAV radios before opening with 108.00 and course 0.</summary>
+    public const int NavPrefillTimeoutMs = 2000;
+
+    /// <summary>
+    /// Ctrl+N: the shared NAV radios dialog, pre-filled from the NAV radios as they are now through
+    /// the fixed one-shot read every aircraft's N readout uses (<see cref="SimConnectManager.RequestNavRadioInfo"/>,
+    /// no new definition), or 108.00 and course 0 when it does not answer in time. Every await
+    /// resumes on the UI thread. Refused before the dialog opens, and again when the values are
+    /// set, when the calculator path cannot land.
+    /// </summary>
+    private async Task ShowNavRadiosDialogAsync(SimConnectManager sim, ScreenReaderAnnouncer announcer, Form parentForm)
+    {
+        if (!CanLand(sim))
+        {
+            announcer.AnnounceImmediate(L1011Levers.Unavailable(L1011Levers.NavRadiosName));
+            return;
+        }
+        try
+        {
+            SimConnectManager.NavRadioData? live = null;
+            var answer = new TaskCompletionSource<SimConnectManager.NavRadioData>(TaskCreationOptions.RunContinuationsAsynchronously);
+            sim.RequestNavRadioInfo(data => answer.TrySetResult(data));
+            try
+            {
+                live = await answer.Task.WaitAsync(TimeSpan.FromMilliseconds(NavPrefillTimeoutMs));
+            }
+            catch (TimeoutException)
+            {
+                Log.Debug("L1011", "NAV radios did not answer; the dialog opens with 108.00 and course 0.");
+            }
+            if (_disposed || parentForm.IsDisposed)
+                return;
+            ShowTrackedWindow(
+                () => new NavRadiosForm(announcer,
+                    L1011Levers.NavPrefillMegahertz(live?.Nav1Freq), L1011Levers.NavPrefillCourse(live?.Nav1Obs),
+                    L1011Levers.NavPrefillMegahertz(live?.Nav2Freq), L1011Levers.NavPrefillCourse(live?.Nav2Obs),
+                    settings => SetNavRadios(settings, sim, announcer)),
+                ShowOrActivate<NavRadiosForm>(parentForm));
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("L1011", $"NAV radios dialog failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>Tunes both NAV radios and sets both courses in one string, then confirms all four
+    /// values in one sentence. The dialog has already checked the ranges.</summary>
+    private void SetNavRadios(NavRadioSettings settings, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        string? rpn = L1011Levers.NavRadiosRpn(settings.Nav1FreqMHz, settings.Nav1Course, settings.Nav2FreqMHz, settings.Nav2Course);
+        if (rpn == null)
+        {
+            announcer.AnnounceImmediate($"{L1011Levers.NavRadiosName}: {L1011Levers.NavRangeError}, course 0 to 359");
+            return;
+        }
+        if (_disposed || !CanLand(sim))
+        {
+            announcer.AnnounceImmediate(L1011Levers.Unavailable(L1011Levers.NavRadiosName));
+            return;
+        }
+        sim.ExecuteCalculatorCodeUnique(rpn);
+        announcer.AnnounceImmediate(L1011Levers.NavRadiosConfirmation(
+            settings.Nav1FreqMHz, settings.Nav1Course, settings.Nav2FreqMHz, settings.Nav2Course));
     }
 
     /// <summary>How long a readout key waits for each value before saying it is unavailable.</summary>

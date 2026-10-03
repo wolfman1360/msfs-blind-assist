@@ -208,4 +208,65 @@ public static class L1011Levers
     public static string SquawkConfirmation(uint bcd) => $"Squawk {L1011Readouts.DecodeSquawk(bcd)}";
 
     public const string SquawkError = "enter four digits, each 0 to 7";
+
+
+    // ---- Input mode: Ctrl+B sets all three altimeters, Ctrl+N both NAV radios --------------
+
+    /// <summary>Ctrl+B's name in its refusal, error and confirmation ("Altimeters 1013, 29.92").</summary>
+    public const string AltimetersName = "Altimeters";
+
+    /// <summary>Ctrl+N's name in its refusal ("NAV radios unavailable").</summary>
+    public const string NavRadiosName = "NAV radios";
+
+    /// <summary>"{name} unavailable": the refusal when the calculator path cannot carry the write.</summary>
+    public static string Unavailable(string name) => $"{name} unavailable";
+
+    /// <summary>A dialog entry read the way the panels' typed fields read theirs: a decimal comma
+    /// counts as a point, then the invariant culture. Null when it is not a number.</summary>
+    public static double? ParseEntry(string text) =>
+        double.TryParse(text.Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out double v)
+            && double.IsFinite(v) ? v : null;
+
+    /// <summary>Ctrl+B's entry as millibars (the typed altimeter fields' range and rule,
+    /// <see cref="AltimeterMillibars"/>), or null.</summary>
+    public static double? AltimeterEntryMillibars(string text) =>
+        ParseEntry(text) is double typed ? AltimeterMillibars(typed) : null;
+
+    /// <summary>What Ctrl+B's dialog says for an entry it cannot use.</summary>
+    public static string AltimetersEntryError { get; } = $"{AltimetersName}: {AltimeterRangeError}";
+
+    /// <summary>Ctrl+B: one setting written to the captain's (1), first officer's (2) and standby (3)
+    /// altimeters, in that order, as one string.</summary>
+    public static string AllAltimetersRpn(double millibars) =>
+        $"{AltimeterRpn(1, millibars)} {AltimeterRpn(2, millibars)} {AltimeterRpn(3, millibars)}";
+
+    /// <summary>A course in whole degrees through the stock VORn_SET event, which is what the
+    /// TriStar's own course knobs send (its INSTRUMENTS script); the course lands in A:NAV OBS:n.</summary>
+    public static string NavCourseRpn(int radio, int degrees) =>
+        $"{degrees.ToString(CultureInfo.InvariantCulture)} (>K:VOR{radio}_SET)";
+
+    /// <summary>Ctrl+N: NAV 1's frequency and course, then NAV 2's, as one string; null when a
+    /// frequency is outside 108.00 to 117.95 or a course outside 0 to 359.</summary>
+    public static string? NavRadiosRpn(double nav1MHz, int nav1Course, double nav2MHz, int nav2Course)
+    {
+        if (NavFrequencyHz(nav1MHz) is not uint hz1 || NavFrequencyHz(nav2MHz) is not uint hz2
+            || nav1Course is < 0 or > 359 || nav2Course is < 0 or > 359)
+            return null;
+        return $"{NavFrequencyRpn(1, hz1)} {NavCourseRpn(1, nav1Course)} {NavFrequencyRpn(2, hz2)} {NavCourseRpn(2, nav2Course)}";
+    }
+
+    /// <summary>"NAV 1 110.30, course 45; NAV 2 113.90, course 270": one sentence, the typed NAV
+    /// fields' frequency wording.</summary>
+    public static string NavRadiosConfirmation(double nav1MHz, int nav1Course, double nav2MHz, int nav2Course) =>
+        $"{FrequencyConfirmation("NAV 1", nav1MHz, 2)}, course {nav1Course.ToString(CultureInfo.InvariantCulture)}; " +
+        $"{FrequencyConfirmation("NAV 2", nav2MHz, 2)}, course {nav2Course.ToString(CultureInfo.InvariantCulture)}";
+
+    /// <summary>Ctrl+N's pre-filled frequency: the radio's active frequency, or 108.00 when it is
+    /// unknown or outside the NAV band.</summary>
+    public static double NavPrefillMegahertz(double? megahertz) =>
+        megahertz is double m && double.IsFinite(m) && NavFrequencyHz(Math.Round(m, 2)) != null ? Math.Round(m, 2) : 108.0;
+
+    /// <summary>Ctrl+N's pre-filled course: the radio's course in whole degrees 0 to 359, or 0 when unknown.</summary>
+    public static int NavPrefillCourse(double? degrees) =>
+        degrees is double d && double.IsFinite(d) ? (((int)Math.Round(d) % 360) + 360) % 360 : 0;
 }

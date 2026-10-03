@@ -150,4 +150,133 @@ public class L1011LeversTests
             CultureInfo.CurrentCulture = saved;
         }
     }
+
+    // ---- Input mode Ctrl+B: one entry sets all three altimeters ---------------------------
+
+    [Theory]
+    [InlineData(29.92, "16211")]
+    [InlineData(1013, "16208")]
+    public void Ctrl_b_writes_the_captain_first_officer_and_standby_altimeters_in_that_order_in_one_string(
+        double typed, string word)
+    {
+        double mb = L1011Levers.AltimeterMillibars(typed)!.Value;
+        Assert.Equal(
+            $"{L1011Levers.AltimeterRpn(1, mb)} {L1011Levers.AltimeterRpn(2, mb)} {L1011Levers.AltimeterRpn(3, mb)}",
+            L1011Levers.AllAltimetersRpn(mb));
+        Assert.Equal(
+            $"1 {word} (>K:2:KOHLSMAN_SET) 2 {word} (>K:2:KOHLSMAN_SET) 3 {word} (>K:2:KOHLSMAN_SET)",
+            L1011Levers.AllAltimetersRpn(mb));
+    }
+
+    [Theory]
+    [InlineData("29.92", 1013.2)]
+    [InlineData("29,92", 1013.2)]
+    [InlineData(" 1013 ", 1013.0)]
+    [InlineData("28.20", 955.0)]
+    public void A_ctrl_b_entry_is_read_like_the_typed_altimeter_fields(string text, double millibars)
+    {
+        Assert.Equal(millibars, L1011Levers.AltimeterEntryMillibars(text)!.Value, 1);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("abc")]
+    [InlineData("50")]
+    [InlineData("2992")]
+    [InlineData("31.31")]
+    public void A_ctrl_b_entry_outside_the_range_or_not_a_number_is_refused(string text)
+    {
+        Assert.Null(L1011Levers.AltimeterEntryMillibars(text));
+    }
+
+    [Fact]
+    public void Ctrl_b_names_the_altimeters_in_its_error_refusal_and_confirmation()
+    {
+        Assert.Equal("Altimeters: enter 28.20 to 31.30 inches, or 955 to 1060 hectopascals", L1011Levers.AltimetersEntryError);
+        Assert.Equal("Altimeters unavailable", L1011Levers.Unavailable(L1011Levers.AltimetersName));
+        Assert.Equal("Altimeters 1013, 29.92",
+            L1011Levers.AltimeterConfirmation(L1011Levers.AltimetersName, L1011Levers.AltimeterEntryMillibars("29.92")!.Value));
+    }
+
+    // ---- Input mode Ctrl+N: both NAV radios, frequency and course ------------------------
+
+    [Fact]
+    public void Ctrl_n_tunes_both_radios_and_sets_both_courses_in_one_string()
+    {
+        Assert.Equal(
+            "110300000 (>K:NAV1_RADIO_SET_HZ) 45 (>K:VOR1_SET) 113900000 (>K:NAV2_RADIO_SET_HZ) 270 (>K:VOR2_SET)",
+            L1011Levers.NavRadiosRpn(110.3, 45, 113.9, 270));
+        Assert.Equal("45 (>K:VOR1_SET)", L1011Levers.NavCourseRpn(1, 45));
+        Assert.Equal("0 (>K:VOR2_SET)", L1011Levers.NavCourseRpn(2, 0));
+    }
+
+    [Theory]
+    [InlineData(121.5, 45, 113.9, 270)]
+    [InlineData(110.3, 45, 107.95, 270)]
+    [InlineData(110.3, 360, 113.9, 270)]
+    [InlineData(110.3, 45, 113.9, -1)]
+    public void Ctrl_n_refuses_a_frequency_or_course_out_of_range(double f1, int c1, double f2, int c2)
+    {
+        Assert.Null(L1011Levers.NavRadiosRpn(f1, c1, f2, c2));
+    }
+
+    [Fact]
+    public void Ctrl_n_confirms_both_radios_in_one_sentence_and_names_itself_when_refused()
+    {
+        Assert.Equal("NAV 1 110.30, course 45; NAV 2 113.90, course 270",
+            L1011Levers.NavRadiosConfirmation(110.3, 45, 113.9, 270));
+        Assert.Equal("NAV radios unavailable", L1011Levers.Unavailable(L1011Levers.NavRadiosName));
+    }
+
+    [Theory]
+    [InlineData(110.3, 110.3)]
+    [InlineData(117.95, 117.95)]
+    [InlineData(0.0, 108.0)]
+    [InlineData(121.5, 108.0)]
+    [InlineData(double.NaN, 108.0)]
+    [InlineData(null, 108.0)]
+    public void Ctrl_n_pre_fills_the_active_frequency_or_108(double? live, double expected)
+    {
+        Assert.Equal(expected, L1011Levers.NavPrefillMegahertz(live), 2);
+    }
+
+    [Theory]
+    [InlineData(45.2, 45)]
+    [InlineData(359.6, 0)]
+    [InlineData(-10.0, 350)]
+    [InlineData(double.NaN, 0)]
+    [InlineData(null, 0)]
+    public void Ctrl_n_pre_fills_the_course_in_whole_degrees_or_0(double? live, int expected)
+    {
+        Assert.Equal(expected, L1011Levers.NavPrefillCourse(live));
+    }
+
+    [Fact]
+    public void Ctrl_b_and_ctrl_n_texts_ignore_a_comma_culture()
+    {
+        double mb = L1011Levers.AltimeterEntryMillibars("29.92")!.Value;
+        string allAltimeters = L1011Levers.AllAltimetersRpn(mb);
+        string confirmation = L1011Levers.AltimeterConfirmation(L1011Levers.AltimetersName, mb);
+        string error = L1011Levers.AltimetersEntryError;
+        string? nav = L1011Levers.NavRadiosRpn(110.3, 45, 113.9, 270);
+        string navConfirmation = L1011Levers.NavRadiosConfirmation(110.3, 45, 113.9, 270);
+        double prefill = L1011Levers.NavPrefillMegahertz(113.9);
+
+        var saved = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+            Assert.Equal(mb, L1011Levers.AltimeterEntryMillibars("29.92")!.Value, 6);
+            Assert.Equal(allAltimeters, L1011Levers.AllAltimetersRpn(mb));
+            Assert.Equal(confirmation, L1011Levers.AltimeterConfirmation(L1011Levers.AltimetersName, mb));
+            Assert.Equal(error, L1011Levers.AltimetersEntryError);
+            Assert.Equal(nav, L1011Levers.NavRadiosRpn(110.3, 45, 113.9, 270));
+            Assert.Equal(navConfirmation, L1011Levers.NavRadiosConfirmation(110.3, 45, 113.9, 270));
+            Assert.Equal(prefill, L1011Levers.NavPrefillMegahertz(113.9));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = saved;
+        }
+    }
 }

@@ -48,6 +48,9 @@ TYPED VALUES - type, then press Set or Enter
   136.990. Setting an active frequency puts it in standby and swaps it in.
   Squawk (Center Console, Transponder) - four digits, each 0 to 7.
 
+  From input mode, Ctrl+B sets all three altimeters from one entry, and Ctrl+N sets NAV 1 and
+  NAV 2 with their courses (see INPUT MODE below).
+
 
 CIRCUIT BREAKERS
 
@@ -192,6 +195,18 @@ Teleport:
 Flight Planning:
   Shift+F    Fix/Waypoint Tracking Window
   Shift+D    Select Destination Runway
+
+Altimeters:
+  Ctrl+B     Set the altimeters - captain, first officer and standby together, from one entry.
+             Type inches (29.92) or hectopascals (1013): 28.20 to 31.30 inches, or 955 to
+             1060 hectopascals. You hear "Altimeters 1013, 29.92". The dialog stays open for
+             another entry; Escape closes it.
+
+Radios:
+  Ctrl+N     Set NAV radios (dialog with NAV 1 and NAV 2 frequency and course; pre-filled
+             with the current values, applies all four on Set; frequency 108.00-117.95 MHz,
+             course 0-359 degrees). You hear "NAV 1 110.30, course 45; NAV 2 113.90,
+             course 270".
 
 Taxi Guidance:
   Shift+Y    Open Taxi Assist Form (enter ATC taxi clearance, start guidance)

@@ -1,5 +1,6 @@
 using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.L1011;
+using MSFSBlindAssist.Hotkeys;
 using MSFSBlindAssist.Settings;
 using MSFSBlindAssist.SimConnect;
 
@@ -127,6 +128,20 @@ public class IniL1011BehaviourTests
     {
         Assert.True(Set(L1011Levers.CaptainAltimeterKey, 29.92));
         Assert.Equal(new[] { "Captain altimeter unavailable" }, _speech.All);
+    }
+
+    // Input mode Ctrl+B and Ctrl+N reach the TriStar's own handler. With the calculator path unable
+    // to land, each is refused aloud before any dialog opens (the parent form is never touched).
+    [Theory]
+    [InlineData(HotkeyAction.FCUSetBaro, "Altimeters unavailable")]
+    [InlineData(HotkeyAction.SetNavRadios, "NAV radios unavailable")]
+    public void Input_mode_ctrl_b_and_ctrl_n_are_handled_and_refused_aloud_when_nothing_can_land(
+        HotkeyAction action, string refusal)
+    {
+        using var hotkeys = new HotkeyManager();
+        Assert.True(_def.HandleHotkeyAction(action, _sim, _speech, null!, hotkeys));
+        Assert.Equal(new[] { refusal }, _speech.All);
+        Assert.Empty(_reReads);
     }
 
     [Theory]
