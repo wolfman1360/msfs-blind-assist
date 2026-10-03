@@ -103,6 +103,9 @@
     <!-- TFDi MD-11 control map. EmbeddedResource, not a copied file: the aircraft has zero
          controls without it, so it must not be able to go missing from the output folder. -->
     <EmbeddedResource Include="Resources\md11_control_map.json" />
+    <!-- iniBuilds L-1011 control map (tools/l1011-gen). Embedded for the same reason as the MD-11's:
+         the TriStar has no controls without it. -->
+    <EmbeddedResource Include="Resources\l1011_control_map.json" />
   </ItemGroup>
 
   <ItemGroup>

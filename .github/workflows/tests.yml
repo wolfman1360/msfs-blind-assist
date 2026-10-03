@@ -46,6 +46,12 @@ jobs:
       - name: MD-11 generator path tests (Python)
         run: python -m unittest discover -s tools/md11-gen -p "test_*.py" -v
 
+      # The L-1011 control-map generator and checklist converter (tools/l1011-gen) are pure
+      # stdlib Python, tested against small fixtures that reproduce the aircraft's compiled
+      # behavior format (the real files are iniBuilds' and cannot be in the repo).
+      - name: L-1011 generator tests (Python)
+        run: python -m unittest discover -s tools/l1011-gen -p "test_*.py" -v
+
   efb-readers:
     name: EFB reader tests (jsdom)
     runs-on: ubuntu-latest
