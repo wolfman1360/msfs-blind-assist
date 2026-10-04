@@ -83,6 +83,14 @@ const files = {
   // A notie toast (appended to the body) over the selection half.
   'weights-toast': weights(ON, OFF_RIGHT, false, 'kg',
     '<div class="notie-container notie-alert notie-background-success"><div class="notie-textbox"><div class="notie-textbox-inner">Payload Removed</div></div></div>'),
+  // Settings, Third Party Settings: the SimBrief box is labelled only by its heading.
+  'settings': tablet('<div id="settings-bg"></div><div id="settings"><div id="settings-container" class="row">' +
+    '<h1 class="mb-2">SETTINGS</h1><div class="card"><div class="card-body bg-dark"><h1 class="mt-2">Third Party Settings</h1>' +
+    '<div class="row"><div class="col-sm-4"><h2 class="mt-2 text-info">SimBrief</h2><div class="row"><div class="col">' +
+    '<div class="d-grid gap-2 mb-1 p-3"><input id="simbrief" class="form-control form-control-lg w-100" type="text" name="simbrief" value=""></div></div></div></div>' +
+    '<div class="col-sm-4"><h2 class="mt-2 text-info">Hoppie</h2><div class="row"><div class="col">' +
+    '<div class="d-grid gap-2 mb-1 p-3"><input id="hoppie" class="form-control form-control-lg w-100" type="password" name="hoppie" value=""></div></div></div></div>' +
+    '</div></div></div></div></div>'),
   'myflight': tablet('<div id="flight">' +
     '<div class="row"><h2>DEPARTURE</h2><div id="dep_icao">CYYZ</div><div id="depcit">Toronto/Pearson Intl</div></div>' +
     '<div class="row"><h2>ARRIVAL</h2><div id="arr_icao">CYUL</div></div>' +

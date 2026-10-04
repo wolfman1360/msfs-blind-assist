@@ -52,7 +52,10 @@
   };
   A.FIELD_NAMES = {
     weight_fuel: 'Total fuel', weight_freight_fwd: 'Forward hold', weight_freight_mid: 'Middle hold',
-    weight_freight_aft: 'Aft hold', input_pax: 'Passengers'
+    weight_freight_aft: 'Aft hold', input_pax: 'Passengers',
+    // Settings: the tablet fetches xml.fetcher.php?userid=, so this box takes the numeric SimBrief
+    // Pilot ID, never the user name; its only label is the heading "SimBrief".
+    simbrief: 'SimBrief Pilot ID, numbers only'
   };
   // The cargo field's label column says LOAD (CARGO on the passenger version).
   A.FIELD_TITLES = { LOAD: 'Total cargo', CARGO: 'Total cargo' };
