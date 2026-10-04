@@ -68,6 +68,28 @@ public class A300TypedValuesTests
         Assert.Equal(said, plan.Confirmation);
     }
 
+    [Theory]
+    [InlineData(200, "200 (>L:INI_MINIMUMS_PILOT) 200 (>L:INI_MINIMUMS_FO)", "Decision height 200 feet")]
+    [InlineData(1200.4, "1200 (>L:INI_MINIMUMS_PILOT) 1200 (>L:INI_MINIMUMS_FO)", "Decision height 1,200 feet")]
+    [InlineData(0, "0 (>L:INI_MINIMUMS_PILOT) 0 (>L:INI_MINIMUMS_FO)", "Decision height not set")]
+    public void A_decision_height_sets_both_pilots_minimums(double value, string rpn, string said)
+    {
+        var plan = Plan(A300TypedValues.MinimumsKey, value);
+        Assert.Null(plan.Error);
+        Assert.Equal(rpn, plan.Rpn);
+        Assert.Equal(said, plan.Confirmation);
+    }
+
+    [Theory]
+    [InlineData(2600)]
+    [InlineData(-10)]
+    public void A_decision_height_out_of_range_is_refused(double value)
+    {
+        var plan = Plan(A300TypedValues.MinimumsKey, value);
+        Assert.Null(plan.Rpn);
+        Assert.Equal("0 to 2,500 feet", plan.Error);
+    }
+
     [Fact]
     public void One_altimeter_entry_sets_all_three_in_inches_or_hectopascals()
     {
@@ -91,6 +113,7 @@ public class A300TypedValuesTests
             Assert.Equal("Altitude 12,000 feet", Plan(A300TypedValues.AltitudeKey, 12000).Confirmation);
             Assert.Equal("VHF 2 standby 121.500", Plan(A300TypedValues.Com2StandbyKey, 121.5).Confirmation);
             Assert.Equal("Mach 0.82", A300FcuState.SpeedWindow(0.82, isMach: true));
+            Assert.Equal("Decision height 1,200 feet", Plan(A300TypedValues.MinimumsKey, 1200).Confirmation);
         }
         finally
         {

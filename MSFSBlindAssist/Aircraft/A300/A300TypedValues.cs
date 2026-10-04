@@ -55,6 +55,7 @@ public static class A300TypedValues
     public const string BaroCaptainKey = "A300_BARO_CPT_SET";
     public const string BaroFirstOfficerKey = "A300_BARO_FO_SET";
     public const string BaroStandbyKey = "A300_BARO_STBY_SET";
+    public const string MinimumsKey = "A300_MINIMUMS_SET";
 
     public static readonly IReadOnlyList<A300TypedValue> All = new[]
     {
@@ -74,6 +75,7 @@ public static class A300TypedValues
         new A300TypedValue(BaroCaptainKey, "Altimeter setting", "Captain Panel"),
         new A300TypedValue(BaroFirstOfficerKey, "Altimeter setting", "First Officer Panel"),
         new A300TypedValue(BaroStandbyKey, "Standby altimeter setting", "Center Panel"),
+        new A300TypedValue(MinimumsKey, "Decision height", "Captain EFIS"),
     };
 
     public static readonly IReadOnlySet<string> Keys = All.Select(t => t.Key).ToHashSet(StringComparer.Ordinal);
@@ -95,6 +97,7 @@ public static class A300TypedValues
     public const string ComError = "118.000 to 136.990 megahertz";
     public const string SquawkError = "four digits, each 0 to 7";
     public const string AltimeterError = "28.20 to 31.30 inches, or 955 to 1060 hectopascals";
+    public const string MinimumsError = "0 to 2,500 feet";
 
     /// <summary>The plan for a typed value. <paramref name="isMach"/> is the FCU's current speed mode.</summary>
     public static A300TypedResult Plan(string key, double value, bool isMach)
@@ -121,6 +124,7 @@ public static class A300TypedValues
             BaroCaptainKey => Altimeter(value, new[] { 1 }, "Captain altimeter"),
             BaroFirstOfficerKey => Altimeter(value, new[] { 2 }, "First officer altimeter"),
             BaroStandbyKey => Altimeter(value, new[] { 3 }, "Standby altimeter"),
+            MinimumsKey => Minimums(value),
             _ => A300TypedResult.Fail("cannot be set from this panel"),
         };
     }
@@ -136,6 +140,7 @@ public static class A300TypedValues
         Vor1CourseKey or Vor2CourseKey or IlsCourseKey => CourseError,
         Com1StandbyKey or Com2StandbyKey => ComError,
         SquawkKey => SquawkError,
+        MinimumsKey => MinimumsError,
         _ => AltimeterError,
     };
 
@@ -248,6 +253,23 @@ public static class A300TypedValues
         string units = Math.Round(mb * 16).ToString("0", Inv);
         string rpn = string.Join(" ", indexes.Select(i => $"{i.ToString(Inv)} {units} (>K:2:KOHLSMAN_SET)"));
         return new(rpn, $"{spoken} {A300Readouts.Altimeter(mb)}", null);
+    }
+
+    /// <summary>
+    /// The decision height, written to BOTH pilots' minimums (<c>INI_MINIMUMS_PILOT</c>,
+    /// <c>INI_MINIMUMS_FO</c>): they are the stored values the PFD and the aircraft's "minimums"
+    /// call-out read, and the DH knob moves them only while DH is selected on its EFIS panel (it steps
+    /// the flight path angle otherwise). A direct write held, and nothing rewrote it (measured
+    /// 2026-10-04). Whole feet; 0 clears it.
+    /// </summary>
+    public static A300TypedResult Minimums(double value)
+    {
+        double ft = Math.Round(value);
+        if (ft < 0 || ft > 2500)
+            return A300TypedResult.Fail(MinimumsError);
+        string text = ft.ToString("0", Inv);
+        return new($"{text} (>L:INI_MINIMUMS_PILOT) {text} (>L:INI_MINIMUMS_FO)",
+            ft == 0 ? "Decision height not set" : $"Decision height {ft.ToString("#,0", Inv)} feet", null);
     }
 
     /// <summary>Ctrl+B: one entry sets all three altimeters.</summary>
