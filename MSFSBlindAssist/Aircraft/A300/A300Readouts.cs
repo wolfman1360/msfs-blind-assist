@@ -16,6 +16,13 @@ public static class A300Readouts
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
+    public const string SpeedKey = "A300_RO_FCU_SPEED";
+    public const string HeadingKey = "A300_RO_FCU_HEADING";
+    public const string AltitudeKey = "A300_RO_FCU_ALTITUDE";
+    public const string VerticalSpeedKey = "A300_RO_FCU_VS";
+    public const string BaroCaptainKey = "A300_RO_BARO_CPT";
+    public const string FuelTotalKey = "A300_RO_FUEL_TOTAL";
+
     public static readonly IReadOnlyList<A300Readout> All = new[]
     {
         new A300Readout("A300_RO_FCU_SPEED", "Speed window", "FCU", "INI_Airspeed_Dial", false, "number",
@@ -42,6 +49,8 @@ public static class A300Readouts
             v => $"{Heading(v)} degrees"),
         new A300Readout("A300_RO_ILS_COURSE", "ILS course", "Navigation Radios", "INI_ils_course", false, "number",
             v => $"{Heading(v)} degrees"),
+        new A300Readout(FuelTotalKey, "Total fuel", "Fuel", "FUEL TOTAL QUANTITY WEIGHT", true, "pounds",
+            v => $"{Math.Round(v).ToString("#,0", Inv)} pounds"),
     };
 
     /// <summary>"1013 hectopascals, 29.92 inches".</summary>

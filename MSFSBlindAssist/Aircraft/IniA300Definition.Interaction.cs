@@ -32,6 +32,11 @@ public partial class IniA300Definition
             HandleLeverSet(row, value, simConnect, announcer);
             return true;
         }
+        if (row.Action == A300RowAction.Typed)
+        {
+            SetTyped(row.Key, value, simConnect, announcer, row.Name);
+            return true;
+        }
 
         var control = row.Control!;
         var plan = row.Action switch
@@ -158,6 +163,8 @@ public partial class IniA300Definition
             (parentForm as MainForm)?.ShowA300MonitorManagerDialog();
             return true;
         }
+        if (TryHandleAutoflightHotkey(action, simConnect, announcer, parentForm, hotkeyManager))
+            return true;
         return base.HandleHotkeyAction(action, simConnect, announcer, parentForm, hotkeyManager);
     }
 }

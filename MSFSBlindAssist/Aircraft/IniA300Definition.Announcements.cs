@@ -31,6 +31,10 @@ public partial class IniA300Definition
         if (base.ProcessSimVarUpdate(varName, value, announcer))
             return true;
 
+        // An FCU button's lamp: shown on the button's label (TryDescribeControlState), never spoken.
+        if (A300FcuState.LightKeys.Contains(varName))
+            return true;
+
         if (A300Announcements.AnnouncedKeys.Contains(varName))
         {
             if (_seedGate.Armed)

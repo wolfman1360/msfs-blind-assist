@@ -136,11 +136,43 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
             vars[lamp.Key] = def;
         }
 
+        // The FCU buttons' lamps: batch-covered, consumed silently, shown only on the buttons' labels.
+        foreach (var light in A300FcuState.ByButton.Values)
+        {
+            var def = new SimVarDefinition
+            {
+                Name = light.Var,
+                DisplayName = light.Key,
+                Type = SimVarType.LVar,
+                UpdateFrequency = UpdateFrequency.Continuous,
+                IsAnnounced = true,
+                ExcludeFromMonitorManager = true,
+            };
+            batchNames.Add(ContinuousBatchLayout.FullName(def));
+            vars[light.Key] = def;
+        }
+
         foreach (var row in _rows.Values)
         {
             if (vars.ContainsKey(row.Key))
                 continue;   // never shadow a base variable
-            var def = row.Action == A300RowAction.Custom ? BuildLeverVariable(row) : BuildRowVariable(row);
+            var def = row.Action switch
+            {
+                A300RowAction.Custom => BuildLeverVariable(row),
+                A300RowAction.Typed => new SimVarDefinition
+                {
+                    Name = "MSFSBA_" + row.Key,
+                    DisplayName = row.Name,
+                    Type = SimVarType.LVar,
+                    UpdateFrequency = UpdateFrequency.Never,
+                    // An empty or mistyped box arrives as NaN, which every typed value refuses with
+                    // its range; 0 would be a real heading.
+                    UnparseableTextAsNaN = true,
+                },
+                _ => BuildRowVariable(row),
+            };
+            if (A300FcuState.ByButton.TryGetValue(row.Key, out var buttonLight))
+                def.StateVariables = new[] { buttonLight.Key };
             if (A300Announcements.AnnouncedKeys.Contains(row.Key))
                 def.ExcludeFromMonitorManager = false;   // it speaks, so Ctrl+M can mute it
             if (ContinuousBatchLayout.RidesBatch(def) && !batchNames.Add(ContinuousBatchLayout.FullName(def)))

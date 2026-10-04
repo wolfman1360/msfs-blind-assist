@@ -13,9 +13,10 @@ READ THIS FIRST - WHAT THIS VERSION COVERS
 Choose iniBuilds Airbus A300-600 from the Aircraft menu. The passenger and freighter versions,
 with either engine, share one cockpit, so one choice covers all four. This version covers the
 A300's switch panels: the overhead, the glareshield, the main instrument panel, the pedestal
-and the cockpit's back wall, and both MCDUs as text (Shift+M). Not included yet: typed values
-for the FCU and the radios, the tablet, and readouts of the PFD, ND and ECAM screens. Until they
-arrive, operate those in the simulator. Shift+T says so instead of opening a window.
+and the cockpit's back wall, both MCDUs as text (Shift+M), and the FCU, autopilot and radios with
+typed values. Not included yet: the tablet, and readouts of the PFD, ND and ECAM screens (so the
+flight mode annunciator cannot be read yet). Until they arrive, operate those in the simulator.
+Shift+T says so instead of opening a window.
 
 
 THE PANELS
@@ -51,6 +52,23 @@ the Navigation Radios panel shows the VOR and ILS courses. The Captain Panel als
 master warning and master caution lights.
 
 
+TYPED VALUES - type, then press Set or Enter
+
+  FCU panel: Speed or Mach (100 to 399 knots, or Mach 0.10 to 0.99; a value in the other unit
+  switches SPD/MACH for you), Heading (0 to 360), Altitude (100 to 49,000 feet, nearest 100),
+  Vertical speed (-6,000 to 6,000, nearest 100). You hear "Heading 270".
+  Navigation Radios panel: VOR 1 and VOR 2 frequency (108.00 to 117.95) and course setting, ILS
+  frequency (108.10 to 111.95) and course setting.
+  VHF Radios panel: VHF 1 and VHF 2 standby frequency (118.000 to 136.990); the transfer buttons
+  swap them in.
+  Transponder and TCAS panel: Squawk, four digits each 0 to 7.
+  Captain, First Officer and Center panels: the altimeter settings, in inches (29.92) or
+  hectopascals (1013).
+
+The FCU's mode buttons say whether their mode is on: "Heading select: On", "Level change: Off".
+SPD/MACH says "Speed" or "Mach". The FCU panel's status display shows the four windows.
+
+
 THE MCDU WINDOW - Press left bracket, then Shift+M
 
 Both MCDUs, Captain and First Officer, read as text: the real screens, live. The window opens on
@@ -84,7 +102,20 @@ keyboard does not have (a comma, for example) is not sent at all, and stays in t
 
 OUTPUT MODE - Press right bracket to activate
 
+FCU:
+  Shift+H    Read the FCU heading window
+  Shift+S    Read the FCU speed window (knots or Mach)
+  Shift+A    Read the FCU altitude window
+  Shift+V    Read the FCU vertical speed window
+
 Aircraft state:
+  L          Read the flaps lever ("Flaps 15/15")
+  Shift+G    Read the gear lever
+  B          Read the captain's altimeter setting in both units
+  F          Read total fuel (pounds)
+  Shift+F    Read total fuel (kilograms)
+  W          Read gross weight (pounds)
+  Shift+W    Read gross weight (kilograms)
   Shift+C    Open the A300 checklist (the aircraft's own checklist, phase by phase)
   Ctrl+M     A300 Monitor Manager
 
@@ -208,6 +239,32 @@ Teleport:
 Flight Planning:
   Shift+F    Fix/Waypoint Tracking Window
   Shift+D    Select Destination Runway
+
+Autopilot (each says the result once it has landed: "Autopilot 1 on"):
+  Shift+A    Toggle Autopilot 1
+  Ctrl+O     Toggle Autopilot 2
+  Ctrl+J     Autothrottle button
+  Ctrl+L     VOR LOC button
+  Shift+P    Land button
+  Ctrl+P     Says where the autopilot buttons are (the FCU panel, Glareshield section)
+
+FCU Push/Pull:
+  Shift+1    Push Heading Knob
+  Ctrl+1     Pull Heading Knob
+  Shift+2    Push Altitude Knob
+  Ctrl+2     Pull Altitude Knob
+  Shift+3    Push Speed Knob
+  Ctrl+3     Pull Speed Knob
+  Shift+4    Push VS Knob
+  Ctrl+4     Pull VS Knob
+
+FCU Set Values (each opens a small window; type and press Enter; Escape closes):
+  Ctrl+S     Speed or Mach
+  Ctrl+H     Heading
+  Ctrl+A     Altitude
+  Ctrl+V     Vertical speed
+  Ctrl+B     Altimeters: one entry sets the captain's, first officer's and standby
+  Ctrl+N     VOR 1 and VOR 2, frequency and course
 
 Taxi Guidance:
   Shift+Y    Open Taxi Assist Form (enter ATC taxi clearance, start guidance)

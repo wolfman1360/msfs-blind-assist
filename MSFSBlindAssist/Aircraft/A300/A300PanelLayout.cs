@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 namespace MSFSBlindAssist.Aircraft.A300;
 
 /// <summary>What a panel row does when the pilot operates it.</summary>
-public enum A300RowAction { Set, Press, Increase, Decrease, Custom }
+public enum A300RowAction { Set, Press, Increase, Decrease, Custom, Typed }
 
 /// <summary>A row after placement: the variable key MSFSBA registers, and what it drives.</summary>
 /// <param name="Positions">State value → spoken word, for a Set row's combo; empty for the rest.</param>
@@ -317,6 +317,11 @@ public static partial class A300PanelLayout
         // A guard comes just before the switch it covers (the cockpit file lists it after).
         foreach (var rows in placement.RowsByPanel.Values)
             MoveGuardsBeforeTheirSwitch(rows);
+
+        // Typed values end the panel they belong to (A300TypedValues).
+        foreach (var typed in A300TypedValues.All)
+            if (placement.RowsByPanel.TryGetValue(typed.Panel, out var rows))
+                rows.Add(new A300PlacedRow(typed.Key, typed.Name, A300RowAction.Typed, null, new Dictionary<double, string>()));
 
         var levers = RowsFor(placement, "Pedestal", A300Levers.Panel);
         levers.Add(new A300PlacedRow(A300Levers.FlapsKey, A300Levers.Name(A300Levers.FlapsKey), A300RowAction.Custom, null, A300Levers.FlapPositions));

@@ -1,0 +1,364 @@
+using MSFSBlindAssist.Accessibility;
+using MSFSBlindAssist.Aircraft.A300;
+using MSFSBlindAssist.Forms;
+using MSFSBlindAssist.Hotkeys;
+using MSFSBlindAssist.SimConnect;
+using MSFSBlindAssist.Utils.Logging;
+
+namespace MSFSBlindAssist.Aircraft;
+
+/// <summary>
+/// Typed values (the panels' text boxes and the input-mode dialogs), the FCU and autopilot hotkeys,
+/// and the readout keys. A typed value is a numeric entry, so its confirmation IS spoken ("Heading
+/// 270"); an error says the range. Hotkeys have no control of their own for the screen reader to
+/// speak, so a toggle reads the state back once it has landed.
+/// </summary>
+public partial class IniA300Definition
+{
+    /// <summary>How long a toggle hotkey waits before reading the result back (one batch period, plus
+    /// the aircraft applying it). A judgement, not a measurement.</summary>
+    public const int ToggleReadBackMs = 1200;
+
+    /// <summary>How long a readout key waits for a fresh value: batch-covered values answer on the
+    /// next 1 Hz delivery.</summary>
+    public const int ReadoutTimeoutMs = 2500;
+
+    /// <summary>The wait between a typed value's two steps; tests replace it.</summary>
+    internal Func<int, Task> TypedDelay { get; set; } = Task.Delay;
+
+    /// <summary>A typed value from a panel box or a dialog: refused aloud with its range, or sent and confirmed.</summary>
+    private void SetTyped(string key, double value, SimConnectManager sim, ScreenReaderAnnouncer announcer, string name)
+    {
+        var plan = A300TypedValues.Plan(key, value, IsMach());
+        if (plan.Error != null)
+        {
+            announcer.Announce($"{name}: {plan.Error}");
+            return;
+        }
+        if (!CanLand(sim))
+        {
+            announcer.Announce($"{name} unavailable");
+            return;
+        }
+        _ = SendTypedAsync(plan, sim, announcer);
+    }
+
+    private async Task SendTypedAsync(A300TypedResult plan, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        try
+        {
+            if (plan.Before != null)
+            {
+                Send(sim, plan.Before);
+                await TypedDelay(A300TypedValues.ModeSwitchSettleMs);
+                if (_disposed)
+                    return;
+            }
+            Send(sim, plan.Rpn!);
+            if (plan.Confirmation != null)
+                announcer.Announce(plan.Confirmation);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("A300", $"A typed value failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>The FCU, autopilot and readout hotkeys; false for one the A300 does not take.</summary>
+    private bool TryHandleAutoflightHotkey(HotkeyAction action, SimConnectManager sim, ScreenReaderAnnouncer announcer,
+        Form parentForm, HotkeyManager hotkeyManager)
+    {
+        switch (action)
+        {
+            // Input mode: typed FCU values, the altimeters and the NAV radios.
+            case HotkeyAction.FCUSetSpeed:
+                ShowValueDialog(A300TypedValues.SpeedKey, "FCU Speed", "Speed or Mach", "100 to 399 knots, or Mach 0.10 to 0.99", sim, announcer, parentForm, hotkeyManager);
+                return true;
+            case HotkeyAction.FCUSetHeading:
+                ShowValueDialog(A300TypedValues.HeadingKey, "FCU Heading", "Heading", "0 to 360 degrees", sim, announcer, parentForm, hotkeyManager);
+                return true;
+            case HotkeyAction.FCUSetAltitude:
+                ShowValueDialog(A300TypedValues.AltitudeKey, "FCU Altitude", "Altitude", "100 to 49,000 feet", sim, announcer, parentForm, hotkeyManager);
+                return true;
+            case HotkeyAction.FCUSetVS:
+                ShowValueDialog(A300TypedValues.VerticalSpeedKey, "FCU Vertical Speed", "Vertical speed", "-6,000 to 6,000 feet per minute", sim, announcer, parentForm, hotkeyManager);
+                return true;
+            case HotkeyAction.FCUSetBaro:
+                ShowValueDialog(AllAltimetersKey, "Altimeter Setting", "Altimeters",
+                    "28.20 to 31.30 inches, or 955 to 1060 hectopascals; sets captain, first officer and standby", sim, announcer, parentForm, hotkeyManager);
+                return true;
+            case HotkeyAction.SetNavRadios:
+                hotkeyManager.ExitInputHotkeyMode();
+                _ = ShowNavRadiosDialogAsync(sim, announcer, parentForm);
+                return true;
+
+            // Input mode: knob push and pull.
+            case HotkeyAction.FCUSpeedPush: PressRow("A300_SPEED_KNOB_PUSH", sim, announcer); return true;
+            case HotkeyAction.FCUSpeedPull: PressRow("A300_SPEED_KNOB_PULL", sim, announcer); return true;
+            case HotkeyAction.FCUHeadingPush: PressRow("A300_HEADING_KNOB_PUSH", sim, announcer); return true;
+            case HotkeyAction.FCUHeadingPull: PressRow("A300_HEADING_KNOB_PULL", sim, announcer); return true;
+            case HotkeyAction.FCUAltitudePush: PressRow("A300_ALT_KNOB_PUSH", sim, announcer); return true;
+            case HotkeyAction.FCUAltitudePull: PressRow("A300_ALT_KNOB_PULL", sim, announcer); return true;
+            case HotkeyAction.FCUVSPush: PressRow("A300_VS_KNOB_PUSH", sim, announcer); return true;
+            case HotkeyAction.FCUVSPull: PressRow("A300_VS_KNOB_PULL", sim, announcer); return true;
+
+            // Input mode: autopilot toggles, each read back once it has landed.
+            case HotkeyAction.ToggleAutopilot1:
+                ToggleSwitchRow("A300_AP_SWITCH_1", "Autopilot 1", sim, announcer);
+                return true;
+            case HotkeyAction.ToggleAutopilot2:
+                ToggleSwitchRow("A300_AP_SWITCH_2", "Autopilot 2", sim, announcer);
+                return true;
+            case HotkeyAction.ToggleAutothrust:
+                PressAndReadBack("A300_ATHR_BUTTON", sim, announcer);
+                return true;
+            case HotkeyAction.ToggleLocalizer:
+                PressAndReadBack("A300_VL_BUTTON", sim, announcer);
+                return true;
+            case HotkeyAction.ToggleApproachMode:
+                PressAndReadBack("A300_LAND_BUTTON", sim, announcer);
+                return true;
+            case HotkeyAction.FCUSetAutopilot:
+                hotkeyManager.ExitInputHotkeyMode();
+                announcer.AnnounceImmediate("The A300 autopilot buttons are on the FCU panel, in the Glareshield section. Each shows whether its mode is on.");
+                return true;
+
+            // Output mode readouts.
+            case HotkeyAction.ReadSpeed:
+                _ = SpeakAsync(sim, announcer, "FCU speed", v => A300FcuState.SpeedWindow(v[0], IsMach()), A300Readouts.SpeedKey);
+                return true;
+            case HotkeyAction.ReadHeading:
+                _ = SpeakAsync(sim, announcer, "FCU heading", v => $"FCU heading {A300Readouts.Heading(v[0])}", A300Readouts.HeadingKey);
+                return true;
+            case HotkeyAction.ReadAltitude:
+                _ = SpeakAsync(sim, announcer, "FCU altitude", v => $"FCU altitude {Readout(A300Readouts.AltitudeKey, v[0])}", A300Readouts.AltitudeKey);
+                return true;
+            case HotkeyAction.ReadFCUVerticalSpeedFPA:
+                _ = SpeakAsync(sim, announcer, "FCU vertical speed", v => $"FCU vertical speed {Readout(A300Readouts.VerticalSpeedKey, v[0])}", A300Readouts.VerticalSpeedKey);
+                return true;
+            case HotkeyAction.ReadFlaps:
+                _ = SpeakAsync(sim, announcer, "Flaps", v => A300Announcements.Phrase(A300Levers.FlapsKey, v[0]) ?? "Flaps in transit", A300Levers.FlapsKey);
+                return true;
+            case HotkeyAction.ReadGear:
+                _ = SpeakAsync(sim, announcer, "Gear", v => A300Announcements.Phrase(A300Announcements.GearLeverKey, v[0])!, A300Announcements.GearLeverKey);
+                return true;
+            case HotkeyAction.ReadAltimeter:
+                _ = SpeakAsync(sim, announcer, "Altimeter", v => $"Altimeter {A300Readouts.Altimeter(v[0])}", A300Readouts.BaroCaptainKey);
+                return true;
+            case HotkeyAction.ReadFuelQuantity:
+                _ = SpeakAsync(sim, announcer, "Fuel", v => $"Fuel {Math.Round(v[0]).ToString("#,0", System.Globalization.CultureInfo.InvariantCulture)} pounds", A300Readouts.FuelTotalKey);
+                return true;
+            case HotkeyAction.ReadFuelInfo:
+                _ = SpeakAsync(sim, announcer, "Fuel", v => $"Fuel {Math.Round(v[0] * 0.45359237).ToString("#,0", System.Globalization.CultureInfo.InvariantCulture)} kilograms", A300Readouts.FuelTotalKey);
+                return true;
+            case HotkeyAction.ReadWaypointInfo:
+                sim.RequestSingleValue((int)SimConnectManager.DATA_DEFINITIONS.DEF_GROSS_WEIGHT, "TOTAL WEIGHT", "pounds", "GROSS_WEIGHT");
+                return true;
+            case HotkeyAction.ReadGrossWeightKg:
+                sim.RequestSingleValue((int)SimConnectManager.DATA_DEFINITIONS.DEF_GROSS_WEIGHT_KG, "TOTAL WEIGHT", "pounds", "GROSS_WEIGHT_KG");
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>Ctrl+B's key in <see cref="ShowValueDialog"/>: one entry for all three altimeters.</summary>
+    private const string AllAltimetersKey = "A300_BARO_ALL_SET";
+
+    private string Readout(string key, double value) =>
+        _readouts.TryGetValue(key, out var readout) ? readout.Format(value) : value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>Presses a map button row (a knob push or pull) the way its panel button does.</summary>
+    private void PressRow(string key, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        if (_rows.TryGetValue(key, out var row))
+            Execute(row, A300WritePlan.ForPress(row.Control!), sim, announcer, commandedValue: null);
+    }
+
+    /// <summary>Flips a two-position switch row from its known position, then reads the result back.</summary>
+    private void ToggleSwitchRow(string key, string name, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        if (!_rows.TryGetValue(key, out var row))
+            return;
+        var control = row.Control!;
+        if (!CanLand(sim))
+        {
+            announcer.AnnounceImmediate($"{name} unavailable");
+            return;
+        }
+        if (CurrentValue(key, sim) is not double now)
+        {
+            announcer.AnnounceImmediate($"{name}: {A300WritePlan.UnknownPositionRefusal}");
+            return;
+        }
+        double target = now >= 0.5 ? 0 : 1;
+        Execute(row, A300WritePlan.ForSet(control, target, now), sim, announcer, commandedValue: target);
+        _ = ReadBackAsync(sim, announcer, key, v => $"{name} {(v >= 0.5 ? "on" : "off")}");
+    }
+
+    /// <summary>Presses an FCU button and reads its lamp back ("VOR LOC on").</summary>
+    private void PressAndReadBack(string key, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        if (!_rows.TryGetValue(key, out var row) || !A300FcuState.ByButton.TryGetValue(key, out var light))
+            return;
+        if (!CanLand(sim))
+        {
+            announcer.AnnounceImmediate($"{row.Name} unavailable");
+            return;
+        }
+        Execute(row, A300WritePlan.ForPress(row.Control!), sim, announcer, commandedValue: null);
+        _ = ReadBackAsync(sim, announcer, light.Key, v => $"{row.Name} {A300FcuState.Describe(light, v).ToLowerInvariant()}");
+    }
+
+    private async Task ReadBackAsync(SimConnectManager sim, ScreenReaderAnnouncer announcer, string key, Func<double, string> words)
+    {
+        try
+        {
+            await TypedDelay(ToggleReadBackMs);
+            if (_disposed)
+                return;
+            if (await sim.ReadFreshAsync(key, ReadoutTimeoutMs) is double value)
+                announcer.AnnounceImmediate(words(value));
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("A300", $"Read-back of {key} failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>Reads each key fresh and speaks the composed text, or "{what} unavailable".</summary>
+    private static async Task SpeakAsync(SimConnectManager sim, ScreenReaderAnnouncer announcer, string what,
+        Func<double[], string> compose, params string[] keys)
+    {
+        try
+        {
+            var values = new double[keys.Length];
+            for (int i = 0; i < keys.Length; i++)
+            {
+                if (await sim.ReadFreshAsync(keys[i], ReadoutTimeoutMs) is not double v)
+                {
+                    announcer.AnnounceImmediate($"{what} unavailable");
+                    return;
+                }
+                values[i] = v;
+            }
+            announcer.AnnounceImmediate(compose(values));
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("A300", $"{what} readout failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>The shared value dialog for one typed value, tracked so an aircraft switch closes it.</summary>
+    private void ShowValueDialog(string key, string title, string name, string hint, SimConnectManager sim,
+        ScreenReaderAnnouncer announcer, Form parentForm, HotkeyManager hotkeyManager)
+    {
+        hotkeyManager.ExitInputHotkeyMode();
+        if (!CanLand(sim))
+        {
+            announcer.AnnounceImmediate($"{name} unavailable");
+            return;
+        }
+        ShowTrackedWindow(
+            () => new ValueInputForm(title, name.ToLowerInvariant(), hint, announcer,
+                input => Parse(input) is double v && PlanFor(key, v).Error == null ? (true, "") : (false, $"{name}: {hint}"),
+                new List<ToggleButtonDef>(),
+                input =>
+                {
+                    if (Parse(input) is not double v || _disposed)
+                        return;
+                    var plan = PlanFor(key, v);
+                    if (plan.Error != null)
+                        announcer.AnnounceImmediate($"{name}: {plan.Error}");
+                    else if (!CanLand(sim))
+                        announcer.AnnounceImmediate($"{name} unavailable");
+                    else
+                        _ = SendTypedAsync(plan, sim, announcer);
+                })
+            {
+                ShowCancelButton = false,
+            },
+            form =>
+            {
+                if (form.Visible) form.Activate();
+                else form.Show(parentForm);
+            });
+    }
+
+    private A300TypedResult PlanFor(string key, double value) => key == AllAltimetersKey
+        ? A300TypedValues.AllAltimeters(value)
+        : A300TypedValues.Plan(key, value, IsMach());
+
+    private static double? Parse(string input) =>
+        double.TryParse(input.Trim().Replace(',', '.'), System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out double v) ? v : null;
+
+    /// <summary>How long Ctrl+N waits for the NAV radios before opening with 108.00 and course 0.</summary>
+    public const int NavPrefillTimeoutMs = 2000;
+
+    /// <summary>Ctrl+N: VOR 1 and VOR 2, frequency and course, pre-filled from NAV 1 and NAV 2 (the A300
+    /// drives them from its VOR radios). The ILS has its own typed fields on the Navigation Radios panel.</summary>
+    private async Task ShowNavRadiosDialogAsync(SimConnectManager sim, ScreenReaderAnnouncer announcer, Form parentForm)
+    {
+        if (!CanLand(sim))
+        {
+            announcer.AnnounceImmediate("NAV radios unavailable");
+            return;
+        }
+        try
+        {
+            SimConnectManager.NavRadioData? live = null;
+            var answer = new TaskCompletionSource<SimConnectManager.NavRadioData>(TaskCreationOptions.RunContinuationsAsynchronously);
+            sim.RequestNavRadioInfo(data => answer.TrySetResult(data));
+            try
+            {
+                live = await answer.Task.WaitAsync(TimeSpan.FromMilliseconds(NavPrefillTimeoutMs));
+            }
+            catch (TimeoutException)
+            {
+                Log.Debug("A300", "NAV radios did not answer; the dialog opens with 108.00 and course 0.");
+            }
+            if (_disposed || parentForm.IsDisposed)
+                return;
+            ShowTrackedWindow(
+                () => new NavRadiosForm(announcer,
+                    Prefill(live?.Nav1Freq, 108.0), (int)Math.Round(Prefill(live?.Nav1Obs, 0)) % 360,
+                    Prefill(live?.Nav2Freq, 108.0), (int)Math.Round(Prefill(live?.Nav2Obs, 0)) % 360,
+                    settings => SetNavRadios(settings, sim, announcer)),
+                form =>
+                {
+                    if (form.Visible) form.Activate();
+                    else form.Show(parentForm);
+                });
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("A300", $"NAV radios dialog failed: {ex.Message}");
+        }
+    }
+
+    private static double Prefill(double? value, double fallback) => value is double v && v > 0 ? v : fallback;
+
+    private void SetNavRadios(NavRadioSettings settings, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        var parts = new[]
+        {
+            A300TypedValues.Plan(A300TypedValues.Vor1FrequencyKey, settings.Nav1FreqMHz, false),
+            A300TypedValues.Plan(A300TypedValues.Vor1CourseKey, settings.Nav1Course, false),
+            A300TypedValues.Plan(A300TypedValues.Vor2FrequencyKey, settings.Nav2FreqMHz, false),
+            A300TypedValues.Plan(A300TypedValues.Vor2CourseKey, settings.Nav2Course, false),
+        };
+        if (parts.FirstOrDefault(p => p.Error != null) is { } bad)
+        {
+            announcer.AnnounceImmediate($"NAV radios: {bad.Error}");
+            return;
+        }
+        if (_disposed || !CanLand(sim))
+        {
+            announcer.AnnounceImmediate("NAV radios unavailable");
+            return;
+        }
+        Send(sim, string.Join(" ", parts.Select(p => p.Rpn)));
+        announcer.AnnounceImmediate(string.Join("; ", parts.Select(p => p.Confirmation)));
+    }
+}

@@ -1,0 +1,190 @@
+using System.Globalization;
+using MSFSBlindAssist.Aircraft;
+using MSFSBlindAssist.Aircraft.A300;
+using MSFSBlindAssist.SimConnect;
+
+namespace MSFSBlindAssist.Tests.A300;
+
+public class A300TypedValuesTests
+{
+    private static A300TypedResult Plan(string key, double value, bool isMach = false) => A300TypedValues.Plan(key, value, isMach);
+
+    [Theory]
+    [InlineData(250, false, "250 (>L:INI_Airspeed_Dial)", "Speed 250 knots", null)]
+    [InlineData(0.78, true, "0.78 (>L:INI_Airspeed_Dial)", "Mach 0.78", null)]
+    [InlineData(0.78, false, "0.78 (>L:INI_Airspeed_Dial)", "Mach 0.78", "1 (>B:AIRLINER_SPDMACH_Set)")]
+    [InlineData(280, true, "280 (>L:INI_Airspeed_Dial)", "Speed 280 knots", "1 (>B:AIRLINER_SPDMACH_Set)")]
+    public void Speed_switches_spd_mach_first_when_the_unit_differs(double value, bool isMach, string rpn, string said, string? before)
+    {
+        var plan = Plan(A300TypedValues.SpeedKey, value, isMach);
+        Assert.Equal(rpn, plan.Rpn);
+        Assert.Equal(said, plan.Confirmation);
+        Assert.Equal(before, plan.Before);
+    }
+
+    [Theory]
+    [InlineData(A300TypedValues.SpeedKey, 99)]
+    [InlineData(A300TypedValues.SpeedKey, 400)]
+    [InlineData(A300TypedValues.SpeedKey, 0.05)]
+    [InlineData(A300TypedValues.HeadingKey, 361)]
+    [InlineData(A300TypedValues.AltitudeKey, 49100)]
+    [InlineData(A300TypedValues.AltitudeKey, 0)]
+    [InlineData(A300TypedValues.VerticalSpeedKey, 6100)]
+    [InlineData(A300TypedValues.Vor1FrequencyKey, 118.0)]
+    [InlineData(A300TypedValues.Vor1FrequencyKey, 113.92)]
+    [InlineData(A300TypedValues.IlsFrequencyKey, 113.90)]
+    [InlineData(A300TypedValues.Com1StandbyKey, 117.5)]
+    [InlineData(A300TypedValues.SquawkKey, 7800)]
+    [InlineData(A300TypedValues.SquawkKey, 1239)]
+    [InlineData(A300TypedValues.BaroCaptainKey, 500)]
+    [InlineData(A300TypedValues.HeadingKey, double.NaN)]
+    public void Values_outside_the_range_are_refused_with_it(string key, double value)
+    {
+        var plan = Plan(key, value);
+        Assert.Null(plan.Rpn);
+        Assert.Equal(A300TypedValues.ErrorFor(key), plan.Error);
+    }
+
+    [Theory]
+    [InlineData(A300TypedValues.HeadingKey, 360, "0 (>L:INI_HEADING_DIAL)", "Heading 000")]
+    [InlineData(A300TypedValues.HeadingKey, 5.4, "5 (>L:INI_HEADING_DIAL)", "Heading 005")]
+    [InlineData(A300TypedValues.AltitudeKey, 12049, "12000 (>L:INI_Altitude_Dial)", "Altitude 12,000 feet")]
+    [InlineData(A300TypedValues.VerticalSpeedKey, -1520, "-1500 (>L:INI_vvi_dial)", "Vertical speed -1,500 feet per minute")]
+    [InlineData(A300TypedValues.VerticalSpeedKey, -20, "0 (>L:INI_vvi_dial)", "Vertical speed 0 feet per minute")]
+    [InlineData(A300TypedValues.Vor1FrequencyKey, 113.9, "113 (>L:INI_VOR1_FREQUENCY_MHZ) 90 (>L:INI_VOR1_FREQUENCY_KHZ)", "VOR 1 113.90")]
+    [InlineData(A300TypedValues.Vor2FrequencyKey, 112.05, "112 (>L:INI_VOR2_FREQUENCY_MHZ) 5 (>L:INI_VOR2_FREQUENCY_KHZ)", "VOR 2 112.05")]
+    [InlineData(A300TypedValues.IlsFrequencyKey, 110.3, "110 (>L:INI_ILS_FREQUENCY_MHZ) 30 (>L:INI_ILS_FREQUENCY_KHZ)", "ILS 110.30")]
+    [InlineData(A300TypedValues.Vor1CourseKey, 90, "90 (>K:VOR1_SET)", "VOR 1 course 090")]
+    [InlineData(A300TypedValues.IlsCourseKey, 135, "135 (>L:INI_ils_course)", "ILS course 135")]
+    [InlineData(A300TypedValues.Com2StandbyKey, 121.5, "121500000 (>K:COM2_STBY_RADIO_SET_HZ)", "VHF 2 standby 121.500")]
+    [InlineData(A300TypedValues.SquawkKey, 4521, "17697 (>K:XPNDR_SET)", "Squawk 4521")]
+    [InlineData(A300TypedValues.SquawkKey, 22, "34 (>K:XPNDR_SET)", "Squawk 0022")]
+    [InlineData(A300TypedValues.BaroCaptainKey, 1020, "1 16320 (>K:2:KOHLSMAN_SET)", "Captain altimeter 1020 hectopascals, 30.12 inches")]
+    public void Values_are_written_the_way_the_aircraft_takes_them(string key, double value, string rpn, string said)
+    {
+        var plan = Plan(key, value);
+        Assert.Null(plan.Error);
+        Assert.Equal(rpn, plan.Rpn);
+        Assert.Equal(said, plan.Confirmation);
+    }
+
+    [Fact]
+    public void One_altimeter_entry_sets_all_three_in_inches_or_hectopascals()
+    {
+        var plan = A300TypedValues.AllAltimeters(29.92);
+        Assert.Equal("1 16211 (>K:2:KOHLSMAN_SET) 2 16211 (>K:2:KOHLSMAN_SET) 3 16211 (>K:2:KOHLSMAN_SET)", plan.Rpn);
+        Assert.Equal("Altimeters 1013 hectopascals, 29.92 inches", plan.Confirmation);
+    }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void Typed_values_read_and_write_the_same_in_a_comma_decimal_culture(string culture)
+    {
+        var saved = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo(culture);
+            Assert.Equal("0.78 (>L:INI_Airspeed_Dial)", Plan(A300TypedValues.SpeedKey, 0.78, true).Rpn);
+            Assert.Equal("Mach 0.78", Plan(A300TypedValues.SpeedKey, 0.78, true).Confirmation);
+            Assert.Equal("VOR 1 113.90", Plan(A300TypedValues.Vor1FrequencyKey, 113.9).Confirmation);
+            Assert.Equal("Altitude 12,000 feet", Plan(A300TypedValues.AltitudeKey, 12000).Confirmation);
+            Assert.Equal("VHF 2 standby 121.500", Plan(A300TypedValues.Com2StandbyKey, 121.5).Confirmation);
+            Assert.Equal("Mach 0.82", A300FcuState.SpeedWindow(0.82, isMach: true));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = saved;
+        }
+    }
+
+    [Fact]
+    public void Every_typed_row_lands_on_its_panel_with_a_set_key()
+    {
+        var placement = A300PanelLayout.Place(A300ControlMap.Load());
+        foreach (var typed in A300TypedValues.All)
+        {
+            Assert.Contains("_SET", typed.Key);
+            Assert.Contains(placement.RowsByPanel[typed.Panel], r => r.Key == typed.Key && r.Action == A300RowAction.Typed);
+        }
+    }
+}
+
+public class IniA300AutoflightBehaviourTests
+{
+    private readonly IniA300Definition _def;
+    private readonly SpeechCapture _speech = new();
+    private readonly SimConnectManager _sim = new(IntPtr.Zero);
+    private readonly Dictionary<string, double> _cache = new();
+    private readonly List<string> _sent = new();
+    private readonly List<TaskCompletionSource> _waits = new();
+
+    public IniA300AutoflightBehaviourTests()
+    {
+        _def = new IniA300Definition
+        {
+            CanLand = _ => true,
+            Cached = (_, key) => _cache.TryGetValue(key, out var v) ? v : null,
+            Send = (_, rpn) => _sent.Add(rpn),
+            TypedDelay = _ =>
+            {
+                var wait = new TaskCompletionSource();
+                _waits.Add(wait);
+                return wait.Task;
+            },
+        };
+        _def.Attach(_sim);
+    }
+
+    private bool Set(string key, double value) => _def.HandleUIVariableSet(key, value, _def.GetVariables()[key], _sim, _speech);
+
+    [Fact]
+    public void A_typed_heading_is_sent_and_confirmed()
+    {
+        Assert.True(Set(A300TypedValues.HeadingKey, 270));
+        Assert.Equal(new[] { "270 (>L:INI_HEADING_DIAL)" }, _sent);
+        Assert.Equal(new[] { "Heading 270" }, _speech.All);
+    }
+
+    [Fact]
+    public void A_typed_mach_in_speed_mode_switches_then_waits_then_writes()
+    {
+        _cache[A300FcuState.SpeedMachLightKey] = 0;
+        Assert.True(Set(A300TypedValues.SpeedKey, 0.78));
+        Assert.Equal(new[] { "1 (>B:AIRLINER_SPDMACH_Set)" }, _sent);
+        Assert.Empty(_speech.All);
+        _waits.Single().SetResult();
+        Assert.Equal(new[] { "1 (>B:AIRLINER_SPDMACH_Set)", "0.78 (>L:INI_Airspeed_Dial)" }, _sent);
+        Assert.Equal(new[] { "Mach 0.78" }, _speech.All);
+    }
+
+    [Fact]
+    public void A_typed_value_out_of_range_says_the_range_and_sends_nothing()
+    {
+        Assert.True(Set(A300TypedValues.AltitudeKey, 60000));
+        Assert.Empty(_sent);
+        Assert.Equal(new[] { "Altitude: 100 to 49,000 feet" }, _speech.All);
+    }
+
+    [Fact]
+    public void An_fcu_lamp_is_consumed_silently_and_shown_on_its_button()
+    {
+        Assert.True(_def.ProcessSimVarUpdate("A300_FCU_LT_HDGSEL", 1, _speech));
+        Assert.Empty(_speech.All);
+        _cache["A300_FCU_LT_HDGSEL"] = 1;
+        Assert.True(_def.TryDescribeControlState("A300_HDGSEL_BUTTON", out var state));
+        Assert.Equal("On", state);
+        Assert.Equal(new[] { "A300_FCU_LT_HDGSEL" }, _def.GetVariables()["A300_HDGSEL_BUTTON"].StateVariables);
+    }
+
+    [Fact]
+    public void The_speed_window_reads_mach_in_mach_mode()
+    {
+        _cache[A300FcuState.SpeedMachLightKey] = 1;
+        Assert.True(_def.TryGetDisplayOverride(A300Readouts.SpeedKey, 0.78, out var text));
+        Assert.Equal("Mach 0.78", text);
+        _cache[A300FcuState.SpeedMachLightKey] = 0;
+        Assert.True(_def.TryGetDisplayOverride(A300Readouts.SpeedKey, 250, out text));
+        Assert.Equal("250 knots", text);
+    }
+}
