@@ -35,6 +35,11 @@ public partial class IniA300Definition
         if (A300FcuState.LightKeys.Contains(varName))
             return true;
 
+        // An FMA source (some are switch rows too): read when its batch has finished dispatching
+        // (OnDeferredFlushBatchDelivered), never spoken here.
+        if (A300FmaSources.Keys.Contains(varName))
+            return true;
+
         if (A300Announcements.AnnouncedKeys.Contains(varName))
         {
             if (_seedGate.Armed)
@@ -68,6 +73,7 @@ public partial class IniA300Definition
     {
         base.OnSimContextReset();
         _tracker.Reset();
+        _fmaTracker.Reset();
         _commanded.Clear();
         _seedGate.Arm(KnownSeedValues());
     }

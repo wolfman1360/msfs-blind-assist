@@ -183,6 +183,8 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
             vars[row.Key] = def;
         }
 
+        RegisterFmaSources(vars, batchNames);
+
         foreach (var readout in A300Readouts.All)
         {
             vars[readout.Key] = new SimVarDefinition
