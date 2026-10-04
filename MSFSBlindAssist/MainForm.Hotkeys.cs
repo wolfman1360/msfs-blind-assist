@@ -234,6 +234,12 @@ public partial class MainForm
                     // MD-11 — all three MCDUs as text from the MD11MCDU client data area.
                     ShowMd11McduDialog();
                 }
+                else if (currentAircraft is IniA300Definition)
+                {
+                    // The A300 MCDU windows come with the next part; the Fenix fallback below must
+                    // not open on it.
+                    announcer.AnnounceImmediate("A300 MCDU window not available yet.");
+                }
                 else if (currentAircraft?.AircraftCode == "A320" || currentAircraft?.AircraftCode == "HW_A330")
                 {
                     // The Headwind A330 MCDU is the same FBW instrument (the Coherent view
@@ -258,6 +264,10 @@ public partial class MainForm
                 else if (currentAircraft?.AircraftCode == "HS_787")
                 {
                     announcer.AnnounceImmediate("787 E F B not available.");
+                }
+                else if (currentAircraft is IniA300Definition)
+                {
+                    announcer.AnnounceImmediate("A300 tablet not available yet.");
                 }
                 else if (currentAircraft?.AircraftCode == "TFDI_MD11")
                 {

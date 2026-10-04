@@ -345,6 +345,14 @@ public partial class MainForm
                     return; // Skip announcement for disabled variable
                 }
 
+                // Check if disabled in the A300 Monitor Manager (the base variables the A300
+                // announces on the generic path: ground state, glideslope and the like).
+                if (currentAircraft.AircraftCode == IniA300Definition.Code &&
+                    Settings.SettingsManager.Current.A300DisabledMonitorVariablesSet.Contains(e.VarName))
+                {
+                    return; // Skip announcement for disabled variable
+                }
+
                 // Check if disabled in the A380 Monitor Manager.
                 if (currentAircraft.AircraftCode == "FBW_A380" &&
                     Settings.SettingsManager.Current.A380DisabledMonitorVariablesSet.Contains(e.VarName))

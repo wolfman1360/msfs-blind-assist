@@ -46,6 +46,12 @@ jobs:
       - name: MD-11 generator path tests (Python)
         run: python -m unittest discover -s tools/md11-gen -p "test_*.py" -v
 
+      # The A300 control-map generator and checklist converter (tools/a300-gen) are pure stdlib
+      # Python, tested against small fixtures in the aircraft's compiled behaviour format (the real
+      # files are iniBuilds' and cannot be in the repo).
+      - name: A300 generator tests (Python)
+        run: python -m unittest discover -s tools/a300-gen -p "test_*.py" -v
+
   efb-readers:
     name: EFB reader tests (jsdom)
     runs-on: ubuntu-latest

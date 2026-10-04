@@ -1,0 +1,171 @@
+using System.Globalization;
+using MSFSBlindAssist.Aircraft.A300;
+
+namespace MSFSBlindAssist.Tests.A300;
+
+public class A300WritePlanTests
+{
+    private static A300Control Control(string kind, string positions = "0=OFF;1=ON", double? scale = null,
+        double? press = null, double? rest = null, Dictionary<string, string>? values = null)
+    {
+        var c = new A300Control
+        {
+            Id = "AIRLINER_TEST",
+            Key = "A300_TEST",
+            Kind = kind,
+            Event = "AIRLINER_Test_Set",
+            StateVar = "L:INI_TEST",
+            Scale = scale,
+            Press = press,
+            Rest = rest,
+            Values = values,
+        };
+        foreach (var part in positions.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var kv = part.Split('=');
+            c.Positions[kv[0]] = kv[1];
+        }
+        return c;
+    }
+
+    private static string[] Rpns(A300Plan plan) => plan.Steps.OfType<A300CalcStep>().Select(s => s.Rpn).ToArray();
+
+    [Fact]
+    public void A_toggle_in_an_unknown_position_is_refused()
+    {
+        var plan = A300WritePlan.ForSet(Control(A300Kinds.Toggle), 1, current: null);
+        Assert.Equal(A300WritePlan.UnknownPositionRefusal, plan.Refusal);
+        Assert.True(plan.IsEmpty);
+    }
+
+    [Fact]
+    public void A_toggle_already_there_sends_nothing()
+    {
+        var plan = A300WritePlan.ForSet(Control(A300Kinds.Toggle), 1, current: 1);
+        Assert.Null(plan.Refusal);
+        Assert.True(plan.IsEmpty);
+    }
+
+    [Theory]
+    [InlineData(0, 1, "0 (>B:AIRLINER_Test_Set)")]
+    [InlineData(1, 0, "1 (>B:AIRLINER_Test_Set)")]
+    public void A_toggle_that_differs_fires_its_set_event_once(double target, double current, string expected)
+    {
+        Assert.Equal(new[] { expected }, Rpns(A300WritePlan.ForSet(Control(A300Kinds.Toggle), target, current)));
+    }
+
+    [Fact]
+    public void A_command_follows_the_toggle_rules()
+    {
+        Assert.Equal(A300WritePlan.UnknownPositionRefusal, A300WritePlan.ForSet(Control(A300Kinds.Command), 1, null).Refusal);
+        Assert.Single(Rpns(A300WritePlan.ForSet(Control(A300Kinds.Command), 1, 0)));
+    }
+
+    [Fact]
+    public void A_value_that_is_not_a_position_is_refused()
+    {
+        Assert.Equal(A300WritePlan.NotAPositionRefusal, A300WritePlan.ForSet(Control(A300Kinds.Toggle), 7, 0).Refusal);
+        Assert.Equal(A300WritePlan.NotAPositionRefusal, A300WritePlan.ForSet(Control(A300Kinds.Selector, "0=A;1=B"), 5, 0).Refusal);
+    }
+
+    [Fact]
+    public void A_selector_is_absolute_even_when_its_position_is_unknown()
+    {
+        var c = Control(A300Kinds.Selector, "0=OFF;1=NAV;2=ATT");
+        Assert.Equal(new[] { "2 (>B:AIRLINER_Test_Set)" }, Rpns(A300WritePlan.ForSet(c, 2, current: null)));
+        Assert.True(A300WritePlan.ForSet(c, 2, current: 2).IsEmpty);
+    }
+
+    [Fact]
+    public void A_selector_whose_state_values_differ_sends_the_position()
+    {
+        var c = Control(A300Kinds.Selector, "0=A;1=B", values: new() { ["0"] = "10", ["1"] = "20" });
+        Assert.Equal(new[] { "1 (>B:AIRLINER_Test_Set)" }, Rpns(A300WritePlan.ForSet(c, 20, current: 10)));
+    }
+
+    [Fact]
+    public void A_spring_is_held_at_the_picked_side_then_returned_to_rest()
+    {
+        var plan = A300WritePlan.ForSet(Control(A300Kinds.Spring, "0=DOWN;1=NEUTRAL;2=UP", rest: 1), 2, current: 1);
+        Assert.Collection(plan.Steps,
+            s => Assert.Equal("2 (>B:AIRLINER_Test_Set)", Assert.IsType<A300CalcStep>(s).Rpn),
+            s => Assert.Equal(A300WritePlan.SpringHoldMs, Assert.IsType<A300DelayStep>(s).Milliseconds),
+            s => Assert.Equal("1 (>B:AIRLINER_Test_Set)", Assert.IsType<A300CalcStep>(s).Rpn));
+    }
+
+    [Fact]
+    public void Picking_a_springs_rest_just_returns_it()
+    {
+        var plan = A300WritePlan.ForSet(Control(A300Kinds.Spring, "0=DOWN;1=NEUTRAL;2=UP", rest: 1), 1, current: 2);
+        Assert.Equal(new[] { "1 (>B:AIRLINER_Test_Set)" }, Rpns(plan));
+    }
+
+    [Theory]
+    [InlineData(1.0, 42, "42 (>B:AIRLINER_Test_Set)")]
+    [InlineData(0.1, 4.2, "42 (>B:AIRLINER_Test_Set)")]
+    [InlineData(1.0, 150, "100 (>B:AIRLINER_Test_Set)")]
+    [InlineData(1.0, -5, "0 (>B:AIRLINER_Test_Set)")]
+    public void A_knob_sends_its_value_unscaled_and_clamped(double scale, double target, string expected)
+    {
+        var plan = A300WritePlan.ForSet(Control(A300Kinds.Knob, "", scale: scale), target, current: null);
+        Assert.Equal(new[] { expected }, Rpns(plan));
+    }
+
+    [Fact]
+    public void A_knob_already_at_the_value_sends_nothing()
+    {
+        Assert.True(A300WritePlan.ForSet(Control(A300Kinds.Knob, "", scale: 0.1), 4.2, current: 4.2).IsEmpty);
+    }
+
+    [Fact]
+    public void A_button_press_is_one_set()
+    {
+        Assert.Equal(new[] { "1 (>B:AIRLINER_Test_Set)" }, Rpns(A300WritePlan.ForPress(Control(A300Kinds.Button, ""))));
+        Assert.Equal(new[] { "3 (>B:AIRLINER_Test_Set)" }, Rpns(A300WritePlan.ForPress(Control(A300Kinds.Button, "", press: 3))));
+    }
+
+    [Fact]
+    public void A_hold_button_is_pressed_held_and_released()
+    {
+        var plan = A300WritePlan.ForPress(Control(A300Kinds.Hold, ""));
+        Assert.Collection(plan.Steps,
+            s => Assert.Equal("2 (>B:AIRLINER_Test_Set)", Assert.IsType<A300CalcStep>(s).Rpn),
+            s => Assert.Equal(A300WritePlan.HoldMs, Assert.IsType<A300DelayStep>(s).Milliseconds),
+            s => Assert.Equal("0 (>B:AIRLINER_Test_Set)", Assert.IsType<A300CalcStep>(s).Rpn));
+    }
+
+    [Fact]
+    public void An_encoder_steps_one_click_either_way()
+    {
+        var c = Control(A300Kinds.Encoder, "");
+        Assert.Equal(new[] { "1 (>B:AIRLINER_Test_Set)" }, Rpns(A300WritePlan.ForStep(c, increase: true)));
+        Assert.Equal(new[] { "-1 (>B:AIRLINER_Test_Set)" }, Rpns(A300WritePlan.ForStep(c, increase: false)));
+    }
+
+    [Fact]
+    public void A_kind_that_cannot_be_driven_is_refused()
+    {
+        Assert.Equal(A300WritePlan.NotSettableRefusal, A300WritePlan.ForSet(Control(A300Kinds.Cover), 1, 0).Refusal);
+        Assert.Equal(A300WritePlan.NotSettableRefusal, A300WritePlan.ForPress(Control(A300Kinds.Toggle)).Refusal);
+        Assert.Equal(A300WritePlan.NotSettableRefusal, A300WritePlan.ForStep(Control(A300Kinds.Knob, ""), true).Refusal);
+    }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void Numbers_are_written_with_a_point_under_a_comma_decimal_culture(string culture)
+    {
+        var saved = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo(culture);
+            var plan = A300WritePlan.ForSet(Control(A300Kinds.Knob, "", scale: 1.0), 42.5, current: null);
+            Assert.Equal(new[] { "42.5 (>B:AIRLINER_Test_Set)" }, Rpns(plan));
+            Assert.Equal("0.0001", A300WritePlan.Format(0.0001));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = saved;
+        }
+    }
+}

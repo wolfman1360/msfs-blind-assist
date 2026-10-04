@@ -1,0 +1,47 @@
+r"""Reports what changed between two A300 control maps, for reviewing a regeneration.
+
+    git show HEAD:MSFSBlindAssist/Resources/a300_control_map.json > %TEMP%\old_map.json
+    python tools/a300-gen/diff_maps.py %TEMP%\old_map.json MSFSBlindAssist/Resources/a300_control_map.json
+
+Every line it prints is something a panel row, a spoken word or a cockpit write may have
+changed for; read each one before committing the new map.
+"""
+import json
+import sys
+
+COMPARED = ('key', 'area', 'panel', 'title', 'kind', 'event', 'state_var', 'state_unit', 'scale',
+            'positions', 'values', 'press', 'rest')
+
+
+def diff(old, new):
+    lines = []
+    old_by = {c['id']: c for c in old.get('controls', [])}
+    new_by = {c['id']: c for c in new.get('controls', [])}
+    for cid in sorted(set(new_by) - set(old_by)):
+        lines.append('added   %s (%s)' % (cid, new_by[cid]['kind']))
+    for cid in sorted(set(old_by) - set(new_by)):
+        lines.append('removed %s (%s)' % (cid, old_by[cid]['kind']))
+    for cid in sorted(set(old_by) & set(new_by)):
+        for key in COMPARED:
+            if old_by[cid].get(key) != new_by[cid].get(key):
+                lines.append('changed %s %s: %s -> %s' % (cid, key, json.dumps(old_by[cid].get(key)),
+                                                          json.dumps(new_by[cid].get(key))))
+    return lines
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    if len(argv) != 2:
+        print(__doc__)
+        return 2
+    with open(argv[0], encoding='utf-8') as f:
+        old = json.load(f)
+    with open(argv[1], encoding='utf-8') as f:
+        new = json.load(f)
+    lines = diff(old, new)
+    print('\n'.join(lines) if lines else 'no differences')
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

@@ -1,0 +1,214 @@
+INIBUILDS AIRBUS A300-600 HOTKEY REFERENCE
+
+Application Navigation:
+  Ctrl+1     Focus Sections List
+  Ctrl+2     Focus Panels List
+  Ctrl+3     Focus Status Display field of the current panel (refreshes it if empty)
+
+Tip: Press the same bracket key again to cancel a mode you activated by accident.
+
+
+READ THIS FIRST - WHAT THIS VERSION COVERS
+
+Choose iniBuilds Airbus A300-600 from the Aircraft menu. The passenger and freighter versions,
+with either engine, share one cockpit, so one choice covers all four. This version covers the
+A300's switch panels: the overhead, the glareshield, the main instrument panel, the pedestal
+and the cockpit's back wall. Not included yet: the MCDU windows, typed values for the FCU and
+the radios, the tablet, and readouts of the PFD, ND and ECAM screens. Until they arrive, operate
+those in the simulator. Shift+M and Shift+T say so instead of opening a window.
+
+
+THE PANELS
+
+Sections (Ctrl+1): Overhead, Glareshield, Main Panel, Pedestal, Cockpit, Cargo. The panels
+(Ctrl+2) follow the cockpit as iniBuilds built it: the Overhead starts with Cabin Pressure, IRS,
+APU and Anti-Ice; the Glareshield holds the FCU and both EFIS panels; the Pedestal holds the
+throttle quadrant, the radios, the transponder, the weather radar and the ECAM control panel.
+The Cargo section is the freighter's main deck cargo door panel.
+
+A switch is a combo box with the aircraft's own position words. A push button is a button. A
+dimmer or temperature knob is a slider. A knob that only turns, such as the FCU speed knob or a
+radio frequency knob, is a pair of buttons, "increase" and "decrease", each one click of the
+knob. The flaps lever, the ground spoiler arm and the speed brake lever are at the end of the
+Throttle Quadrant panel.
+
+When you change a control, MSFS Blind Assist moves it exactly the way a click in the cockpit
+would. Nothing is spoken back - your screen reader already says what you chose - unless the
+control could not be moved, when you hear why: "Battery 1 unavailable" (the simulator connection
+cannot carry the change), or "position unknown, try again in a moment" (a switch must be read
+before it may be moved; this clears within a second or two of connecting).
+
+A trim switch (aileron trim, rudder trim, the pitch trim switches on the yokes, the cabin
+manual vertical speed switch) springs back: choosing a side holds it there for one second and
+lets it return, the way a short press does in the cockpit. Choose the side again for more.
+
+Each cargo smoke agent switch has its guard just before it. The switch only moves while its
+guard is open, exactly as in the aircraft.
+
+Status Display (Ctrl+3): the FCU panel shows the four FCU windows; the Captain, First Officer
+and Center panels show the altimeter settings, the flex temperature and the landing elevation;
+the Navigation Radios panel shows the VOR and ILS courses. The Captain Panel also shows the
+master warning and master caution lights.
+
+
+OUTPUT MODE - Press right bracket to activate
+
+Aircraft state:
+  Shift+C    Open the A300 checklist (the aircraft's own checklist, phase by phase)
+  Ctrl+M     A300 Monitor Manager
+
+Altitude:
+  Q          Read Altitude AGL
+  A          Read Altitude MSL
+
+Airspeed:
+  S          Read IAS (Indicated Airspeed)
+  T          Read TAS (True Airspeed)
+  G          Read Ground Speed
+  M          Read Mach Number
+
+Heading:
+  H          Read Magnetic Heading
+  U          Read True Heading
+
+Vertical:
+  V          Read Vertical Speed
+  Ctrl+Shift+R  Read last landing rate (touchdown vertical speed, feet per minute)
+  Ctrl+Shift+G  Read last landing peak g-force
+
+Navigation:
+  N          Read NAV 1 and NAV 2 radio info (frequency, ident, localizer, glideslope, DME)
+
+Weather:
+  I          Wind Info
+  O          Read Outside Temperature (Celsius)
+
+Time:
+  Z          Read Local Time at the aircraft's position, with the time-zone name
+             ("16:38 Eastern Daylight Time"). Seconds are added when "Include seconds
+             in time announcements" is ticked in Announcement Settings.
+  Shift+Z    Read Zulu / UTC Time ("03:30Z")
+
+Transponder:
+  X          Read Squawk Code
+
+Location:
+  C          Read Nearest City
+
+Tools:
+  Ctrl+H     Activate/deactivate Hand Fly mode
+  Ctrl+V     Activate/deactivate Visual Guidance mode. Does not require Hand
+             Fly mode. Enables the same single-letter quick-access hotkeys
+             Hand Fly mode does, plus F for target VS.
+  Ctrl+T     Activate/deactivate Takeoff Assistance
+  Ctrl+D     Read Distance to Selected Runway
+  Ctrl+I     Read ILS Guidance System Report
+
+Taxi Guidance (turn-by-turn taxi assistance with audio steering tone):
+  Y          Taxi Status (current taxiway, next turn, distance to destination)
+  Ctrl+Y     Repeat Current Taxi Instruction
+  Alt+Y      Where Am I (announces current taxiway, gate, or runway at nearest airport)
+  Alt+L      Look Around (where you are, the apron or concourse you are in, and the nearest buildings with direction and distance)
+  Ctrl+Shift+L  Surroundings window (everything nearby as a list, with the airport's fuel and frequencies)
+                In its Frequencies list, Enter tunes the selected frequency into COM 1 standby
+                and Shift+Enter tunes it straight into COM 1 active; COM 1 is read back to confirm.
+  (Open the form with Input mode > Shift+Y)
+
+Waypoint Tracking (use the Fix Track window or the route viewer to add):
+  1          Track Slot 1
+  2          Track Slot 2
+  3          Track Slot 3
+  4          Track Slot 4
+  5          Track Slot 5
+
+Traffic and Weather:
+  R          Announce Tracked TCAS Traffic
+  Ctrl+R     Open TCAS Traffic Window
+  Shift+R    Open Weather Radar Window (uses ActiveSky's richer data when it is
+             running, MSFS weather otherwise)
+  Alt+G      Announce nearest ground traffic (up to 3 aircraft on ground with
+             direction and distance; auto-alerts also fire at 500/250/100 ft
+             zone transitions while taxiing)
+
+Displays and Windows:
+  Shift+E    Route viewer, procedure planner and airport lookup
+  Shift+L    Location Info
+  Shift+M    Show METAR Report (VATSIM, plus ActiveSky METAR if AS detected)
+  Shift+B    SimBrief Briefing
+  Alt+D      Describe outside scene (AI; needs an AI key in File > Settings > AI tab)
+  Ctrl+Shift+T  Cold Temperature Altitude Correction (offline calculator: field elevation + temperature + published altitudes -> corrected altitudes)
+
+Hand Fly Mode Hotkeys:
+  A          Read MSL
+  S          Read IAS
+  D          Read Distance to Destination Runway
+  H          Read Magnetic Heading
+  P          Read Aircraft Pitch
+  B          Read Aircraft Bank
+  Q          Read AGL
+  V          Read VS
+
+Visual Guidance Mode Hotkeys (same single-letter set as Hand Fly mode, plus F):
+  F          Read Target VS
+
+Ground Services:
+  Ctrl+G     Read latest GSX tooltip (no need to open the Access GSX window)
+             In the Access GSX window, press F5 to open the GSX menu, 1-9/0/A-E
+             to choose menu options, C to open GSX Settings, and Escape to hide
+             the window.
+
+SayIntentions:
+  Ctrl+S        Read last SayIntentions transmission
+  Ctrl+Shift+S  Open SayIntentions flight information. Assigned arrival gate,
+                departure runway, which runways are landing and departing, the
+                field flow and the altimeter. Read-only: arrow keys move line by
+                line, Escape closes.
+
+VATSIM:
+  Alt+V      Mute or unmute VATSIM announcements (vPilot)
+
+
+INPUT MODE - Press [ to activate
+
+Teleport:
+  Shift+R    Runway Teleport
+  Shift+G    Gate Teleport
+
+Flight Planning:
+  Shift+F    Fix/Waypoint Tracking Window
+  Shift+D    Select Destination Runway
+
+Taxi Guidance:
+  Shift+Y    Open Taxi Assist Form (enter ATC taxi clearance, start guidance)
+  Y          Continue past current hold-short point
+  Ctrl+Y     Stop Taxi Guidance
+  Shift+X    Open Landing Exit Planner (pick a runway exit taxiway before
+             touchdown; guidance starts when you land)
+
+Ground Services:
+  Alt+G      Open Access GSX window (accessible GSX Ground Services Pro menu)
+
+SayIntentions:
+  Ctrl+Shift+Y Build a taxi route from the last SayIntentions taxi clearance.
+               Fills the Taxi Assist form with the destination, taxiways and
+               hold-short runways ATC gave, and names anything it could not
+               apply. Review the fields and press Calculate Route to start
+               guidance, or turn on auto-start in the SayIntentions section
+               of Settings > Taxi Guidance.
+
+General:
+  Escape     Exit active hotkey mode
+
+
+BACKGROUND ANNOUNCEMENTS - Ctrl+M
+
+The master warning and master caution lights are announced when they come on ("Master
+warning"). Pressing the light to acknowledge it is not spoken back.
+
+The flaps lever, the ground spoiler arm, the gear lever and the parking brake are announced when
+something other than MSFS Blind Assist moves them - a hardware lever, or the aircraft itself
+("Flaps 15/15", "Parking brake set"). Changes you make in MSFS Blind Assist are not.
+
+Ctrl+M opens the monitor manager: type in the search box to narrow the list, use the Show filter
+to see only the muted rows, and untick an item to stop it announcing. Your choices are
+remembered between sessions.

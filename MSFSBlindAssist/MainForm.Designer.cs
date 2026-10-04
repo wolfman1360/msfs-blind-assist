@@ -22,6 +22,7 @@
         private System.Windows.Forms.ToolStripMenuItem headwindA330MenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem ifly737MaxMenuItem = null!;
         private System.Windows.Forms.ToolStripMenuItem tfdiMd11MenuItem = null!;
+        private System.Windows.Forms.ToolStripMenuItem iniA300MenuItem = null!;
         private System.Windows.Forms.ListBox sectionsListBox = null!;
         private System.Windows.Forms.ListBox panelsListBox = null!;
         private System.Windows.Forms.Panel controlsContainer = null!;
@@ -57,6 +58,7 @@
             this.headwindA330MenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.ifly737MaxMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.tfdiMd11MenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.iniA300MenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.sectionsListBox = new System.Windows.Forms.ListBox();
             this.panelsListBox = new System.Windows.Forms.ListBox();
             this.controlsContainer = new System.Windows.Forms.Panel();
@@ -170,6 +172,7 @@
             this.flyByWireA380MenuItem,
             this.headwindA330MenuItem,
             this.fenixA320MenuItem,
+            this.iniA300MenuItem,
             this.pmdg737MenuItem,
             this.pmdg777MenuItem,
             this.horizonSim787MenuItem,
@@ -268,6 +271,16 @@
             this.tfdiMd11MenuItem.Text = "TFDi Design &MD-11";
             this.tfdiMd11MenuItem.Checked = false;
             this.tfdiMd11MenuItem.Click += new System.EventHandler(this.TFDiMD11MenuItem_Click);
+            //
+            // iniA300MenuItem
+            //
+            this.iniA300MenuItem.AccessibleName = "iniBuilds Airbus A300-600";
+            this.iniA300MenuItem.AccessibleDescription = "Switch to the iniBuilds Airbus A300-600";
+            this.iniA300MenuItem.Name = "iniA300MenuItem";
+            this.iniA300MenuItem.Size = new System.Drawing.Size(240, 26);
+            this.iniA300MenuItem.Text = "ini&Builds Airbus A300-600";
+            this.iniA300MenuItem.Checked = false;
+            this.iniA300MenuItem.Click += new System.EventHandler(this.IniA300MenuItem_Click);
             //
             // sectionsListBox
             // 

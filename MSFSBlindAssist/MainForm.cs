@@ -626,6 +626,8 @@ public partial class MainForm : Form
         // to happen here as well — otherwise every panel row opens without a state, and nothing
         // is described until the pilot's first press. Idempotent: a later switch re-attaches.
         if (currentAircraft is TFDiMD11Definition startupMd11) startupMd11.Attach(simConnectManager);
+        // The A300 likewise: its writes need the manager before the first panel opens.
+        if (currentAircraft is IniA300Definition startupA300) startupA300.Attach(simConnectManager);
         simConnectManager.ConnectionStatusChanged += OnConnectionStatusChanged;
         // A calc path that never came up is a DEGRADED session on FBW aircraft — overhead
         // switches can silently revert and the FCU can ignore commands. Say so once, rather
@@ -1306,6 +1308,11 @@ public partial class MainForm : Form
             md11ExitDef.Dispose();
             Log.Debug("MD11", "App exit: definition disposed.");
         }
+
+        // The A300's windows, then its definition, also before Disconnect(): a hold button or a
+        // spring switch still held owes its release, which Dispose sends while the sim is connected.
+        DisposeA300Windows();
+        if (currentAircraft is IniA300Definition a300ExitDef) a300ExitDef.Dispose();
 
         // Stop listening BEFORE Disconnect(). Disconnect ends by raising ConnectionLost, whose
         // handler calls currentAircraft.OnSimContextReset() — so on this path it re-entered the
