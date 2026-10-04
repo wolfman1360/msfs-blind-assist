@@ -29,10 +29,17 @@ master caution call-outs. The AI display reads are not available on the A300.
 THE PANELS
 
 Sections (Ctrl+1): Overhead, Glareshield, Main Panel, Displays, Pedestal, Cockpit, Cargo. The panels
-(Ctrl+2) follow the cockpit as iniBuilds built it: the Overhead starts with Cabin Pressure, IRS,
-APU and Anti-Ice; the Glareshield holds the FCU and both EFIS panels; the Pedestal holds the
-throttle quadrant, the radios, the transponder, the weather radar and the ECAM control panel.
+(Ctrl+2) come in the order of the other aircraft in MSFS Blind Assist, power first: the Overhead
+starts with Electrical, IRS, APU, Fire, Hydraulics and Fuel, then air conditioning, pressurization,
+anti-ice, wipers, lights and oxygen, with flight controls, engine start, recorders and the cockpit
+door last. The Glareshield holds the FCU and both EFIS panels. The Pedestal starts with the
+throttle quadrant, trim and ECAM control panel, then the weather radar, transponder and radios.
 The Cargo section is the freighter's main deck cargo door panel.
+
+A few panels open on what the checklist sets first: Electrical on the batteries and external
+power, Lights on the signs and then the exterior lights, the captain and first officer panels on
+master warning and master caution, the center panel on the gear lever, and the throttle quadrant
+on the fuel levers, flaps, speed brake, spoiler arm and parking brake.
 
 A switch is a combo box with the aircraft's own position words. A push button is a button. A
 dimmer or temperature knob is a slider. A knob that only turns, such as the FCU speed knob or a

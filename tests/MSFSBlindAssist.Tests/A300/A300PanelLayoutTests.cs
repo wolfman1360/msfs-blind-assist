@@ -31,12 +31,32 @@ public class A300PanelLayoutTests
     }
 
     [Fact]
-    public void The_sections_follow_the_cockpit()
+    public void The_sections_keep_their_order()
     {
         Assert.Equal(new[] { "Overhead", "Glareshield", "Main Panel", "Pedestal", "Cockpit", "Cargo" },
             Placement.Structure.Keys);
-        Assert.Equal(new[] { "Cabin Pressure", "IRS", "APU", "Anti-Ice" }, Placement.Structure["Overhead"].Take(4));
-        Assert.Equal(new[] { "FCU", "Captain EFIS", "First Officer EFIS" }, Placement.Structure["Glareshield"]);
+    }
+
+    [Fact]
+    public void The_overhead_opens_like_every_other_aircraft()
+    {
+        Assert.Equal(new[] { "Electrical", "IRS", "APU", "Fire", "Hydraulics", "Fuel" },
+            Placement.Structure["Overhead"].Take(6));
+        Assert.Equal(new[] { "Throttle Quadrant", "Trim", "ECAM Control" }, Placement.Structure["Pedestal"].Take(3));
+    }
+
+    [Fact]
+    public void Every_section_lists_exactly_the_panels_it_has()
+    {
+        foreach (var (section, panels) in Placement.Structure)
+            Assert.Equal(A300PanelLayout.PanelOrder[section], panels);
+    }
+
+    [Fact]
+    public void A_panel_the_order_does_not_name_comes_after_the_listed_ones()
+    {
+        Assert.Equal(new[] { "A", "B", "X" }, A300PanelLayout.Ordered(new[] { "B", "X", "A" }, new[] { "A", "B" }));
+        Assert.Equal(new[] { "A" }, A300PanelLayout.Ordered(new[] { "A" }, new[] { "Z", "A" }));
     }
 
     [Fact]
@@ -86,11 +106,29 @@ public class A300PanelLayoutTests
     }
 
     [Fact]
-    public void The_levers_end_the_throttle_quadrant()
+    public void Each_lead_list_opens_its_panel()
     {
-        var keys = Placement.RowsByPanel[A300Levers.Panel].Select(r => r.Key).TakeLast(3);
-        Assert.Equal(new[] { A300Levers.FlapsKey, A300Levers.SpoilersArmKey, A300Levers.SpeedBrakeKey }, keys);
+        foreach (var (panel, keys) in A300PanelLayout.LeadRows)
+            Assert.Equal(keys, Placement.RowsByPanel[panel].Take(keys.Length).Select(r => r.Key));
+    }
+
+    [Fact]
+    public void Electrical_opens_on_the_batteries_and_the_throttle_quadrant_on_its_levers()
+    {
+        Assert.Equal(new[] { "A300_BATT_1", "A300_BATT_2", "A300_BATT_3", "A300_EXT_PWR" },
+            Placement.RowsByPanel["Electrical"].Take(4).Select(r => r.Key));
+        Assert.Equal(new[] { "A300_ENG1_CUTOFF", "A300_ENG2_CUTOFF", A300Levers.FlapsKey, A300Levers.SpeedBrakeKey, A300Levers.SpoilersArmKey },
+            Placement.RowsByPanel[A300Levers.Panel].Take(5).Select(r => r.Key));
         Assert.Contains(A300Levers.Panel, Placement.Structure["Pedestal"]);
+    }
+
+    [Fact]
+    public void No_row_is_lost_or_repeated()
+    {
+        var keys = AllRows.Select(r => r.Key).ToList();
+        Assert.Equal(keys.Count, keys.Distinct().Count());
+        foreach (var c in Map.Controls.Where(A300PanelLayout.IsPlaced))
+            Assert.Contains(keys, k => k == c.Key || k == c.Key + "#INC");
     }
 
     [Theory]

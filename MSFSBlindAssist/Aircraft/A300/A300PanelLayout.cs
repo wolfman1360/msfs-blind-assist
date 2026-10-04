@@ -21,11 +21,13 @@ public sealed class A300Placement
 }
 
 /// <summary>
-/// The A300's panels, following the cockpit (owner decision, 2026-10-03): the sections and panels
-/// come from the component tree iniBuilds grouped the cockpit by (Overhead, Glareshield, Main panel,
-/// Pedestal, Cockpit, Cargo), in the order the cockpit file lists them, so an iniBuilds update is
-/// picked up by regenerating the map. The one hand-made split is the pedestal's radio and audio
-/// group (iniBuilds' "STD", 113 controls), divided by what each control is.
+/// The A300's panels: which section and panel a control belongs to comes from the component tree
+/// iniBuilds grouped the cockpit by (Overhead, Glareshield, Main panel, Pedestal, Cockpit, Cargo), so
+/// an iniBuilds update is picked up by regenerating the map. The ORDER of the panels, and the rows
+/// that open a few of them, come from <see cref="PanelOrder"/> and <see cref="LeadRows"/> (owner
+/// decision, 2026-10-04: Electrical first, like every other aircraft in the app); everything else
+/// keeps the cockpit file's order. The one hand-made split is the pedestal's radio and audio group
+/// (iniBuilds' "STD", 113 controls), divided by what each control is.
 ///
 /// Left out on purpose: guard covers (they only move the 3D model; the switch under them works with
 /// the cover shut, measured from the click code), the IDC's copies of the classic radio panel (the
@@ -277,7 +279,8 @@ public static partial class A300PanelLayout
 
     /// <summary>
     /// Places every placed map control, in map (cockpit file) order, then the hand-written levers
-    /// (<see cref="A300Levers"/>) at the end of the throttle quadrant. Encoders become two rows
+    /// (<see cref="A300Levers"/>) on the throttle quadrant, and finally applies
+    /// <see cref="PanelOrder"/> and <see cref="LeadRows"/>. Encoders become two rows
     /// ("… increase", "… decrease").
     /// </summary>
     public static A300Placement Place(A300ControlMap map)
@@ -327,6 +330,8 @@ public static partial class A300PanelLayout
         levers.Add(new A300PlacedRow(A300Levers.FlapsKey, A300Levers.Name(A300Levers.FlapsKey), A300RowAction.Custom, null, A300Levers.FlapPositions));
         levers.Add(new A300PlacedRow(A300Levers.SpoilersArmKey, A300Levers.Name(A300Levers.SpoilersArmKey), A300RowAction.Custom, null, A300Levers.ArmPositions));
         levers.Add(new A300PlacedRow(A300Levers.SpeedBrakeKey, A300Levers.Name(A300Levers.SpeedBrakeKey), A300RowAction.Custom, null, new Dictionary<double, string>()));
+
+        ApplyOrder(placement);
 
         foreach (var section in placement.Structure.Where(s => s.Value.Count == 0).Select(s => s.Key).ToList())
             placement.Structure.Remove(section);
