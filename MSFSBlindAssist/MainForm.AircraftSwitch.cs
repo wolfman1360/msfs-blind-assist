@@ -322,6 +322,13 @@ public partial class MainForm
                 simConnectManager.InitializePMDG(currentAircraft);
             }
 
+            else if (currentAircraft?.AircraftCode == IniA300Definition.Code)
+            {
+                // The A300 reads its two MCDU screens from client data areas too; the same hook
+                // registers its manager.
+                simConnectManager.InitializePMDG(currentAircraft);
+            }
+
             // Automatically switch database if simulator version doesn't match
             CheckAndSwitchDatabase();
 
@@ -1126,7 +1133,8 @@ public partial class MainForm
         // Not `newAircraft?.` — every caller passes a freshly constructed definition and this method
         // dereferences the parameter unconditionally hundreds of lines earlier. The null-conditional
         // told the compiler otherwise, which is what put a CS8602 on the plain dereference below it.
-        if ((newAircraft is IPMDGAircraft || newAircraft.AircraftCode == "TFDI_MD11")
+        if ((newAircraft is IPMDGAircraft || newAircraft.AircraftCode == "TFDI_MD11"
+                || newAircraft.AircraftCode == IniA300Definition.Code)
             && simConnectManager.IsConnected)
         {
             simConnectManager.InitializePMDG(newAircraft);

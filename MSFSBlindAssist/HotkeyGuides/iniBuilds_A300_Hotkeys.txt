@@ -13,9 +13,9 @@ READ THIS FIRST - WHAT THIS VERSION COVERS
 Choose iniBuilds Airbus A300-600 from the Aircraft menu. The passenger and freighter versions,
 with either engine, share one cockpit, so one choice covers all four. This version covers the
 A300's switch panels: the overhead, the glareshield, the main instrument panel, the pedestal
-and the cockpit's back wall. Not included yet: the MCDU windows, typed values for the FCU and
-the radios, the tablet, and readouts of the PFD, ND and ECAM screens. Until they arrive, operate
-those in the simulator. Shift+M and Shift+T say so instead of opening a window.
+and the cockpit's back wall, and both MCDUs as text (Shift+M). Not included yet: typed values
+for the FCU and the radios, the tablet, and readouts of the PFD, ND and ECAM screens. Until they
+arrive, operate those in the simulator. Shift+T says so instead of opening a window.
 
 
 THE PANELS
@@ -49,6 +49,37 @@ Status Display (Ctrl+3): the FCU panel shows the four FCU windows; the Captain, 
 and Center panels show the altimeter settings, the flex temperature and the landing elevation;
 the Navigation Radios panel shows the VOR and ILS courses. The Captain Panel also shows the
 master warning and master caution lights.
+
+
+THE MCDU WINDOW - Press left bracket, then Shift+M
+
+Both MCDUs, Captain and First Officer, read as text: the real screens, live. The window opens on
+the screen list: the title, then each line with its label above it, numbered 1 to 6 for the
+line-select keys, then the scratchpad. When the page changes you hear its title and the cursor
+goes to line 1. The window switches on the aircraft's MCDU export (the tablet's External
+Hardware setting) every time it opens, because the aircraft forgets it at each flight load.
+
+How the screen reads: # is an empty box the MCDU wants filled (dashes are optional fields), the
+arrows beside a title mean there are more pages (Right Arrow or Alt+Right goes to the next one),
+and a degree sign is a degree sign. A blank screen says so: the MCDU is probably unpowered.
+
+  Ctrl+1 to Ctrl+6   Left line-select keys 1 to 6
+  Alt+1 to Alt+6     Right line-select keys 1 to 6
+                     (or F1 to F6 and F7 to F12, with the alternate layout in FMC Settings)
+  Page Up / Down     Slew up and down
+  Right Arrow        Next page (on the screen list); Alt+Right from anywhere in the window
+  Backspace          CLR, one character (on the screen list)
+  Delete             Clear the whole scratchpad (on the screen list)
+  Alt+S              Go to the input box: type, then Enter sends it to the scratchpad
+  Alt+Home           Back to the screen list
+  Ctrl+Shift+L / R   Captain or First Officer MCDU
+  Escape             Close the window
+  Page keys          Alt+I Init, Alt+F F-Plan, Alt+P Prog, Alt+D Dir To, Alt+R Ref, Alt+O Mode,
+                     Alt+T Tact Mode, Alt+A T/O Appr, Alt+E Eng Out, Alt+L Sec Plan, Alt+M Menu,
+                     Alt+C Clr, Alt+N Next Page, Alt+U slew up, Alt+W slew down
+
+The scratchpad is read back once what you typed has landed. An entry holding a character the MCDU
+keyboard does not have (a comma, for example) is not sent at all, and stays in the box to edit.
 
 
 OUTPUT MODE - Press right bracket to activate

@@ -276,6 +276,7 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
         _disposed = true;
         _seedGate.Disarm();
         ReleaseOwedSteps();   // a held button or a spring switch is let go before the definition goes away
+        ReleaseMcduKeys();
         _sim = null;
         DisposeTrackedWindows();
         GC.SuppressFinalize(this);

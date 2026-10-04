@@ -9,6 +9,7 @@ namespace MSFSBlindAssist;
 public partial class MainForm
 {
     private Forms.A300.A300MonitorManagerForm? a300MonitorManagerForm;
+    private Forms.A300.A300McduForm? a300McduForm;
 
     /// <summary>
     /// The A300's monitor manager (Ctrl+M). Guarded on the loaded aircraft because the definition
@@ -24,11 +25,23 @@ public partial class MainForm
         a300MonitorManagerForm.ShowForm();
     }
 
-    /// <summary>Disposes the A300 windows: their rows belong to one definition.</summary>
+    /// <summary>The A300's two MCDUs (Shift+M). Guarded on the loaded aircraft like the monitor manager.</summary>
+    public void ShowA300McduDialog()
+    {
+        if (currentAircraft is not IniA300Definition a300) return;
+        hotkeyManager.ExitOutputHotkeyMode();
+        if (a300McduForm == null || a300McduForm.IsDisposed)
+            a300McduForm = new Forms.A300.A300McduForm(a300, simConnectManager, announcer);
+        a300McduForm.ShowForm();
+    }
+
+    /// <summary>Disposes the A300 windows: their rows and keys belong to one definition.</summary>
     private void DisposeA300Windows()
     {
         if (a300MonitorManagerForm != null && !a300MonitorManagerForm.IsDisposed) a300MonitorManagerForm.Dispose();
         a300MonitorManagerForm = null;
+        if (a300McduForm != null && !a300McduForm.IsDisposed) a300McduForm.Dispose();
+        a300McduForm = null;
     }
 
     private void IniA300MenuItem_Click(object? sender, EventArgs e)

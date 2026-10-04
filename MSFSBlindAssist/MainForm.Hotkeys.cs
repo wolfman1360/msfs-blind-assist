@@ -236,9 +236,8 @@ public partial class MainForm
                 }
                 else if (currentAircraft is IniA300Definition)
                 {
-                    // The A300 MCDU windows come with the next part; the Fenix fallback below must
-                    // not open on it.
-                    announcer.AnnounceImmediate("A300 MCDU window not available yet.");
+                    // Both MCDUs as text from the aircraft's MCDU export.
+                    ShowA300McduDialog();
                 }
                 else if (currentAircraft?.AircraftCode == "A320" || currentAircraft?.AircraftCode == "HW_A330")
                 {
