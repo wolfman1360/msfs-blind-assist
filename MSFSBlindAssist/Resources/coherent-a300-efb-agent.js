@@ -34,8 +34,52 @@
     refreshMetar: 'Refresh METAR', pb_left: 'Pushback, turn left', pb_right: 'Pushback, turn right',
     pb_stop: 'Pushback, stop', pb_aft: 'Pushback, straight back',
     switcher_page1: 'Back to payload selection', switcher_page2: 'Loading page',
-    payload_cargo: 'Custom cargo', payload_cargo_sb: 'Cargo from SimBrief'
+    payload_cargo: 'Custom cargo', payload_cargo_sb: 'Cargo from SimBrief',
+    hide_runway_select: 'Cancel runway selection', land_hide_runway_select: 'Cancel runway selection',
+    close_checklist_viewer: 'Close checklist', close_ofp_viewer: 'Close flight plan',
+    // Charts: icon-only buttons.
+    filter_pinned: 'Pinned charts', ctrlZoomIn: 'Zoom in', ctrlZoomOut: 'Zoom out', ctrlReset: 'Reset chart view',
+    ctrlSidebar: 'Chart list', ctrlDarkLight: 'Day or night chart', ctrlPanUp: 'Pan up', ctrlPanLeft: 'Pan left',
+    ctrlPanRight: 'Pan right', ctrlPanDown: 'Pan down'
   };
+
+  // Pages whose root is a class on the page container rather than an id.
+  A.PAGE_CLASSES = { termcharts: 'Charts', 'enroute-map': 'Enroute Map' };
+  // A line opening a page that is a picture for a sighted pilot.
+  A.PAGE_NOTES = {
+    termcharts: 'Charts are pictures and cannot be read here; the list gives their names.',
+    'enroute-map': 'The map is a picture and cannot be read here.'
+  };
+
+  // Aircraft Maintenance's panel and cowl toggles: their buttons carry no state, so it is read from
+  // the variable each one toggles (the tablet's own handlers: 1, or above 0.5, is open).
+  A.MAINT_PANELS = {
+    fuel_panel: 'L:INI_Fuel_Panel', maint_eng_cowl_l: 'L:INI_Engine_Cowl_Left',
+    maint_eng_cowl_r: 'L:INI_Engine_Cowl_Right', maint_apu_cowl: 'L:INI_APU_Cowl_TGT'
+  };
+  // Its component state: oil and hydraulic levels, a label over a bar over a value.
+  A.LEVELS = {
+    APU_OIL: 'APU oil', ENG1_OIL: 'Engine 1 oil', ENG2_OIL: 'Engine 2 oil',
+    HYD_BLU: 'Blue hydraulic reservoir', HYD_GRE: 'Green hydraulic reservoir', HYD_YEL: 'Yellow hydraulic reservoir'
+  };
+  // And its wear, which the tablet shows only as coloured blocks on a drawing of the gear. The
+  // colours are five bands of each variable (its updateMaintIndicators, read 2026-10-04): a brake
+  // from 0 to 1, a tyre from 0 to 200, green under a fifth, then dark green, yellow, orange, and
+  // red up to the full scale; black beyond it.
+  A.BRAKES = [
+    ['L:INI_Brake_Wear_Indicator_LFI', 'left forward inner'], ['L:INI_Brake_Wear_Indicator_LFO', 'left forward outer'],
+    ['L:INI_Brake_Wear_Indicator_LRI', 'left rear inner'], ['L:INI_Brake_Wear_Indicator_LRO', 'left rear outer'],
+    ['L:INI_Brake_Wear_Indicator_RFI', 'right forward inner'], ['L:INI_Brake_Wear_Indicator_RFO', 'right forward outer'],
+    ['L:INI_Brake_Wear_Indicator_RRI', 'right rear inner'], ['L:INI_Brake_Wear_Indicator_RRO', 'right rear outer']
+  ];
+  A.TYRES = [
+    ['L:INI_TIRE0_NG_WEAR', 'nose left'], ['L:INI_TIRE1_NG_WEAR', 'nose right'],
+    ['L:INI_TIRE0_WEAR', 'left rear inner'], ['L:INI_TIRE1_WEAR', 'left rear outer'],
+    ['L:INI_TIRE2_WEAR', 'right rear outer'], ['L:INI_TIRE3_WEAR', 'right rear inner'],
+    ['L:INI_TIRE4_WEAR', 'right forward outer'], ['L:INI_TIRE5_WEAR', 'right forward inner'],
+    ['L:INI_TIRE6_WEAR', 'left forward inner'], ['L:INI_TIRE7_WEAR', 'left forward outer']
+  ];
+  A.WEAR_BANDS = ['under 20 percent', '20 to 40 percent', '40 to 60 percent', '60 to 80 percent', '80 to 100 percent', 'beyond the scale'];
 
   // WEIGHT AND BALANCE. Its two halves slide by 100vw: payload selection (#page1: preset loads)
   // and loading (#page2: the hold weights, the fuel, Update and Apply, and the results). Read from
@@ -55,7 +99,8 @@
     weight_freight_aft: 'Aft hold', input_pax: 'Passengers',
     // Settings: the tablet fetches xml.fetcher.php?userid=, so this box takes the numeric SimBrief
     // Pilot ID, never the user name; its only label is the heading "SimBrief".
-    simbrief: 'SimBrief Pilot ID, numbers only'
+    simbrief: 'SimBrief Pilot ID, numbers only',
+    ng_search: 'Airport'
   };
   // The cargo field's label column says LOAD (CARGO on the passenger version).
   A.FIELD_TITLES = { LOAD: 'Total cargo', CARGO: 'Total cargo' };
@@ -115,6 +160,68 @@
     return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
   };
 
+  // Shown on screen: el and every element above it are displayed. A.visible looks at el alone,
+  // which is enough while walking down from the visible page; an overlay found by id is not
+  // walked to, and a page the tablet has hidden leaves its viewers' own display untouched.
+  A.shown = function (el) {
+    for (var n = el; n && n.nodeType === 1 && n !== document.body; n = n.parentElement) {
+      try {
+        var cs = window.getComputedStyle(n);
+        if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+      } catch (e) { return false; }
+    }
+    return !!el;
+  };
+
+  A.listWords = function (names) {
+    if (names.length < 2) return names.join('');
+    return names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+  };
+
+  // One line for a set of wear indicators: "all 8 under 20 percent", or the most common band as a
+  // count and the other wheels by name. '' when the simulator cannot be read.
+  A.wearLine = function (title, list, full) {
+    try {
+      if (typeof SimVar === 'undefined' || !SimVar.GetSimVarValue) return '';
+      var bands = [[], [], [], [], [], []], n = 0;
+      for (var i = 0; i < list.length; i++) {
+        var v = +SimVar.GetSimVarValue(list[i][0], 'number');
+        if (!isFinite(v)) continue;
+        var f = v / full;
+        var b = f < 0.2 ? 0 : f < 0.4 ? 1 : f < 0.6 ? 2 : f < 0.8 ? 3 : f <= 1 ? 4 : 5;
+        bands[b].push(list[i][1]);
+        n++;
+      }
+      if (!n) return '';
+      var most = 0;
+      for (var m = 1; m < bands.length; m++) if (bands[m].length > bands[most].length) most = m;
+      if (bands[most].length === n) return title + ': all ' + n + ' ' + A.WEAR_BANDS[most];
+      var parts = [];
+      for (var k = 0; k < bands.length; k++) {
+        if (!bands[k].length) continue;
+        parts.push((k === most ? bands[k].length : A.listWords(bands[k])) + ' ' + A.WEAR_BANDS[k]);
+      }
+      return title + ': ' + parts.join('; ');
+    } catch (e) { return ''; }
+  };
+
+  // A Take Off or Landing runway button: "RWY 18L [3000m / 9843ft]", red when the tablet's tables
+  // start above its length (1,700 m for take-off, 1,300 m for landing).
+  A.runwayLabel = function (btn) {
+    var m = /^RWY\s+(\S+)\s*\[\s*([\d.]+)\s*m\s*\/\s*([\d.]+)\s*ft\s*\]$/i.exec(A.txt(btn));
+    if (!m) return '';
+    var small = btn.querySelector('small');
+    var red = !!small && /^rgb\(\s*255,\s*0,\s*0\s*\)$/.test(small.style.color || '');
+    return 'Runway ' + m[1] + ': ' + A.thousands(+m[2]) + ' metres, ' + A.thousands(+m[3]) + ' feet' + (red ? ', marked short' : '');
+  };
+
+  // A chart in the Charts list: its name (h1) and its kind (p), "CONDR 4 RNAV [ATC], STAR".
+  // A chart named after its kind ("AFC", "AOI") says it once.
+  A.chartName = function (row) {
+    var name = A.txt(row.querySelector('h1')), kind = A.txt(row.querySelector('p'));
+    return name + (kind && kind !== name ? ', ' + kind : '');
+  };
+
   // True when every element under el is inline text formatting, so el reads as one line.
   A.INLINE = { SPAN: 1, STRONG: 1, B: 1, I: 1, EM: 1, SMALL: 1, BR: 1, SUP: 1, SUB: 1, U: 1 };
   A.inlineOnly = function (el) {
@@ -129,7 +236,8 @@
     if (t === 'INPUT' && (el.type === 'button' || el.type === 'submit')) return true;
     if (t === 'IMG' && el.id === 'menu-home-button') return true;
     if (t === 'DIV' && (el.id === 'control-box-button' || el.id === 'switcher_page1' || el.id === 'switcher_page2' ||
-        A.hasClass(el, 'is-button') || A.hasClass(el, 'unlock-button'))) return true;
+        A.hasClass(el, 'is-button') || A.hasClass(el, 'unlock-button') ||
+        A.hasClass(el, 'chart-button') || A.hasClass(el, 'chart-pin-button'))) return true;
     return false;
   };
 
@@ -244,11 +352,11 @@
       var s = A.slideState(el);
       return A.slideName(el.id) + (s ? ': ' + s : '');
     }
+    if (A.NAMES[el.id]) return A.NAMES[el.id];
     if (el.tagName === 'INPUT') {
       var lab = A.rowLabel(el) || A.idWords(el.id);
       return lab ? lab + ': ' + A.clean(el.value) : A.clean(el.value);
     }
-    if (A.NAMES[el.id]) return A.NAMES[el.id];
     if (el.tagName === 'DIV' && A.hasClass(el, 'unlock-button')) return 'Unlock';
     // A maintenance timer's Finish Now names the job it finishes, as several can run at once.
     var timer = /^timer_complete_/.test(el.id || '') ? el.closest('.pop_timer') : null;
@@ -256,13 +364,64 @@
       var job = timer.querySelector('h1');
       return 'Finish now' + (job ? ': ' + A.txt(job) : '');
     }
+    if (A.hasClass(el, 'rwy-select') || A.hasClass(el, 'land-rwy-select')) {
+      var rwy = A.runwayLabel(el);
+      if (rwy) return rwy;
+    }
+    if (A.MAINT_PANELS[el.id]) {
+      var open = A.panelOpen(el.id);
+      return A.txt(el) + (open === null ? '' : open ? ': open' : ': closed');
+    }
+    if (A.hasClass(el, 'chart-button')) return A.chartName(el);
+    if (A.hasClass(el, 'chart-pin-button')) {
+      var chart = el.previousElementSibling;
+      var named = chart && A.hasClass(chart, 'chart-button') ? ' ' + A.txt(chart.querySelector('h1')) : '';
+      return (A.hasClass(el, 'bg-success') ? 'Unpin' : 'Pin') + named;
+    }
+    if (A.hasClass(el, 'page--left')) return 'Previous chart page';
+    if (A.hasClass(el, 'page--right')) return 'Next chart page';
+    // The Enroute Map's "<" opens its list of map types.
+    if (el.closest('#enroutemap-sidebar') && /^[<>]$/.test(A.txt(el))) return 'Map type';
     var preset = A.presetLabel(el);
     if (preset) return preset;
-    var t = A.txt(el);
-    if (t) return t;
+    // The tablet's words, without the arrows it draws after some ("CALCULATE >>").
+    var t = A.clean(A.txt(el).replace(/(>>|<<|»|«)/g, ' '));
+    // A symbol for a name ("+", "-") gives way to the button's own title ("Zoom in").
+    if (!/[A-Za-z0-9]/.test(t) && el.getAttribute('title')) t = el.getAttribute('title');
+    if (t) return t + A.selectedSuffix(el);
     var img = el.querySelector ? el.querySelector('img[title], img[alt]') : null;
     if (img) return img.getAttribute('title') || img.getAttribute('alt');
     return A.idWords(el.id) || 'Button';
+  };
+
+  // A maintenance panel or cowl: true open, false closed, null when the simulator cannot be read.
+  A.panelOpen = function (id) {
+    try {
+      if (typeof SimVar === 'undefined' || !SimVar.GetSimVarValue) return null;
+      return +SimVar.GetSimVarValue(A.MAINT_PANELS[id], 'number') > 0.5;
+    } catch (e) { return null; }
+  };
+
+  // Settings' choice buttons (Maintenance Mode) mark the chosen one with data-active="true",
+  // which a sighted pilot sees as a highlight.
+  A.selectedSuffix = function (el) { return el.getAttribute('data-active') === 'true' ? ' (selected)' : ''; };
+
+  // A press label that carries the control's own state, so the shell keeps one node for it and
+  // speaks its new label after the pilot's own press.
+  A.stateKey = function (el) {
+    if (A.hasClass(el, 'door') || A.hasClass(el, 'door-arm') || el.tagName === 'INPUT' || el.hasAttribute('data-active') ||
+        A.MAINT_PANELS[el.id]) return 'press:' + el.id;
+    if (A.hasClass(el, 'chart-pin-button')) {
+      var chart = el.previousElementSibling;
+      return 'pin:' + (chart && chart.getAttribute('data-guid') || el.id);
+    }
+    return '';
+  };
+
+  // The page container's own class among A.PAGE_CLASSES ("termcharts", "enroute-map"), or ''.
+  A.pageClass = function (vp) {
+    for (var c in A.PAGE_CLASSES) if (A.hasClass(vp, c)) return c;
+    return '';
   };
 
   A.pageName = function () {
@@ -270,6 +429,8 @@
     if (overlay) return overlay.def.page;
     var vp = document.querySelector('#renderer .visiblePage');
     if (!vp) return '';
+    var byClass = A.PAGE_CLASSES[A.pageClass(vp)];
+    if (byClass) return byClass;
     for (var i = 0; i < vp.children.length; i++) {
       var c = vp.children[i];
       if (c.id && A.PAGES[c.id] && A.visible(c)) return A.PAGES[c.id] + (c.id === 'weights' ? A.weightsHalf() : '');
@@ -304,6 +465,13 @@
     function emit(e) { els.push(e); }
 
     function walk(el) {
+      // The Enroute Map's list of map types slides in from the right edge, its "<" toggle staying on
+      // screen while the list is off it.
+      if (el.id === 'enroutemap-sidebar' && !A.visible(el)) {
+        var toggle = el.querySelector('button');
+        if (toggle && A.visible(toggle)) emit({ idx: A.stamp(toggle), text: 'Map type', value: '', kind: 'button', clickable: true });
+        return;
+      }
       if (!A.visible(el)) return;
       var tag = el.tagName;
 
@@ -316,6 +484,40 @@
       if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'svg' || tag === 'CANVAS') return;
       // Pictures with letters on them: Take Off's speed diagram (its V1/VR/V2 marks repeat the fields).
       if (el.id === 'diagram' || el.id === 'weight-image') return;
+      // The picture's own words: Throttle Calibration's TOGA and IDLE scale marks, a page's title
+      // banner (the page name says it).
+      if (A.hasClass(el, 'indicator') || A.hasClass(el, 'page-title')) return;
+
+      // Aircraft Maintenance's wear blocks and levels, in words (the blocks are only colours).
+      if (A.hasClass(el, 'brake-wear-indicator') || A.hasClass(el, 'tire-wear-indicator')) {
+        if (el.id === 'Brake_Wear_Indicator_LFI') {
+          var brakes = A.wearLine('Brake wear', A.BRAKES, 1), tyres = A.wearLine('Tyre wear', A.TYRES, 200);
+          if (brakes) emit({ idx: 0, text: brakes, value: '', kind: 'static', clickable: false, key: 'status:brakewear' });
+          if (tyres) emit({ idx: 0, text: tyres, value: '', kind: 'static', clickable: false, key: 'status:tyrewear' });
+        }
+        return;
+      }
+      if (el.id === 'oil-levels' || el.id === 'hyd-levels') {
+        for (var lv in A.LEVELS) {
+          var val = el.querySelector('#' + lv + '_val');
+          if (val) emit({ idx: 0, text: A.LEVELS[lv] + ': ' + A.txt(val), value: '', kind: 'static', clickable: false, key: 'text:' + lv });
+        }
+        return;
+      }
+
+      // Pre-formatted text, the flight plan: one block with its line breaks kept, which the shell
+      // reads line by line (the MD-11 and PMDG readers do the same).
+      if (tag === 'PRE') {
+        var block = (el.textContent || '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/^\s+|\s+$/g, '');
+        if (block) emit({ idx: 0, text: block, value: '', kind: 'static', controlType: 'pre', clickable: false, key: el.id ? 'pre:' + el.id : undefined });
+        return;
+      }
+      // The Charts viewer's page counter, "1 / 2".
+      if (A.hasClass(el, 'page--count')) {
+        var pc = /(\d+)\s*\/\s*(\d+)/.exec(A.txt(el));
+        if (pc) emit({ idx: 0, text: 'Chart page ' + pc[1] + ' of ' + pc[2], value: '', kind: 'static', clickable: false, key: 'status:chartpage' });
+        return;
+      }
 
       // Radio groups: one choice control per group, labelled by the heading above it.
       if (tag === 'INPUT' && el.type === 'radio') {
@@ -355,8 +557,9 @@
         var label = A.pressLabel(el);
         // A Home menu item the tablet has switched off carries the class "disabled" and no handler.
         var item = { idx: idxP, text: label, value: '', kind: 'button', clickable: true, disabled: !!el.disabled || A.hasClass(el, 'disabled') };
-        if (A.hasClass(el, 'door') || A.hasClass(el, 'door-arm') || el.tagName === 'INPUT') {
-          item.key = 'press:' + el.id;
+        var stateKey = A.stateKey(el);
+        if (stateKey) {
+          item.key = stateKey;
           item.announceChange = true;   // the label carries the control's own new state
         }
         emit(item);
@@ -365,6 +568,14 @@
 
       if (tag === 'INPUT' && A.READOUTS[el.id]) {
         emit({ idx: 0, text: A.readout(el), value: '', kind: 'static', clickable: false, key: 'readout:' + el.id });
+        return;
+      }
+
+      // A box the pilot cannot type in is a result: Take Off's FLEX, V1, VR, V2..., Landing's distances.
+      if (tag === 'INPUT' && (el.type === 'text' || el.type === 'number') && (el.disabled || el.readOnly)) {
+        var ru = A.unit(el);
+        emit({ idx: 0, text: A.fieldLabel(el) + (ru ? ' (' + ru + ')' : '') + ': ' + (A.clean(el.value) || 'blank'), value: '',
+          kind: 'static', clickable: false, key: 'readout:' + (el.id || A._idx) });
         return;
       }
 
@@ -385,6 +596,14 @@
         return;
       }
 
+      // Throttle Calibration's "LEFT 50%" headings are the throttle positions.
+      var pct = /^H[1-6]$/.test(tag) ? el.querySelector('#l_pct, #r_pct') : null;
+      if (pct) {
+        emit({ idx: 0, text: (pct.id === 'l_pct' ? 'Left' : 'Right') + ' throttle: ' + A.txt(pct), value: '', kind: 'static',
+          clickable: false, key: 'text:' + pct.id });
+        return;
+      }
+
       if (/^H[1-6]$/.test(tag)) {
         var ht = A.txt(el);
         // A heading holding a button (Take Off's "Conditions" + SYNC) reads its own words only.
@@ -392,6 +611,9 @@
         if (btns.length) ht = A.ownText(el);
         // Weight and Balance's capitals and bracketed unit: "WEIGHT AND BALANCE [kg]" → "Weight and balance".
         if (el.closest('#weights')) ht = A.sentence(ht.replace(/\s*\[[^\]]*\]\s*$/, ''));
+        // Ground Equipment's slide legend, "Emergency Slides: Red - Armed // Green - Disarmed", sits
+        // after the slide buttons, which say armed or disarmed in words: it is not read at all.
+        if (/^Emergency Slides\b/i.test(ht)) ht = '';
         if (ht) emit({ idx: 0, text: ht, value: '', kind: 'heading', level: Math.min(6, +tag.charAt(1)), clickable: false });
         for (var b = 0; b < btns.length; b++) walk(btns[b]);
         return;
@@ -411,7 +633,10 @@
 
       var own = A.ownText(el);
       if (own && tag !== 'LABEL') {
-        emit({ idx: 0, text: own, value: '', kind: 'static', clickable: false, key: el.id ? 'text:' + el.id : undefined });
+        var said = { idx: 0, text: own, value: '', kind: 'static', clickable: false, key: el.id ? 'text:' + el.id : undefined };
+        // Throttle Calibration's instruction changes at each step of the calibration.
+        if (el.id === 'calibration') said.live = 'polite';
+        emit(said);
       }
       for (var k = 0; k < el.children.length; k++) walk(el.children[k]);
     }
@@ -439,7 +664,11 @@
     }
 
     var page = document.querySelector('#renderer .visiblePage');
-    if (page) walk(page);
+    if (page) {
+      var note = A.PAGE_NOTES[A.pageClass(page)];
+      if (note) emit({ idx: 0, text: note, value: '', kind: 'static', clickable: false, key: 'help:page' });
+      walk(page);
+    }
     A.header(emit);
     return els;
   };
@@ -454,13 +683,16 @@
     { id: 'powered-off', page: 'Powered off' },
     { sel: '.paused-overlay', page: 'Paused' },
     { id: 'confirm-box', page: 'Control box, confirm panel state' },
-    { id: 'control-box', page: 'Control box' }
+    { id: 'control-box', page: 'Control box' },
+    // My Flight's checklist (a picture) and flight plan viewers, fixed over the page.
+    { id: 'checklist_viewer', page: 'My Flight, checklist' },
+    { id: 'ofp_viewer', page: 'My Flight, flight plan' }
   ];
   A.openOverlay = function () {
     for (var i = 0; i < A.OVERLAYS.length; i++) {
       var o = A.OVERLAYS[i];
       var el = o.id ? A.byId(o.id) : document.querySelector(o.sel);
-      if (el && A.visible(el) && !A.hasClass(el, 'hidden')) return { def: o, el: el };
+      if (el && A.shown(el) && !A.hasClass(el, 'hidden')) return { def: o, el: el };
     }
     return null;
   };
@@ -474,6 +706,8 @@
       emit({ idx: A.stamp(o.el), text: 'Power on', value: '', kind: 'button', clickable: true });
       return;
     }
+    if (id === 'checklist_viewer')
+      emit({ idx: 0, text: 'The checklist is a picture and cannot be read here.', value: '', kind: 'static', clickable: false });
     var start = els.length;
     walk(o.el);
     if (id === 'confirm-box' && A._pendingPanelState) {

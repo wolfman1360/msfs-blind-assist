@@ -116,8 +116,94 @@ function weights(p1Rect, p2Rect, forwardShown, unit, extra) {
   return tablet('<div id="weights-bg"></div><div id="weights">' + page1(p1Rect, forwardShown) + page2(p2Rect, unit) + '</div>', extra);
 }
 
+
+// Take Off's runway list (#runway_opts, built by the tablet from the airport's runways: red when
+// the runway is at or below its shortest table, 1,700 m) and its read-only results.
+function rwy(name, metres, red) {
+  return '<div class="col-sm-4 mt-3"><div class="input-group mb-3"><button class="form-control rwy-select" id="' + name + '">RWY ' + name +
+    '<br><small style="padding-top: 10px; color: ' + (red ? 'rgb(255, 0, 0)' : 'rgb(153, 204, 255)') + '">[' + metres + 'm / ' + Math.round(metres * 3.28084) + 'ft]</small></button></div></div>';
+}
+function perfRow(label, input) {
+  return '<div class="row mb-2"><div class="col-sm-4 text-end ini-input-label">' + label + '</div><div class="col-sm-8"><div class="input-group">' + input + '</div></div></div>';
+}
+function wearBox() {
+  let h = '';
+  for (const b of ['LFI', 'LFO', 'LRI', 'LRO', 'RFI', 'RFO', 'RRI', 'RRO']) h += '<div class="brake-wear-indicator" id="Brake_Wear_Indicator_' + b + '"></div>';
+  for (const t of ['NG_LEFT', 'NG_RIGHT', 'LAI', 'LAO', 'RAO', 'RAI', 'RFO', 'RFI', 'LFI', 'LFO']) h += '<div class="tire-wear-indicator" id="INI_TIRE_' + t + '_WEAR"></div>';
+  return h;
+}
+function level(id, label, value) {
+  return '<div class="col text-center"><p>' + label + '</p><div id="' + id + '" class="condition-bar"></div><p id="' + id + '_val" class="text-center mt-1">' + value + '</p></div>';
+}
+function chart(guid, name, kind, pinned) {
+  return '<div data-guid="' + guid + '" class="col-sm-11 chart-button"> <h1>' + name + '</h1> <p class="text-warning">' + kind + ' </p> </div>' +
+    '<div class="col-sm-1 chart-pin-button' + (pinned ? ' bg-success' : '') + '"><img class="chart-pin-icon" src="pin.png"></div>';
+}
+
 const ON = '0,0,2048,1536', OFF_LEFT = '0,-2048,0,1536', OFF_RIGHT = '0,2048,4096,1536';
 const files = {
+  // My Flight's checklist (a picture) and its flight plan (a <pre>), each opened over the page.
+  'myflight-checklist': tablet('<div id="flight"><div id="checklist_viewer"><img src="a306checklist.png" id="checklist">' +
+    '<button id="close_checklist_viewer" class="btn btn-lg btn-danger">Close</button></div>' +
+    '<div id="ofp_viewer" data-display="none"><pre id="ofp_data">OFP Not Downloaded</pre><button id="close_ofp_viewer" class="btn btn-lg btn-danger">Close</button></div>' +
+    '<div id="dep_icao">CYYZ</div><button id="open_checklist_viewer" class="btn">CHECKLIST</button></div>'),
+  'myflight-ofp': tablet('<div id="flight"><div id="checklist_viewer" data-display="none"><img src="a306checklist.png" id="checklist">' +
+    '<button id="close_checklist_viewer" class="btn btn-lg btn-danger">Close</button></div>' +
+    '<div id="ofp_viewer"><pre id="ofp_data">[ OFP ]   \nCYYZ-CYUL   ACA412\n\n\n\nBLOCK FUEL   6200\n</pre><button id="close_ofp_viewer" class="btn btn-lg btn-danger">Close</button></div>' +
+    '<div id="dep_icao">CYYZ</div></div>'),
+  // A viewer on a hidden page is not open, whatever its own display says.
+  'myflight-hidden-ofp': tablet('<div id="dashboard"></div>').replace('</div></div><div class="paused-overlay',
+    '</div><div class="hiddenPage" data-display="none"><div id="flight"><div id="ofp_viewer"><pre id="ofp_data">x</pre><button id="close_ofp_viewer">Close</button></div></div></div></div><div class="paused-overlay'),
+  'takeoff': tablet('<div id="perf-bg"></div><div id="takeOffPerfViewer">' +
+    '<div id="runwayPanel"><h1>SELECT RUNWAY</h1><input type="button" id="hide_runway_select" value="Cancel">' +
+    '<div id="runway_opts" class="row">' + rwy('18L', 3000, false) + rwy('09', 1500, true) + '</div></div>' +
+    '<div id="conditions"><h1>CONDITIONS <button id="syncMetar" class="btn">SYNC</button></h1>' +
+    perfRow('RWY', '<input type="button" id="show_runway_select" value="SELECT">') + '</div>' +
+    '<div id="config"><button id="calculate" class="btn">CALCULATE &gt;&gt;</button></div>' +
+    '<div id="performance"><h1>PERFORMANCE</h1>' +
+    perfRow('FLEX', '<input type="text" id="output_flex" disabled value="45"><span class="input-group-text">°C</span>') +
+    perfRow('V1', '<input type="number" id="output_v1" disabled value="">') + '</div></div>'),
+  'groundequip': tablet('<div id="equip"><button id="door1Larmed" class="door-arm" style="background-color: rgb(0, 128, 0)"></button>' +
+    '<h1>Emergency Slides: Red - Armed // Green - Disarmed</h1></div>'),
+  'maintenance': tablet('<div id="maintenance"><div class="row"><div class="col-sm-12"><h1 class="mb-2">AIRCRAFT MAINTENANCE</h1>' +
+    '<div class="card m-2"><div class="card-body"><h2>MAINTENANCE PANELS</h2><div class="row mt-3">' +
+    '<div class="col-sm-4"><button id="fuel_panel" class="btn btn-primary">Fuel Panel</button></div>' +
+    '<div id="eng_cowl_l_button" class="col-sm-4"><button id="maint_eng_cowl_l" class="btn btn-primary">Eng Cowl L</button></div>' +
+    '<div id="eng_cowl_r_button" class="col-sm-4"><button id="maint_eng_cowl_r" class="btn btn-primary">Eng Cowl R</button></div>' +
+    '<div class="col-sm-4"><button id="maint_apu_cowl" class="btn btn-primary">APU Cowl</button></div>' +
+    '<div class="col-sm-4"><button id="maint_stow_rat" class="btn btn-primary">Stow RAT</button></div></div></div></div>' +
+    '<div class="col-sm-8"><h1 class="ms-2 mt-2">COMPONENT STATE</h1><div><div></div>' + wearBox() +
+    '<div id="oil-levels"><h2 class="text-light">OIL</h2><div class="row">' + level('APU_OIL', 'APU', '100%') + level('ENG1_OIL', 'ENG1', '97%') + level('ENG2_OIL', 'ENG2', '100%') + '</div></div>' +
+    '<div id="hyd-levels"><h2 class="text-end text-light">HYDRAULICS</h2><div class="row">' + level('HYD_BLU', 'B', '14.5') + level('HYD_GRE', 'G', '31.5') + level('HYD_YEL', 'Y', '19.5') + '</div></div>' +
+    '</div></div></div></div></div>'),
+  'throttle': tablet('<div id="throttlecalibration"><h1 class="mb-2">THROTTLE CALIBRATION</h1>' +
+    '<p id="calibration">Move both throttles to TOGA and press Set TOGA Position.</p>' +
+    '<button id="tcab_start" class="btn">Start Calibration</button>' +
+    '<div class="col-sm-2"><div id="l_toga" class="indicator i-left"><p>TOGA</p><div class="arrow-right"></div></div><div id="l_idle" class="indicator i-left"><p>IDLE</p></div></div>' +
+    '<div class="col-sm-4 text-center"><h1>LEFT <span id="l_pct">50%</span></h1><div id="l_pct_box" class="tpos"></div></div>' +
+    '<div class="col-sm-4 text-center"><h1>RIGHT <span id="r_pct">48%</span></h1><div id="r_pct_box" class="tpos"></div></div>' +
+    '<div class="col-sm-2"><div id="r_toga" class="indicator i-right"><p>TOGA</p></div><div id="r_idle" class="indicator i-right"><p>IDLE</p></div></div></div>'),
+  'settings-maint': tablet('<div id="settings"><div class="card mt-4"><div class="card-body bg-dark">' +
+    '<p class="float-end">Maintenance system is currently set to: <span id="maint_state">REALISTIC</span></p><h1 class="mt-2">Maintenance Mode</h1>' +
+    '<button class="btn" id="maint_disabled" type="button" data-active="false">Disabled</button>' +
+    '<button class="btn" id="maint_real" type="button" data-active="true">Realistic</button>' +
+    '<button class="btn" id="maint_fast" type="button" data-active="false">Fast</button></div></div></div>'),
+  'charts': tablet('<div class="termcharts-bg"></div><div id="unauthed_content" class="termcharts-panel" data-display="none"><h1 id="ng_user_code"></h1></div>' +
+    '<div id="authed_content" class="termcharts-panel"><div class="row"><div class="col-sm-3 termcharts-sidebar">' +
+    '<div class="row"><div class="col-sm-6"><input id="ng_search" class="form-control" value="KMEM"></div><div class="col-sm-6"><button id="ng_search_button" class="btn">SEARCH</button></div></div>' +
+    '<div class="row mt-3 w-100 chart-list" id="chart_list">' + chart('g1', 'CONDR 4 RNAV [ATC]', 'STAR', false) + chart('g2', 'ELVIS 4', 'SID', true) + '</div>' +
+    '<div class="btn-group filter-toolbar"><button id="filter_all" class="filter-button">ALL</button><button id="filter_pinned" class="filter-button"><img class="chart-pin-icon" src="pin.png"></button></div></div>' +
+    '<div class="col chart-viewer"><div id="chart_ctrl_zoom" class="chart-controls"><button id="ctrlZoomIn" class="btn chart-control-button"><img src="zoomin.png"></button>' +
+    '<button id="ctrlPanUp" class="btn chart-control-button"><i class="arrow up"></i></button></div>' +
+    '<div class="chart-controls--pages"><button class="btn page--left"><i class="arrow left"></i></button><div class="btn page--count"><span>1 / 2</span></div>' +
+    '<button class="btn page--right"><i class="arrow right"></i></button></div>' +
+    '<div id="chart_image_box" class="chart-image-box"><img id="chart_image" class="chart-image" src="chart"></div></div></div></div>', '', { pageClass: 'termcharts' }),
+  'enroute': tablet('<div class="page-title">ENROUTE</div><div id="enroutemap-sidebar" data-rect="140,2048,2348,1116"><div class="row pa-2">' +
+    '<button data-rect="160,1998,2048,232">&lt;</button><div class="col-12"><button class="p-2 w-100 mb-2">Standard</button></div></div></div>' +
+    '<div id="position-icon" class="plane-marker"><img src="progress.png"></div><div id="enroutemap-bg"></div>' +
+    '<div id="enroute"><div class="ol-viewport"><div class="ol-zoom"><button class="ol-zoom-in" type="button" title="Zoom in">+</button>' +
+    '<button class="ol-zoom-out" type="button" title="Zoom out">-</button></div></div></div>', '', { pageClass: 'enroute-map' }),
+
   // The Home page with the header bar: the gear opens the control box; the tablet charges.
   'home': tablet('<div id="dashboard"><div class="menu-row">' +
     '<div class="menu-row-item is-button text-center" rel="flight"><img class="home-button" src="button_myflight.png"><div class="menu-text">My Flight</div></div>' +
