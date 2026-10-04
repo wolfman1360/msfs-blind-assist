@@ -440,7 +440,29 @@
 
   A.find = function (idx) { return document.querySelector('[' + A.ATTR + '="' + idx + '"]'); };
 
+  // Where a finger on the control's centre would land. The tablet wires its controls with
+  // element.onclick, and the Unlock button and the header's gear hang it on the picture INSIDE the
+  // control (measured 2026-10-04: a click dispatched on the Unlock box itself never unlocked). So
+  // the press goes to the topmost element under the centre when that lies inside the control; when
+  // something else covers it, to the first element inside the control that has an onclick of its
+  // own; otherwise to the control. Events bubble, so a handler on the control still runs once.
+  A.pressTarget = function (el) {
+    try {
+      var r = el.getBoundingClientRect();
+      if (document.elementFromPoint && r.width > 0 && r.height > 0) {
+        var hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        if (hit && (hit === el || el.contains(hit))) return hit;
+      }
+    } catch (e) { }
+    if (typeof el.onclick !== 'function') {
+      var inner = el.getElementsByTagName('*');
+      for (var i = 0; i < inner.length; i++) if (typeof inner[i].onclick === 'function') return inner[i];
+    }
+    return el;
+  };
+
   A.press = function (el) {
+    var target = A.pressTarget(el);
     var r = el.getBoundingClientRect();
     var x = r.left + r.width / 2, y = r.top + r.height / 2;
     var types = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'];
@@ -450,7 +472,7 @@
         ev = new PointerEvent(t, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0 });
       else
         ev = new MouseEvent(t, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, view: window });
-      el.dispatchEvent(ev);
+      target.dispatchEvent(ev);
     }
   };
 

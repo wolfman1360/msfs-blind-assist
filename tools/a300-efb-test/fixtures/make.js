@@ -61,10 +61,55 @@ function page2(rect, unit) {
     '</div></div></div></div></div></div></div></div>';
 }
 
-function tablet(inner, extra) {
-  return '<div id="iniEFB"><div>' +
-    '<div id="header-bar"><div id="left-menu-bar"><div class="menu-bar-item ml-5 mt-3"><img id="menu-home-button" src="home.png"></div></div></div>' +
-    '<div id="renderer"><div class="visiblePage">' + inner + '</div></div></div></div>' + (extra || '');
+// The tablet's frame, laid out as it renders live (2026-10-04): #iniEFB holds the maintenance timer
+// list, then one div with the powered-off screen, the simulation-rate badge, the control box (the
+// gear icon's panel, with its dimming background and its panel-state confirmation) and the header
+// bar, then the page renderer and the pause dialog. o: { home, chargeIcon, simRate, controlBox,
+// confirm, poweredOff, paused: [title, text, resumeShown], timers: html, maintenanceShown,
+// pageClass } — everything else hidden, as at rest.
+function tablet(inner, extra, o) {
+  o = o || {};
+  const hide = shown => (shown ? '' : ' data-display="none"');
+  return '<div id="iniEFB">' +
+    '<div id="timerContainer"' + hide(!!o.timers) + '>' + (o.timers || '') + '</div>' +
+    '<div>' +
+    '<div id="powered-off"' + hide(o.poweredOff) + (o.poweredOff ? ' data-rect="0,0,2048,1476"' : '') + '></div>' +
+    '<div id="bgimg"></div>' +
+    '<div class="sim-rate"' + hide(!!o.simRate) + '><span>SIMULATION RATE: ' + (o.simRate || '2x') + '</span></div>' +
+    '<div id="control-box-background" class="control-box-background"' + hide(o.controlBox) + (o.controlBox ? ' data-rect="0,0,2048,1476"' : '') + '></div>' +
+    '<div id="control-box"' + hide(o.controlBox) + '><div class="row mt-5"><div class="col-sm-12"><div class="d-grid gap-2 mt-5 mb-5">' +
+    '<button class="btn btn-primary mb-2 btn-lg btn-custom" id="powerOff" type="button">Power Off EFB</button>' +
+    '<button class="btn btn-primary mb-2 btn-lg btn-custom" id="lockEfb" type="button">Lock EFB</button><hr>' +
+    '<h1 class="text-center text-white">TIME COMPRESSION</h1><div class="row time-compression">' +
+    '<div class="col"><button class="btn btn-primary mb-1 btn-custom w-100">DISABLED</button></div>' +
+    '<div class="col"><button class="btn btn-primary mb-1 btn-custom w-100">MAX 2x</button></div>' +
+    '<div class="col"><button class="btn btn-primary mb-1 btn-custom w-100">MAX 4x</button></div></div>' +
+    '<div class="text-center text-white mt-4 time-compression__label">Time Compression: OFF</div><hr>' +
+    '<h1 class="text-center text-white">Brightness</h1><input type="range" class="ini-range" min="0" max="100" step="0.1" id="brightness" value="75"><hr>' +
+    '<h1 class="text-center text-white">Panel States</h1>' +
+    '<button class="btn btn-primary mb-2 btn-lg btn-custom" id="panelstate_0" type="button">Cold and Dark</button>' +
+    '<button class="btn btn-primary mb-2 btn-lg btn-custom" id="panelstate_1" type="button">Ready for Takeoff</button>' +
+    '<button class="btn btn-primary mb-2 btn-lg btn-custom" id="panelstate_2" type="button">On APU</button>' +
+    '<button class="btn btn-primary mb-5 btn-lg btn-custom" id="panelstate_3" type="button">On GPU</button>' +
+    '</div></div></div></div>' +
+    '<div id="confirm-box"' + hide(o.confirm) + '><div class="row"><div class="col-sm-12"><div class="d-grid gap-2 mt-5 mb-5">' +
+    '<h1 class="mb-3 text-center text-white">Confirm New Panel State</h1>' +
+    '<button class="btn btn-primary mb-2 btn-lg btn-success" id="confirmBoxConfirmButton" type="button">Confirm</button>' +
+    '<button class="btn btn-primary mb-2 btn-lg btn-danger" id="confirmBoxCancelButton" type="button">Cancel</button></div></div></div></div>' +
+    '<div id="header-bar"><div id="left-menu-bar"><div class="menu-bar-item ml-5 mt-3"><img id="menu-home-button" src="home.png"' + hide(o.home !== false) + '></div></div>' +
+    '<div id="right-menu-bar">' +
+    '<div class="menu-bar-item wider"><button id="toggle-maintenance" class="btn btn-sm btn-danger"' + hide(o.maintenanceShown) + '><img id="maint-spin" class="spin" src="convert.png"></button></div>' +
+    '<div class="menu-bar-item wider"><div class="time" title="LOCAL TIME"><span class="time-small">LOCAL</span><br>1357</div></div>' +
+    '<div class="menu-bar-item wider"><div class="time" title="ZULU TIME"><span class="time-small">ZULU</span><br>2057</div></div>' +
+    '<div class="menu-bar-item"><img id="charge-state" src="/Pages/VCockpit/Instruments/ini-common/Icons/' + (o.chargeIcon || 'plug.png') + '"></div>' +
+    '<div class="menu-bar-item" id="control-box-button" data-rect="0,1950,2040,100"><img id="control-box-button-icon" src="gear.png" data-rect="10,1960,2030,90"></div>' +
+    '</div></div>' +
+    '</div>' +
+    '<div id="renderer"><div class="' + (o.pageClass ? o.pageClass + ' ' : '') + 'visiblePage">' + inner + '</div></div>' +
+    '<div class="paused-overlay' + (o.paused ? '' : ' hidden') + '"' + hide(!!o.paused) + '><div id="paused" class="paused-overlay__dialog">' +
+    '<h2 class="text-danger">' + (o.paused ? o.paused[0] : '') + '</h2><p>' + (o.paused ? o.paused[1] : '') + '</p>' +
+    '<button type="button" class="btn btn-secondary' + (o.paused && o.paused[2] ? '' : ' hidden') + '"' + hide(!!(o.paused && o.paused[2])) + '><span>RESUME FLIGHT</span></button></div></div>' +
+    '</div>' + (extra || '');
 }
 
 function weights(p1Rect, p2Rect, forwardShown, unit, extra) {
@@ -73,6 +118,11 @@ function weights(p1Rect, p2Rect, forwardShown, unit, extra) {
 
 const ON = '0,0,2048,1536', OFF_LEFT = '0,-2048,0,1536', OFF_RIGHT = '0,2048,4096,1536';
 const files = {
+  // The lock screen: the unlock handler is the tablet's onclick on the picture INSIDE the button
+  // (LockComponent sets it on document.querySelector('.home-button')), never on the button itself.
+  'lock': tablet('<div id="lockscreen"><div class="lock-time mt-5 text-center">1355</div>' +
+    '<div class="unlock-button" data-rect="688,152,1895,869"><div class="menu-row-item text-center" data-rect="688,152,1895,869">' +
+    '<img class="home-button" src="unlock-button.png" data-rect="688,933,1114,869"></div></div></div>', '', { home: false }),
   // Payload selection on screen; no load chosen yet, so the forward chevron is hidden.
   'weights-selection': weights(ON, OFF_RIGHT, false, 'kg'),
   // A load was chosen and the pilot came back: the forward chevron shows.
