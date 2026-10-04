@@ -188,15 +188,22 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
 
         foreach (var readout in _readouts.Values)
         {
-            vars[readout.Key] = new SimVarDefinition
+            // The altitude window rides the batch: it speaks a change MSFSBA did not make
+            // (A300FcuWindows), and its Ctrl+M row mutes that. Every other readout is read on request.
+            bool announced = readout.Key == A300Readouts.AltitudeKey;
+            var def = new SimVarDefinition
             {
                 Name = readout.Var,
                 DisplayName = readout.Name,
                 Type = readout.IsStock ? SimVarType.SimVar : SimVarType.LVar,
                 Units = readout.Units,
-                UpdateFrequency = UpdateFrequency.OnRequest,
+                UpdateFrequency = announced ? UpdateFrequency.Continuous : UpdateFrequency.OnRequest,
+                IsAnnounced = announced,
                 RenderAsReadOnlyStatus = true,
             };
+            if (announced)
+                batchNames.Add(ContinuousBatchLayout.FullName(def));
+            vars[readout.Key] = def;
         }
 
         // End-to-end MobiFlight probe target: every A300 write is a calculator-path string, and with

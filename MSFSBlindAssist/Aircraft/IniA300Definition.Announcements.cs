@@ -19,6 +19,9 @@ public partial class IniA300Definition
 {
     private readonly A300AnnouncementTracker _tracker = new();
 
+    /// <summary>The FCU altitude window's call-out (<see cref="A300FcuWindows"/>).</summary>
+    private readonly A300WindowTracker _altitudeWindow = new();
+
     /// <summary>
     /// WHEN, after a context reset, the lights and levers a flight load left unchanged get their
     /// baselines from the cache (a load re-delivers only changed values): on the batch deliveries'
@@ -39,6 +42,17 @@ public partial class IniA300Definition
         // (OnDeferredFlushBatchDelivered), never spoken here.
         if (A300FmaSources.Keys.Contains(varName))
             return true;
+
+        // The FCU altitude window: a change MSFSBA did not make ("Altitude 12,000 feet"). Spoken from
+        // here, inside MainForm's mute wrap; MSFSBA's own typed value or knob step is its echo.
+        if (varName == A300Readouts.AltitudeKey)
+        {
+            if (_seedGate.Armed)
+                _seedGate.NoteValue(varName, value, ownedByAircraft: true);
+            if (_altitudeWindow.Observe(A300FcuWindows.Altitude(value), Clock()) is string window)
+                announcer.Announce(window);
+            return true;
+        }
 
         if (A300Announcements.AnnouncedKeys.Contains(varName))
         {
@@ -74,6 +88,7 @@ public partial class IniA300Definition
         base.OnSimContextReset();
         _tracker.Reset();
         _fmaTracker.Reset();
+        _altitudeWindow.Reset();
         _commanded.Clear();
         _seedGate.Arm(KnownSeedValues());
     }
@@ -83,7 +98,7 @@ public partial class IniA300Definition
         var sim = _sim;
         if (sim == null)
             yield break;
-        foreach (var key in A300Announcements.AnnouncedKeys)
+        foreach (var key in A300Announcements.AnnouncedKeys.Append(A300Readouts.AltitudeKey))
             if (Cached(sim, key) is double value)
                 yield return new KeyValuePair<string, double>(key, value);
     }
@@ -94,6 +109,8 @@ public partial class IniA300Definition
         foreach (var key in A300Announcements.AnnouncedKeys)
             if (Cached(sim, key) is double value && _tracker.Seed(key, value))
                 seeded++;
+        if (Cached(sim, A300Readouts.AltitudeKey) is double altitude && _altitudeWindow.Seed(A300FcuWindows.Altitude(altitude)))
+            seeded++;
         Log.Debug("A300", $"Context reset: {seeded} baselines seeded from the cache ({trigger}, {_seedGate.Deliveries} batch deliveries).");
     }
 }

@@ -44,6 +44,8 @@ public partial class IniA300Definition
             announcer.Announce($"{name} unavailable");
             return;
         }
+        if (key == A300TypedValues.AltitudeKey)
+            _altitudeWindow.SuppressEcho(Clock());   // the typed confirmation says it
         _ = SendTypedAsync(plan, sim, announcer);
     }
 

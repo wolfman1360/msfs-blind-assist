@@ -51,7 +51,17 @@ public partial class IniA300Definition
         double? commanded = row.Action != A300RowAction.Set ? null
             : control.Kind == A300Kinds.Spring ? control.StateForPosition(control.Rest ?? 1)
             : value;
-        Execute(row, plan, simConnect, announcer, commanded);
+        bool sent = Execute(row, plan, simConnect, announcer, commanded);
+
+        // An FCU knob step is read back once it lands ("Heading 271"): a numeric confirmation, as a
+        // typed value's is. The altitude window's own call-out is told it is an echo.
+        if (sent && row.Action is A300RowAction.Increase or A300RowAction.Decrease
+            && A300FcuWindows.ReadoutByKnob.TryGetValue(control.Key, out var readoutKey))
+        {
+            if (readoutKey == A300Readouts.AltitudeKey)
+                _altitudeWindow.SuppressEcho(Clock());
+            _ = ReadBackAsync(simConnect, announcer, readoutKey, v => A300FcuWindows.Phrase(readoutKey, v, IsMach()));
+        }
         return true;
     }
 
@@ -59,26 +69,28 @@ public partial class IniA300Definition
     private double? CurrentValue(string key, SimConnectManager sim) =>
         _commanded.Resolve(key, Cached(sim, key), Clock());
 
-    private void Execute(A300PlacedRow row, A300Plan plan, SimConnectManager sim, ScreenReaderAnnouncer announcer,
+    /// <summary>Runs a plan, or refuses it aloud; true when its steps were sent.</summary>
+    private bool Execute(A300PlacedRow row, A300Plan plan, SimConnectManager sim, ScreenReaderAnnouncer announcer,
         double? commandedValue)
     {
         if (plan.Refusal != null)
         {
             announcer.Announce($"{row.Name}: {plan.Refusal}");
             ReRead(row.Key, sim);
-            return;
+            return false;
         }
         if (plan.IsEmpty)
-            return;   // already there; the screen reader has said so
+            return false;   // already there; the screen reader has said so
         if (!CanLand(sim))
         {
             announcer.Announce($"{row.Name} unavailable");
             ReRead(row.Key, sim);
-            return;
+            return false;
         }
         if (commandedValue is double target)
             _commanded.Record(row.Key, target, Clock());
         _ = RunAsync(plan.Steps, sim);
+        return true;
     }
 
     /// <summary>
