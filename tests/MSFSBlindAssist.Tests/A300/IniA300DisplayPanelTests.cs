@@ -180,9 +180,9 @@ public class IniA300DisplayPanelTests
     }
 
     [Fact]
-    public void The_standby_box_follows_the_nd_and_reads_the_standby_altimeter()
+    public void The_standby_box_reads_the_standby_altimeter()
     {
-        Assert.Equal(new[] { "PFD", "ND", "Standby Instruments" }, _def.GetPanelStructure()["Displays"].Take(3));
+        // Its place in the section is pinned by A300EcamPagesTests.The_pages_follow_the_standby_box_in_cockpit_order.
         Assert.Equal(new[]
         {
             "PLANE_PITCH_DEGREES", "PLANE_BANK_DEGREES", A300Readouts.PfdAirspeedKey,

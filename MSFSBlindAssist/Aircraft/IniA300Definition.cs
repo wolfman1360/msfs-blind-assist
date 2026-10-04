@@ -85,7 +85,7 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
                 _rows[row.Key] = row;
         foreach (var lamp in A300Announcements.Lamps)
             _lamps[lamp.Key] = lamp;
-        foreach (var readout in A300Readouts.All)
+        foreach (var readout in A300Readouts.All.Concat(A300EcamPages.Readouts))
             _readouts[readout.Key] = readout;
     }
 
@@ -185,7 +185,7 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
 
         RegisterFmaSources(vars, batchNames);
 
-        foreach (var readout in A300Readouts.All)
+        foreach (var readout in _readouts.Values)
         {
             vars[readout.Key] = new SimVarDefinition
             {

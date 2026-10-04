@@ -107,6 +107,11 @@ public partial class IniA300Definition
         return base.TryGetDisplayOverride(varKey, value, out displayText);
     }
 
+    /// <summary>Whether the tablet's weight unit is kilograms, from the cache. Unknown reads
+    /// kilograms, the unit the tank weights are stored in.</summary>
+    private bool IsMetric() =>
+        _sim is not { } sim || Cached(sim, A300EcamPages.WeightUnitKey) is not double v || v >= 0.5;
+
     /// <summary>Whether the FCU speed window is in Mach, from the cache (false when unknown).</summary>
     private bool IsMach() => _sim is { } sim && Cached(sim, A300FcuState.SpeedMachLightKey) is double v && v >= 0.5;
 
@@ -130,6 +135,10 @@ public partial class IniA300Definition
             case "GROUND_VELOCITY":
                 return A300DisplayText.Knots(value);
         }
+        if (A300EcamPages.KilogramKeys.Contains(key))
+            return A300EcamPages.Weight(value, IsMetric());
+        if (A300EcamPages.PoundsPerHourKeys.Contains(key))
+            return A300EcamPages.FlowPerHour(value, IsMetric());
         if (A300Readouts.FlapSpeeds.TryGetValue(key, out var speed))
             return A300DisplayText.FlapSpeed(speed, value, _sim is { } sim ? Cached(sim, A300Levers.FlapsKey) : null);
         return null;
