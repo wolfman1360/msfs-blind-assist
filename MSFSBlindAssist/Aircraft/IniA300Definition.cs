@@ -129,11 +129,16 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
                 DisplayName = lamp.Name,
                 Type = SimVarType.LVar,
                 UpdateFrequency = UpdateFrequency.Continuous,
-                IsAnnounced = true,                  // batch-covered; spoken from ProcessSimVarUpdate
+                IsAnnounced = true,                  // spoken from ProcessSimVarUpdate
+                // The fault lights stream on their own once-a-second subscriptions, never the batch:
+                // 58 more names there pushed the FMA's pitch trim sources into a second batch, and
+                // the FMA must read one complete sample. The two master lights ride the batch.
+                ExcludeFromBatch = lamp.SpeaksOff,
                 ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "On" },
                 RenderAsReadOnlyStatus = true,
             };
-            batchNames.Add(ContinuousBatchLayout.FullName(def));
+            if (ContinuousBatchLayout.RidesBatch(def))
+                batchNames.Add(ContinuousBatchLayout.FullName(def));
             vars[lamp.Key] = def;
         }
 
@@ -318,6 +323,7 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
             return;
         _disposed = true;
         _seedGate.Disarm();
+        _pendingLamps.Clear();
         ReleaseOwedSteps();   // a held button or a spring switch is let go before the definition goes away
         ReleaseMcduKeys();
         _sim = null;

@@ -7,13 +7,16 @@ using MSFSBlindAssist.Utils.Logging;
 namespace MSFSBlindAssist.Aircraft;
 
 /// <summary>
-/// What the A300 says on its own: the master warning and master caution as they come on, and the
-/// flap handle, ground spoiler arm, gear lever and parking brake when something other than the
-/// pilot's own pick moves them (<see cref="A300Announcements"/>). All of it is spoken from
-/// ProcessSimVarUpdate, inside MainForm's wrap, which applies both the Ctrl+M mute
-/// (<see cref="Settings.UserSettings.A300DisabledMonitorVariablesSet"/>) and the UI echo, so the
-/// pilot's own lever pick is never spoken back. Every other switch position is consumed silently:
-/// the panel combo follows it.
+/// What the A300 says on its own about its lights, levers and FCU altitude window: the master warning
+/// and master caution as they come on, the fault and warning lights both ways, the flap handle,
+/// ground spoiler arm, gear lever and parking brake when something other than the pilot's own pick
+/// moves them (<see cref="A300Announcements"/>), and the altitude window when MSFSBA did not set it
+/// (<see cref="A300FcuWindows"/>). Each is decided in ProcessSimVarUpdate, inside MainForm's wrap,
+/// which applies both the Ctrl+M mute (<see cref="Settings.UserSettings.A300DisabledMonitorVariablesSet"/>)
+/// and the UI echo, so the pilot's own lever pick is never spoken back. The fault lights are SPOKEN
+/// later, when the next continuous batch ends (one sentence for every light changed since), so each
+/// change is kept only when the announcer was not suppressed at the moment it was decided. Every other switch
+/// position is consumed silently: the panel combo follows it.
 /// </summary>
 public partial class IniA300Definition
 {
@@ -21,6 +24,10 @@ public partial class IniA300Definition
 
     /// <summary>The FCU altitude window's call-out (<see cref="A300FcuWindows"/>).</summary>
     private readonly A300WindowTracker _altitudeWindow = new();
+
+    /// <summary>The fault light changes since the last continuous batch ended, spoken when the next one ends.</summary>
+    private readonly List<A300LampChange> _pendingLamps = new();
+    private ScreenReaderAnnouncer? _lampAnnouncer;
 
     /// <summary>
     /// WHEN, after a context reset, the lights and levers a flight load left unchanged get their
@@ -62,7 +69,19 @@ public partial class IniA300Definition
             if (_seedGate.Armed)
                 _seedGate.NoteValue(varName, value, ownedByAircraft: _lamps.ContainsKey(varName));
             if (_tracker.Observe(varName, value) is string phrase)
-                announcer.Announce(phrase);
+            {
+                if (_lamps.TryGetValue(varName, out var lamp) && lamp.SpeaksOff)
+                {
+                    // Spoken at the batch's end, outside the wrap: kept only if it would be heard now.
+                    if (!announcer.Suppressed)
+                    {
+                        _pendingLamps.Add(new A300LampChange(lamp.Name, value >= 0.5));
+                        _lampAnnouncer = announcer;
+                    }
+                }
+                else
+                    announcer.Announce(phrase);
+            }
             return true;
         }
 
@@ -74,6 +93,7 @@ public partial class IniA300Definition
     public override void OnContinuousBatchDelivered(int batchNum)
     {
         base.OnContinuousBatchDelivered(batchNum);
+        FlushLamps();
         var sim = _sim;
         if (!_seedGate.Armed || sim == null)
             return;
@@ -93,8 +113,21 @@ public partial class IniA300Definition
         _fmaTracker.Reset();
         _altitudeWindow.Reset();
         _takeoffCallouts.Reset();
+        _pendingLamps.Clear();
         _commanded.Clear();
         _seedGate.Arm(KnownSeedValues());
+    }
+
+    /// <summary>Speaks the fault lights changed since the last batch ended, as one sentence (<see cref="A300LampCallouts"/>).</summary>
+    private void FlushLamps()
+    {
+        if (_pendingLamps.Count == 0)
+            return;
+        var announcer = _lampAnnouncer;
+        string text = A300LampCallouts.Compose(_pendingLamps);
+        _pendingLamps.Clear();
+        if (!_disposed)
+            announcer?.Announce(text);
     }
 
     private IEnumerable<KeyValuePair<string, double>> KnownSeedValues()

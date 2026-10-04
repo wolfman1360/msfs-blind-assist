@@ -1,12 +1,14 @@
 namespace MSFSBlindAssist.Aircraft.A300;
 
-/// <summary>One warning light the A300 speaks.</summary>
-public sealed record A300Lamp(string Key, string Var, string Name, string Panel);
+/// <summary>One light the A300 speaks. A master light speaks only as it comes on; a light with
+/// <paramref name="SpeaksOff"/> (<see cref="A300FaultLights"/>) speaks both ways.</summary>
+public sealed record A300Lamp(string Key, string Var, string Name, string Panel, bool SpeaksOff = false);
 
 /// <summary>
-/// What the A300 says on its own in part 1: the two master lights when they come on, and the
-/// levers when something other than the pilot's own pick moves them (a hardware lever, the cockpit
-/// itself). Each phrase is composed here; <see cref="A300AnnouncementTracker"/> decides when.
+/// What the A300 says on its own about its lights and levers: the two master lights when they come
+/// on, the fault and warning lights both ways (<see cref="A300FaultLights"/>), and the levers when
+/// something other than the pilot's own pick moves them (a hardware lever, the cockpit itself). Each
+/// phrase is composed here; <see cref="A300AnnouncementTracker"/> decides when.
 ///
 /// The master lights speak only as they COME ON. Pressing the light writes 0 to the very variable
 /// read here (the cockpit's own click code), so speaking the light going out would announce the
@@ -21,25 +23,33 @@ public static class A300Announcements
     public const string GearLeverKey = "A300_GEAR_LEVER";
     public const string ParkingBrakeKey = "A300_PARKINGBRAKE";
 
-    public static readonly IReadOnlyList<A300Lamp> Lamps = new[]
+    private static readonly A300Lamp[] Masters =
     {
         new A300Lamp(MasterWarningKey, "INI_MASTER_WARNING_ACTIVE", "Master warning", "Captain Panel"),
         new A300Lamp(MasterCautionKey, "INI_MASTER_CAUTION_ACTIVE", "Master caution", "Captain Panel"),
     };
 
-    /// <summary>Every key that speaks: the lamps and the four levers.</summary>
-    public static readonly IReadOnlySet<string> AnnouncedKeys = new HashSet<string>(StringComparer.Ordinal)
-    {
-        MasterWarningKey, MasterCautionKey,
-        A300Levers.FlapsKey, A300Levers.SpoilersArmKey, GearLeverKey, ParkingBrakeKey,
-    };
+    /// <summary>Every light that speaks: the two master lights, then the fault and warning lights.</summary>
+    public static readonly IReadOnlyList<A300Lamp> Lamps = Masters.Concat(A300FaultLights.All).ToArray();
 
-    /// <summary>The phrase a key's value speaks, or null when that value says nothing (a light out,
-    /// a flap handle between detents).</summary>
-    public static string? Phrase(string key, double value) => key switch
+    private static readonly Dictionary<string, A300Lamp> LampByKey = Lamps.ToDictionary(l => l.Key, StringComparer.Ordinal);
+
+    /// <summary>Every key that speaks: the lights and the four levers.</summary>
+    public static readonly IReadOnlySet<string> AnnouncedKeys = Lamps.Select(l => l.Key)
+        .Concat(new[] { A300Levers.FlapsKey, A300Levers.SpoilersArmKey, GearLeverKey, ParkingBrakeKey })
+        .ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>The phrase a key's value speaks, or null when that value says nothing (a master light
+    /// going out, a flap handle between detents).</summary>
+    public static string? Phrase(string key, double value)
     {
-        MasterWarningKey => value >= 0.5 ? "Master warning" : null,
-        MasterCautionKey => value >= 0.5 ? "Master caution" : null,
+        if (LampByKey.TryGetValue(key, out var lamp))
+            return lamp.SpeaksOff ? $"{lamp.Name} {(value >= 0.5 ? "on" : "off")}" : value >= 0.5 ? lamp.Name : null;
+        return LeverPhrase(key, value);
+    }
+
+    private static string? LeverPhrase(string key, double value) => key switch
+    {
         A300Levers.FlapsKey => A300Levers.FlapPositions.TryGetValue(Math.Round(value), out var detent)
             && Math.Abs(value - Math.Round(value)) < 0.01
                 ? $"Flaps {detent.ToLowerInvariant()}"
