@@ -26,8 +26,9 @@ namespace MSFSBlindAssist.Aircraft;
 /// lights and a lever moved by something else speak (<see cref="A300Announcements"/>).</item>
 /// <item>Knobs and readouts are on-request reads listed with their panel.</item>
 /// </list>
-/// The MCDU windows, the FCU and autopilot hotkeys, the tablet and the display readers come in
-/// later parts (design doc, 2026-10-03).
+/// The MCDU windows (IniA300Definition.Mcdu), the FCU, autopilot and readout hotkeys (.Autoflight),
+/// and the FMA and display boxes (.Displays, .Panels) are in their own partial files; the tablet is
+/// the shared Coherent EFB reader.
 /// </summary>
 public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
 {

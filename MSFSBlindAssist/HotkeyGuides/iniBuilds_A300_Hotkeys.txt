@@ -13,15 +13,20 @@ READ THIS FIRST - WHAT THIS VERSION COVERS
 Choose iniBuilds Airbus A300-600 from the Aircraft menu. The passenger and freighter versions,
 with either engine, share one cockpit, so one choice covers all four. This version covers the
 A300's switch panels: the overhead, the glareshield, the main instrument panel, the pedestal
-and the cockpit's back wall, both MCDUs as text (Shift+M), and the FCU, autopilot and radios with
-typed values, and the tablet (Shift+T). Not included yet: readouts of the PFD, ND and ECAM screens
-(so the flight mode annunciator cannot be read yet). Until they arrive, operate those in the
-simulator.
+and the cockpit's back wall, both MCDUs as text (Shift+M), the FCU, autopilot and radios with
+typed values, the tablet (Shift+T), and the screens: the flight mode annunciator spoken as it
+changes, and status boxes for the PFD, ND, engine instruments, standby instruments and nine
+ECAM system pages. Everything is read from the aircraft's own values, not from pictures.
+
+Not included: the upper ECAM's warnings and memos, and the ND's waypoint name and bearing. The
+A300 keeps these inside its own display software, not in values the simulator shares, so read
+the next waypoint on the MCDU's F-PLN page (Shift+M), and hear warnings by the master warning and
+master caution call-outs. The AI display reads are not available on the A300.
 
 
 THE PANELS
 
-Sections (Ctrl+1): Overhead, Glareshield, Main Panel, Pedestal, Cockpit, Cargo. The panels
+Sections (Ctrl+1): Overhead, Glareshield, Main Panel, Displays, Pedestal, Cockpit, Cargo. The panels
 (Ctrl+2) follow the cockpit as iniBuilds built it: the Overhead starts with Cabin Pressure, IRS,
 APU and Anti-Ice; the Glareshield holds the FCU and both EFIS panels; the Pedestal holds the
 throttle quadrant, the radios, the transponder, the weather radar and the ECAM control panel.
@@ -67,6 +72,33 @@ TYPED VALUES - type, then press Set or Enter
 
 The FCU's mode buttons say whether their mode is on: "Heading select: On", "Level change: Off".
 SPD/MACH says "Speed" or "Mach". The FCU panel's status display shows the four windows.
+
+
+THE DISPLAYS
+
+The flight mode annunciator is spoken as it changes, in the A300's own words: "Thrust mode:
+Speed", "Pitch mode: Profile climb", "Roll mode: Heading select", "Glide slope armed", "Land",
+"Flare", "Go around". P.CLB is Profile climb, ALT* is Altitude capture, HDG/S is Heading select,
+HDG is Heading hold; level change shows as Thrust mode: Thrust with Pitch mode: Speed. It stays
+quiet while the aircraft is cold and dark (the annunciator is blank until an IRS is aligned) and
+when the annunciator first appears. Ctrl+M has a row for each part: Thrust mode, Pitch mode,
+Roll mode, Land flare rollout and go-around, and Armed modes.
+
+The Displays section has a status box (Ctrl+3) for each screen:
+
+  PFD                  The annunciator (thrust, pitch, roll, armed modes and the autopilot,
+                       CMD 1, CMD 2 or Dual), the FCU windows, attitude, heading, airspeed,
+                       altitude, vertical speed, radio altitude, VLS, VMAX, green dot, S and F
+                       speeds, VS and minimums. Green dot, S and F say "not shown at this flap
+                       setting" where the speed tape does not draw them.
+  ND                   Mode and range, distance to the next waypoint, ground speed, true
+                       airspeed, wind, VOR 1 and 2 with DME, the ILS with localizer and
+                       glideslope reception, ADF 1 and 2.
+  Engine Instruments   N1, EGT, N2 and fuel flow for each engine.
+  Standby Instruments  Attitude, airspeed, the standby altimeter and its setting, the compass.
+  ECAM pages           Engine, Electrical AC, Electrical DC, Hydraulics, Bleed, Air
+                       Conditioning, Pressurization, Fuel and APU: the numbers each ECAM page
+                       prints. Fuel reads in the weight unit set on the tablet.
 
 
 THE MCDU WINDOW - Press left bracket, then Shift+M
@@ -126,6 +158,14 @@ FCU:
   Shift+S    Read the FCU speed window (knots or Mach)
   Shift+A    Read the FCU altitude window
   Shift+V    Read the FCU vertical speed window
+
+Speed tape:
+  Shift+1    Read green dot
+  Shift+2    Read S speed
+  Shift+3    Read F speed
+  Shift+4    Read VLS
+  Shift+5    Read VS (the speed at the bottom of the tape)
+  Shift+6    Read VMAX (the top of the tape: the gear or flap limit when one applies)
 
 Aircraft state:
   L          Read the flaps lever ("Flaps 15/15")
