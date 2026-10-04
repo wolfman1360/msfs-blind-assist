@@ -118,6 +118,22 @@ function weights(p1Rect, p2Rect, forwardShown, unit, extra) {
 
 const ON = '0,0,2048,1536', OFF_LEFT = '0,-2048,0,1536', OFF_RIGHT = '0,2048,4096,1536';
 const files = {
+  // The Home page with the header bar: the gear opens the control box; the tablet charges.
+  'home': tablet('<div id="dashboard"><div class="menu-row">' +
+    '<div class="menu-row-item is-button text-center" rel="flight"><img class="home-button" src="button_myflight.png"><div class="menu-text">My Flight</div></div>' +
+    '<div class="menu-row-item is-button text-center disabled" rel="charts"><img class="home-button" src="button_charts.png"><div class="menu-text">Charts</div></div>' +
+    '</div></div>', '', { home: false, simRate: '4x' }),
+  'home-battery': tablet('<div id="dashboard"></div>', '', { home: false, chargeIcon: 'battery-half.png' }),
+  // The control box open over a page, and its panel-state confirmation open over it.
+  'control-box': tablet('<div id="dashboard"><div class="menu-row"><div class="menu-row-item is-button text-center" rel="flight"><div class="menu-text">My Flight</div></div></div></div>', '', { home: false, controlBox: true }),
+  'confirm-box': tablet('<div id="dashboard"></div>', '', { home: false, controlBox: true, confirm: true }),
+  'powered-off': tablet('<div id="dashboard"><div class="menu-row"><div class="menu-row-item is-button text-center" rel="flight"><div class="menu-text">My Flight</div></div></div></div>', '', { home: false, poweredOff: true }),
+  'paused': tablet('<div id="dashboard"></div>', '', { home: false, paused: ['TOP OF DESCENT PAUSE', 'Aircraft has reached top of descent. The simulation has been paused. Click below to resume.', true] }),
+  // Maintenance under way: the header's spinning button shows, and its timer list is open.
+  'timers': tablet('<div id="dashboard"></div>', '', { home: false, maintenanceShown: true,
+    timers: '<div id="timer_1" class="pop_timer"><h1>Replace Brakes</h1><p>All eight brakes are being replaced.</p>' +
+      '<p><strong>Complete in <span id="timer_dur_1">4:59</span></strong></p>' +
+      '<button id="timer_complete_1" class="btn btn-info btn-lg btn-custom w-100">Finish Now</button></div>' }),
   // The lock screen: the unlock handler is the tablet's onclick on the picture INSIDE the button
   // (LockComponent sets it on document.querySelector('.home-button')), never on the button itself.
   'lock': tablet('<div id="lockscreen"><div class="lock-time mt-5 text-center">1355</div>' +

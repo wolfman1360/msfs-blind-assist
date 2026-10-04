@@ -30,7 +30,7 @@
 
   // Icon-only controls, and buttons whose own words read badly, by id.
   A.NAMES = {
-    'menu-home-button': 'Home', 'control-box-button': 'Control box', 'toggle-maintenance': 'Maintenance in progress',
+    'menu-home-button': 'Home', 'control-box-button': 'Control box',
     refreshMetar: 'Refresh METAR', pb_left: 'Pushback, turn left', pb_right: 'Pushback, turn right',
     pb_stop: 'Pushback, stop', pb_aft: 'Pushback, straight back',
     switcher_page1: 'Back to payload selection', switcher_page2: 'Loading page',
@@ -113,6 +113,14 @@
     var s = String(id || '').replace(/[_-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2');
     s = A.clean(s).toLowerCase();
     return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+  };
+
+  // True when every element under el is inline text formatting, so el reads as one line.
+  A.INLINE = { SPAN: 1, STRONG: 1, B: 1, I: 1, EM: 1, SMALL: 1, BR: 1, SUP: 1, SUB: 1, U: 1 };
+  A.inlineOnly = function (el) {
+    var all = el.getElementsByTagName('*');
+    for (var i = 0; i < all.length; i++) if (!A.INLINE[all[i].tagName] || A.isPress(all[i])) return false;
+    return true;
   };
 
   A.isPress = function (el) {
@@ -242,6 +250,12 @@
     }
     if (A.NAMES[el.id]) return A.NAMES[el.id];
     if (el.tagName === 'DIV' && A.hasClass(el, 'unlock-button')) return 'Unlock';
+    // A maintenance timer's Finish Now names the job it finishes, as several can run at once.
+    var timer = /^timer_complete_/.test(el.id || '') ? el.closest('.pop_timer') : null;
+    if (timer) {
+      var job = timer.querySelector('h1');
+      return 'Finish now' + (job ? ': ' + A.txt(job) : '');
+    }
     var preset = A.presetLabel(el);
     if (preset) return preset;
     var t = A.txt(el);
@@ -252,6 +266,8 @@
   };
 
   A.pageName = function () {
+    var overlay = A.openOverlay();
+    if (overlay) return overlay.def.page;
     var vp = document.querySelector('#renderer .visiblePage');
     if (!vp) return '';
     for (var i = 0; i < vp.children.length; i++) {
@@ -337,7 +353,8 @@
       if (A.isPress(el)) {
         var idxP = A.stamp(el);
         var label = A.pressLabel(el);
-        var item = { idx: idxP, text: label, value: '', kind: 'button', clickable: true, disabled: !!el.disabled };
+        // A Home menu item the tablet has switched off carries the class "disabled" and no handler.
+        var item = { idx: idxP, text: label, value: '', kind: 'button', clickable: true, disabled: !!el.disabled || A.hasClass(el, 'disabled') };
         if (A.hasClass(el, 'door') || A.hasClass(el, 'door-arm') || el.tagName === 'INPUT') {
           item.key = 'press:' + el.id;
           item.announceChange = true;   // the label carries the control's own new state
@@ -384,6 +401,14 @@
       if (A.hasClass(el, 'flight-value-title') || A.hasClass(el, 'ini-input-label') || A.hasClass(el, 'input-group-text')) return;
       if (tag === 'P' && A.hasClass(el, 'text-end') && el.closest('.row') && el.closest('.row').querySelector('input[type=range]')) return;
 
+      // A line of text broken up by inline tags ("Complete in <span>4:59</span>", "currently set to:
+      // <span>REALISTIC</span>") is one line, not a phrase and an orphaned value.
+      if (tag !== 'LABEL' && el.children.length && A.inlineOnly(el)) {
+        var line = A.txt(el);
+        if (line) emit({ idx: 0, text: line, value: '', kind: 'static', clickable: false, key: el.id ? 'text:' + el.id : undefined });
+        return;
+      }
+
       var own = A.ownText(el);
       if (own && tag !== 'LABEL') {
         emit({ idx: 0, text: own, value: '', kind: 'static', clickable: false, key: el.id ? 'text:' + el.id : undefined });
@@ -401,14 +426,108 @@
       if (said) emit({ idx: 0, text: said, value: '', kind: 'alert', clickable: false });
     }
 
-    var header = document.getElementById('header-bar');
+    var overlay = A.openOverlay();
+    if (overlay) { A.readOverlay(overlay, emit, walk, els); return els; }
+    if (A.visible(A.byId('confirm-box')) === false) A._pendingPanelState = '';
+
+    // Servicing under way: the header's maintenance button shows a list of timers, each with a
+    // Finish Now. Not modal, so it is read above the page while it shows.
+    var timers = A.byId('timerContainer');
+    if (timers && A.visible(timers) && timers.children.length) {
+      emit({ idx: 0, text: 'Maintenance in progress', value: '', kind: 'heading', level: 2, clickable: false });
+      walk(timers);
+    }
+
     var page = document.querySelector('#renderer .visiblePage');
     if (page) walk(page);
-    if (header) {
-      var home = document.getElementById('menu-home-button');
-      if (home && A.visible(home)) emit({ idx: A.stamp(home), text: 'Home', value: '', kind: 'button', clickable: true });
-    }
+    A.header(emit);
     return els;
+  };
+
+  A.byId = function (id) { return document.getElementById(id); };
+
+  // What the tablet puts over its pages, most covering first: the powered-off screen, the pause
+  // dialog, the control box's panel-state confirmation, and the control box behind the header's
+  // gear. Each covers the page for a sighted pilot, so while one is open it is read alone, under
+  // its own page name, and nothing behind it can be pressed.
+  A.OVERLAYS = [
+    { id: 'powered-off', page: 'Powered off' },
+    { sel: '.paused-overlay', page: 'Paused' },
+    { id: 'confirm-box', page: 'Control box, confirm panel state' },
+    { id: 'control-box', page: 'Control box' }
+  ];
+  A.openOverlay = function () {
+    for (var i = 0; i < A.OVERLAYS.length; i++) {
+      var o = A.OVERLAYS[i];
+      var el = o.id ? A.byId(o.id) : document.querySelector(o.sel);
+      if (el && A.visible(el) && !A.hasClass(el, 'hidden')) return { def: o, el: el };
+    }
+    return null;
+  };
+  // The panel state last pressed in the control box: the confirmation itself only says "Confirm
+  // New Panel State", the state it will set being held inside the tablet's code.
+  A._pendingPanelState = '';
+  A.readOverlay = function (o, emit, walk, els) {
+    var id = o.def.id;
+    if (id === 'powered-off') {
+      emit({ idx: 0, text: 'The tablet is powered off.', value: '', kind: 'static', clickable: false });
+      emit({ idx: A.stamp(o.el), text: 'Power on', value: '', kind: 'button', clickable: true });
+      return;
+    }
+    var start = els.length;
+    walk(o.el);
+    if (id === 'confirm-box' && A._pendingPanelState) {
+      for (var i = start; i < els.length; i++) {
+        if (els[i].kind !== 'heading') continue;
+        els.splice(i + 1, 0, { idx: 0, text: 'Panel state: ' + A._pendingPanelState, value: '', kind: 'static', clickable: false });
+        break;
+      }
+    }
+    if (id === 'control-box') {
+      var bg = A.byId('control-box-background');
+      if (bg && A.visible(bg)) emit({ idx: A.stamp(bg), text: 'Close control box', value: '', kind: 'button', clickable: true });
+    }
+  };
+
+  // The header bar, after the page: the simulation-rate badge (shown only above 1x), one status
+  // line with the clocks and the tablet's battery, then Home and the gear. Only Home used to be
+  // read, so the control box behind the gear could not be reached at all.
+  A.BATTERY = { 'plug.png': 'charging', 'battery-full.png': 'battery full', 'battery-half.png': 'battery half', 'battery-empty.png': 'battery low' };
+  A.clock = function (s) { return /^\d{4}$/.test(s) ? s.slice(0, 2) + ':' + s.slice(2) : s; };
+  A.statusLine = function () {
+    var parts = [];
+    var times = document.querySelectorAll('#right-menu-bar .time');
+    for (var i = 0; i < times.length; i++) {
+      var small = times[i].querySelector('.time-small');
+      var which = small ? A.sentence(A.txt(small)) : '';
+      var value = A.ownText(times[i]);
+      if (value) parts.push((which ? which + ' time ' : '') + A.clock(value));
+    }
+    var charge = document.getElementById('charge-state');
+    var src = charge ? String(charge.getAttribute('src') || '') : '';
+    var word = A.BATTERY[src.substring(src.lastIndexOf('/') + 1)];
+    if (word) parts.push(word);
+    return parts.join(', ');
+  };
+  A.header = function (emit) {
+    var rate = document.querySelector('.sim-rate');
+    if (rate && A.visible(rate)) {
+      var m = /SIMULATION RATE:\s*(\S+)/i.exec(A.txt(rate));
+      if (m) emit({ idx: 0, text: 'Simulation rate: ' + m[1], value: '', kind: 'static', clickable: false, key: 'status:simrate' });
+    }
+    var line = A.statusLine();
+    if (line) emit({ idx: 0, text: line, value: '', kind: 'static', clickable: false, key: 'status:header' });
+    var home = document.getElementById('menu-home-button');
+    if (home && A.visible(home)) emit({ idx: A.stamp(home), text: 'Home', value: '', kind: 'button', clickable: true });
+    // Shown only while servicing runs; it shows and hides the timer list.
+    var maint = A.byId('toggle-maintenance');
+    if (maint && A.visible(maint)) {
+      var shown = A.visible(A.byId('timerContainer'));
+      emit({ idx: A.stamp(maint), text: 'Maintenance timers: ' + (shown ? 'shown' : 'hidden'), value: '', kind: 'button',
+        clickable: true, key: 'press:toggle-maintenance', announceChange: true });
+    }
+    var gear = document.getElementById('control-box-button');
+    if (gear && A.visible(gear)) emit({ idx: A.stamp(gear), text: 'Control box', value: '', kind: 'button', clickable: true });
   };
 
   // A heading that only repeats the name of the field right after it (Settings' "SimBrief" above the
@@ -479,6 +598,7 @@
   A.clickElement = function (idx) {
     var el = A.find(idx);
     if (!el || !A.visible(el) || el.disabled) return false;
+    if (/^panelstate_\d+$/.test(el.id || '')) A._pendingPanelState = A.txt(el);
     A.press(el);
     return true;
   };

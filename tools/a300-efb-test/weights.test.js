@@ -32,6 +32,7 @@ test('the selection half reads only its own controls, with the loads in words', 
     'Cargo from SimBrief',
     'Unload Cargo',
     'Home',
+    'Control box',
   ]);
   assert.ok(!texts(r).some(t => /^(Apply Load|Total fuel|Gross weight)/.test(t)), 'the loading half is off screen');
 });
@@ -77,7 +78,7 @@ test('the loading half reads its fields by what they hold', () => {
 test('the loading half has its buttons and the way back', () => {
   const { A, window } = load('weights-loading', { simvars: KG });
   const r = scrape(A);
-  assert.deepStrictEqual(buttons(r), ['Back to payload selection', 'Update from SimBrief', 'Apply Load to Aircraft', 'Home']);
+  assert.deepStrictEqual(buttons(r), ['Back to payload selection', 'Update from SimBrief', 'Apply Load to Aircraft', 'Home', 'Control box']);
   let clicked = 0;
   window.document.getElementById('switcher_page1').addEventListener('click', () => clicked++);
   assert.ok(A.clickElement(find(r, 'Back to payload selection').idx));
