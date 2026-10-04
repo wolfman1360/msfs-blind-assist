@@ -14,9 +14,9 @@ Choose iniBuilds Airbus A300-600 from the Aircraft menu. The passenger and freig
 with either engine, share one cockpit, so one choice covers all four. This version covers the
 A300's switch panels: the overhead, the glareshield, the main instrument panel, the pedestal
 and the cockpit's back wall, both MCDUs as text (Shift+M), and the FCU, autopilot and radios with
-typed values. Not included yet: the tablet, and readouts of the PFD, ND and ECAM screens (so the
-flight mode annunciator cannot be read yet). Until they arrive, operate those in the simulator.
-Shift+T says so instead of opening a window.
+typed values, and the tablet (Shift+T). Not included yet: readouts of the PFD, ND and ECAM screens
+(so the flight mode annunciator cannot be read yet). Until they arrive, operate those in the
+simulator.
 
 
 THE PANELS
@@ -98,6 +98,25 @@ and a degree sign is a degree sign. A blank screen says so: the MCDU is probably
 
 The scratchpad is read back once what you typed has landed. An entry holding a character the MCDU
 keyboard does not have (a comma, for example) is not sent at all, and stays in the box to edit.
+
+
+THE TABLET - Press left bracket, then Shift+T
+
+The aircraft's own tablet, read as a web page: headings, text, buttons, fields, choices and
+sliders, in the order the tablet shows them. It starts on the lock screen: press Unlock, then pick
+an app. Home is the last item on every page. The apps that matter for a flight:
+
+  My Flight            Import from SimBrief, the route, METARs, times, checklist and flight plan
+  Ground Equipment     Doors (each says open, moving or closed), slides (armed or disarmed),
+                       chocks, covers, stairs, ground power, luggage, pushback, close all doors
+  Weight and Balance   Payload presets, or your own load and fuel, then Apply Load to Aircraft
+  Take Off / Landing   Performance: runway, conditions and configuration, then Calculate
+  Settings             SimBrief user name, MCDU export, IRS align time, weight units and more
+  Aircraft Maintenance Tires, brakes, oil, hydraulics, slides and the maintenance panels
+
+A button whose label changes when you press it (a door, a Take Off setting) says its new label.
+Password fields (Hoppie, SayIntentions) only say whether they are set. The Charts and Enroute Map
+apps are pictures and read as little more than their buttons.
 
 
 OUTPUT MODE - Press right bracket to activate

@@ -266,7 +266,7 @@ public partial class MainForm
                 }
                 else if (currentAircraft is IniA300Definition)
                 {
-                    announcer.AnnounceImmediate("A300 tablet not available yet.");
+                    ShowA300EfbDialog();
                 }
                 else if (currentAircraft?.AircraftCode == "TFDI_MD11")
                 {
