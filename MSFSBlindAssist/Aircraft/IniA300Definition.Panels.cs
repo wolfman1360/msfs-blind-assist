@@ -37,7 +37,11 @@ public partial class IniA300Definition
 
         var structure = new Dictionary<string, List<string>>();
         foreach (var (section, panels) in _placement.Structure)
+        {
             structure[section] = new List<string>(panels);
+            if (section == A300DisplayPanels.AfterSection)
+                structure[A300DisplayPanels.Section] = new List<string>(A300DisplayPanels.Panels);
+        }
 
         // Every panel gets a controls entry, even an empty one: a panel with only a status
         // display is otherwise never built (the HS787 lesson).
@@ -49,7 +53,13 @@ public partial class IniA300Definition
         foreach (var lamp in A300Announcements.Lamps)
             Add(displays, lamp.Panel, lamp.Key);
         foreach (var readout in A300Readouts.All)
-            Add(displays, readout.Panel, readout.Key);
+            if (!A300DisplayPanels.IsDisplayPanel(readout.Panel))
+                Add(displays, readout.Panel, readout.Key);
+        foreach (var panel in A300DisplayPanels.Panels)
+        {
+            controls[panel] = new List<string>();
+            displays[panel] = new List<string>(A300DisplayPanels.Lines[panel]);
+        }
 
         _panelStructure = structure;
         _panelControls = controls;
@@ -79,6 +89,11 @@ public partial class IniA300Definition
     /// The speed window reads as Mach while SPD/MACH is in Mach.</summary>
     public override bool TryGetDisplayOverride(string varKey, double value, out string displayText)
     {
+        if (TryGetDisplayText(varKey, value) is string text)
+        {
+            displayText = text;
+            return true;
+        }
         if (varKey == A300Readouts.SpeedKey)
         {
             displayText = A300FcuState.SpeedWindow(value, IsMach());
@@ -94,4 +109,43 @@ public partial class IniA300Definition
 
     /// <summary>Whether the FCU speed window is in Mach, from the cache (false when unknown).</summary>
     private bool IsMach() => _sim is { } sim && Cached(sim, A300FcuState.SpeedMachLightKey) is double v && v >= 0.5;
+
+    /// <summary>The Displays section's lines that need more than their own value: the FMA columns,
+    /// the attitude in words, and the speeds the tape shows only at some flap settings.</summary>
+    private string? TryGetDisplayText(string key, double value)
+    {
+        switch (key)
+        {
+            case A300FmaSources.ThrustModeKey:
+            case A300FmaSources.PitchModeKey:
+            case A300FmaSources.RollModeKey:
+            case A300FmaSources.ArmedKey:
+                return FmaLine(key);
+            case "PLANE_PITCH_DEGREES":
+                return A300PfdText.Pitch(value);
+            case "PLANE_BANK_DEGREES":
+                return A300PfdText.Bank(value);
+            case "INDICATED_ALTITUDE":
+                return A300PfdText.Feet(value);
+        }
+        if (A300Readouts.FlapSpeeds.TryGetValue(key, out var speed))
+            return A300PfdText.FlapSpeed(speed, value, _sim is { } sim ? Cached(sim, A300Levers.FlapsKey) : null);
+        return null;
+    }
+
+    /// <summary>One FMA line, read fresh from the cache. A blank column reads "blank"; the whole FMA
+    /// reads "not shown" while the PFD draws no guidance columns. The armed line carries the
+    /// autopilot column beneath it.</summary>
+    private string FmaLine(string key)
+    {
+        var fma = A300Fma.Read(A300FmaSources.Compose(k => _sim is { } sim ? Cached(sim, k) : null));
+        string Column(string? words) => !fma.IsShown ? "not shown" : words ?? "blank";
+        return key switch
+        {
+            A300FmaSources.ThrustModeKey => Column(fma.Thrust),
+            A300FmaSources.PitchModeKey => Column(fma.Common ?? fma.Pitch),
+            A300FmaSources.RollModeKey => Column(fma.Common ?? fma.Roll),
+            _ => $"{(!fma.IsShown ? "not shown" : fma.Armed.Count == 0 ? "none" : string.Join(", ", fma.Armed))}\nAutopilot: {fma.Autopilot ?? "off"}",
+        };
+    }
 }

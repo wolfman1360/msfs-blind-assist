@@ -26,6 +26,10 @@ public partial class IniA300Definition
     /// <summary>The wait between a typed value's two steps; tests replace it.</summary>
     internal Func<int, Task> TypedDelay { get; set; } = Task.Delay;
 
+    /// <summary>Reads a key fresh (<see cref="SimConnectManager.ReadFreshAsync"/>); tests replace it.</summary>
+    internal Func<SimConnectManager, string, int, Task<double?>> ReadFresh { get; set; } =
+        (sim, key, timeoutMs) => sim.ReadFreshAsync(key, timeoutMs);
+
     /// <summary>A typed value from a panel box or a dialog: refused aloud with its range, or sent and confirmed.</summary>
     private void SetTyped(string key, double value, SimConnectManager sim, ScreenReaderAnnouncer announcer, string name)
     {
@@ -216,7 +220,7 @@ public partial class IniA300Definition
             await TypedDelay(ToggleReadBackMs);
             if (_disposed)
                 return;
-            if (await sim.ReadFreshAsync(key, ReadoutTimeoutMs) is double value)
+            if (await ReadFresh(sim, key, ReadoutTimeoutMs) is double value)
                 announcer.AnnounceImmediate(words(value));
         }
         catch (Exception ex)
@@ -226,7 +230,7 @@ public partial class IniA300Definition
     }
 
     /// <summary>Reads each key fresh and speaks the composed text, or "{what} unavailable".</summary>
-    private static async Task SpeakAsync(SimConnectManager sim, ScreenReaderAnnouncer announcer, string what,
+    private async Task SpeakAsync(SimConnectManager sim, ScreenReaderAnnouncer announcer, string what,
         Func<double[], string> compose, params string[] keys)
     {
         try
@@ -234,7 +238,7 @@ public partial class IniA300Definition
             var values = new double[keys.Length];
             for (int i = 0; i < keys.Length; i++)
             {
-                if (await sim.ReadFreshAsync(keys[i], ReadoutTimeoutMs) is not double v)
+                if (await ReadFresh(sim, keys[i], ReadoutTimeoutMs) is not double v)
                 {
                     announcer.AnnounceImmediate($"{what} unavailable");
                     return;

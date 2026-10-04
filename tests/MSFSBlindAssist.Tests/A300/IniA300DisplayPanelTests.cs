@@ -1,0 +1,146 @@
+using MSFSBlindAssist.Aircraft;
+using MSFSBlindAssist.Aircraft.A300;
+using MSFSBlindAssist.SimConnect;
+
+namespace MSFSBlindAssist.Tests.A300;
+
+/// <summary>
+/// The Displays section: status boxes that read the A300's screens from its own variables, the
+/// way the FlyByWire A320's PFD, ND and ISIS boxes do.
+/// </summary>
+public class IniA300DisplayPanelTests
+{
+    private readonly IniA300Definition _def;
+    private readonly SimConnectManager _sim = new(IntPtr.Zero);   // never connected
+    private readonly Dictionary<string, double> _cache = new();
+
+    public IniA300DisplayPanelTests()
+    {
+        _def = new IniA300Definition
+        {
+            CanLand = _ => true,
+            Cached = (_, key) => _cache.TryGetValue(key, out var v) ? v : null,
+        };
+        _def.Attach(_sim);
+    }
+
+    private void Var(string var, double value) =>
+        _cache[A300FmaSources.All.Single(s => string.Equals(s.Var, var, StringComparison.OrdinalIgnoreCase)).Key] = value;
+
+    private void Flying()
+    {
+        Var("INI_PITCH_MODE", 8);
+        Var("INI_ROLL_MODE", 3);
+        Var("INI_at_mode", 1);
+        Var("INI_AT_ON", 1);
+        Var("INI_autothrottle_master_switch1", 1);
+        Var("INI_IRS1_ATTITUDE_ALIGNED", 1);
+        Var("INI_pitch_trim2", 1);
+        Var("INI_ap1_on", 1);
+    }
+
+    private string Shown(string key, double value = 0)
+    {
+        Assert.True(_def.TryGetDisplayOverride(key, value, out var text), $"{key} has no display text");
+        return text;
+    }
+
+    [Fact]
+    public void The_displays_section_follows_the_main_panel()
+    {
+        var sections = _def.GetPanelStructure().Keys.ToList();
+        Assert.Equal(sections.IndexOf("Main Panel") + 1, sections.IndexOf("Displays"));
+        Assert.Equal("PFD", _def.GetPanelStructure()["Displays"][0]);
+    }
+
+    [Fact]
+    public void A_display_panel_has_no_controls()
+    {
+        foreach (var panel in _def.GetPanelStructure()["Displays"])
+            Assert.Empty(_def.GetPanelControls()[panel]);
+    }
+
+    [Fact]
+    public void Every_line_of_every_display_panel_is_a_registered_variable()
+    {
+        var vars = _def.GetVariables();
+        foreach (var panel in _def.GetPanelStructure()["Displays"])
+            foreach (var key in _def.GetPanelDisplayVariables()[panel])
+                Assert.True(vars.ContainsKey(key), $"{panel}: {key} is not registered");
+    }
+
+    [Fact]
+    public void The_pfd_box_reads_like_the_a320s()
+    {
+        Assert.Equal(new[]
+        {
+            A300FmaSources.ThrustModeKey, A300FmaSources.PitchModeKey, A300FmaSources.RollModeKey, A300FmaSources.ArmedKey,
+            A300Readouts.SpeedKey, A300Readouts.HeadingKey, A300Readouts.AltitudeKey, A300Readouts.VerticalSpeedKey,
+            "PLANE_PITCH_DEGREES", "PLANE_BANK_DEGREES", A300Readouts.PfdHeadingKey, A300Readouts.PfdAirspeedKey,
+            "INDICATED_ALTITUDE", A300Readouts.PfdVerticalSpeedKey, A300Readouts.PfdRadioAltitudeKey,
+            A300Readouts.VlsKey, A300Readouts.VmaxKey, A300Readouts.GreenDotKey, A300Readouts.SSpeedKey, A300Readouts.FSpeedKey,
+            A300Readouts.VsSpeedKey, A300Readouts.MinimumsKey,
+        }, _def.GetPanelDisplayVariables()["PFD"]);
+    }
+
+    [Fact]
+    public void The_fma_lines_read_each_column()
+    {
+        Flying();
+        Var("INI_PITCH_MODE_ARM", 6);
+        Var("INI_ROLL_MODE_ARM", 1);
+        Assert.Equal("Speed", Shown(A300FmaSources.ThrustModeKey));
+        Assert.Equal("Vertical speed", Shown(A300FmaSources.PitchModeKey));
+        Assert.Equal("Heading hold", Shown(A300FmaSources.RollModeKey));
+        Assert.Equal("Altitude, NAV\nAutopilot: CMD 1", Shown(A300FmaSources.ArmedKey));
+    }
+
+    [Fact]
+    public void A_combined_mode_reads_on_both_pitch_and_roll()
+    {
+        Flying();
+        Var("INI_PITCH_ROLL_MODE", 1);
+        Assert.Equal("Land", Shown(A300FmaSources.PitchModeKey));
+        Assert.Equal("Land", Shown(A300FmaSources.RollModeKey));
+    }
+
+    [Fact]
+    public void Blank_columns_read_as_blank_and_nothing_armed_reads_none()
+    {
+        Flying();
+        Var("INI_PITCH_MODE", 0);
+        Var("INI_ap1_on", 0);
+        Assert.Equal("blank", Shown(A300FmaSources.PitchModeKey));
+        Assert.Equal("none\nAutopilot: off", Shown(A300FmaSources.ArmedKey));
+    }
+
+    [Fact]
+    public void An_unpowered_fma_reads_not_shown()
+    {
+        Assert.Equal("not shown", Shown(A300FmaSources.ThrustModeKey));
+        Assert.Equal("not shown", Shown(A300FmaSources.PitchModeKey));
+        Assert.Equal("not shown\nAutopilot: off", Shown(A300FmaSources.ArmedKey));
+    }
+
+    [Fact]
+    public void Flap_speeds_follow_the_flap_lever()
+    {
+        _cache[A300Levers.FlapsKey] = 0;
+        Assert.Equal("187 knots", Shown(A300Readouts.GreenDotKey, 187.4));
+        Assert.Equal(A300PfdText.NotShown, Shown(A300Readouts.FSpeedKey, 137.2));
+        _cache[A300Levers.FlapsKey] = 2;
+        Assert.Equal("137 knots", Shown(A300Readouts.FSpeedKey, 137.2));
+    }
+
+    [Fact]
+    public void Attitude_and_altitude_read_in_words()
+    {
+        Assert.Equal("5.0 degrees up", Shown("PLANE_PITCH_DEGREES", -5 * Math.PI / 180));
+        Assert.Equal("Wings level", Shown("PLANE_BANK_DEGREES", 0));
+        Assert.Equal("12,000 feet", Shown("INDICATED_ALTITUDE", 12000));
+        Assert.Equal("270", Shown(A300Readouts.PfdHeadingKey, 270));
+        Assert.Equal("1,520 feet per minute up", Shown(A300Readouts.PfdVerticalSpeedKey, 1520));
+        Assert.Equal("180 knots", Shown(A300Readouts.VlsKey, 179.8));
+        Assert.Equal("not set", Shown(A300Readouts.MinimumsKey, 0));
+    }
+}

@@ -165,6 +165,8 @@ public partial class IniA300Definition
         }
         if (TryHandleAutoflightHotkey(action, simConnect, announcer, parentForm, hotkeyManager))
             return true;
+        if (TryHandleDisplayHotkey(action, simConnect, announcer))
+            return true;
         return base.HandleHotkeyAction(action, simConnect, announcer, parentForm, hotkeyManager);
     }
 }

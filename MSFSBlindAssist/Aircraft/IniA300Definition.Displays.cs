@@ -1,5 +1,6 @@
 using MSFSBlindAssist.Accessibility;
 using MSFSBlindAssist.Aircraft.A300;
+using MSFSBlindAssist.Hotkeys;
 using MSFSBlindAssist.SimConnect;
 
 namespace MSFSBlindAssist.Aircraft;
@@ -63,4 +64,40 @@ public partial class IniA300Definition
             if (!IsMuted(A300FmaSources.MuteKeyFor(callout.Column)))
                 announcer.Announce(callout.Phrase);
     }
+
+    /// <summary>
+    /// The speed-tape keys, as on the A320s: VLS, VS, the maximum speed (VMAX, on the A320's VFE
+    /// key: the top of the tape, which is the flap or gear limit whenever one applies), and green dot,
+    /// S and F, which say "not shown at this flap setting" where the tape does not draw them.
+    /// </summary>
+    private bool TryHandleDisplayHotkey(HotkeyAction action, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        switch (action)
+        {
+            case HotkeyAction.ReadSpeedVLS:
+                _ = SpeakAsync(sim, announcer, "VLS", v => $"VLS {A300PfdText.Speed(v[0])}", A300Readouts.VlsKey);
+                return true;
+            case HotkeyAction.ReadSpeedVS:
+                _ = SpeakAsync(sim, announcer, "VS", v => $"VS {A300PfdText.Speed(v[0])}", A300Readouts.VsSpeedKey);
+                return true;
+            case HotkeyAction.ReadSpeedVFE:
+                _ = SpeakAsync(sim, announcer, "VMAX", v => $"VMAX {A300PfdText.Speed(v[0])}", A300Readouts.VmaxKey);
+                return true;
+            case HotkeyAction.ReadSpeedGD:
+                SpeakFlapSpeed(sim, announcer, "Green dot", A300Readouts.GreenDotKey);
+                return true;
+            case HotkeyAction.ReadSpeedS:
+                SpeakFlapSpeed(sim, announcer, "S speed", A300Readouts.SSpeedKey);
+                return true;
+            case HotkeyAction.ReadSpeedF:
+                SpeakFlapSpeed(sim, announcer, "F speed", A300Readouts.FSpeedKey);
+                return true;
+        }
+        return false;
+    }
+
+    private void SpeakFlapSpeed(SimConnectManager sim, ScreenReaderAnnouncer announcer, string name, string key) =>
+        _ = SpeakAsync(sim, announcer, name,
+            v => $"{name} {A300PfdText.FlapSpeed(A300Readouts.FlapSpeeds[key], v[0], v[1])}",
+            key, A300Levers.FlapsKey);
 }
