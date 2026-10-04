@@ -1,0 +1,434 @@
+INIBUILDS AIRBUS A300-600 HOTKEY REFERENCE
+
+Application Navigation:
+  Ctrl+1     Focus Sections List
+  Ctrl+2     Focus Panels List
+  Ctrl+3     Focus Status Display field of the current panel (refreshes it if empty)
+
+Tip: Press the same bracket key again to cancel a mode you activated by accident.
+
+
+READ THIS FIRST - WHAT THIS VERSION COVERS
+
+Choose iniBuilds Airbus A300-600 from the Aircraft menu. The passenger and freighter versions,
+with either engine, share one cockpit, so one choice covers all four. This version covers the
+A300's switch panels: the overhead, the glareshield, the main instrument panel, the pedestal
+and the cockpit's back wall, both MCDUs as text (Shift+M), the FCU, autopilot and radios with
+typed values, the tablet (Shift+T), and the screens: the flight mode annunciator spoken as it
+changes, and status boxes for the PFD, ND, engine instruments, standby instruments and nine
+ECAM system pages. It also speaks what you need while flying: the take-off call-outs (V1,
+Rotate, V2), the fault and warning lights, autopilot and autothrottle disconnects, and the FCU
+altitude window. Everything is read from the aircraft's own values, not from pictures.
+
+Not included: the upper ECAM's warnings and memos, and the ND's waypoint name and bearing. The
+A300 keeps these inside its own display software, not in values the simulator shares, so read
+the next waypoint on the MCDU's F-PLN page (Shift+M), and hear warnings by the master warning and
+master caution call-outs. The AI display reads are not available on the A300.
+
+
+THE PANELS
+
+Sections (Ctrl+1): Overhead, Glareshield, Main Panel, Displays, Pedestal, Cockpit, Cargo. The panels
+(Ctrl+2) come in the order of the other aircraft in MSFS Blind Assist, power first: the Overhead
+starts with Electrical, IRS, APU, Fire, Hydraulics and Fuel, then air conditioning, pressurization,
+anti-ice, wipers, lights and oxygen, with flight controls, engine start, recorders and the cockpit
+door last. The Glareshield holds the FCU and both EFIS panels. The Pedestal starts with the
+throttle quadrant, trim and ECAM control panel, then the weather radar, transponder and radios.
+The Cargo section is the freighter's main deck cargo door panel.
+
+A few panels open on what the checklist sets first: Electrical on the batteries and external
+power, Lights on the signs and then the exterior lights, the captain and first officer panels on
+master warning and master caution, the center panel on the gear lever, and the throttle quadrant
+on the fuel levers, flaps, speed brake, spoiler arm and parking brake.
+
+A switch is a combo box with the aircraft's own position words. A push button is a button. A
+dimmer or temperature knob is a slider. A knob that only turns, such as the FCU speed knob or a
+radio frequency knob, is a pair of buttons, "increase" and "decrease", each one click of the
+knob. The flaps lever, the ground spoiler arm and the speed brake lever are at the end of the
+Throttle Quadrant panel.
+
+When you change a control, MSFS Blind Assist moves it exactly the way a click in the cockpit
+would. Nothing is spoken back - your screen reader already says what you chose - unless the
+control could not be moved, when you hear why: "Battery 1 unavailable" (the simulator connection
+cannot carry the change), or "position unknown, try again in a moment" (a switch must be read
+before it may be moved; this clears within a second or two of connecting).
+
+A trim switch (aileron trim, rudder trim, the pitch trim switches on the yokes, the cabin
+manual vertical speed switch) springs back: choosing a side holds it there for one second and
+lets it return, the way a short press does in the cockpit. Choose the side again for more.
+
+Each cargo smoke agent switch has its guard just before it. The switch only moves while its
+guard is open, exactly as in the aircraft.
+
+Status Display (Ctrl+3): the FCU panel shows the four FCU windows; the Captain, First Officer
+and Center panels show the altimeter settings, the flex temperature and the landing elevation;
+the Navigation Radios panel shows the VOR and ILS courses. The Captain Panel also shows the
+master warning and master caution lights. Each panel with fault or warning lights shows them
+too ("Engine 1 generator fault light: On"): Fire, Electrical, Hydraulics, Flight Controls, Air
+Bleed and Air Conditioning, Cabin Pressure, Anti-Ice, Window and Probe Heat, APU, Throttle
+Quadrant, Center Panel, Captain EFIS, Captain Panel, ECAM Control and Cockpit Door.
+
+
+TYPED VALUES - type, then press Set or Enter
+
+  FCU panel: Speed or Mach (100 to 399 knots, or Mach 0.10 to 0.99; a value in the other unit
+  switches SPD/MACH for you), Heading (0 to 360), Altitude (100 to 49,000 feet, nearest 100),
+  Vertical speed (-6,000 to 6,000, nearest 100). You hear "Heading 270".
+  Navigation Radios panel: VOR 1 and VOR 2 frequency (108.00 to 117.95) and course setting, ILS
+  frequency (108.10 to 111.95) and course setting.
+  VHF Radios panel: VHF 1 and VHF 2 standby frequency (118.000 to 136.990); the transfer buttons
+  swap them in.
+  Transponder and TCAS panel: Squawk, four digits each 0 to 7.
+  Captain, First Officer and Center panels: the altimeter settings, in inches (29.92) or
+  hectopascals (1013).
+  Captain EFIS panel: Decision height, 0 to 2,500 feet (0 clears it). It sets both pilots'
+  minimums, which the PFD box shows and the aircraft's "minimums" call-out uses. You hear
+  "Decision height 200 feet".
+
+The FCU's mode buttons say whether their mode is on: "Heading select: On", "Level change: Off".
+SPD/MACH says "Speed" or "Mach". The FCU panel's status display shows the four windows. Pressing
+an FCU knob's increase or decrease button reads its window back once it has moved ("Heading
+271", "Altitude 12,100 feet").
+
+
+THE DISPLAYS
+
+The flight mode annunciator is spoken as it changes, in the A300's own words: "Thrust mode:
+Speed", "Pitch mode: Profile climb", "Roll mode: Heading select", "Glide slope armed", "Land",
+"Flare", "Go around". P.CLB is Profile climb, ALT* is Altitude capture, HDG/S is Heading select,
+HDG is Heading hold; level change shows as Thrust mode: Thrust with Pitch mode: Speed. It stays
+quiet while the aircraft is cold and dark (the annunciator is blank until an IRS is aligned) and
+when the annunciator first appears. Ctrl+M has a row for each part: Thrust mode, Pitch mode,
+Roll mode, Land flare rollout and go-around, and Armed modes.
+
+The Displays section has a status box (Ctrl+3) for each screen:
+
+  PFD                  The annunciator (thrust, pitch, roll, armed modes and the autopilot,
+                       CMD 1, CMD 2 or Dual), the FCU windows, attitude, heading, airspeed,
+                       altitude, vertical speed, radio altitude, VLS, VMAX, green dot, S and F
+                       speeds, VS and minimums. Green dot, S and F say "not shown at this flap
+                       setting" where the speed tape does not draw them.
+  ND                   Mode and range, distance to the next waypoint, ground speed, true
+                       airspeed, wind, VOR 1 and 2 with DME, the ILS with localizer and
+                       glideslope reception, ADF 1 and 2.
+  Engine Instruments   N1, EGT, N2 and fuel flow for each engine.
+  Standby Instruments  Attitude, airspeed, the standby altimeter and its setting, the compass.
+  ECAM pages           Engine, Electrical AC, Electrical DC, Hydraulics, Bleed, Air
+                       Conditioning, Pressurization, Fuel and APU: the numbers each ECAM page
+                       prints. Fuel reads in the weight unit set on the tablet.
+
+
+THE MCDU WINDOW - Press left bracket, then Shift+M
+
+Both MCDUs, Captain and First Officer, read as text: the real screens, live. The window opens on
+the screen list: the title, then each line with its label above it, numbered 1 to 6 for the
+line-select keys, then the scratchpad. When the page changes you hear its title and the cursor
+goes to line 1. The window switches on the aircraft's MCDU export (the tablet's External
+Hardware setting) every time it opens, because the aircraft forgets it at each flight load.
+
+How the screen reads: # is an empty box the MCDU wants filled (dashes are optional fields), the
+arrows beside a title mean there are more pages (Right Arrow or Alt+Right goes to the next one),
+and a degree sign is a degree sign. A blank screen says so: the MCDU is probably unpowered.
+
+  Ctrl+1 to Ctrl+6   Left line-select keys 1 to 6
+  Alt+1 to Alt+6     Right line-select keys 1 to 6
+                     (or F1 to F6 and F7 to F12, with the alternate layout in FMC Settings)
+  Page Up / Down     Slew up and down
+  Right Arrow        Next page (on the screen list); Alt+Right from anywhere in the window
+  Backspace          CLR, one character (on the screen list)
+  Delete             Clear the whole scratchpad (on the screen list)
+  Alt+S              Go to the input box: type, then Enter sends it to the scratchpad
+  Alt+Home           Back to the screen list
+  Ctrl+Shift+L / R   Captain or First Officer MCDU
+  Escape             Close the window
+  Page keys          Alt+I Init, Alt+F F-Plan, Alt+P Prog, Alt+D Dir To, Alt+R Ref, Alt+O Mode,
+                     Alt+T Tact Mode, Alt+A T/O Appr, Alt+E Eng Out, Alt+L Sec Plan, Alt+M Menu,
+                     Alt+C Clr, Alt+N Next Page, Alt+U slew up, Alt+W slew down
+
+The scratchpad is read back once what you typed has landed. An entry holding a character the MCDU
+keyboard does not have (a comma, for example) is not sent at all, and stays in the box to edit.
+
+
+THE TABLET - Press left bracket, then Shift+T
+
+The aircraft's own tablet, read as a web page: headings, text, buttons, fields, choices and
+sliders, in the order the tablet shows them. It starts on the lock screen: press Unlock, then pick
+an app. Home is the last item on every page. The apps that matter for a flight:
+
+  My Flight            Import from SimBrief, the route, METARs, times, checklist and flight plan
+  Ground Equipment     Doors (each says open, moving or closed), slides (armed or disarmed),
+                       chocks, covers, stairs, ground power, luggage, pushback, close all doors
+  Weight and Balance   The cargo and fuel: see below
+  Take Off / Landing   Performance: runway, conditions and configuration, then Calculate
+  Settings             SimBrief (your SimBrief Pilot ID: the number on your SimBrief account
+                       page, not your user name), MCDU export, IRS align time, weight units
+                       and more
+  Aircraft Maintenance Tires, brakes, oil, hydraulics, slides and the maintenance panels
+
+Weight and Balance has two pages, and the window's title names the one you are on. Each page
+starts with a line saying what its buttons do, then a line saying what is on board now: the
+payload and the fuel, or "fuelling in progress" while the tablet fills the tanks. That line is
+spoken when it changes, so you hear the load arrive after Apply.
+
+  Payload selection    The load buttons, each with its cargo and weight. A load fills in the
+                       three hold weights and opens the loading page. Custom cargo opens the
+                       loading page with the weights as they are; Cargo from SimBrief fills them
+                       from your latest SimBrief plan. Nothing goes on board yet. Unload Cargo
+                       only removes the cargo you can see in the hold: the weight stays on board
+                       until you set the holds to 0 and apply. Loading page goes back to the
+                       loading page once you have chosen a load.
+  Loading              Total cargo, Total fuel and the forward, middle and aft holds. Update
+                       from SimBrief fills in the cargo and fuel from your latest SimBrief plan.
+                       Apply Load to Aircraft puts the cargo and fuel on board. The fuel goes
+                       in at the speed of Maintenance Mode in Settings: Disabled loads it at
+                       once, Fast at about 15 tonnes a minute, and Realistic (the default) at
+                       about 2 tonnes a minute, so a full load can take half an hour. Then the
+                       results: centre of gravity in percent MAC, zero fuel weight, gross
+                       weight, payload and block fuel, in tonnes (or thousands of pounds). Back
+                       to payload selection returns to the loads.
+
+Messages the tablet shows ("Payload Removed", a SimBrief error, "Unable to fuel aircraft when
+engines are running.") are spoken as they appear.
+
+A button whose label changes when you press it (a door, a Take Off setting) says its new label.
+Password fields (Hoppie, SayIntentions) only say whether they are set. The Charts and Enroute Map
+apps are pictures and read as little more than their buttons.
+
+
+OUTPUT MODE - Press right bracket to activate
+
+FCU:
+  Shift+H    Read the FCU heading window
+  Shift+S    Read the FCU speed window (knots or Mach)
+  Shift+A    Read the FCU altitude window
+  Shift+V    Read the FCU vertical speed window
+
+Speed tape:
+  Shift+1    Read green dot
+  Shift+2    Read S speed
+  Shift+3    Read F speed
+  Shift+4    Read VLS
+  Shift+5    Read VS (the speed at the bottom of the tape)
+  Shift+6    Read VMAX (the top of the tape: the gear or flap limit when one applies)
+
+Aircraft state:
+  L          Read the flaps lever ("Flaps 15/15")
+  Shift+G    Read the gear lever
+  B          Read the captain's altimeter setting in both units
+  F          Read total fuel (pounds)
+  Shift+F    Read total fuel (kilograms)
+  W          Read gross weight (pounds)
+  Shift+W    Read gross weight (kilograms)
+  Shift+C    Open the A300 checklist (the aircraft's own checklist, phase by phase)
+  Ctrl+M     A300 Monitor Manager
+
+Altitude:
+  Q          Read Altitude AGL
+  A          Read Altitude MSL
+
+Airspeed:
+  S          Read IAS (Indicated Airspeed)
+  T          Read TAS (True Airspeed)
+  G          Read Ground Speed
+  M          Read Mach Number
+
+Heading:
+  H          Read Magnetic Heading
+  U          Read True Heading
+
+Vertical:
+  V          Read Vertical Speed
+  Ctrl+Shift+R  Read last landing rate (touchdown vertical speed, feet per minute)
+  Ctrl+Shift+G  Read last landing peak g-force
+
+Navigation:
+  N          Read NAV 1 and NAV 2 radio info (frequency, ident, localizer, glideslope, DME)
+
+Weather:
+  I          Wind Info
+  O          Read Outside Temperature (Celsius)
+
+Time:
+  Z          Read Local Time at the aircraft's position, with the time-zone name
+             ("16:38 Eastern Daylight Time"). Seconds are added when "Include seconds
+             in time announcements" is ticked in Announcement Settings.
+  Shift+Z    Read Zulu / UTC Time ("03:30Z")
+
+Transponder:
+  X          Read Squawk Code
+
+Location:
+  C          Read Nearest City
+
+Tools:
+  Ctrl+H     Activate/deactivate Hand Fly mode
+  Ctrl+V     Activate/deactivate Visual Guidance mode. Does not require Hand
+             Fly mode. Enables the same single-letter quick-access hotkeys
+             Hand Fly mode does, plus F for target VS.
+  Ctrl+T     Activate/deactivate Takeoff Assistance
+  Ctrl+D     Read Distance to Selected Runway
+  Ctrl+I     Read ILS Guidance System Report
+
+Taxi Guidance (turn-by-turn taxi assistance with audio steering tone):
+  Y          Taxi Status (current taxiway, next turn, distance to destination)
+  Ctrl+Y     Repeat Current Taxi Instruction
+  Alt+Y      Where Am I (announces current taxiway, gate, or runway at nearest airport)
+  Alt+L      Look Around (where you are, the apron or concourse you are in, and the nearest buildings with direction and distance)
+  Ctrl+Shift+L  Surroundings window (everything nearby as a list, with the airport's fuel and frequencies)
+                In its Frequencies list, Enter tunes the selected frequency into COM 1 standby
+                and Shift+Enter tunes it straight into COM 1 active; COM 1 is read back to confirm.
+  (Open the form with Input mode > Shift+Y)
+
+Waypoint Tracking (use the Fix Track window or the route viewer to add):
+  1          Track Slot 1
+  2          Track Slot 2
+  3          Track Slot 3
+  4          Track Slot 4
+  5          Track Slot 5
+
+Traffic and Weather:
+  R          Announce Tracked TCAS Traffic
+  Ctrl+R     Open TCAS Traffic Window
+  Shift+R    Open Weather Radar Window (uses ActiveSky's richer data when it is
+             running, MSFS weather otherwise)
+  Alt+G      Announce nearest ground traffic (up to 3 aircraft on ground with
+             direction and distance; auto-alerts also fire at 500/250/100 ft
+             zone transitions while taxiing)
+
+Displays and Windows:
+  Shift+E    Route viewer, procedure planner and airport lookup
+  Shift+L    Location Info
+  Shift+M    Show METAR Report (VATSIM, plus ActiveSky METAR if AS detected)
+  Shift+B    SimBrief Briefing
+  Alt+D      Describe outside scene (AI; needs an AI key in File > Settings > AI tab)
+  Ctrl+Shift+T  Cold Temperature Altitude Correction (offline calculator: field elevation + temperature + published altitudes -> corrected altitudes)
+
+Hand Fly Mode Hotkeys:
+  A          Read MSL
+  S          Read IAS
+  D          Read Distance to Destination Runway
+  H          Read Magnetic Heading
+  P          Read Aircraft Pitch
+  B          Read Aircraft Bank
+  Q          Read AGL
+  V          Read VS
+
+Visual Guidance Mode Hotkeys (same single-letter set as Hand Fly mode, plus F):
+  F          Read Target VS
+
+Ground Services:
+  Ctrl+G     Read latest GSX tooltip (no need to open the Access GSX window)
+             In the Access GSX window, press F5 to open the GSX menu, 1-9/0/A-E
+             to choose menu options, C to open GSX Settings, and Escape to hide
+             the window.
+
+SayIntentions:
+  Ctrl+S        Read last SayIntentions transmission
+  Ctrl+Shift+S  Open SayIntentions flight information. Assigned arrival gate,
+                departure runway, which runways are landing and departing, the
+                field flow and the altimeter. Read-only: arrow keys move line by
+                line, Escape closes.
+
+VATSIM:
+  Alt+V      Mute or unmute VATSIM announcements (vPilot)
+
+
+INPUT MODE - Press [ to activate
+
+Teleport:
+  Shift+R    Runway Teleport
+  Shift+G    Gate Teleport
+
+Flight Planning:
+  Shift+F    Fix/Waypoint Tracking Window
+  Shift+D    Select Destination Runway
+
+Autopilot (each says the result once it has landed: "Autopilot 1 on"):
+  Shift+A    Toggle Autopilot 1
+  Ctrl+O     Toggle Autopilot 2
+  Ctrl+J     Autothrottle button
+  Ctrl+L     VOR LOC button
+  Shift+P    Land button
+  Ctrl+P     Says where the autopilot buttons are (the FCU panel, Glareshield section)
+
+FCU Push/Pull:
+  Shift+1    Push Heading Knob
+  Ctrl+1     Pull Heading Knob
+  Shift+2    Push Altitude Knob
+  Ctrl+2     Pull Altitude Knob
+  Shift+3    Push Speed Knob
+  Ctrl+3     Pull Speed Knob
+  Shift+4    Push VS Knob
+  Ctrl+4     Pull VS Knob
+
+FCU Set Values (each opens a small window; type and press Enter; Escape closes):
+  Ctrl+S     Speed or Mach
+  Ctrl+H     Heading
+  Ctrl+A     Altitude
+  Ctrl+V     Vertical speed
+  Ctrl+B     Altimeters: one entry sets the captain's, first officer's and standby
+  Ctrl+N     VOR 1 and VOR 2, frequency and course
+
+Taxi Guidance:
+  Shift+Y    Open Taxi Assist Form (enter ATC taxi clearance, start guidance)
+  Y          Continue past current hold-short point
+  Ctrl+Y     Stop Taxi Guidance
+  Shift+X    Open Landing Exit Planner (pick a runway exit taxiway before
+             touchdown; guidance starts when you land)
+
+Ground Services:
+  Alt+G      Open Access GSX window (accessible GSX Ground Services Pro menu)
+
+SayIntentions:
+  Ctrl+Shift+Y Build a taxi route from the last SayIntentions taxi clearance.
+               Fills the Taxi Assist form with the destination, taxiways and
+               hold-short runways ATC gave, and names anything it could not
+               apply. Review the fields and press Calculate Route to start
+               guidance, or turn on auto-start in the SayIntentions section
+               of Settings > Taxi Guidance.
+
+General:
+  Escape     Exit active hotkey mode
+
+
+BACKGROUND ANNOUNCEMENTS - Ctrl+M
+
+The master warning and master caution lights are announced when they come on ("Master
+warning"). Pressing the light to acknowledge it is not spoken back.
+
+Fault and warning lights are announced both ways: "Engine 1 generator fault light off", "Engine 1
+fire handle light on". 58 of them: the fire loops and handles, generators and batteries,
+hydraulic pumps, spoilers, pitch feel, rudder travel limiters, flap and slat systems, packs and
+isolation valves, cabin pressure, anti-ice, window heat, the APU, the engine master switches and
+oil pressure, autoland, GPWS, below glide slope, the MCDU message light, ECAM clear and the
+cockpit door. Lights that change together are read as one sentence, about once a second, so an
+engine start sounds like "3 lights off: Spoiler 7 fault, Spoiler 6 fault, Spoiler 5 fault". The
+annunciator light test does not trigger these announcements.
+
+Take-off: "V1", "Rotate" and "V2" as the airspeed reaches them on the take-off roll. V1 and VR
+come from the MCDU's TAKE OFF page. V2 is the FCU speed, which the A300 crew sets to V2 for
+take-off, so set the FCU speed to V2 before you go: it is called only when it is no more than
+30 knots above VR (with the window left at 250 there is no V2 call). Entering the speeds is not
+spoken; the MCDU shows them.
+
+The autopilot and autothrottle: "Autopilot disconnected", "Autopilot CMD 1" (or CMD 2, Dual),
+"Autothrottle disconnected" and "Autothrottle armed" when something other than MSFS Blind Assist
+changes them - a yoke or hardware button, the instinctive disconnect, the aircraft itself. When
+you switch them with MSFS Blind Assist, only your screen reader or the hotkey's read-back speaks.
+
+The FCU altitude window is announced when it changes and you did not set it from MSFS Blind
+Assist, for example with a hardware knob ("Altitude 12,000 feet"). The heading, speed and
+vertical speed windows are not announced on their own, because the autopilot moves them itself
+(heading sync, managed speed); read them with Shift+H, Shift+S and Shift+V in output mode.
+
+The flaps lever, the ground spoiler arm, the gear lever and the parking brake are announced when
+something other than MSFS Blind Assist moves them - a hardware lever, or the aircraft itself
+("Flaps 15/15", "Parking brake set"). Changes you make in MSFS Blind Assist are not.
+
+Each of these has its own Ctrl+M row: every light, V1 call-out, Rotate call-out, V2 call-out,
+Autopilot engagement, Autothrottle engagement, Altitude window, and the flight mode annunciator's
+rows.
+
+Ctrl+M opens the monitor manager: type in the search box to narrow the list, use the Show filter
+to see only the muted rows, and untick an item to stop it announcing. Your choices are
+remembered between sessions.

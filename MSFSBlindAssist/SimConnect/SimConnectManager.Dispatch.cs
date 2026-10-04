@@ -1543,5 +1543,8 @@ public partial class SimConnectManager
         // so the order relative to PMDG doesn't matter — the two never register overlapping ids
         // (the MD-11's are namespaced into 0x4D44xxxx).
         md11McduDataManager?.HandleClientData(data);
+
+        // The A300 MCDU feed claims only its own four request ids (namespaced 0x4133xxxx).
+        a300McduDataManager?.HandleClientData(data);
     }
 }

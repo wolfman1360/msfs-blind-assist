@@ -1,0 +1,277 @@
+using System.Globalization;
+
+namespace MSFSBlindAssist.Aircraft.A300;
+
+/// <summary>A typed-value row: a text box and a Set button on a panel (the key contains "_SET").</summary>
+public sealed record A300TypedValue(string Key, string Name, string Panel);
+
+/// <summary>What a typed value does: one calculator string and its spoken confirmation, or an error.
+/// <paramref name="Before"/> is sent first, <see cref="A300TypedValues.ModeSwitchSettleMs"/> ahead of
+/// <paramref name="Rpn"/> (the SPD/MACH switch, which the aircraft applies a moment later).</summary>
+public sealed record A300TypedResult(string? Rpn, string? Confirmation, string? Error, string? Before = null)
+{
+    public static A300TypedResult Fail(string error) => new(null, null, error);
+}
+
+/// <summary>
+/// The A300's typed values. Every write path below was measured live at the gate (2026-10-03):
+/// <list type="bullet">
+/// <item>FCU windows: writing <c>L:INI_Airspeed_Dial</c>, <c>L:INI_HEADING_DIAL</c>,
+/// <c>L:INI_Altitude_Dial</c> and <c>L:INI_vvi_dial</c> moved the autopilot's own targets
+/// (<c>A:AUTOPILOT HEADING LOCK DIR</c>, <c>AIRSPEED HOLD VAR</c>, <c>ALTITUDE LOCK VAR</c>,
+/// <c>VERTICAL HOLD VAR</c>). The knobs stop at speed 100-399 knots, Mach 0.10-0.99, altitude
+/// up to 49,000 feet and vertical speed -6,000 to +6,000; heading wraps 359 to 0. In Mach mode
+/// (<c>L:INI_Airspeed_is_mach</c> 1) the SAME speed variable holds the Mach number, so a typed value
+/// in the other unit presses SPD/MACH first — and waits <see cref="ModeSwitchSettleMs"/>: the
+/// aircraft applies the switch a moment later and converts whatever the variable holds then, so a
+/// value written in the same string was converted (0.78 became Mach 0.15; measured). A 50 ms pause
+/// was enough.</item>
+/// <item>VOR 1, VOR 2 and ILS frequencies: the aircraft rebuilds each frequency from its megahertz and
+/// kilohertz parts (<c>INI_VOR1_FREQUENCY_MHZ</c> / <c>_KHZ</c>) and drives the stock NAV 1, 2 and 3
+/// from them; writing the combined value or the stock NAV radio is undone.</item>
+/// <item>VOR courses: the stock <c>K:VOR1_SET</c> / <c>K:VOR2_SET</c> (the A300 mirrors NAV OBS);
+/// ILS course: <c>L:INI_ils_course</c>, which the aircraft keeps.</item>
+/// <item>VHF standby: the stock standby set events (the A300 mirrors them). Squawk: <c>K:XPNDR_SET</c>.
+/// Altimeters: <c>index value (&gt;K:2:KOHLSMAN_SET)</c>, index FIRST (value first does nothing).</item>
+/// </list>
+/// Pure: the definition sends the strings and speaks the confirmations. Every number is formatted
+/// with the invariant culture.
+/// </summary>
+public static class A300TypedValues
+{
+    public const string SpeedKey = "A300_FCU_SPEED_SET";
+    public const string HeadingKey = "A300_FCU_HEADING_SET";
+    public const string AltitudeKey = "A300_FCU_ALTITUDE_SET";
+    public const string VerticalSpeedKey = "A300_FCU_VS_SET";
+    public const string Vor1FrequencyKey = "A300_VOR1_FREQ_SET";
+    public const string Vor1CourseKey = "A300_VOR1_COURSE_SET";
+    public const string Vor2FrequencyKey = "A300_VOR2_FREQ_SET";
+    public const string Vor2CourseKey = "A300_VOR2_COURSE_SET";
+    public const string IlsFrequencyKey = "A300_ILS_FREQ_SET";
+    public const string IlsCourseKey = "A300_ILS_COURSE_SET";
+    public const string Com1StandbyKey = "A300_COM1_STBY_SET";
+    public const string Com2StandbyKey = "A300_COM2_STBY_SET";
+    public const string SquawkKey = "A300_SQUAWK_SET";
+    public const string BaroCaptainKey = "A300_BARO_CPT_SET";
+    public const string BaroFirstOfficerKey = "A300_BARO_FO_SET";
+    public const string BaroStandbyKey = "A300_BARO_STBY_SET";
+    public const string MinimumsKey = "A300_MINIMUMS_SET";
+
+    public static readonly IReadOnlyList<A300TypedValue> All = new[]
+    {
+        new A300TypedValue(SpeedKey, "Speed or Mach", "FCU"),
+        new A300TypedValue(HeadingKey, "Heading", "FCU"),
+        new A300TypedValue(AltitudeKey, "Altitude", "FCU"),
+        new A300TypedValue(VerticalSpeedKey, "Vertical speed", "FCU"),
+        new A300TypedValue(Vor1FrequencyKey, "VOR 1 frequency", "Navigation Radios"),
+        new A300TypedValue(Vor1CourseKey, "VOR 1 course setting", "Navigation Radios"),
+        new A300TypedValue(Vor2FrequencyKey, "VOR 2 frequency", "Navigation Radios"),
+        new A300TypedValue(Vor2CourseKey, "VOR 2 course setting", "Navigation Radios"),
+        new A300TypedValue(IlsFrequencyKey, "ILS frequency", "Navigation Radios"),
+        new A300TypedValue(IlsCourseKey, "ILS course setting", "Navigation Radios"),
+        new A300TypedValue(Com1StandbyKey, "VHF 1 standby frequency", "VHF Radios"),
+        new A300TypedValue(Com2StandbyKey, "VHF 2 standby frequency", "VHF Radios"),
+        new A300TypedValue(SquawkKey, "Squawk", "Transponder and TCAS"),
+        new A300TypedValue(BaroCaptainKey, "Altimeter setting", "Captain Panel"),
+        new A300TypedValue(BaroFirstOfficerKey, "Altimeter setting", "First Officer Panel"),
+        new A300TypedValue(BaroStandbyKey, "Standby altimeter setting", "Center Panel"),
+        new A300TypedValue(MinimumsKey, "Decision height", "Captain EFIS"),
+    };
+
+    public static readonly IReadOnlySet<string> Keys = All.Select(t => t.Key).ToHashSet(StringComparer.Ordinal);
+
+    private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+
+    /// <summary>The pause between a SPD/MACH switch and the value written after it (50 ms measured enough).</summary>
+    public const int ModeSwitchSettleMs = 300;
+
+    private const string SpeedMachToggle = "1 (>B:AIRLINER_SPDMACH_Set)";
+
+    public const string SpeedError = "100 to 399 knots, or Mach 0.10 to 0.99";
+    public const string HeadingError = "0 to 360 degrees";
+    public const string AltitudeError = "100 to 49,000 feet";
+    public const string VerticalSpeedError = "-6,000 to 6,000 feet per minute";
+    public const string VorError = "108.00 to 117.95 megahertz, in steps of 0.05";
+    public const string IlsError = "108.10 to 111.95 megahertz, in steps of 0.05";
+    public const string CourseError = "0 to 360 degrees";
+    public const string ComError = "118.000 to 136.990 megahertz";
+    public const string SquawkError = "four digits, each 0 to 7";
+    public const string AltimeterError = "28.20 to 31.30 inches, or 955 to 1060 hectopascals";
+    public const string MinimumsError = "0 to 2,500 feet";
+
+    /// <summary>The plan for a typed value. <paramref name="isMach"/> is the FCU's current speed mode.</summary>
+    public static A300TypedResult Plan(string key, double value, bool isMach)
+    {
+        if (double.IsNaN(value) || double.IsInfinity(value))
+            return A300TypedResult.Fail(ErrorFor(key));
+        return key switch
+        {
+            SpeedKey => Speed(value, isMach),
+            HeadingKey => Heading(value),
+            AltitudeKey => Altitude(value),
+            VerticalSpeedKey => VerticalSpeed(value),
+            Vor1FrequencyKey => NavFrequency(value, "VOR1", "VOR 1", 108.0, VorError),
+            Vor2FrequencyKey => NavFrequency(value, "VOR2", "VOR 2", 108.0, VorError),
+            IlsFrequencyKey => value > 111.95 + 1e-6
+                ? A300TypedResult.Fail(IlsError)
+                : NavFrequency(value, "ILS", "ILS", 108.1, IlsError),
+            Vor1CourseKey => Course(value, c => $"{c} (>K:VOR1_SET)", "VOR 1 course"),
+            Vor2CourseKey => Course(value, c => $"{c} (>K:VOR2_SET)", "VOR 2 course"),
+            IlsCourseKey => Course(value, c => $"{c} (>L:INI_ils_course)", "ILS course"),
+            Com1StandbyKey => ComStandby(value, "COM_STBY_RADIO_SET_HZ", "VHF 1 standby"),
+            Com2StandbyKey => ComStandby(value, "COM2_STBY_RADIO_SET_HZ", "VHF 2 standby"),
+            SquawkKey => Squawk(value),
+            BaroCaptainKey => Altimeter(value, new[] { 1 }, "Captain altimeter"),
+            BaroFirstOfficerKey => Altimeter(value, new[] { 2 }, "First officer altimeter"),
+            BaroStandbyKey => Altimeter(value, new[] { 3 }, "Standby altimeter"),
+            MinimumsKey => Minimums(value),
+            _ => A300TypedResult.Fail("cannot be set from this panel"),
+        };
+    }
+
+    public static string ErrorFor(string key) => key switch
+    {
+        SpeedKey => SpeedError,
+        HeadingKey => HeadingError,
+        AltitudeKey => AltitudeError,
+        VerticalSpeedKey => VerticalSpeedError,
+        Vor1FrequencyKey or Vor2FrequencyKey => VorError,
+        IlsFrequencyKey => IlsError,
+        Vor1CourseKey or Vor2CourseKey or IlsCourseKey => CourseError,
+        Com1StandbyKey or Com2StandbyKey => ComError,
+        SquawkKey => SquawkError,
+        MinimumsKey => MinimumsError,
+        _ => AltimeterError,
+    };
+
+    /// <summary>Knots (100-399) or Mach (0.10-0.99), whichever the number is; a value in the other
+    /// unit from the FCU's current mode presses SPD/MACH first, in the same string.</summary>
+    public static A300TypedResult Speed(double value, bool isMach)
+    {
+        bool mach = value < 1.0;
+        if (mach)
+        {
+            double m = Math.Round(value, 2);
+            if (m < 0.10 - 1e-9 || m > 0.99 + 1e-9)
+                return A300TypedResult.Fail(SpeedError);
+            return new($"{m.ToString("0.00", Inv)} (>L:INI_Airspeed_Dial)", $"Mach {m.ToString("0.00", Inv)}", null,
+                isMach ? null : SpeedMachToggle);
+        }
+        double kt = Math.Round(value);
+        if (kt < 100 || kt > 399)
+            return A300TypedResult.Fail(SpeedError);
+        return new($"{kt.ToString("0", Inv)} (>L:INI_Airspeed_Dial)", $"Speed {kt.ToString("0", Inv)} knots", null,
+            isMach ? SpeedMachToggle : null);
+    }
+
+    public static A300TypedResult Heading(double value)
+    {
+        double h = Math.Round(value);
+        if (h < 0 || h > 360)
+            return A300TypedResult.Fail(HeadingError);
+        if (h == 360)
+            h = 0;
+        return new($"{h.ToString("0", Inv)} (>L:INI_HEADING_DIAL)", $"Heading {h.ToString("000", Inv)}", null);
+    }
+
+    public static A300TypedResult Altitude(double value)
+    {
+        double a = Math.Round(value / 100) * 100;
+        if (a < 100 || a > 49000)
+            return A300TypedResult.Fail(AltitudeError);
+        return new($"{a.ToString("0", Inv)} (>L:INI_Altitude_Dial)", $"Altitude {a.ToString("#,0", Inv)} feet", null);
+    }
+
+    public static A300TypedResult VerticalSpeed(double value)
+    {
+        double v = Math.Round(value / 100) * 100;
+        if (v < -6000 || v > 6000)
+            return A300TypedResult.Fail(VerticalSpeedError);
+        if (v == 0)
+            v = 0;   // never "-0"
+        return new($"{v.ToString("0", Inv)} (>L:INI_vvi_dial)", $"Vertical speed {v.ToString("#,0", Inv)} feet per minute", null);
+    }
+
+    /// <summary>A 50 kHz-spaced NAV frequency, written as its megahertz and kilohertz parts.</summary>
+    public static A300TypedResult NavFrequency(double value, string radio, string spoken, double min, string error)
+    {
+        int hundredths = (int)Math.Round(value * 100);
+        if (hundredths < (int)Math.Round(min * 100) || hundredths > 11795 || hundredths % 5 != 0)
+            return A300TypedResult.Fail(error);
+        int mhz = hundredths / 100;
+        int khz = hundredths % 100;
+        string text = $"{mhz.ToString(Inv)}.{khz.ToString("00", Inv)}";
+        return new($"{mhz.ToString(Inv)} (>L:INI_{radio}_FREQUENCY_MHZ) {khz.ToString(Inv)} (>L:INI_{radio}_FREQUENCY_KHZ)",
+            $"{spoken} {text}", null);
+    }
+
+    public static A300TypedResult Course(double value, Func<string, string> rpn, string spoken)
+    {
+        double c = Math.Round(value);
+        if (c < 0 || c > 360)
+            return A300TypedResult.Fail(CourseError);
+        if (c == 360)
+            c = 0;
+        return new(rpn(c.ToString("0", Inv)), $"{spoken} {c.ToString("000", Inv)}", null);
+    }
+
+    public static A300TypedResult ComStandby(double value, string evt, string spoken)
+    {
+        long khz = (long)Math.Round(value * 1000);
+        if (khz < 118000 || khz > 136990)
+            return A300TypedResult.Fail(ComError);
+        long hz = khz * 1000;
+        return new($"{hz.ToString(Inv)} (>K:{evt})", $"{spoken} {(khz / 1000.0).ToString("0.000", Inv)}", null);
+    }
+
+    /// <summary>Four octal digits, as the panel's typed box hands them over (4521 for "4521", 22 for "0022").</summary>
+    public static A300TypedResult Squawk(double value)
+    {
+        if (value < 0 || value > 7777 || value != Math.Floor(value))
+            return A300TypedResult.Fail(SquawkError);
+        string digits = ((int)value).ToString("0000", Inv);
+        if (digits.Any(d => d > '7'))
+            return A300TypedResult.Fail(SquawkError);
+        int bcd = Convert.ToInt32(digits, 16);
+        return new($"{bcd.ToString(Inv)} (>K:XPNDR_SET)", $"Squawk {digits}", null);
+    }
+
+    /// <summary>Inches (28.20-31.30) or hectopascals (955-1060), whichever the number is.</summary>
+    public static double? Millibars(double value)
+    {
+        if (value >= 28.2 - 1e-9 && value <= 31.3 + 1e-9)
+            return value / 0.0295299830714;
+        if (value >= 955 && value <= 1060)
+            return value;
+        return null;
+    }
+
+    public static A300TypedResult Altimeter(double value, IReadOnlyList<int> indexes, string spoken)
+    {
+        if (Millibars(value) is not double mb)
+            return A300TypedResult.Fail(AltimeterError);
+        string units = Math.Round(mb * 16).ToString("0", Inv);
+        string rpn = string.Join(" ", indexes.Select(i => $"{i.ToString(Inv)} {units} (>K:2:KOHLSMAN_SET)"));
+        return new(rpn, $"{spoken} {A300Readouts.Altimeter(mb)}", null);
+    }
+
+    /// <summary>
+    /// The decision height, written to BOTH pilots' minimums (<c>INI_MINIMUMS_PILOT</c>,
+    /// <c>INI_MINIMUMS_FO</c>): they are the stored values the PFD and the aircraft's "minimums"
+    /// call-out read, and the DH knob moves them only while DH is selected on its EFIS panel (it steps
+    /// the flight path angle otherwise). A direct write held, and nothing rewrote it (measured
+    /// 2026-10-04). Whole feet; 0 clears it.
+    /// </summary>
+    public static A300TypedResult Minimums(double value)
+    {
+        double ft = Math.Round(value);
+        if (ft < 0 || ft > 2500)
+            return A300TypedResult.Fail(MinimumsError);
+        string text = ft.ToString("0", Inv);
+        return new($"{text} (>L:INI_MINIMUMS_PILOT) {text} (>L:INI_MINIMUMS_FO)",
+            ft == 0 ? "Decision height not set" : $"Decision height {ft.ToString("#,0", Inv)} feet", null);
+    }
+
+    /// <summary>Ctrl+B: one entry sets all three altimeters.</summary>
+    public static A300TypedResult AllAltimeters(double value) => Altimeter(value, new[] { 1, 2, 3 }, "Altimeters");
+}
