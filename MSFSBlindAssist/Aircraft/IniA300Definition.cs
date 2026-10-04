@@ -185,6 +185,7 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
         }
 
         RegisterFmaSources(vars, batchNames);
+        RegisterTakeoffCallouts(vars, batchNames);
 
         foreach (var readout in _readouts.Values)
         {

@@ -31,6 +31,9 @@ public partial class IniA300Definition
 
     public override bool ProcessSimVarUpdate(string varName, double value, ScreenReaderAnnouncer announcer)
     {
+        // First: the take-off call-outs peek SIM_ON_GROUND, which the base may consume.
+        if (TryHandleTakeoffCallouts(varName, value, announcer))
+            return true;
         if (base.ProcessSimVarUpdate(varName, value, announcer))
             return true;
 
@@ -89,6 +92,7 @@ public partial class IniA300Definition
         _tracker.Reset();
         _fmaTracker.Reset();
         _altitudeWindow.Reset();
+        _takeoffCallouts.Reset();
         _commanded.Clear();
         _seedGate.Arm(KnownSeedValues());
     }
