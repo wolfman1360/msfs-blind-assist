@@ -75,13 +75,13 @@ public partial class IniA300Definition
         switch (action)
         {
             case HotkeyAction.ReadSpeedVLS:
-                _ = SpeakAsync(sim, announcer, "VLS", v => $"VLS {A300PfdText.Speed(v[0])}", A300Readouts.VlsKey);
+                _ = SpeakAsync(sim, announcer, "VLS", v => $"VLS {A300DisplayText.Speed(v[0])}", A300Readouts.VlsKey);
                 return true;
             case HotkeyAction.ReadSpeedVS:
-                _ = SpeakAsync(sim, announcer, "VS", v => $"VS {A300PfdText.Speed(v[0])}", A300Readouts.VsSpeedKey);
+                _ = SpeakAsync(sim, announcer, "VS", v => $"VS {A300DisplayText.Speed(v[0])}", A300Readouts.VsSpeedKey);
                 return true;
             case HotkeyAction.ReadSpeedVFE:
-                _ = SpeakAsync(sim, announcer, "VMAX", v => $"VMAX {A300PfdText.Speed(v[0])}", A300Readouts.VmaxKey);
+                _ = SpeakAsync(sim, announcer, "VMAX", v => $"VMAX {A300DisplayText.Speed(v[0])}", A300Readouts.VmaxKey);
                 return true;
             case HotkeyAction.ReadSpeedGD:
                 SpeakFlapSpeed(sim, announcer, "Green dot", A300Readouts.GreenDotKey);
@@ -98,6 +98,6 @@ public partial class IniA300Definition
 
     private void SpeakFlapSpeed(SimConnectManager sim, ScreenReaderAnnouncer announcer, string name, string key) =>
         _ = SpeakAsync(sim, announcer, name,
-            v => $"{name} {A300PfdText.FlapSpeed(A300Readouts.FlapSpeeds[key], v[0], v[1])}",
+            v => $"{name} {A300DisplayText.FlapSpeed(A300Readouts.FlapSpeeds[key], v[0], v[1])}",
             key, A300Levers.FlapsKey);
 }

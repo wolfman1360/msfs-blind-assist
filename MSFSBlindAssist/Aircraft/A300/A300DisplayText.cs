@@ -6,10 +6,10 @@ namespace MSFSBlindAssist.Aircraft.A300;
 public enum A300PfdSpeed { GreenDot, S, F }
 
 /// <summary>
-/// How the PFD status box reads its values. Every number goes through the invariant culture, so a
+/// How the display status boxes read their values. Every number goes through the invariant culture, so a
 /// comma-decimal Windows locale never turns "5.0 degrees up" into "5,0 degrees up". Pure.
 /// </summary>
-public static class A300PfdText
+public static class A300DisplayText
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
@@ -74,4 +74,34 @@ public static class A300PfdText
 
     /// <summary>Whole feet with a thousands separator.</summary>
     public static string Feet(double feet) => $"{Math.Round(feet).ToString("#,0", Inv)} feet";
+
+    /// <summary>The distance to the next waypoint in tenths of a mile; zero is no waypoint.</summary>
+    public static string WaypointDistance(double nauticalMiles) =>
+        nauticalMiles > 0 ? $"{nauticalMiles.ToString("0.0", Inv)} nautical miles" : "not available";
+
+    /// <summary>A DME distance in tenths of a mile; zero is no DME received.</summary>
+    public static string Dme(double nauticalMiles) =>
+        nauticalMiles > 0 ? $"{nauticalMiles.ToString("0.0", Inv)} nautical miles" : "no DME";
+
+    /// <summary>A VOR or ILS frequency.</summary>
+    public static string Megahertz(double megahertz) =>
+        megahertz > 0 ? $"{megahertz.ToString("0.00", Inv)} megahertz" : "not tuned";
+
+    /// <summary>An ADF frequency.</summary>
+    public static string Kilohertz(double kilohertz) =>
+        kilohertz > 0 ? $"{Math.Round(kilohertz).ToString("0", Inv)} kilohertz" : "not tuned";
+
+    /// <summary>The wind's direction (the sim gives it true), as three digits.</summary>
+    public static string WindDirection(double degrees) =>
+        $"{(((int)Math.Round(degrees) % 360 + 360) % 360).ToString("000", Inv)} true";
+
+    /// <summary>Whether a receiver has its signal.</summary>
+    public static string Received(double flag) => flag >= 0.5 ? "received" : "not received";
+
+    /// <summary>Whole knots, zero included (a ground speed or airspeed, never "not available").</summary>
+    public static string Knots(double knots)
+    {
+        string text = Math.Round(knots).ToString("0", Inv);
+        return $"{(text == "-0" ? "0" : text)} knots";
+    }
 }

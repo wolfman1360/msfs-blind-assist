@@ -24,10 +24,23 @@ public static class A300DisplayPanels
             A300Readouts.VlsKey, A300Readouts.VmaxKey, A300Readouts.GreenDotKey, A300Readouts.SSpeedKey, A300Readouts.FSpeedKey,
             A300Readouts.VsSpeedKey, A300Readouts.MinimumsKey,
         },
+        ["ND"] = new[]
+        {
+            "A300_EFIS_MODE_CPT", "A300_EFIS_RANGE_CPT", A300Readouts.WaypointDistanceKey,
+            "GROUND_VELOCITY", A300Readouts.TrueAirspeedKey, A300Readouts.WindDirectionKey, A300Readouts.WindSpeedKey,
+            A300Readouts.Vor1FrequencyKey, A300Readouts.Dme1Key, A300Readouts.Vor2FrequencyKey, A300Readouts.Dme2Key,
+            A300Readouts.IlsFrequencyKey, A300Readouts.LocalizerKey, A300Readouts.GlideslopeKey,
+            A300Readouts.Adf1FrequencyKey, A300Readouts.Adf2FrequencyKey,
+        },
+        ["Standby Instruments"] = new[]
+        {
+            "PLANE_PITCH_DEGREES", "PLANE_BANK_DEGREES", A300Readouts.PfdAirspeedKey,
+            A300Readouts.StandbyAltitudeKey, "A300_RO_BARO_STBY", A300Readouts.StandbyCompassKey,
+        },
     };
 
     /// <summary>The panels, in the order the section lists them.</summary>
-    public static readonly IReadOnlyList<string> Panels = new[] { "PFD" };
+    public static readonly IReadOnlyList<string> Panels = new[] { "PFD", "ND", "Standby Instruments" };
 
     public static bool IsDisplayPanel(string panel) => Lines.ContainsKey(panel);
 }

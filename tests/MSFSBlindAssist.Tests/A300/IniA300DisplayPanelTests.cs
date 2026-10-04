@@ -127,7 +127,7 @@ public class IniA300DisplayPanelTests
     {
         _cache[A300Levers.FlapsKey] = 0;
         Assert.Equal("187 knots", Shown(A300Readouts.GreenDotKey, 187.4));
-        Assert.Equal(A300PfdText.NotShown, Shown(A300Readouts.FSpeedKey, 137.2));
+        Assert.Equal(A300DisplayText.NotShown, Shown(A300Readouts.FSpeedKey, 137.2));
         _cache[A300Levers.FlapsKey] = 2;
         Assert.Equal("137 knots", Shown(A300Readouts.FSpeedKey, 137.2));
     }
@@ -142,5 +142,56 @@ public class IniA300DisplayPanelTests
         Assert.Equal("1,520 feet per minute up", Shown(A300Readouts.PfdVerticalSpeedKey, 1520));
         Assert.Equal("180 knots", Shown(A300Readouts.VlsKey, 179.8));
         Assert.Equal("not set", Shown(A300Readouts.MinimumsKey, 0));
+    }
+
+    [Fact]
+    public void The_nd_box_follows_the_pfd_and_reads_like_the_a320s_without_the_waypoint_name()
+    {
+        Assert.Equal(new[] { "PFD", "ND" }, _def.GetPanelStructure()["Displays"].Take(2));
+        Assert.Equal(new[]
+        {
+            "A300_EFIS_MODE_CPT", "A300_EFIS_RANGE_CPT", A300Readouts.WaypointDistanceKey,
+            "GROUND_VELOCITY", A300Readouts.TrueAirspeedKey, A300Readouts.WindDirectionKey, A300Readouts.WindSpeedKey,
+            A300Readouts.Vor1FrequencyKey, A300Readouts.Dme1Key, A300Readouts.Vor2FrequencyKey, A300Readouts.Dme2Key,
+            A300Readouts.IlsFrequencyKey, A300Readouts.LocalizerKey, A300Readouts.GlideslopeKey,
+            A300Readouts.Adf1FrequencyKey, A300Readouts.Adf2FrequencyKey,
+        }, _def.GetPanelDisplayVariables()["ND"]);
+    }
+
+    [Fact]
+    public void The_nd_lines_read_in_words()
+    {
+        Assert.Equal("12.3 nautical miles", Shown(A300Readouts.WaypointDistanceKey, 12.34));
+        Assert.Equal("250 knots", Shown("GROUND_VELOCITY", 250.2));
+        Assert.Equal("089 true", Shown(A300Readouts.WindDirectionKey, 88.6));
+        Assert.Equal("116.55 megahertz", Shown(A300Readouts.Vor1FrequencyKey, 116.55));
+        Assert.Equal("no DME", Shown(A300Readouts.Dme2Key, 0));
+        Assert.Equal("received", Shown(A300Readouts.LocalizerKey, 1));
+        Assert.Equal("890 kilohertz", Shown(A300Readouts.Adf1FrequencyKey, 890));
+    }
+
+    [Fact]
+    public void The_ils_receiver_is_nav_3()
+    {
+        var vars = _def.GetVariables();
+        Assert.Equal("NAV ACTIVE FREQUENCY:3", vars[A300Readouts.IlsFrequencyKey].Name);
+        Assert.Equal("NAV HAS LOCALIZER:3", vars[A300Readouts.LocalizerKey].Name);
+        Assert.Equal("NAV HAS GLIDE SLOPE:3", vars[A300Readouts.GlideslopeKey].Name);
+    }
+
+    [Fact]
+    public void The_standby_box_follows_the_nd_and_reads_the_standby_altimeter()
+    {
+        Assert.Equal(new[] { "PFD", "ND", "Standby Instruments" }, _def.GetPanelStructure()["Displays"].Take(3));
+        Assert.Equal(new[]
+        {
+            "PLANE_PITCH_DEGREES", "PLANE_BANK_DEGREES", A300Readouts.PfdAirspeedKey,
+            A300Readouts.StandbyAltitudeKey, "A300_RO_BARO_STBY", A300Readouts.StandbyCompassKey,
+        }, _def.GetPanelDisplayVariables()["Standby Instruments"]);
+        // The standby altimeter has its own baro setting, so its altitude is INDICATED ALTITUDE:3
+        // (measured 2026-10-03: baro 3 at 1020 moved it while altimeter 1 stayed put).
+        Assert.Equal("INDICATED ALTITUDE:3", _def.GetVariables()[A300Readouts.StandbyAltitudeKey].Name);
+        Assert.Equal("5,120 feet", Shown(A300Readouts.StandbyAltitudeKey, 5120));
+        Assert.Equal("115", Shown(A300Readouts.StandbyCompassKey, 115.3));
     }
 }

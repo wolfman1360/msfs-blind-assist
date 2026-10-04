@@ -36,6 +36,26 @@ public static class A300Readouts
     public const string VsSpeedKey = "A300_RO_VS_SPEED";
     public const string MinimumsKey = "A300_RO_MINIMUMS";
 
+    // The ND status box (A300DisplayPanels). VOR 1 and 2 are NAV 1 and 2, and the ILS is NAV 3
+    // (measured 2026-10-03: the radio panel's ILS frequency shows on NAV 3).
+    public const string WaypointDistanceKey = "A300_RO_ND_WPT_DIST";
+    public const string TrueAirspeedKey = "A300_RO_ND_TAS";
+    public const string WindDirectionKey = "A300_RO_ND_WIND_DIR";
+    public const string WindSpeedKey = "A300_RO_ND_WIND_SPEED";
+    public const string Vor1FrequencyKey = "A300_RO_ND_VOR1_FREQ";
+    public const string Dme1Key = "A300_RO_ND_DME1";
+    public const string Vor2FrequencyKey = "A300_RO_ND_VOR2_FREQ";
+    public const string Dme2Key = "A300_RO_ND_DME2";
+    public const string IlsFrequencyKey = "A300_RO_ND_ILS_FREQ";
+    public const string LocalizerKey = "A300_RO_ND_LOC";
+    public const string GlideslopeKey = "A300_RO_ND_GS";
+    public const string Adf1FrequencyKey = "A300_RO_ND_ADF1_FREQ";
+    public const string Adf2FrequencyKey = "A300_RO_ND_ADF2_FREQ";
+
+    // The standby instruments box.
+    public const string StandbyAltitudeKey = "A300_RO_STBY_ALTITUDE";
+    public const string StandbyCompassKey = "A300_RO_STBY_COMPASS";
+
     public static readonly IReadOnlyList<A300Readout> All = new[]
     {
         new A300Readout("A300_RO_FCU_SPEED", "Speed window", "FCU", "INI_Airspeed_Dial", false, "number",
@@ -72,15 +92,35 @@ public static class A300Readouts
         new A300Readout(PfdHeadingKey, "Heading", "PFD", "PLANE HEADING DEGREES MAGNETIC", true, "degrees", Heading),
         new A300Readout(PfdAirspeedKey, "Indicated airspeed", "PFD", "AIRSPEED INDICATED", true, "knots",
             v => $"{Whole(v)} knots"),
-        new A300Readout(PfdVerticalSpeedKey, "Vertical speed", "PFD", "VERTICAL SPEED", true, "feet per minute", A300PfdText.VerticalSpeed),
-        new A300Readout(PfdRadioAltitudeKey, "Radio altitude", "PFD", "RADIO HEIGHT", true, "feet", A300PfdText.Feet),
-        new A300Readout(VlsKey, "VLS", "PFD", "INI_VLS_SPEED", false, "number", A300PfdText.Speed),
-        new A300Readout(VmaxKey, "VMAX", "PFD", "INI_max_speed", false, "number", A300PfdText.Speed),
-        new A300Readout(GreenDotKey, "Green dot", "PFD", "FMGEC_GD_SPD", false, "number", A300PfdText.Speed),
-        new A300Readout(SSpeedKey, "S speed", "PFD", "FCPC_S_SPEED", false, "number", A300PfdText.Speed),
-        new A300Readout(FSpeedKey, "F speed", "PFD", "FCPC_F_SPEED", false, "number", A300PfdText.Speed),
-        new A300Readout(VsSpeedKey, "VS", "PFD", "INI_VS_SPEED", false, "number", A300PfdText.Speed),
-        new A300Readout(MinimumsKey, "Minimums", "PFD", "INI_MINIMUMS_PILOT", false, "number", A300PfdText.Minimums),
+        new A300Readout(PfdVerticalSpeedKey, "Vertical speed", "PFD", "VERTICAL SPEED", true, "feet per minute", A300DisplayText.VerticalSpeed),
+        new A300Readout(PfdRadioAltitudeKey, "Radio altitude", "PFD", "RADIO HEIGHT", true, "feet", A300DisplayText.Feet),
+        new A300Readout(VlsKey, "VLS", "PFD", "INI_VLS_SPEED", false, "number", A300DisplayText.Speed),
+        new A300Readout(VmaxKey, "VMAX", "PFD", "INI_max_speed", false, "number", A300DisplayText.Speed),
+        new A300Readout(GreenDotKey, "Green dot", "PFD", "FMGEC_GD_SPD", false, "number", A300DisplayText.Speed),
+        new A300Readout(SSpeedKey, "S speed", "PFD", "FCPC_S_SPEED", false, "number", A300DisplayText.Speed),
+        new A300Readout(FSpeedKey, "F speed", "PFD", "FCPC_F_SPEED", false, "number", A300DisplayText.Speed),
+        new A300Readout(VsSpeedKey, "VS", "PFD", "INI_VS_SPEED", false, "number", A300DisplayText.Speed),
+        new A300Readout(MinimumsKey, "Minimums", "PFD", "INI_MINIMUMS_PILOT", false, "number", A300DisplayText.Minimums),
+
+        // The ND. The waypoint's name and bearing are not aircraft variables (the ND computes them
+        // from its flight plan); the MCDU's F-PLN page reads them.
+        new A300Readout(WaypointDistanceKey, "Distance to next waypoint", "ND", "FMGS_DIST", false, "number", A300DisplayText.WaypointDistance),
+        new A300Readout(TrueAirspeedKey, "True airspeed", "ND", "AIRSPEED TRUE", true, "knots", A300DisplayText.Knots),
+        new A300Readout(WindDirectionKey, "Wind direction", "ND", "AMBIENT WIND DIRECTION", true, "degrees", A300DisplayText.WindDirection),
+        new A300Readout(WindSpeedKey, "Wind speed", "ND", "AMBIENT WIND VELOCITY", true, "knots", A300DisplayText.Knots),
+        new A300Readout(Vor1FrequencyKey, "VOR 1", "ND", "NAV ACTIVE FREQUENCY:1", true, "MHz", A300DisplayText.Megahertz),
+        new A300Readout(Dme1Key, "DME 1", "ND", "NAV DME:1", true, "nautical miles", A300DisplayText.Dme),
+        new A300Readout(Vor2FrequencyKey, "VOR 2", "ND", "NAV ACTIVE FREQUENCY:2", true, "MHz", A300DisplayText.Megahertz),
+        new A300Readout(Dme2Key, "DME 2", "ND", "NAV DME:2", true, "nautical miles", A300DisplayText.Dme),
+        new A300Readout(IlsFrequencyKey, "ILS", "ND", "NAV ACTIVE FREQUENCY:3", true, "MHz", A300DisplayText.Megahertz),
+        new A300Readout(LocalizerKey, "Localizer", "ND", "NAV HAS LOCALIZER:3", true, "Bool", A300DisplayText.Received),
+        new A300Readout(GlideslopeKey, "Glideslope", "ND", "NAV HAS GLIDE SLOPE:3", true, "Bool", A300DisplayText.Received),
+        new A300Readout(Adf1FrequencyKey, "ADF 1", "ND", "ADF ACTIVE FREQUENCY:1", true, "KHz", A300DisplayText.Kilohertz),
+        new A300Readout(Adf2FrequencyKey, "ADF 2", "ND", "ADF ACTIVE FREQUENCY:2", true, "KHz", A300DisplayText.Kilohertz),
+
+        // The standby instruments: the standby altimeter has its own baro setting (altimeter 3).
+        new A300Readout(StandbyAltitudeKey, "Standby altitude", "Standby Instruments", "INDICATED ALTITUDE:3", true, "feet", A300DisplayText.Feet),
+        new A300Readout(StandbyCompassKey, "Standby compass", "Standby Instruments", "WISKEY COMPASS INDICATION DEGREES", true, "degrees", Heading),
     };
 
     /// <summary>The three speeds the tape shows only at some flap settings.</summary>

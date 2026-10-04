@@ -122,14 +122,16 @@ public partial class IniA300Definition
             case A300FmaSources.ArmedKey:
                 return FmaLine(key);
             case "PLANE_PITCH_DEGREES":
-                return A300PfdText.Pitch(value);
+                return A300DisplayText.Pitch(value);
             case "PLANE_BANK_DEGREES":
-                return A300PfdText.Bank(value);
+                return A300DisplayText.Bank(value);
             case "INDICATED_ALTITUDE":
-                return A300PfdText.Feet(value);
+                return A300DisplayText.Feet(value);
+            case "GROUND_VELOCITY":
+                return A300DisplayText.Knots(value);
         }
         if (A300Readouts.FlapSpeeds.TryGetValue(key, out var speed))
-            return A300PfdText.FlapSpeed(speed, value, _sim is { } sim ? Cached(sim, A300Levers.FlapsKey) : null);
+            return A300DisplayText.FlapSpeed(speed, value, _sim is { } sim ? Cached(sim, A300Levers.FlapsKey) : null);
         return null;
     }
 
