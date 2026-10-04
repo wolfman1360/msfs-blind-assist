@@ -13,6 +13,7 @@ namespace MSFSBlindAssist.Aircraft;
 public partial class IniA300Definition
 {
     private readonly A300FmaTracker _fmaTracker = new();
+    private readonly A300EngagementTracker _engagementTracker = new();
 
     /// <summary>Whether a Ctrl+M row is unticked; tests replace it. The FMA is spoken from the batch-end
     /// callback, OUTSIDE MainForm's mute wrap, so it asks for itself.</summary>
@@ -48,6 +49,8 @@ public partial class IniA300Definition
     /// dispatching, so a mode change that moves several variables at once (a thrust and a pitch mode
     /// together, an armed mode becoming active) is read complete. The A300 waits on this every period
     /// rather than only while something is held: every FMA delivery is held until its batch ends.
+    /// The autopilot and autothrottle engagement (<see cref="A300EngagementTracker"/>) is read from the
+    /// same sample and spoken first; a switch MSFSBA itself just commanded is the pilot's own pick.
     /// </summary>
     public override string? DeferredFlushWatchVariable => A300FmaSources.PitchModeKey;
 
@@ -56,14 +59,24 @@ public partial class IniA300Definition
         base.OnDeferredFlushBatchDelivered(announcer);
         if (_disposed || _sim is not { } sim)
             return;
-        var reading = A300Fma.Read(A300FmaSources.Compose(key => Cached(sim, key)));
+        var inputs = A300FmaSources.Compose(key => Cached(sim, key));
+        var reading = A300Fma.Read(inputs);
         var callouts = _fmaTracker.Observe(reading);
+        long now = Clock();
+        var engagement = _engagementTracker.Observe(
+            new A300Engagement(reading.Autopilot, inputs.AtMasterSwitch1 || inputs.AtMasterSwitch2),
+            OwnPick("A300_AP_SWITCH_1", inputs.Ap1, now) || OwnPick("A300_AP_SWITCH_2", inputs.Ap2, now),
+            OwnPick("A300_ATS_1", inputs.AtMasterSwitch1, now) || OwnPick("A300_ATS_2", inputs.AtMasterSwitch2, now));
         if (_seedGate.Armed)
             return;   // a flight load is still settling: the modes it shows are not changes
-        foreach (var callout in callouts)
+        foreach (var callout in engagement.Concat(callouts))
             if (!IsMuted(A300FmaSources.MuteKeyFor(callout.Column)))
                 announcer.Announce(callout.Phrase);
     }
+
+    /// <summary>Whether the switch is where MSFSBA just commanded it (<see cref="A300CommandedState"/>).</summary>
+    private bool OwnPick(string key, bool isOn, long nowMs) =>
+        _commanded.Resolve(key, null, nowMs) is double commanded && (commanded >= 0.5) == isOn;
 
     /// <summary>
     /// The speed-tape keys, as on the A320s: VLS, VS, the maximum speed (VMAX, on the A320's VFE

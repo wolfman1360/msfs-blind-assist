@@ -1,7 +1,8 @@
 namespace MSFSBlindAssist.Aircraft.A300;
 
-/// <summary>The FMA column a callout comes from; each has its own Ctrl+M row.</summary>
-public enum A300FmaColumn { Thrust, Pitch, Roll, Combined, Armed }
+/// <summary>The FMA column a callout comes from (or the engagement it reports,
+/// <see cref="A300EngagementTracker"/>); each has its own Ctrl+M row.</summary>
+public enum A300FmaColumn { Thrust, Pitch, Roll, Combined, Armed, Autopilot, Autothrottle }
 
 /// <summary>One thing to say about the FMA.</summary>
 public readonly record struct A300FmaCallout(A300FmaColumn Column, string Phrase);

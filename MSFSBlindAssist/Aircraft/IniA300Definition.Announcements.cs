@@ -111,6 +111,7 @@ public partial class IniA300Definition
         base.OnSimContextReset();
         _tracker.Reset();
         _fmaTracker.Reset();
+        _engagementTracker.Reset();
         _altitudeWindow.Reset();
         _takeoffCallouts.Reset();
         _pendingLamps.Clear();

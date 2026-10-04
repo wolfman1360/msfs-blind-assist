@@ -1,6 +1,6 @@
 namespace MSFSBlindAssist.Aircraft.A300;
 
-/// <summary>One variable the FMA is read from. <paramref name="MuteName"/> is set on the five that
+/// <summary>One variable the FMA is read from. <paramref name="MuteName"/> is set on the seven that
 /// carry a column's Ctrl+M row.</summary>
 public sealed record A300FmaSource(string Key, string Var, string? MuteName);
 
@@ -19,6 +19,12 @@ public static class A300FmaSources
     public const string RollModeKey = "A300_FMA_ROLL_MODE";
     public const string CommonModeKey = "A300_FMA_COMMON_MODE";
     public const string ArmedKey = "A300_FMA_PITCH_ARMED";
+
+    /// <summary>The Ctrl+M rows of the engagement call-outs (<see cref="A300EngagementTracker"/>). Their
+    /// variables are the aircraft's own disconnect flags; nothing reads their values, they only carry
+    /// the rows, and they ride the FMA's batch like every source.</summary>
+    public const string AutopilotMuteKey = "A300_FMA_AP_DISCONNECT";
+    public const string AutothrottleMuteKey = "A300_FMA_AT_DISCONNECT";
 
     public static readonly IReadOnlyList<A300FmaSource> All = new[]
     {
@@ -47,12 +53,14 @@ public static class A300FmaSources
         new A300FmaSource("A300_PITCH_TRIM_2", "INI_pitch_trim2", null),
         new A300FmaSource("A300_FMA_FD_SOURCE_CPT", "INI_capt_switch_fd_fo1", null),
         new A300FmaSource("A300_FMA_ESS_BUS_2_OFF", "INI_ac_essential_bus2_off", null),
+        new A300FmaSource(AutopilotMuteKey, "INI_AUTOPILOT_DISCONNECT", "Autopilot engagement"),
+        new A300FmaSource(AutothrottleMuteKey, "INI_AUTOTHROTTLE_DISCONNECTED", "Autothrottle engagement"),
     };
 
     /// <summary>Every source key.</summary>
     public static readonly IReadOnlySet<string> Keys = All.Select(s => s.Key).ToHashSet(StringComparer.Ordinal);
 
-    /// <summary>The five keys that carry a column's Ctrl+M row.</summary>
+    /// <summary>The seven keys that carry a column's Ctrl+M row.</summary>
     public static readonly IReadOnlySet<string> MuteKeys =
         All.Where(s => s.MuteName != null).Select(s => s.Key).ToHashSet(StringComparer.Ordinal);
 
@@ -63,6 +71,8 @@ public static class A300FmaSources
         A300FmaColumn.Pitch => PitchModeKey,
         A300FmaColumn.Roll => RollModeKey,
         A300FmaColumn.Combined => CommonModeKey,
+        A300FmaColumn.Autopilot => AutopilotMuteKey,
+        A300FmaColumn.Autothrottle => AutothrottleMuteKey,
         _ => ArmedKey,
     };
 
