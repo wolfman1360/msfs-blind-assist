@@ -16,7 +16,9 @@ A300's switch panels: the overhead, the glareshield, the main instrument panel, 
 and the cockpit's back wall, both MCDUs as text (Shift+M), the FCU, autopilot and radios with
 typed values, the tablet (Shift+T), and the screens: the flight mode annunciator spoken as it
 changes, and status boxes for the PFD, ND, engine instruments, standby instruments and nine
-ECAM system pages. Everything is read from the aircraft's own values, not from pictures.
+ECAM system pages. It also speaks what you need while flying: the take-off call-outs (V1,
+Rotate, V2), the fault and warning lights, autopilot and autothrottle disconnects, and the FCU
+altitude window. Everything is read from the aircraft's own values, not from pictures.
 
 Not included: the upper ECAM's warnings and memos, and the ND's waypoint name and bearing. The
 A300 keeps these inside its own display software, not in values the simulator shares, so read
@@ -54,7 +56,10 @@ guard is open, exactly as in the aircraft.
 Status Display (Ctrl+3): the FCU panel shows the four FCU windows; the Captain, First Officer
 and Center panels show the altimeter settings, the flex temperature and the landing elevation;
 the Navigation Radios panel shows the VOR and ILS courses. The Captain Panel also shows the
-master warning and master caution lights.
+master warning and master caution lights. Each panel with fault or warning lights shows them
+too ("Engine 1 generator fault light: On"): Fire, Electrical, Hydraulics, Flight Controls, Air
+Bleed and Air Conditioning, Cabin Pressure, Anti-Ice, Window and Probe Heat, APU, Throttle
+Quadrant, Center Panel, Captain EFIS, Captain Panel, ECAM Control and Cockpit Door.
 
 
 TYPED VALUES - type, then press Set or Enter
@@ -69,9 +74,14 @@ TYPED VALUES - type, then press Set or Enter
   Transponder and TCAS panel: Squawk, four digits each 0 to 7.
   Captain, First Officer and Center panels: the altimeter settings, in inches (29.92) or
   hectopascals (1013).
+  Captain EFIS panel: Decision height, 0 to 2,500 feet (0 clears it). It sets both pilots'
+  minimums, which the PFD box shows and the aircraft's "minimums" call-out uses. You hear
+  "Decision height 200 feet".
 
 The FCU's mode buttons say whether their mode is on: "Heading select: On", "Level change: Off".
-SPD/MACH says "Speed" or "Mach". The FCU panel's status display shows the four windows.
+SPD/MACH says "Speed" or "Mach". The FCU panel's status display shows the four windows. Pressing
+an FCU knob's increase or decrease button reads its window back once it has moved ("Heading
+271", "Altitude 12,100 feet").
 
 
 THE DISPLAYS
@@ -352,9 +362,38 @@ BACKGROUND ANNOUNCEMENTS - Ctrl+M
 The master warning and master caution lights are announced when they come on ("Master
 warning"). Pressing the light to acknowledge it is not spoken back.
 
+Fault and warning lights are announced both ways: "Engine 1 generator fault light off", "Engine 1
+fire handle light on". 58 of them: the fire loops and handles, generators and batteries,
+hydraulic pumps, spoilers, pitch feel, rudder travel limiters, flap and slat systems, packs and
+isolation valves, cabin pressure, anti-ice, window heat, the APU, the engine master switches and
+oil pressure, autoland, GPWS, below glide slope, the MCDU message light, ECAM clear and the
+cockpit door. Lights that change together are read as one sentence, about once a second, so an
+engine start sounds like "3 lights off: Spoiler 7 fault, Spoiler 6 fault, Spoiler 5 fault". The
+annunciator light test does not trigger these announcements.
+
+Take-off: "V1", "Rotate" and "V2" as the airspeed reaches them on the take-off roll. V1 and VR
+come from the MCDU's TAKE OFF page. V2 is the FCU speed, which the A300 crew sets to V2 for
+take-off, so set the FCU speed to V2 before you go: it is called only when it is no more than
+30 knots above VR (with the window left at 250 there is no V2 call). Entering the speeds is not
+spoken; the MCDU shows them.
+
+The autopilot and autothrottle: "Autopilot disconnected", "Autopilot CMD 1" (or CMD 2, Dual),
+"Autothrottle disconnected" and "Autothrottle armed" when something other than MSFS Blind Assist
+changes them - a yoke or hardware button, the instinctive disconnect, the aircraft itself. When
+you switch them with MSFS Blind Assist, only your screen reader or the hotkey's read-back speaks.
+
+The FCU altitude window is announced when it changes and you did not set it from MSFS Blind
+Assist, for example with a hardware knob ("Altitude 12,000 feet"). The heading, speed and
+vertical speed windows are not announced on their own, because the autopilot moves them itself
+(heading sync, managed speed); read them with Shift+H, Shift+S and Shift+V in output mode.
+
 The flaps lever, the ground spoiler arm, the gear lever and the parking brake are announced when
 something other than MSFS Blind Assist moves them - a hardware lever, or the aircraft itself
 ("Flaps 15/15", "Parking brake set"). Changes you make in MSFS Blind Assist are not.
+
+Each of these has its own Ctrl+M row: every light, V1 call-out, Rotate call-out, V2 call-out,
+Autopilot engagement, Autothrottle engagement, Altitude window, and the flight mode annunciator's
+rows.
 
 Ctrl+M opens the monitor manager: type in the search box to narrow the list, use the Show filter
 to see only the muted rows, and untick an item to stop it announcing. Your choices are
