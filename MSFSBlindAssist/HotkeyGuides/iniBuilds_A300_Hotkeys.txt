@@ -151,10 +151,37 @@ an app. Home is the last item on every page. The apps that matter for a flight:
   My Flight            Import from SimBrief, the route, METARs, times, checklist and flight plan
   Ground Equipment     Doors (each says open, moving or closed), slides (armed or disarmed),
                        chocks, covers, stairs, ground power, luggage, pushback, close all doors
-  Weight and Balance   Payload presets, or your own load and fuel, then Apply Load to Aircraft
+  Weight and Balance   The cargo and fuel: see below
   Take Off / Landing   Performance: runway, conditions and configuration, then Calculate
-  Settings             SimBrief user name, MCDU export, IRS align time, weight units and more
+  Settings             SimBrief (your SimBrief Pilot ID: the number on your SimBrief account
+                       page, not your user name), MCDU export, IRS align time, weight units
+                       and more
   Aircraft Maintenance Tires, brakes, oil, hydraulics, slides and the maintenance panels
+
+Weight and Balance has two pages, and the window's title names the one you are on. Each page
+starts with a line saying what its buttons do, then a line saying what is on board now: the
+payload and the fuel, or "fuelling in progress" while the tablet fills the tanks. That line is
+spoken when it changes, so you hear the load arrive after Apply.
+
+  Payload selection    The load buttons, each with its cargo and weight. A load fills in the
+                       three hold weights and opens the loading page. Custom cargo opens the
+                       loading page with the weights as they are; Cargo from SimBrief fills them
+                       from your latest SimBrief plan. Nothing goes on board yet. Unload Cargo
+                       only removes the cargo you can see in the hold: the weight stays on board
+                       until you set the holds to 0 and apply. Loading page goes back to the
+                       loading page once you have chosen a load.
+  Loading              Total cargo, Total fuel and the forward, middle and aft holds. Update
+                       from SimBrief fills in the cargo and fuel from your latest SimBrief plan.
+                       Apply Load to Aircraft puts the cargo and fuel on board. The fuel goes
+                       in at the speed of Maintenance Mode in Settings: Disabled loads it at
+                       once, Fast at about 15 tonnes a minute, and Realistic (the default) at
+                       about 2 tonnes a minute, so a full load can take half an hour. Then the
+                       results: centre of gravity in percent MAC, zero fuel weight, gross
+                       weight, payload and block fuel, in tonnes (or thousands of pounds). Back
+                       to payload selection returns to the loads.
+
+Messages the tablet shows ("Payload Removed", a SimBrief error, "Unable to fuel aircraft when
+engines are running.") are spoken as they appear.
 
 A button whose label changes when you press it (a door, a Take Off setting) says its new label.
 Password fields (Hoppie, SayIntentions) only say whether they are set. The Charts and Enroute Map

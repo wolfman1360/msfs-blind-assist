@@ -28,12 +28,42 @@
     maintenance: 'Aircraft Maintenance', throttlecalibration: 'Throttle Calibration', settings: 'Settings'
   };
 
-  // Icon-only controls, by id.
+  // Icon-only controls, and buttons whose own words read badly, by id.
   A.NAMES = {
     'menu-home-button': 'Home', 'control-box-button': 'Control box', 'toggle-maintenance': 'Maintenance in progress',
     refreshMetar: 'Refresh METAR', pb_left: 'Pushback, turn left', pb_right: 'Pushback, turn right',
-    pb_stop: 'Pushback, stop', pb_aft: 'Pushback, straight back', switcher_page1: 'Back to payload selection'
+    pb_stop: 'Pushback, stop', pb_aft: 'Pushback, straight back',
+    switcher_page1: 'Back to payload selection', switcher_page2: 'Loading page',
+    payload_cargo: 'Custom cargo', payload_cargo_sb: 'Cargo from SimBrief'
   };
+
+  // WEIGHT AND BALANCE. Its two halves slide by 100vw: payload selection (#page1: preset loads)
+  // and loading (#page2: the hold weights, the fuel, Update and Apply, and the results). Read from
+  // the tablet's own code (2026-10-04): a preset fills the three hold weights with a third of its
+  // load each and slides to the loading half; Update from SimBrief fills the holds (a third of the
+  // plan's payload each) and the fuel (the plan's ramp fuel); only Apply Load to Aircraft puts
+  // them on board. The fuel field is the TOTAL fuel to have on board. Unload Cargo only hides the
+  // cargo models (the INI_LOAD_*_SHOW visuals); the weight stays on board.
+  A.WEIGHTS_HALVES = { page1: 'payload selection', page2: 'loading' };
+  A.WEIGHTS_HELP = {
+    page1: 'Choosing a load fills in the hold weights and opens the loading page. Nothing goes on board until you press Apply Load to Aircraft there. ' +
+      'Unload Cargo only removes the cargo you can see in the hold; to take its weight off, set the holds to 0 on the loading page and apply.',
+    page2: 'Update from SimBrief fills in the cargo and fuel from your latest SimBrief plan. Apply Load to Aircraft puts the cargo and fuel on board.'
+  };
+  A.FIELD_NAMES = {
+    weight_fuel: 'Total fuel', weight_freight_fwd: 'Forward hold', weight_freight_mid: 'Middle hold',
+    weight_freight_aft: 'Aft hold', input_pax: 'Passengers'
+  };
+  // The cargo field's label column says LOAD (CARGO on the passenger version).
+  A.FIELD_TITLES = { LOAD: 'Total cargo', CARGO: 'Total cargo' };
+  // The results: read-only boxes, printed in thousands of the tablet's weight unit or in % MAC.
+  A.READOUTS = {
+    output_maczfw: ['Zero fuel weight centre of gravity', 'mac'], output_maccg: ['Gross weight centre of gravity', 'mac'],
+    output_zfw: ['Zero fuel weight', 'weight'], output_tow: ['Gross weight', 'weight'],
+    output_payload: ['Payload', 'weight'], output_blkfuel: ['Block fuel', 'weight']
+  };
+  // A preset's two lines: "31'000Kgs / 68'300Lbs", then its name.
+  A.PRESET_WEIGHT = /^([\d',.]+)\s*kgs?\s*\/\s*([\d',.]+)\s*lbs?$/i;
 
   // My Flight's values, which sit under headings ("METAR", "DEP TIME") or under nothing at all.
   A.VALUE_NAMES = {
@@ -48,6 +78,9 @@
       var cs = window.getComputedStyle(el);
       if (cs.display === 'none' || cs.visibility === 'hidden') return false;
       var r = el.getBoundingClientRect();
+      // Slid off the side: Weight and Balance moves its other half 100vw away, still laid out.
+      var vw = window.innerWidth || 0;
+      if (vw > 0 && r.width > 0 && (r.right <= 0 || r.left >= vw)) return false;
       if (r.width > 0 && r.height > 0) return true;
       // A zero-size container can still hold visible children: the page container is 2048 x 0,
       // its pages being positioned absolutely inside it.
@@ -56,6 +89,12 @@
   };
 
   A.clean = function (s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, ''); };
+  // "31'000" → 31000; 31000 → "31,000" (the tablet's own separator is an apostrophe).
+  A.num = function (s) { return parseFloat(String(s).replace(/[',]/g, '')); };
+  A.thousands = function (n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); };
+  // "000.0" → "0.0", "060.11" → "60.11".
+  A.plainNumber = function (s) { return A.clean(s).replace(/^(-?)0+(?=\d)/, '$1'); };
+  A.sentence = function (s) { s = A.clean(s).toLowerCase(); return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; };
   A.txt = function (el) { return el ? A.clean(el.innerText || el.textContent || '') : ''; };
   A.ownText = function (el) {
     var s = '';
@@ -78,7 +117,8 @@
     if (t === 'BUTTON') return true;
     if (t === 'INPUT' && (el.type === 'button' || el.type === 'submit')) return true;
     if (t === 'IMG' && el.id === 'menu-home-button') return true;
-    if (t === 'DIV' && (el.id === 'control-box-button' || A.hasClass(el, 'is-button') || A.hasClass(el, 'unlock-button'))) return true;
+    if (t === 'DIV' && (el.id === 'control-box-button' || el.id === 'switcher_page1' || el.id === 'switcher_page2' ||
+        A.hasClass(el, 'is-button') || A.hasClass(el, 'unlock-button'))) return true;
     return false;
   };
 
@@ -123,8 +163,49 @@
   };
 
   A.fieldLabel = function (input) {
+    if (A.FIELD_NAMES[input.id]) return A.FIELD_NAMES[input.id];
     var l = A.rowLabel(input) || A.headingBefore(input) || A.NAMES[input.id] || A.idWords(input.id);
-    return l;
+    return A.FIELD_TITLES[l] || l;
+  };
+
+  // The tablet's weight unit, from the unit beside its fuel box ("kg" or "lbs").
+  A.inPounds = function () {
+    var f = document.getElementById('weight_fuel');
+    return !!f && /^lb/i.test(A.unit(f));
+  };
+
+  // A Weight and Balance result in words: "Gross weight: 102.40 tonnes", "... 24.95 percent MAC".
+  A.readout = function (input) {
+    var r = A.READOUTS[input.id];
+    var unit = r[1] === 'mac' ? 'percent MAC' : (A.inPounds() ? 'thousand pounds' : 'tonnes');
+    return r[0] + ': ' + A.plainNumber(input.value) + ' ' + unit;
+  };
+
+  // What is on board now, from the simulator: the payload (stations 3 to 8; 1 and 2 are the
+  // pilots) and the fuel to the nearest hundred, so an APU's burn does not change the line every
+  // poll. While the tablet fuels the aircraft (L:INI_IS_REFUELING) the fuel says so instead of a
+  // number that moves every second; the line then changes once, when fuelling ends. '' when the
+  // simulator cannot be read.
+  A.onBoardLine = function () {
+    try {
+      if (typeof SimVar === 'undefined' || !SimVar.GetSimVarValue) return '';
+      var unit = A.inPounds() ? 'pounds' : 'kilograms';
+      var payload = 0;
+      for (var st = 3; st <= 8; st++) payload += +SimVar.GetSimVarValue('PAYLOAD STATION WEIGHT:' + st, unit) || 0;
+      var fuelling = +SimVar.GetSimVarValue('L:INI_IS_REFUELING', 'number') >= 0.5;
+      var fuel = +SimVar.GetSimVarValue('FUEL TOTAL QUANTITY WEIGHT', unit) || 0;
+      return 'On board: payload ' + A.thousands(payload) + ' ' + unit + ', ' +
+        (fuelling ? 'fuelling in progress' : 'fuel ' + A.thousands(Math.round(fuel / 100) * 100) + ' ' + unit);
+    } catch (e) { return ''; }
+  };
+
+  // A preset load button: "Racing Team Charter: 31,000 kilograms, 68,300 pounds".
+  A.presetLabel = function (btn) {
+    var spans = btn.querySelectorAll ? btn.querySelectorAll('h1 span') : [];
+    if (spans.length < 2) return '';
+    var m = A.PRESET_WEIGHT.exec(A.txt(spans[0]));
+    if (!m) return '';
+    return A.txt(spans[1]) + ': ' + A.thousands(A.num(m[1])) + ' kilograms, ' + A.thousands(A.num(m[2])) + ' pounds';
   };
 
   // A door button's state from its classes; a slide button's from its colour.
@@ -158,6 +239,8 @@
     }
     if (A.NAMES[el.id]) return A.NAMES[el.id];
     if (el.tagName === 'DIV' && A.hasClass(el, 'unlock-button')) return 'Unlock';
+    var preset = A.presetLabel(el);
+    if (preset) return preset;
     var t = A.txt(el);
     if (t) return t;
     var img = el.querySelector ? el.querySelector('img[title], img[alt]') : null;
@@ -170,11 +253,20 @@
     if (!vp) return '';
     for (var i = 0; i < vp.children.length; i++) {
       var c = vp.children[i];
-      if (c.id && A.PAGES[c.id] && A.visible(c)) return A.PAGES[c.id];
+      if (c.id && A.PAGES[c.id] && A.visible(c)) return A.PAGES[c.id] + (c.id === 'weights' ? A.weightsHalf() : '');
     }
     for (var j = 0; j < vp.children.length; j++) {
       var d = vp.children[j];
       if (d.id && !/-bg$/.test(d.id) && A.visible(d)) return A.idWords(d.id);
+    }
+    return '';
+  };
+
+  // ", payload selection" or ", loading": the Weight and Balance half on screen.
+  A.weightsHalf = function () {
+    for (var id in A.WEIGHTS_HALVES) {
+      var half = document.getElementById(id);
+      if (half && half.closest('#weights') && A.visible(half)) return ', ' + A.WEIGHTS_HALVES[id];
     }
     return '';
   };
@@ -195,6 +287,13 @@
     function walk(el) {
       if (!A.visible(el)) return;
       var tag = el.tagName;
+
+      // A Weight and Balance half opens with what its buttons do and what is on board.
+      if (A.WEIGHTS_HELP[el.id] && el.closest('#weights')) {
+        emit({ idx: 0, text: A.WEIGHTS_HELP[el.id], value: '', kind: 'static', clickable: false, key: 'help:weights-' + el.id });
+        var line = A.onBoardLine();
+        if (line) emit({ idx: 0, text: line, value: '', kind: 'static', clickable: false, live: 'polite', key: 'status:onboard' });
+      }
       if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'svg' || tag === 'CANVAS') return;
       // Pictures with letters on them: Take Off's speed diagram (its V1/VR/V2 marks repeat the fields).
       if (el.id === 'diagram' || el.id === 'weight-image') return;
@@ -244,6 +343,11 @@
         return;   // a button's inner text and icons are its label
       }
 
+      if (tag === 'INPUT' && A.READOUTS[el.id]) {
+        emit({ idx: 0, text: A.readout(el), value: '', kind: 'static', clickable: false, key: 'readout:' + el.id });
+        return;
+      }
+
       if (tag === 'INPUT' && (el.type === 'text' || el.type === 'number' || el.type === 'password')) {
         var idxI = A.stamp(el);
         var unit = A.unit(el);
@@ -266,6 +370,8 @@
         // A heading holding a button (Take Off's "Conditions" + SYNC) reads its own words only.
         var btns = el.querySelectorAll('button, input');
         if (btns.length) ht = A.ownText(el);
+        // Weight and Balance's capitals and bracketed unit: "WEIGHT AND BALANCE [kg]" → "Weight and balance".
+        if (el.closest('#weights')) ht = A.sentence(ht.replace(/\s*\[[^\]]*\]\s*$/, ''));
         if (ht) emit({ idx: 0, text: ht, value: '', kind: 'heading', level: Math.min(6, +tag.charAt(1)), clickable: false });
         for (var b = 0; b < btns.length; b++) walk(btns[b]);
         return;
@@ -280,6 +386,16 @@
         emit({ idx: 0, text: own, value: '', kind: 'static', clickable: false, key: el.id ? 'text:' + el.id : undefined });
       }
       for (var k = 0; k < el.children.length; k++) walk(el.children[k]);
+    }
+
+    // The tablet's messages ("Payload Removed", a SimBrief error, "Unable to fuel aircraft when
+    // engines are running.") pop up outside the page, in notie alert boxes on the body: read
+    // first, as an alert the window speaks when it appears. The tablet only ever uses notie.alert.
+    var toasts = document.querySelectorAll('.notie-container');
+    for (var n = 0; n < toasts.length; n++) {
+      if (!A.visible(toasts[n])) continue;
+      var said = A.txt(toasts[n].querySelector('.notie-textbox-inner') || toasts[n]);
+      if (said) emit({ idx: 0, text: said, value: '', kind: 'alert', clickable: false });
     }
 
     var header = document.getElementById('header-bar');
