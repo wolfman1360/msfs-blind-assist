@@ -231,8 +231,8 @@ public static partial class A300PanelLayout
     private static readonly HashSet<string> SpokenAsLetters = new(StringComparer.OrdinalIgnoreCase)
     {
         "AC", "ADC", "ADF", "ADI", "APU", "ATC", "ATS", "CVR", "CWS", "DC", "DH", "ECAM", "EFIS", "FD", "FPA", "FPV",
-        "GPWS", "HF", "HP", "IDC", "IDG", "ILS", "IRS", "MCDU", "MCU", "ND", "NDB", "PA", "PFD", "PTU", "RA", "RAT",
-        "SGU", "TA", "TCAS", "TOGA", "TRP", "VHF", "VOR", "WX", "WXR", "XPDR",
+        "GPWS", "HF", "HP", "IDC", "IDG", "ILS", "IRS", "MCDU", "MCU", "ND", "NDB", "PA", "PFD", "PTU", "QNH", "RA", "RAT",
+        "SGU", "STD", "TA", "TCAS", "TOGA", "TRP", "VHF", "VOR", "WX", "WXR", "XPDR",
     };
 
     /// <summary>
