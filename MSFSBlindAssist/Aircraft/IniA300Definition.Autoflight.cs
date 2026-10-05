@@ -1,6 +1,7 @@
 using MSFSBlindAssist.Accessibility;
 using MSFSBlindAssist.Aircraft.A300;
 using MSFSBlindAssist.Forms;
+using MSFSBlindAssist.Forms.PMDG;
 using MSFSBlindAssist.Hotkeys;
 using MSFSBlindAssist.SimConnect;
 using MSFSBlindAssist.Utils.Logging;
@@ -78,20 +79,25 @@ public partial class IniA300Definition
         {
             // Input mode: typed FCU values, the altimeters and the NAV radios.
             case HotkeyAction.FCUSetSpeed:
-                ShowValueDialog(A300TypedValues.SpeedKey, "FCU Speed", "Speed or Mach", "100 to 399 knots, or Mach 0.10 to 0.99", sim, announcer, parentForm, hotkeyManager);
+                ShowValueDialog(A300TypedValues.SpeedKey, "FCU Speed", "Speed or Mach", "100 to 399 knots, or Mach 0.10 to 0.99",
+                    ValueBoxButtons(A300AutoflightWindows.Speed, sim, announcer), sim, announcer, parentForm, hotkeyManager);
                 return true;
             case HotkeyAction.FCUSetHeading:
-                ShowValueDialog(A300TypedValues.HeadingKey, "FCU Heading", "Heading", "0 to 360 degrees", sim, announcer, parentForm, hotkeyManager);
+                ShowValueDialog(A300TypedValues.HeadingKey, "FCU Heading", "Heading", "0 to 360 degrees",
+                    ValueBoxButtons(A300AutoflightWindows.Heading, sim, announcer), sim, announcer, parentForm, hotkeyManager);
                 return true;
             case HotkeyAction.FCUSetAltitude:
-                ShowValueDialog(A300TypedValues.AltitudeKey, "FCU Altitude", "Altitude", "100 to 49,000 feet", sim, announcer, parentForm, hotkeyManager);
+                ShowValueDialog(A300TypedValues.AltitudeKey, "FCU Altitude", "Altitude", "100 to 49,000 feet",
+                    ValueBoxButtons(A300AutoflightWindows.Altitude, sim, announcer), sim, announcer, parentForm, hotkeyManager);
                 return true;
             case HotkeyAction.FCUSetVS:
-                ShowValueDialog(A300TypedValues.VerticalSpeedKey, "FCU Vertical Speed", "Vertical speed", "-6,000 to 6,000 feet per minute", sim, announcer, parentForm, hotkeyManager);
+                ShowValueDialog(A300TypedValues.VerticalSpeedKey, "FCU Vertical Speed", "Vertical speed", "-6,000 to 6,000 feet per minute",
+                    ValueBoxButtons(A300AutoflightWindows.VerticalSpeed, sim, announcer), sim, announcer, parentForm, hotkeyManager);
                 return true;
             case HotkeyAction.FCUSetBaro:
                 ShowValueDialog(AllAltimetersKey, "Altimeter Setting", "Altimeters",
-                    "28.20 to 31.30 inches, or 955 to 1060 hectopascals; sets captain, first officer and standby", sim, announcer, parentForm, hotkeyManager);
+                    "28.20 to 31.30 inches, or 955 to 1060 hectopascals; sets captain, first officer and standby",
+                    new List<ToggleButtonDef>(), sim, announcer, parentForm, hotkeyManager);
                 return true;
             case HotkeyAction.SetNavRadios:
                 hotkeyManager.ExitInputHotkeyMode();
@@ -212,7 +218,7 @@ public partial class IniA300Definition
             return;
         }
         Execute(row, A300WritePlan.ForPress(row.Control!), sim, announcer, commandedValue: null);
-        _ = ReadBackAsync(sim, announcer, light.Key, v => $"{row.Name} {A300FcuState.Describe(light, v).ToLowerInvariant()}");
+        _ = ReadBackAsync(sim, announcer, light.Key, v => A300FcuState.ReadBack(row.Name, light, v));
     }
 
     private async Task ReadBackAsync(SimConnectManager sim, ScreenReaderAnnouncer announcer, string key, Func<double, string> words)
@@ -255,9 +261,14 @@ public partial class IniA300Definition
         }
     }
 
-    /// <summary>The shared value dialog for one typed value, tracked so an aircraft switch closes it.</summary>
-    private void ShowValueDialog(string key, string title, string name, string hint, SimConnectManager sim,
-        ScreenReaderAnnouncer announcer, Form parentForm, HotkeyManager hotkeyManager)
+    /// <summary>The open value box: every A300 value box is one window type, which the tracked-window
+    /// registry keys on, so a different box replaces it rather than re-showing it ([A300-17]).</summary>
+    private ValueInputForm? _valueBox;
+
+    /// <summary>The shared value box for one typed value and its buttons, tracked so an aircraft switch
+    /// closes it.</summary>
+    private void ShowValueDialog(string key, string title, string name, string hint, List<ToggleButtonDef> buttons,
+        SimConnectManager sim, ScreenReaderAnnouncer announcer, Form parentForm, HotkeyManager hotkeyManager)
     {
         hotkeyManager.ExitInputHotkeyMode();
         if (!CanLand(sim))
@@ -265,10 +276,12 @@ public partial class IniA300Definition
             announcer.AnnounceImmediate($"{name} unavailable");
             return;
         }
+        if (A300AutoflightWindows.ReplacesOpenBox(_valueBox is { IsDisposed: false } open ? open.Text : null, title))
+            _valueBox!.Close();
         ShowTrackedWindow(
-            () => new ValueInputForm(title, name.ToLowerInvariant(), hint, announcer,
+            () => _valueBox = new ValueInputForm(title, name.ToLowerInvariant(), hint, announcer,
                 input => Parse(input) is double v && PlanFor(key, v).Error == null ? (true, "") : (false, $"{name}: {hint}"),
-                new List<ToggleButtonDef>(),
+                buttons,
                 input =>
                 {
                     if (Parse(input) is not double v || _disposed)
@@ -290,6 +303,36 @@ public partial class IniA300Definition
                 else form.Show(parentForm);
             });
     }
+
+    /// <summary>The buttons of one FCU value box (<see cref="A300AutoflightWindows"/>). A press goes
+    /// through the panel row's own write path. A lamp button reads its result back fresh, because the
+    /// box's own echo reads the 1 Hz cache and could speak the old state. A knob push or pull says
+    /// nothing, because the FMA call-out speaks the mode it changes.</summary>
+    internal List<ToggleButtonDef> ValueBoxButtons(IReadOnlyList<A300WindowButton> buttons, SimConnectManager sim,
+        ScreenReaderAnnouncer announcer)
+    {
+        var defs = new List<ToggleButtonDef>();
+        foreach (var button in buttons)
+        {
+            if (!_rows.TryGetValue(button.RowKey, out var row))
+                continue;
+            string key = button.RowKey;
+            string label = PMDGAutopilotRowBinder.ApplyMnemonic(
+                A300AutoflightWindows.LabelFor(button, row.Name, row.Control?.Action), button.Mnemonic);
+            defs.Add(button.State == A300ButtonState.Lamp
+                ? new ToggleButtonDef(label, () => LampState(key), () => PressAndReadBack(key, sim, announcer))
+                    { SuppressStateAnnounce = () => true }
+                : new ToggleButtonDef(label, () => "", () => PressRow(key, sim, announcer))
+                    { SuppressStateAnnounce = () => true });
+        }
+        return defs;
+    }
+
+    /// <summary>An FCU button's lamp in words ("On", "Mach"), or "" while it has not been read.</summary>
+    private string LampState(string rowKey) =>
+        A300FcuState.ByButton.TryGetValue(rowKey, out var light) && _sim is { } sim && Cached(sim, light.Key) is double v
+            ? A300FcuState.Describe(light, v)
+            : "";
 
     private A300TypedResult PlanFor(string key, double value) => key == AllAltimetersKey
         ? A300TypedValues.AllAltimeters(value)

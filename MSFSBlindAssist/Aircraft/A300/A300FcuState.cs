@@ -35,6 +35,13 @@ public static class A300FcuState
     /// <summary>The words for a light's value.</summary>
     public static string Describe(A300FcuLight light, double value) => value >= 0.5 ? light.On : light.Off;
 
+    /// <summary>A press read back: "VOR LOC on" for an on/off lamp; "Speed Mach: Mach" for SPD/MACH,
+    /// whose two states are not on and off.</summary>
+    public static string ReadBack(string name, A300FcuLight light, double value) =>
+        light.On == "On" && light.Off == "Off"
+            ? $"{name} {Describe(light, value).ToLowerInvariant()}"
+            : $"{name}: {Describe(light, value)}";
+
     /// <summary>The speed window as the FCU shows it: Mach while SPD/MACH is in Mach.</summary>
     public static string SpeedWindow(double value, bool isMach) => isMach
         ? $"Mach {value.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)}"
