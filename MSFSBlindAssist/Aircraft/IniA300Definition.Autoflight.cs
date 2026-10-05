@@ -97,7 +97,7 @@ public partial class IniA300Definition
             case HotkeyAction.FCUSetBaro:
                 ShowValueDialog(AllAltimetersKey, "Altimeter Setting", "Altimeters",
                     "28.20 to 31.30 inches, or 955 to 1060 hectopascals; sets captain, first officer and standby",
-                    new List<ToggleButtonDef>(), sim, announcer, parentForm, hotkeyManager);
+                    BaroButtons(sim, announcer), sim, announcer, parentForm, hotkeyManager);
                 return true;
             case HotkeyAction.SetNavRadios:
                 hotkeyManager.ExitInputHotkeyMode();
@@ -302,6 +302,132 @@ public partial class IniA300Definition
                 if (form.Visible) form.Activate();
                 else form.Show(parentForm);
             });
+    }
+
+    /// <summary>Ctrl+B's STD and QNH buttons, labelled with the altimeter knob's own words and showing
+    /// both sides' modes. Each speaks its own read-back, so the box's echo is off.</summary>
+    internal List<ToggleButtonDef> BaroButtons(SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        string Words(string rowKey, string fallback) =>
+            _rows.TryGetValue(rowKey, out var row) && row.Control?.Action is string action
+                ? A300PanelLayout.SpokenWord(action) : fallback;
+        string State() => A300Baro.Describe(Cached(sim, A300Baro.Captain.ModeKey), Cached(sim, A300Baro.FirstOfficer.ModeKey));
+        return new List<ToggleButtonDef>
+        {
+            new(PMDGAutopilotRowBinder.ApplyMnemonic(Words(A300Baro.Captain.PullKey, "Set STD pressure") + ", both sides", 'S'),
+                State, () => _ = SetStandardAsync(sim, announcer)) { SuppressStateAnnounce = () => true },
+            new(PMDGAutopilotRowBinder.ApplyMnemonic(Words(A300Baro.Captain.PushKey, "Set QNH pressure") + ", both sides", 'Q'),
+                State, () => _ = SetQnhAsync(sim, announcer)) { SuppressStateAnnounce = () => true },
+        };
+    }
+
+    /// <summary>STD: pull the sides in QNH, confirm each reads STD, set all three to 1013.25, read back.</summary>
+    internal async Task SetStandardAsync(SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        try
+        {
+            if (!CanLand(sim))
+            {
+                announcer.AnnounceImmediate("Altimeters unavailable");
+                return;
+            }
+            var plan = A300Baro.Standard(Cached(sim, A300Baro.Captain.ModeKey), Cached(sim, A300Baro.FirstOfficer.ModeKey));
+            if (plan.Refusal != null)
+            {
+                announcer.AnnounceImmediate(plan.Refusal);
+                return;
+            }
+            if (!await PressKnobsAsync(plan.Pressed, side => side.PullKey, wantStd: true, sim, announcer))
+                return;
+            Send(sim, plan.Rpn!);
+            await ReadBackAltimetersAsync("Altimeters standard", sim, announcer);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("A300", $"Altimeters STD failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>QNH: push the sides in STD, confirm each reads QNH, restore the saved settings, read back.</summary>
+    internal async Task SetQnhAsync(SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        try
+        {
+            if (!CanLand(sim))
+            {
+                announcer.AnnounceImmediate("Altimeters unavailable");
+                return;
+            }
+            double? captain = Cached(sim, A300Baro.Captain.ModeKey);
+            double? firstOfficer = Cached(sim, A300Baro.FirstOfficer.ModeKey);
+            double? captainSaved = captain is double c && A300Baro.IsStd(c)
+                ? await ReadFresh(sim, A300Baro.Captain.SavedKey, ReadoutTimeoutMs) : null;
+            double? firstOfficerSaved = firstOfficer is double f && A300Baro.IsStd(f)
+                ? await ReadFresh(sim, A300Baro.FirstOfficer.SavedKey, ReadoutTimeoutMs) : null;
+            if (_disposed)
+                return;
+            var plan = A300Baro.Qnh(captain, firstOfficer, captainSaved, firstOfficerSaved);
+            if (plan.Refusal != null)
+            {
+                announcer.AnnounceImmediate(plan.Refusal);
+                return;
+            }
+            if (!await PressKnobsAsync(plan.Pressed, side => side.PushKey, wantStd: false, sim, announcer))
+                return;
+            if (plan.Rpn != null)
+                Send(sim, plan.Rpn);
+            foreach (var warning in plan.Warnings)
+                announcer.Announce(warning);
+            await ReadBackAltimetersAsync("Altimeters QNH", sim, announcer);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("A300", $"Altimeters QNH failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>Presses each side's knob, waits <see cref="A300Baro.KnobSettleMs"/>, and confirms every
+    /// pressed side now reads the wanted mode; says which one did not, and returns false, otherwise.</summary>
+    private async Task<bool> PressKnobsAsync(IReadOnlyList<A300BaroSide> sides, Func<A300BaroSide, string> knob,
+        bool wantStd, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        if (sides.Count == 0)
+            return true;
+        foreach (var side in sides)
+            PressRow(knob(side), sim, announcer);
+        await TypedDelay(A300Baro.KnobSettleMs);
+        foreach (var side in sides)
+        {
+            if (_disposed)
+                return false;
+            if (await ReadFresh(sim, side.ModeKey, ReadoutTimeoutMs) is not double mode || A300Baro.IsStd(mode) != wantStd)
+            {
+                announcer.AnnounceImmediate($"{side.Name} altimeter did not switch to {(wantStd ? "STD" : "QNH")}");
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>Reads the three settings back once the write has landed and speaks them
+    /// (<see cref="A300Baro.Confirmation"/>): a numeric confirmation.</summary>
+    private async Task ReadBackAltimetersAsync(string lead, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        await TypedDelay(ToggleReadBackMs);
+        if (_disposed)
+            return;
+        var values = new double[3];
+        string[] keys = { A300Readouts.BaroCaptainKey, A300Readouts.BaroFirstOfficerKey, A300Readouts.BaroStandbyKey };
+        for (int i = 0; i < keys.Length; i++)
+        {
+            if (await ReadFresh(sim, keys[i], ReadoutTimeoutMs) is not double v)
+            {
+                announcer.AnnounceImmediate($"{lead}; the altimeters did not report back");
+                return;
+            }
+            values[i] = v;
+        }
+        announcer.AnnounceImmediate(A300Baro.Confirmation(lead, values[0], values[1], values[2]));
     }
 
     /// <summary>The buttons of one FCU value box (<see cref="A300AutoflightWindows"/>). A press goes

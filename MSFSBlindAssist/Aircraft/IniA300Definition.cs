@@ -192,6 +192,30 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
         RegisterFmaSources(vars, batchNames);
         RegisterTakeoffCallouts(vars, batchNames);
 
+        // Ctrl+B's STD and QNH (A300Baro, [A300-16]): each side's STD flag streams on its own
+        // once-a-second subscription, never the batch (a new batch name can split the FMA's sources,
+        // [A300-9]), and is consumed silently; the setting a side saves when pulled is read on demand.
+        foreach (var side in A300Baro.Sides)
+        {
+            vars[side.ModeKey] = new SimVarDefinition
+            {
+                Name = side.ModeVar,
+                DisplayName = side.Name + " altimeter mode",
+                Type = SimVarType.LVar,
+                UpdateFrequency = UpdateFrequency.Continuous,
+                IsAnnounced = true,
+                ExcludeFromBatch = true,
+                ExcludeFromMonitorManager = true,
+            };
+            vars[side.SavedKey] = new SimVarDefinition
+            {
+                Name = side.SavedVar,
+                DisplayName = side.Name + " altimeter saved setting",
+                Type = SimVarType.LVar,
+                UpdateFrequency = UpdateFrequency.OnRequest,
+            };
+        }
+
         foreach (var readout in _readouts.Values)
         {
             // The altitude window rides the batch: it speaks a change MSFSBA did not make

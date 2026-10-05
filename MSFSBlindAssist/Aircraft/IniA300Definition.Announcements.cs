@@ -48,6 +48,10 @@ public partial class IniA300Definition
         if (A300FcuState.LightKeys.Contains(varName))
             return true;
 
+        // Ctrl+B's STD flags: shown on its buttons, never spoken.
+        if (A300Baro.ModeKeys.Contains(varName))
+            return true;
+
         // An FMA source (some are switch rows too): read when its batch has finished dispatching
         // (OnDeferredFlushBatchDelivered), never spoken here.
         if (A300FmaSources.Keys.Contains(varName))
