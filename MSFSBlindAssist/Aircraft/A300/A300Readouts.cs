@@ -21,6 +21,8 @@ public static class A300Readouts
     public const string AltitudeKey = "A300_RO_FCU_ALTITUDE";
     public const string VerticalSpeedKey = "A300_RO_FCU_VS";
     public const string BaroCaptainKey = "A300_RO_BARO_CPT";
+    public const string BaroFirstOfficerKey = "A300_RO_BARO_FO";
+    public const string BaroStandbyKey = "A300_RO_BARO_STBY";
     public const string FuelTotalKey = "A300_RO_FUEL_TOTAL";
 
     // The PFD status box (A300DisplayPanels).
@@ -68,9 +70,9 @@ public static class A300Readouts
             v => $"{Whole(v)} feet per minute"),
         new A300Readout("A300_RO_BARO_CPT", "Captain altimeter setting", "Captain Panel", "KOHLSMAN SETTING MB:1", true, "Millibars",
             Altimeter),
-        new A300Readout("A300_RO_BARO_FO", "First officer altimeter setting", "First Officer Panel", "KOHLSMAN SETTING MB:2", true, "Millibars",
+        new A300Readout(BaroFirstOfficerKey, "First officer altimeter setting", "First Officer Panel", "KOHLSMAN SETTING MB:2", true, "Millibars",
             Altimeter),
-        new A300Readout("A300_RO_BARO_STBY", "Standby altimeter setting", "Center Panel", "KOHLSMAN SETTING MB:3", true, "Millibars",
+        new A300Readout(BaroStandbyKey, "Standby altimeter setting", "Center Panel", "KOHLSMAN SETTING MB:3", true, "Millibars",
             Altimeter),
         new A300Readout("A300_RO_FLEX_TEMP", "Flex temperature", "Center Panel", "INI_FLEX_TEMPERATURE", false, "number",
             v => $"{Whole(v)} degrees"),
