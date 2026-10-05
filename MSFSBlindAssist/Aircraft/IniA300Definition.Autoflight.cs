@@ -569,8 +569,8 @@ public partial class IniA300Definition
     /// <summary>How long Ctrl+N waits for the NAV radios before opening with 108.00 and course 0.</summary>
     public const int NavPrefillTimeoutMs = 2000;
 
-    /// <summary>Ctrl+N: VOR 1 and VOR 2, frequency and course, pre-filled from NAV 1 and NAV 2 (the A300
-    /// drives them from its VOR radios). The ILS has its own typed fields on the Navigation Radios panel.</summary>
+    /// <summary>Ctrl+N: VOR 1, VOR 2 and the ILS, frequency and course, pre-filled from NAV 1, NAV 2 and NAV 3
+    /// and the ILS course (the A300 drives them from its VOR radios and its ILS receiver).</summary>
     private async Task ShowNavRadiosDialogAsync(SimConnectManager sim, ScreenReaderAnnouncer announcer, Form parentForm)
     {
         if (!CanLand(sim))
@@ -593,11 +593,17 @@ public partial class IniA300Definition
             }
             if (_disposed || parentForm.IsDisposed)
                 return;
+            double? ilsFrequency = await ReadFresh(sim, A300Readouts.IlsFrequencyKey, NavPrefillTimeoutMs);
+            double? ilsCourse = await ReadFresh(sim, A300Readouts.IlsCourseKey, NavPrefillTimeoutMs);
+            if (_disposed || parentForm.IsDisposed)
+                return;
             ShowTrackedWindow(
-                () => new NavRadiosForm(announcer,
-                    Prefill(live?.Nav1Freq, 108.0), (int)Math.Round(Prefill(live?.Nav1Obs, 0)) % 360,
-                    Prefill(live?.Nav2Freq, 108.0), (int)Math.Round(Prefill(live?.Nav2Obs, 0)) % 360,
-                    settings => SetNavRadios(settings, sim, announcer)),
+                () => new NavRadiosForm(announcer, new[]
+                {
+                    new NavRadioRow("VOR 1", Prefill(live?.Nav1Freq, 108.0), (int)Math.Round(Prefill(live?.Nav1Obs, 0)) % 360),
+                    new NavRadioRow("VOR 2", Prefill(live?.Nav2Freq, 108.0), (int)Math.Round(Prefill(live?.Nav2Obs, 0)) % 360),
+                    new NavRadioRow("ILS", InBand(ilsFrequency, 108.10, 111.95), (int)Math.Round(Prefill(ilsCourse, 0)) % 360, 108.10, 111.95),
+                }, settings => SetNavRadios(settings, sim, announcer)),
                 form =>
                 {
                     if (form.Visible) form.Activate();
@@ -612,15 +618,23 @@ public partial class IniA300Definition
 
     private static double Prefill(double? value, double fallback) => value is double v && v > 0 ? v : fallback;
 
-    private void SetNavRadios(NavRadioSettings settings, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    /// <summary>A pre-fill inside a radio's band, else its bottom (NAV 3 can hold a VOR frequency).</summary>
+    private static double InBand(double? value, double min, double max) =>
+        value is double v && v >= min - 1e-9 && v <= max + 1e-9 ? v : min;
+
+    internal void SetNavRadios(NavRadioSettings settings, SimConnectManager sim, ScreenReaderAnnouncer announcer)
     {
-        var parts = new[]
+        var parts = new List<A300TypedResult>
         {
             A300TypedValues.Plan(A300TypedValues.Vor1FrequencyKey, settings.Nav1FreqMHz, false),
             A300TypedValues.Plan(A300TypedValues.Vor1CourseKey, settings.Nav1Course, false),
             A300TypedValues.Plan(A300TypedValues.Vor2FrequencyKey, settings.Nav2FreqMHz, false),
             A300TypedValues.Plan(A300TypedValues.Vor2CourseKey, settings.Nav2Course, false),
         };
+        if (settings.Nav3FreqMHz is double ilsFrequency)
+            parts.Add(A300TypedValues.Plan(A300TypedValues.IlsFrequencyKey, ilsFrequency, false));
+        if (settings.Nav3Course is int ilsCourse)
+            parts.Add(A300TypedValues.Plan(A300TypedValues.IlsCourseKey, ilsCourse, false));
         if (parts.FirstOrDefault(p => p.Error != null) is { } bad)
         {
             announcer.AnnounceImmediate($"NAV radios: {bad.Error}");

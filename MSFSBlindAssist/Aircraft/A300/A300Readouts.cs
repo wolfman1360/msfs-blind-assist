@@ -49,6 +49,7 @@ public static class A300Readouts
     public const string Vor2FrequencyKey = "A300_RO_ND_VOR2_FREQ";
     public const string Dme2Key = "A300_RO_ND_DME2";
     public const string IlsFrequencyKey = "A300_RO_ND_ILS_FREQ";
+    public const string IlsCourseKey = "A300_RO_ILS_COURSE";
     public const string LocalizerKey = "A300_RO_ND_LOC";
     public const string GlideslopeKey = "A300_RO_ND_GS";
     public const string Adf1FrequencyKey = "A300_RO_ND_ADF1_FREQ";
@@ -82,7 +83,7 @@ public static class A300Readouts
             v => $"{Heading(v)} degrees"),
         new A300Readout("A300_RO_VOR2_COURSE", "VOR 2 course", "Navigation Radios", "NAV OBS:2", true, "Degrees",
             v => $"{Heading(v)} degrees"),
-        new A300Readout("A300_RO_ILS_COURSE", "ILS course", "Navigation Radios", "INI_ils_course", false, "number",
+        new A300Readout(IlsCourseKey, "ILS course", "Navigation Radios", "INI_ils_course", false, "number",
             v => $"{Heading(v)} degrees"),
         new A300Readout(FuelTotalKey, "Total fuel", "Fuel", "FUEL TOTAL QUANTITY WEIGHT", true, "pounds",
             v => $"{Math.Round(v).ToString("#,0", Inv)} pounds"),
