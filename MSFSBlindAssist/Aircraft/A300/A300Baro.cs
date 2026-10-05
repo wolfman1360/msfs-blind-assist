@@ -49,6 +49,7 @@ public static class A300Baro
     /// next update. A judgement; the read-back is what confirms it.</summary>
     public const int KnobSettleMs = 300;
 
+    public const string UnavailableRefusal = "Altimeters unavailable";
     public const string UnknownModeRefusal = "Altimeters: mode unknown, try again in a moment";
     public const string AlreadyQnh = "Altimeters already QNH";
 

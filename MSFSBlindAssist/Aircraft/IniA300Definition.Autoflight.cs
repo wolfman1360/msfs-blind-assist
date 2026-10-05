@@ -24,6 +24,11 @@ public partial class IniA300Definition
     /// next 1 Hz delivery.</summary>
     public const int ReadoutTimeoutMs = 2500;
 
+    /// <summary>True while Ctrl+B's STD or QNH sequence is running: a second press in that time is
+    /// ignored, because it would decide from the 1 Hz cache, which still shows the old modes, and could
+    /// pull a side already in STD (saving 1013 over the pilot's QNH). Everything runs on the UI thread.</summary>
+    private bool _altimetersBusy;
+
     /// <summary>The wait between a typed value's two steps; tests replace it.</summary>
     internal Func<int, Task> TypedDelay { get; set; } = Task.Delay;
 
@@ -324,11 +329,14 @@ public partial class IniA300Definition
     /// <summary>STD: pull the sides in QNH, confirm each reads STD, set all three to 1013.25, read back.</summary>
     internal async Task SetStandardAsync(SimConnectManager sim, ScreenReaderAnnouncer announcer)
     {
+        if (_altimetersBusy)
+            return;   // the running sequence's read-back speaks
+        _altimetersBusy = true;
         try
         {
             if (!CanLand(sim))
             {
-                announcer.AnnounceImmediate("Altimeters unavailable");
+                announcer.AnnounceImmediate(A300Baro.UnavailableRefusal);
                 return;
             }
             var plan = A300Baro.Standard(Cached(sim, A300Baro.Captain.ModeKey), Cached(sim, A300Baro.FirstOfficer.ModeKey));
@@ -339,23 +347,32 @@ public partial class IniA300Definition
             }
             if (!await PressKnobsAsync(plan.Pressed, side => side.PullKey, wantStd: true, sim, announcer))
                 return;
+            if (_disposed)
+                return;
             Send(sim, plan.Rpn!);
-            await ReadBackAltimetersAsync("Altimeters standard", sim, announcer);
+            await ReadBackAltimetersAsync("Altimeters standard", Array.Empty<string>(), sim, announcer);
         }
         catch (Exception ex)
         {
             Log.Warn("A300", $"Altimeters STD failed: {ex.Message}");
+        }
+        finally
+        {
+            _altimetersBusy = false;
         }
     }
 
     /// <summary>QNH: push the sides in STD, confirm each reads QNH, restore the saved settings, read back.</summary>
     internal async Task SetQnhAsync(SimConnectManager sim, ScreenReaderAnnouncer announcer)
     {
+        if (_altimetersBusy)
+            return;   // the running sequence's read-back speaks
+        _altimetersBusy = true;
         try
         {
             if (!CanLand(sim))
             {
-                announcer.AnnounceImmediate("Altimeters unavailable");
+                announcer.AnnounceImmediate(A300Baro.UnavailableRefusal);
                 return;
             }
             double? captain = Cached(sim, A300Baro.Captain.ModeKey);
@@ -374,15 +391,19 @@ public partial class IniA300Definition
             }
             if (!await PressKnobsAsync(plan.Pressed, side => side.PushKey, wantStd: false, sim, announcer))
                 return;
+            if (_disposed)
+                return;
             if (plan.Rpn != null)
                 Send(sim, plan.Rpn);
-            foreach (var warning in plan.Warnings)
-                announcer.Announce(warning);
-            await ReadBackAltimetersAsync("Altimeters QNH", sim, announcer);
+            await ReadBackAltimetersAsync("Altimeters QNH", plan.Warnings, sim, announcer);
         }
         catch (Exception ex)
         {
             Log.Warn("A300", $"Altimeters QNH failed: {ex.Message}");
+        }
+        finally
+        {
+            _altimetersBusy = false;
         }
     }
 
@@ -410,9 +431,12 @@ public partial class IniA300Definition
     }
 
     /// <summary>Reads the three settings back once the write has landed and speaks them
-    /// (<see cref="A300Baro.Confirmation"/>): a numeric confirmation.</summary>
-    private async Task ReadBackAltimetersAsync(string lead, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    /// (<see cref="A300Baro.Confirmation"/>): a numeric confirmation. Any <paramref name="warnings"/>
+    /// lead that one utterance, because the read-back interrupts, so a warning spoken beside it is cut off.</summary>
+    private async Task ReadBackAltimetersAsync(string lead, IReadOnlyList<string> warnings, SimConnectManager sim,
+        ScreenReaderAnnouncer announcer)
     {
+        string Spoken(string text) => warnings.Count == 0 ? text : $"{string.Join(". ", warnings)}. {text}";
         await TypedDelay(ToggleReadBackMs);
         if (_disposed)
             return;
@@ -422,12 +446,12 @@ public partial class IniA300Definition
         {
             if (await ReadFresh(sim, keys[i], ReadoutTimeoutMs) is not double v)
             {
-                announcer.AnnounceImmediate($"{lead}; the altimeters did not report back");
+                announcer.AnnounceImmediate(Spoken($"{lead}; the altimeters did not report back"));
                 return;
             }
             values[i] = v;
         }
-        announcer.AnnounceImmediate(A300Baro.Confirmation(lead, values[0], values[1], values[2]));
+        announcer.AnnounceImmediate(Spoken(A300Baro.Confirmation(lead, values[0], values[1], values[2])));
     }
 
     /// <summary>The buttons of one FCU value box (<see cref="A300AutoflightWindows"/>). A press goes
