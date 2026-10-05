@@ -137,7 +137,10 @@ public partial class IniA300Definition
                 return true;
             case HotkeyAction.FCUSetAutopilot:
                 hotkeyManager.ExitInputHotkeyMode();
-                announcer.AnnounceImmediate("The A300 autopilot buttons are on the FCU panel, in the Glareshield section. Each shows whether its mode is on.");
+                ShowTrackedWindow(
+                    () => new PMDGAutopilotWindow("A300 Autopilot", AutopilotButtons(sim, announcer),
+                        AutopilotSelectors(sim, announcer), () => AutopilotStatusLines(sim), "Autopilot status"),
+                    w => w.ShowForm());
                 return true;
 
             // Output mode readouts.
@@ -476,6 +479,77 @@ public partial class IniA300Definition
                     { SuppressStateAnnounce = () => true });
         }
         return defs;
+    }
+
+    /// <summary>Asks for an on-request value; the next delivery fills the cache. Only when connected.
+    /// Tests replace it.</summary>
+    internal Action<string, SimConnectManager> RequestRead { get; set; } = (key, sim) =>
+    {
+        if (sim.IsConnected)
+            sim.RequestVariable(key);
+    };
+
+    /// <summary>Ctrl+P's buttons (<see cref="A300AutoflightWindows.AutopilotButtons"/>). Each goes through
+    /// its panel row's write path. It says nothing when it works, because the window's labels update in
+    /// place, and says why when it does not.</summary>
+    internal List<ToggleButtonDef> AutopilotButtons(SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        var defs = new List<ToggleButtonDef>();
+        foreach (var button in A300AutoflightWindows.AutopilotButtons)
+        {
+            if (!_rows.TryGetValue(button.RowKey, out var row))
+                continue;
+            string key = button.RowKey;
+            string label = PMDGAutopilotRowBinder.ApplyMnemonic(
+                A300AutoflightWindows.LabelFor(button, row.Name, row.Control?.Action), button.Mnemonic);
+            Func<string> state = button.State switch
+            {
+                A300ButtonState.Lamp => () => LampState(key),
+                A300ButtonState.Switch => () => SwitchState(row, sim),
+                _ => () => "",
+            };
+            Action press = button.State == A300ButtonState.Switch
+                ? () => FlipSwitch(row, sim, announcer)
+                : () => HandleUIVariableSet(key, 1, GetVariables()[key], sim, announcer);
+            defs.Add(new ToggleButtonDef(label, state, press));
+        }
+        return defs;
+    }
+
+    /// <summary>Ctrl+P's combos: the flight director selectors, through their rows.</summary>
+    internal List<SelectorRowDef> AutopilotSelectors(SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        var defs = new List<SelectorRowDef>();
+        foreach (var selector in A300AutoflightWindows.AutopilotSelectors)
+        {
+            if (!_rows.TryGetValue(selector.RowKey, out var row))
+                continue;
+            string key = selector.RowKey;
+            defs.Add(new SelectorRowDef(selector.Label, row.Positions, () => CurrentValue(key, sim),
+                v => HandleUIVariableSet(key, v, GetVariables()[key], sim, announcer), selector.Mnemonic));
+        }
+        return defs;
+    }
+
+    /// <summary>Ctrl+P's status lines from the cache; asks again for the on-request FCU windows so the
+    /// next refresh has them.</summary>
+    internal IReadOnlyList<string> AutopilotStatusLines(SimConnectManager sim)
+    {
+        foreach (var key in A300AutopilotStatus.RequestedKeys)
+            RequestRead(key, sim);
+        return A300AutopilotStatus.Lines(k => Cached(sim, k));
+    }
+
+    /// <summary>A two-position switch row's position in its own words ("Engaged"), or "" while unread.</summary>
+    private string SwitchState(A300PlacedRow row, SimConnectManager sim) =>
+        CurrentValue(row.Key, sim) is double v && row.Positions.TryGetValue(Math.Round(v), out var word) ? word : "";
+
+    /// <summary>Flips a two-position switch row from its known position through the panel path. An
+    /// unknown position is refused aloud by the write plan.</summary>
+    private void FlipSwitch(A300PlacedRow row, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        double target = CurrentValue(row.Key, sim) is double now && now >= 0.5 ? 0 : 1;
+        HandleUIVariableSet(row.Key, target, GetVariables()[row.Key], sim, announcer);
     }
 
     /// <summary>An FCU button's lamp in words ("On", "Mach"), or "" while it has not been read.</summary>
