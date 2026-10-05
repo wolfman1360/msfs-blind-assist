@@ -23,6 +23,11 @@ class DiffMapsTests(unittest.TestCase):
         self.assertIn('removed B (toggle)', lines)
         self.assertIn('changed A state_var: "L:X" -> "L:Y"', lines)
 
+    def test_a_changed_action_is_reported(self):
+        old = {'controls': [dict(control('A'), action='AIRCRAFT HEADING')]}
+        new = {'controls': [dict(control('A'), action='HEADING')]}
+        self.assertIn('changed A action: "AIRCRAFT HEADING" -> "HEADING"', diff_maps.diff(old, new))
+
 
 if __name__ == '__main__':
     unittest.main()

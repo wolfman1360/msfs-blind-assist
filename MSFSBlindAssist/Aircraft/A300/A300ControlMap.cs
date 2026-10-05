@@ -149,6 +149,9 @@ public sealed class A300Control
     /// <summary>Springs: the position they return to.</summary>
     [JsonPropertyName("rest")] public double? Rest { get; set; }
     [JsonPropertyName("note")] public string? Note { get; set; }
+    /// <summary>A knob push or pull: what it does, in iniBuilds' tooltip words ("AIRCRAFT HEADING");
+    /// null for every other control.</summary>
+    [JsonPropertyName("action")] public string? Action { get; set; }
 
     /// <summary>The positions in ascending value order with iniBuilds' words.</summary>
     public IReadOnlyList<(double Value, string Label)> OrderedPositions() =>

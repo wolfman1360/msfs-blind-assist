@@ -28,6 +28,8 @@ LOC = {
     'INI.TOOLTIPS.CPT_VHF_TFR.TITLE': 'COM1 FREQUENCY',
     'INI.TOOLTIPS.ECAM_ENG.TITLE': 'ECAM ENG PAGE',
     'INI.TOOLTIPS.HEADING_KNOB.TITLE': 'HEADING KNOB',
+    'INI.TOOLTIPS.HEADING_KNOB.PUSH': 'AIRCRAFT HEADING',
+    'INI.TOOLTIPS.HEADING_KNOB.PULL': 'HEADING MODE',
     'INI.TOOLTIPS.VOR_CRS_CAPT.TITLE': 'VOR1 CRS',
     'INI.TOOLTIPS.RAM_AIR_COVER.TITLE': 'RAM AIR GUARD',
     'INI.TOOLTIPS.GEAR_LEVER.TITLE': 'GEAR LEVER',
@@ -92,6 +94,13 @@ def _fixture():
                   "(O:_KnobAnimVar) 10 p0 * + dnor (>O:_KnobAnimVar)"),
         tt_value="(L:INI_HEADING_DIAL) flr '%ddeg' (F:Format)",
         inc="p0 (>B:AIRLINER_HEADING_KNOB_Set)", dec="p0 -1 * (>B:AIRLINER_HEADING_KNOB_Set)")
+    for part, cmd in (('PUSH', 'INI_FCU_SYNC_HEADING_BUTTON'), ('PULL', 'INI_FCU_SELECTED_HEADING_BUTTON')):
+        add(pedestal, 'AIRLINER_HEADING_KNOB_' + part, 'INI.TOOLTIPS.HEADING_KNOB.TITLE', units='',
+            set_code=("p0 if{ 1 (>L:%s) } 1 (>O:IsPushed) (E:SIMULATION TIME, second) (>O:_LastPushTime) "
+                      "(O:IsPulled) if{ 0 (>O:IsPulled) }" % cmd),
+            tt_value='INI.TOOLTIPS.HEADING_KNOB.PUSH_VALUE',
+            inc='1 (>B:AIRLINER_HEADING_KNOB_%s_Set)' % part.capitalize(),
+            dec='0 (>B:AIRLINER_HEADING_KNOB_%s_Set)' % part.capitalize())
     add(pedestal, 'AIRLINER_VOR_CRS_CAPT', 'INI.TOOLTIPS.VOR_CRS_CAPT.TITLE', units='',
         set_code="p0 p0 0 > if{ (>K:VOR1_OBI_INC) } els{ (>K:VOR1_OBI_DEC) } (O:_KnobAnimVar) 10 p0 * + dnor (>O:_KnobAnimVar)",
         tt_value="(A:NAV OBS:1, Degrees) flr '%dDeg' (F:Format)",
@@ -123,7 +132,19 @@ def _by_id():
 
 class GenerateA300MapTests(unittest.TestCase):
     def test_reads_a_file_with_digit_tags(self):
-        self.assertEqual(15, len(_map()['controls']))
+        self.assertEqual(17, len(_map()['controls']))
+
+    def test_a_knob_push_and_pull_carry_the_knobs_own_words(self):
+        self.assertEqual('AIRCRAFT HEADING', _by_id()['AIRLINER_HEADING_KNOB_PUSH']['action'])
+        self.assertEqual('HEADING MODE', _by_id()['AIRLINER_HEADING_KNOB_PULL']['action'])
+
+    def test_other_controls_carry_no_action(self):
+        self.assertNotIn('action', _by_id()['AIRLINER_StormLight'])
+        self.assertNotIn('action', _by_id()['AIRLINER_HEADING_KNOB'])
+
+    def test_a_push_with_no_tooltip_words_has_no_action(self):
+        self.assertIsNone(gen.knob_action(LOC, 'INI.TOOLTIPS.CWS_PUSH.TITLE', 'AIRLINER_CWS_PUSH'))
+        self.assertIsNone(gen.knob_action(LOC, '', 'AIRLINER_HEADING_KNOB_PUSH'))
 
     def test_toggle(self):
         c = _by_id()['AIRLINER_StormLight']

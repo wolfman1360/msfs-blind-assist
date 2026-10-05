@@ -130,6 +130,20 @@ def title_key_for(behavior, ie):
     return re.sub(r'\.(ACTION|ON|OFF|PUSH|PULL)$', '.TITLE', ie['tt_desc'] or '')
 
 
+PUSH_PULL_RE = re.compile(r'_(PUSH|PULL)$', re.IGNORECASE)
+
+
+def knob_action(loc, title_key, ie_id):
+    """What a knob push or pull does, in iniBuilds' words ("AIRCRAFT HEADING"), or None.
+
+    A knob's push and pull events (AIRLINER_<KNOB>_PUSH / _PULL) share the knob's mouse rect and
+    title; the tooltip file carries what each does beside the title, as <knob>.PUSH and <knob>.PULL."""
+    m = PUSH_PULL_RE.search(ie_id or '')
+    if not m or not title_key or not title_key.endswith('.TITLE'):
+        return None
+    return loc_text(loc, title_key[:-len('.TITLE')] + '.' + m.group(1).upper()) or None
+
+
 def new_entry(ie, area, panel, title):
     short = ie['id'][len(PREFIX):] if ie['id'].upper().startswith(PREFIX) else ie['id']
     return OrderedDict([
@@ -248,8 +262,12 @@ def build_map(behavior, loc, package_version=''):
         path = behavior.path(ie['owner'])
         area = path[1] if len(path) > 1 else ''
         panel = path[2] if len(path) > 2 else area
-        entry = new_entry(ie, area, panel, loc_text(loc, title_key_for(behavior, ie)))
-        controls.append(classify(entry, ie, loc))
+        title_key = title_key_for(behavior, ie)
+        entry = classify(new_entry(ie, area, panel, loc_text(loc, title_key)), ie, loc)
+        action = knob_action(loc, title_key, ie['id'])
+        if action:
+            entry['action'] = action
+        controls.append(entry)
     return OrderedDict([
         ('generator', 'tools/a300-gen/generate_a300_map.py'),
         ('package', 'inibuilds-aircraft-a300'),
