@@ -349,7 +349,7 @@ Autopilot (each says the result once it has landed: "Autopilot 1 on"):
   Ctrl+J     Autothrottle button
   Ctrl+L     VOR LOC button
   Shift+P    Land button
-  Ctrl+P     Says where the autopilot buttons are (the FCU panel, Glareshield section)
+  Ctrl+P     Autopilot window: status, engage buttons, disconnects, TOGA, bank limit, flight directors
 
 FCU Push/Pull:
   Shift+1    Push Heading Knob
@@ -361,13 +361,13 @@ FCU Push/Pull:
   Shift+4    Push VS Knob
   Ctrl+4     Pull VS Knob
 
-FCU Set Values (each opens a small window; type and press Enter; Escape closes):
-  Ctrl+S     Speed or Mach
-  Ctrl+H     Heading
-  Ctrl+A     Altitude
-  Ctrl+V     Vertical speed
-  Ctrl+B     Altimeters: one entry sets the captain's, first officer's and standby
-  Ctrl+N     VOR 1 and VOR 2, frequency and course
+FCU Set Values (each opens a small window with its knob and mode buttons; type and press Enter; Escape closes):
+  Ctrl+S     Speed or Mach (speed knob push and pull, Speed Mach)
+  Ctrl+H     Heading (heading knob push and pull, Heading select, NAV)
+  Ctrl+A     Altitude (altitude knob push and pull, Altitude hold, Level change, Profile)
+  Ctrl+V     Vertical speed (vertical speed knob push and pull)
+  Ctrl+B     Altimeters: one entry sets the captain's, first officer's and standby; STD and QNH buttons
+  Ctrl+N     VOR 1, VOR 2 and ILS, frequency and course
 
 Taxi Guidance:
   Shift+Y    Open Taxi Assist Form (enter ATC taxi clearance, start guidance)

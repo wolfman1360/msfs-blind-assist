@@ -454,7 +454,7 @@ public class ClaudeContextBudgetTests
     {
         ["MSFSBlindAssist/Forms/IFly737/"] = "the iFly 737 has no rule file; docs/ifly-737.md holds its notes",
         ["MSFSBlindAssist/SimConnect/IFly/"] = "the iFly 737 has no rule file; docs/ifly-737.md holds its notes",
-        ["MSFSBlindAssist/Forms/PMDG/"] = "the autopilot window both PMDG aircraft share; no rule names it",
+        ["MSFSBlindAssist/Forms/PMDG/"] = "the autopilot window the PMDG aircraft and the A300 share; no rule names it",
         ["MSFSBlindAssist/Forms/Settings/"] = "app-wide settings panels, not one area: VAT-13 in CLAUDE.md covers them all, "
             + "and an area that owns a panel globs it in its own rule file",
     };
