@@ -97,6 +97,14 @@ jobs:
           npm ci --no-audit --no-fund
           npm test
 
+      # The iniBuilds L-1011's in-page display readers (the glareshield autopilot windows; the
+      # INS, PMS and EFB readers join this suite) against live captures of their Coherent views.
+      - name: L-1011 display readers
+        working-directory: tools/l1011-display-test
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+
       # The A380 OANS agent's ARINC decode (the "runway ahead" advisory read the raw word's bits
       # and never showed until 2026-09-25). It needs only SimVar, not a DOM, so it runs in a bare
       # vm context: no dependencies, no lockfile, no npm ci.
