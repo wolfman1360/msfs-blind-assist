@@ -122,16 +122,18 @@ public partial class IniL1011Definition
         return CurrentPosition(key, sim) == target;   // Execute records the target only when it sends
     }
 
-    /// <summary>The keys a value box button or a toggle key is about to read back, so the general
-    /// call-out stays quiet for them until the read-back has spoken: the result is heard once.</summary>
-    private readonly HashSet<string> _readBackPending = new(StringComparer.Ordinal);
+    /// <summary>The keys a value box button or a toggle key is about to read back, with how many
+    /// read-backs each has waiting, so the general call-out stays quiet for a key until the last of
+    /// them has spoken: the result is heard once, even when one button is pressed twice inside a
+    /// read-back delay.</summary>
+    private readonly Dictionary<string, int> _readBackPending = new(StringComparer.Ordinal);
 
     /// <summary>A value box button or a toggle key: the toggle, then its result read back fresh.</summary>
     private void ToggleAndReadBack(string key, SimConnectManager sim, ScreenReaderAnnouncer announcer)
     {
         if (!ToggleControl(key, sim, announcer))
             return;
-        _readBackPending.Add(key);
+        _readBackPending[key] = _readBackPending.GetValueOrDefault(key) + 1;
         _ = ReadBackAsync(key, sim, announcer);
     }
 
@@ -139,8 +141,8 @@ public partial class IniL1011Definition
     /// words ("Heading on", "Autopilot A command"). Fresh, not the cache: the aircraft turns some
     /// presses straight back (thrust management without an autopilot in command), and the 1 Hz cache
     /// could still hold the old position. Queued, not interrupting, so it never cuts off the call-outs
-    /// the press set off ("Localizer armed"); the key leaves <see cref="_readBackPending"/> on every
-    /// path, so the general call-out speaks for it again.</summary>
+    /// the press set off ("Localizer armed"); this read-back's count leaves <see cref="_readBackPending"/>
+    /// on every path, so the general call-out speaks for the key again once the last one has.</summary>
     private async Task ReadBackAsync(string key, SimConnectManager sim, ScreenReaderAnnouncer announcer)
     {
         try
@@ -157,7 +159,14 @@ public partial class IniL1011Definition
         }
         finally
         {
-            _readBackPending.Remove(key);
+            // OnSimContextReset clears the table while a read-back may still be waiting: nothing to take off then.
+            if (_readBackPending.TryGetValue(key, out int waiting))
+            {
+                if (waiting > 1)
+                    _readBackPending[key] = waiting - 1;
+                else
+                    _readBackPending.Remove(key);
+            }
         }
     }
 

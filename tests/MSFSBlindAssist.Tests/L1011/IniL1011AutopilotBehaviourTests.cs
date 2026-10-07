@@ -206,6 +206,35 @@ public class IniL1011AutopilotBehaviourTests
     }
 
     [Fact]
+    public void Two_quick_presses_of_one_box_button_are_each_heard_once()
+    {
+        _def.CanLand = _ => true;
+        var gates = new Queue<TaskCompletionSource>();   // each read-back is released separately
+        _def.ReadBackDelay = _ =>
+        {
+            var gate = new TaskCompletionSource();
+            gates.Enqueue(gate);
+            return gate.Task;
+        };
+        Deliver("SWITCH_AFCS_AT", 0);
+        var autothrottle = _def.ValueBoxButtons(L1011AutoflightWindows.Speed, _sim, _speech)[0];
+        autothrottle.OnPressed();        // target On
+        Deliver("SWITCH_AFCS_AT", 1);    // it took
+        autothrottle.OnPressed();        // target Off, inside the first read-back's delay
+        Deliver("SWITCH_AFCS_AT", 0);    // it took
+        _freshValue = 0;
+        gates.Dequeue().SetResult();     // the first read-back speaks and finishes
+        Assert.Equal(new[] { "Autothrottle off" }, _speech.All);
+
+        Deliver("SWITCH_AFCS_AT", 1);    // the aircraft puts it back on while the second press is still pending
+        Assert.Equal(new[] { "Autothrottle off" }, _speech.All);   // the call-out stays quiet for that key
+
+        _freshValue = 1;
+        gates.Dequeue().SetResult();     // the second read-back
+        Assert.Equal(new[] { "Autothrottle off", "Autothrottle on" }, _speech.All);   // one line per read-back
+    }
+
+    [Fact]
     public void A_box_button_that_is_refused_says_only_why()
     {
         NoDirectorOrAutopilot();

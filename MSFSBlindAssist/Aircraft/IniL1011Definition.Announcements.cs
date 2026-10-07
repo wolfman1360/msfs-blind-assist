@@ -54,7 +54,7 @@ public partial class IniL1011Definition
             // MainForm's UI echo wrap covers a panel combo pick, as on every aircraft.
             bool ownCommand = (_commanded.Resolve(varName, null, Clock()) is double commanded
                     && Math.Abs(commanded - value) < 0.5)
-                || _readBackPending.Contains(varName);
+                || _readBackPending.ContainsKey(varName);
             if (_afcs.Observe(varName, value, ownCommand) is string words)
                 announcer.Announce(words);
             return true;   // a mode button or engage paddle is also a position: the open control follows it
