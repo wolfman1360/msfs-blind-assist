@@ -9,7 +9,7 @@ namespace MSFSBlindAssist.Aircraft.L1011;
 /// altimeters, NAV and COM frequencies and the squawk are typed values. Pure: keys, words, the RPN
 /// each write sends and the words that confirm a typed value; the definition registers the
 /// variables and sends the RPN through the calculator path.
-/// Keys carry no colon: an L:var name with a colon is a stock-SimVar shape (CLAUDE.md).
+/// Keys carry no colon: an L:var name with a colon is a stock-SimVar shape ([VAR-2]).
 /// </summary>
 public static class L1011Levers
 {

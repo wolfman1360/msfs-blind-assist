@@ -36,6 +36,7 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
 
     public override string AircraftName => "iniBuilds L-1011 TriStar";
     public override string AircraftCode => Code;
+    public override string? ChecklistFileName => "iniBuilds_L1011_Checklist.txt";
 
     private readonly L1011ControlMap _map;
     private readonly L1011Placement _placement;
