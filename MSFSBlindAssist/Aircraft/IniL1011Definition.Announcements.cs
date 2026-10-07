@@ -20,7 +20,7 @@ namespace MSFSBlindAssist.Aircraft;
 /// <item>AUTOPILOT states (<see cref="L1011AfcsModes"/>): engage paddles, mode buttons and the
 /// armed/captured flags, through <see cref="L1011AfcsAnnouncer"/> inside ProcessSimVarUpdate, under the
 /// same wrap; MSFSBA's own press, within <see cref="L1011CommandedState.HoldMs"/>, is silent only
-/// while the switch sits where it was put (any other movement is the aircraft's and is spoken).</item>
+/// while the switch sits where it was put (any other movement is the aircraft's and is spoken, except that a value box button or toggle key speaks its own read-back instead).</item>
 /// </list>
 /// Switch positions are consumed silently: the panel combo follows them, nothing is spoken.
 /// </summary>
@@ -50,7 +50,7 @@ public partial class IniL1011Definition
                 _seedGate.NoteValue(varName, value, ownedByAircraft: true);
             // MSFSBA's own press is silent while the switch sits where it was put (the PMDG windows'
             // value-matched echo); any other movement is the aircraft's and is spoken. A value box
-            // button or toggle key reads its own result back, so the call-out waits for that.
+            // button or toggle key reads its own result back, so the call-out stays quiet for that key until it has.
             // MainForm's UI echo wrap covers a panel combo pick, as on every aircraft.
             bool ownCommand = (_commanded.Resolve(varName, null, Clock()) is double commanded
                     && Math.Abs(commanded - value) < 0.5)
