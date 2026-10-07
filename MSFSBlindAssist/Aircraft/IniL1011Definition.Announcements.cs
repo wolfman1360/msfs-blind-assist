@@ -19,8 +19,8 @@ namespace MSFSBlindAssist.Aircraft;
 /// so the pilot's own combo pick is never spoken back.</item>
 /// <item>AUTOPILOT states (<see cref="L1011AfcsModes"/>): engage paddles, mode buttons and the
 /// armed/captured flags, through <see cref="L1011AfcsAnnouncer"/> inside ProcessSimVarUpdate, under the
-/// same wrap; a change MSFSBA itself commanded within <see cref="L1011CommandedState.HoldMs"/> is
-/// recorded silently.</item>
+/// same wrap; MSFSBA's own press, within <see cref="L1011CommandedState.HoldMs"/>, is silent only
+/// while the switch sits where it was put (any other movement is the aircraft's and is spoken).</item>
 /// </list>
 /// Switch positions are consumed silently: the panel combo follows them, nothing is spoken.
 /// </summary>
@@ -48,9 +48,13 @@ public partial class IniL1011Definition
         {
             if (_seedGate.Armed)
                 _seedGate.NoteValue(varName, value, ownedByAircraft: true);
-            // A change MSFSBA itself just commanded (a value box, Ctrl+P or a toggle key) is recorded
-            // but not spoken; MainForm's UI echo wrap covers a panel combo pick the same way.
-            bool ownCommand = _commanded.Resolve(varName, null, Clock()) is not null;
+            // MSFSBA's own press is silent while the switch sits where it was put (the PMDG windows'
+            // value-matched echo); any other movement is the aircraft's and is spoken. A value box
+            // button or toggle key reads its own result back, so the call-out waits for that.
+            // MainForm's UI echo wrap covers a panel combo pick, as on every aircraft.
+            bool ownCommand = (_commanded.Resolve(varName, null, Clock()) is double commanded
+                    && Math.Abs(commanded - value) < 0.5)
+                || _readBackPending.Contains(varName);
             if (_afcs.Observe(varName, value, ownCommand) is string words)
                 announcer.Announce(words);
             return true;   // a mode button or engage paddle is also a position: the open control follows it
@@ -129,6 +133,7 @@ public partial class IniL1011Definition
         _lightTest.Clear();
         _leverLast.Clear();
         _afcs.Reset();
+        _readBackPending.Clear();
         _commanded.Clear();
         _seedGate.Arm(KnownSeedValues());
     }

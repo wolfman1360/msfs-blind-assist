@@ -15,9 +15,10 @@ namespace MSFSBlindAssist.Aircraft;
 /// <see cref="PMDGAutopilotWindow"/>) with a live status list, the engage paddles and the rest of the
 /// cluster; the input-mode toggle keys; and the output-mode readouts. Each control sits in one window
 /// only (<see cref="L1011AutoflightWindows"/>), and every press goes through the panel row's write
-/// path, so the refusals and the commanded-position hold match the panels. A value box button and a
-/// toggle key read their result back, because no control of theirs speaks it; Ctrl+P's labels update
-/// in place and say nothing.
+/// path, so the refusals and the commanded-position hold match the panels. A label, a combo and a
+/// status line show the position the aircraft REPORTS, never the one just asked for. A value box button
+/// and a toggle key read their result back (queued, so the call-outs the press set off are heard
+/// first), because no control of theirs speaks it; Ctrl+P's labels update in place and say nothing.
 /// </summary>
 public partial class IniL1011Definition
 {
@@ -73,6 +74,14 @@ public partial class IniL1011Definition
     private double? AfcsPosition(string key, SimConnectManager sim) => CurrentPosition(key, sim) ?? _afcs.Last(key);
 
     /// <summary>
+    /// A control's position as the aircraft reports it: the cache, else the last value delivered. Never
+    /// what MSFSBA just commanded: a label, a combo or a status line must not say "On" for a switch that
+    /// has not moved (the PMDG windows' rule). The commanded position (<see cref="AfcsPosition"/>) only
+    /// decides which way a toggle goes and whether a refusal applies.
+    /// </summary>
+    private double? ReportedPosition(string key, SimConnectManager sim) => sim.GetCachedVariableValue(key) ?? _afcs.Last(key);
+
+    /// <summary>
     /// Why a press must not be sent, or null: a pitch or lateral mode switched ON while the autopilot
     /// is known to be off and both flight directors are known to be off would be turned straight back
     /// off by the aircraft, with nothing to tell the pilot why.
@@ -84,9 +93,10 @@ public partial class IniL1011Definition
             ? L1011AfcsModes.NeedsDirectorRefusal
             : null;
 
-    /// <summary>A row's position in its own words ("On", "Command"), or "" while it is not known.</summary>
+    /// <summary>A row's REPORTED position in its own words ("On", "Command"), or "" while it is not
+    /// known: what the aircraft says (<see cref="ReportedPosition"/>), never what was just asked for.</summary>
     internal string PositionWord(string key, SimConnectManager sim) =>
-        _rows.TryGetValue(key, out var row) && AfcsPosition(key, sim) is double v
+        _rows.TryGetValue(key, out var row) && ReportedPosition(key, sim) is double v
         && row.Positions.TryGetValue(Math.Round(v), out var word)
             ? word
             : "";
@@ -112,17 +122,25 @@ public partial class IniL1011Definition
         return CurrentPosition(key, sim) == target;   // Execute records the target only when it sends
     }
 
+    /// <summary>The keys a value box button or a toggle key is about to read back, so the general
+    /// call-out stays quiet for them until the read-back has spoken: the result is heard once.</summary>
+    private readonly HashSet<string> _readBackPending = new(StringComparer.Ordinal);
+
     /// <summary>A value box button or a toggle key: the toggle, then its result read back fresh.</summary>
     private void ToggleAndReadBack(string key, SimConnectManager sim, ScreenReaderAnnouncer announcer)
     {
-        if (ToggleControl(key, sim, announcer))
-            _ = ReadBackAsync(key, sim, announcer);
+        if (!ToggleControl(key, sim, announcer))
+            return;
+        _readBackPending.Add(key);
+        _ = ReadBackAsync(key, sim, announcer);
     }
 
     /// <summary>Reads a control fresh once the press has landed and speaks it in the announcements'
     /// words ("Heading on", "Autopilot A command"). Fresh, not the cache: the aircraft turns some
     /// presses straight back (thrust management without an autopilot in command), and the 1 Hz cache
-    /// could still hold the old position.</summary>
+    /// could still hold the old position. Queued, not interrupting, so it never cuts off the call-outs
+    /// the press set off ("Localizer armed"); the key leaves <see cref="_readBackPending"/> on every
+    /// path, so the general call-out speaks for it again.</summary>
     private async Task ReadBackAsync(string key, SimConnectManager sim, ScreenReaderAnnouncer announcer)
     {
         try
@@ -131,11 +149,15 @@ public partial class IniL1011Definition
             if (_disposed)
                 return;
             if (await ReadFresh(sim, key, BatchReadoutTimeoutMs) is double value && L1011AfcsModes.Words(key, value) is string words)
-                announcer.AnnounceImmediate(words);
+                announcer.Announce(words);
         }
         catch (Exception ex)
         {
             Log.Warn("L1011", $"Read-back of {key} failed: {ex.Message}");
+        }
+        finally
+        {
+            _readBackPending.Remove(key);
         }
     }
 
@@ -258,7 +280,7 @@ public partial class IniL1011Definition
 
     /// <summary>Ctrl+P's status lines (<see cref="L1011AutopilotStatus"/>).</summary>
     internal IReadOnlyList<string> AutopilotStatusLines(SimConnectManager sim) =>
-        L1011AutopilotStatus.Lines(_afcsWindowRows, key => AfcsPosition(key, sim));
+        L1011AutopilotStatus.Lines(_afcsWindowRows, key => ReportedPosition(key, sim));
 
     /// <summary>Ctrl+P's buttons (<see cref="L1011AutoflightWindows.AutopilotButtons"/>), each through its
     /// row's write path. Nothing is said when a press works: the labels update in place.</summary>
@@ -287,7 +309,7 @@ public partial class IniL1011Definition
             if (!_rows.TryGetValue(selector.RowKey, out var row))
                 continue;
             string key = selector.RowKey;
-            defs.Add(new SelectorRowDef(selector.Label, row.Positions, () => AfcsPosition(key, sim),
+            defs.Add(new SelectorRowDef(selector.Label, row.Positions, () => ReportedPosition(key, sim),
                 v => HandleUIVariableSet(key, v, GetVariables()[key], sim, announcer), selector.Mnemonic));
         }
         return defs;

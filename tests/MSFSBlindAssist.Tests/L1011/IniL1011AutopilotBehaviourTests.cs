@@ -182,6 +182,27 @@ public class IniL1011AutopilotBehaviourTests
         buttons[1].OnPressed();
         Assert.Equal(new[] { ("SWITCH_AFCS_TM", IniL1011Definition.BatchReadoutTimeoutMs) }, _freshReads);
         Assert.Equal(new[] { "Thrust management off" }, _speech.All);
+        Assert.Empty(_speech.Interrupts);   // queued: it must not cut off the call-outs the press set off
+    }
+
+    [Fact]
+    public void A_box_button_result_is_heard_once()
+    {
+        _def.CanLand = _ => true;
+        var gate = new TaskCompletionSource();
+        _def.ReadBackDelay = _ => gate.Task;
+        Deliver("SWITCH_AFCS_TM", 0);
+        _def.ValueBoxButtons(L1011AutoflightWindows.Speed, _sim, _speech)[1].OnPressed();
+        Deliver("SWITCH_AFCS_TM", 1);
+        Deliver("SWITCH_AFCS_TM", 0);   // the aircraft turned it straight back
+        Assert.Empty(_speech.All);      // the read-back is pending: the general call-out waits for it
+        _freshValue = 0;
+        gate.SetResult();
+        Assert.Equal(new[] { "Thrust management off" }, _speech.All);
+
+        _now += L1011CommandedState.HoldMs + 1;   // the press's hold is over, and the read-back has spoken
+        Deliver("SWITCH_AFCS_TM", 1);             // a later change by the aircraft
+        Assert.Equal(new[] { "Thrust management off", "Thrust management on" }, _speech.All);
     }
 
     [Fact]
@@ -222,12 +243,55 @@ public class IniL1011AutopilotBehaviourTests
     }
 
     [Fact]
+    public void A_window_label_shows_the_position_the_aircraft_reports()
+    {
+        _def.CanLand = _ => true;
+        Deliver("SWITCH_AFCS_FD_A", 0);
+        var button = _def.AutopilotButtons(_sim, _speech)[0];   // Flight director A
+        button.OnPressed();
+        Assert.Equal("Off", button.GetCurrentState());   // asked for On, but the switch has not moved
+        Deliver("SWITCH_AFCS_FD_A", 1);
+        Assert.Equal("On", button.GetCurrentState());
+    }
+
+    [Fact]
+    public void Your_own_press_is_silent_when_the_switch_goes_where_you_put_it()
+    {
+        _def.CanLand = _ => true;
+        Deliver("SWITCH_AFCS_FD_A", 0);
+        _def.AutopilotButtons(_sim, _speech)[0].OnPressed();
+        Deliver("SWITCH_AFCS_FD_A", 1);
+        Assert.Empty(_speech.All);
+    }
+
+    [Fact]
+    public void A_switch_the_aircraft_moves_after_your_press_is_announced()
+    {
+        _def.CanLand = _ => true;
+        Deliver("SWITCH_AFCS_FD_A", 0);
+        _def.AutopilotButtons(_sim, _speech)[0].OnPressed();
+        Deliver("SWITCH_AFCS_FD_A", 1);
+        Deliver("SWITCH_AFCS_FD_A", 0);   // within the hold: the aircraft moved it, not you
+        Assert.Equal(new[] { "Flight director A off" }, _speech.All);
+    }
+
+    [Fact]
     public void The_status_list_starts_with_the_windows_not_read_yet()
     {
         Deliver("SWITCH_AFCS_AP_A", 2);
         var lines = _def.AutopilotStatusLines(_sim);
         Assert.Equal(L1011AutopilotStatus.NotReadYet, lines[0]);
         Assert.Contains("Autopilot A off", lines);
+    }
+
+    [Fact]
+    public void The_status_list_shows_the_reported_engage_position()
+    {
+        _def.CanLand = _ => true;
+        Deliver("SWITCH_AFCS_AP_A", 2);
+        _freshValue = 2;
+        Assert.True(Hotkey(HotkeyAction.ToggleAutopilot1));   // Shift+A asks for Command
+        Assert.Contains("Autopilot A off", _def.AutopilotStatusLines(_sim));   // not shown before the aircraft reports it
     }
 
     [Theory]
@@ -245,6 +309,7 @@ public class IniL1011AutopilotBehaviourTests
         _freshValue = landed;
         Assert.True(Hotkey(action));
         Assert.Equal(new[] { spoken }, _speech.All);
+        Assert.Empty(_speech.Interrupts);   // queued behind any call-out the press set off
     }
 
     [Fact]
