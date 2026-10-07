@@ -266,7 +266,8 @@ public partial class IniL1011Definition
         if (on && _afcsReader == null && !_disposed)
         {
             var reader = new CoherentDisplayClient(AfcsViewNeedle, AfcsReadIntervalMs, "coherent-l1011-afcs-agent.js");
-            reader.RowsUpdated += rows => _afcsWindowRows = rows;
+            reader.RowsUpdated += rows => OnAfcsRows(reader, rows);
+            reader.Error += message => Log.Warn("L1011", $"Glareshield reader: {message}");
             _afcsReader = reader;
             reader.Start();
         }
@@ -276,6 +277,14 @@ public partial class IniL1011Definition
             _afcsReader = null;
             _afcsWindowRows = null;
         }
+    }
+
+    /// <summary>Takes a reader's rows only while that reader is the running one: a post queued just
+    /// before the reader stopped must not bring the old window lines back.</summary>
+    internal void OnAfcsRows(CoherentDisplayClient source, List<string> rows)
+    {
+        if (ReferenceEquals(source, _afcsReader))
+            _afcsWindowRows = rows;
     }
 
     /// <summary>Ctrl+P's status lines (<see cref="L1011AutopilotStatus"/>).</summary>

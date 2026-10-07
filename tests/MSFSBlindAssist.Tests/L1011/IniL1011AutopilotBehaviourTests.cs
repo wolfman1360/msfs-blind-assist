@@ -285,6 +285,14 @@ public class IniL1011AutopilotBehaviourTests
     }
 
     [Fact]
+    public void Rows_from_a_reader_that_is_not_running_are_ignored()
+    {
+        using var stale = new CoherentDisplayClient(IniL1011Definition.AfcsViewNeedle);   // never started
+        _def.OnAfcsRows(stale, new List<string> { "power|on", "1|250" });
+        Assert.Equal(L1011AutopilotStatus.NotReadYet, _def.AutopilotStatusLines(_sim)[0]);
+    }
+
+    [Fact]
     public void The_status_list_shows_the_reported_engage_position()
     {
         _def.CanLand = _ => true;
