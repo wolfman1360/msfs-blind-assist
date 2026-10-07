@@ -9,9 +9,10 @@ namespace MSFSBlindAssist.Forms.L1011;
 ///
 /// Rows come from <see cref="MonitorRowBuilder"/> like every other aircraft's: every Continuous +
 /// IsAnnounced variable minus those flagged ExcludeFromMonitorManager, so the TriStar lists its
-/// warning lights, its announced levers (flap handle, parking brake, ground spoilers) and the shared
-/// base variables; the silently consumed switch positions are excluded because a checkbox there
-/// would mute nothing. Unticked keys go to UserSettings.L1011DisabledMonitorVariables, honoured by
+/// warning lights, its announced levers (flap handle, parking brake, ground spoilers), the
+/// autopilot's engage switches, mode buttons and armed/captured flags, and the shared base
+/// variables; the silently consumed switch positions are excluded because a checkbox there would
+/// mute nothing. Unticked keys go to UserSettings.L1011DisabledMonitorVariables, honoured by
 /// MainForm (generic gate and the ProcessSimVarUpdate wrap) and by the definition's warning-light
 /// flush. All behaviour lives in <see cref="MonitorManagerFormBase"/>.
 /// </summary>

@@ -90,10 +90,12 @@ Ctrl+P (input mode) opens the autopilot window. Its first list reads the glaresh
 line by line as the cockpit draws them ("Speed: IAS 250", "Pitch: VS -1500", "Heading: 090"),
 then the engaged modes, the armed and captured modes, the autothrottle, thrust management and
 both autopilots. It updates while the window is open without moving your place. Below the list:
-Flight director A and B, Turbulence, ILS, Localizer, VOR, Back course, Autopilot disconnect, the
-captain's autothrottle disconnect and the takeoff go-around button, each showing its state, then
-the Autopilot A and B combo boxes (Command, CWS, Off). Nothing is spoken when a press works: the
-button's label changes. Escape closes the window.
+Flight director A and B, Turbulence, ILS, Localizer, VOR and Back course, each showing the
+position the aircraft reports; then three one-shot buttons with no state: Autopilot disconnect,
+the captain's autothrottle disconnect and the takeoff go-around button; then the Autopilot A and
+B combo boxes (Command, CWS, Off). Nothing is spoken when you press a button: a switch's label
+changes once the aircraft has moved it, and a disconnect is heard as "Autopilot A off" when the
+aircraft moves the engage switch. Escape closes the window.
 
 
 CIRCUIT BREAKERS
@@ -298,11 +300,14 @@ Warning and caution lights are announced when they come on and when they go out 
 light on"), once they have stayed that way for about a second, so a flashing light is heard
 once. The annunciator light test, which lights every lamp at once, is silent.
 
-The autopilot is announced when its state changes other than by your own choice in MSFS Blind
+The autopilot is announced when a switch moves other than by your own press in MSFS Blind
 Assist: an engage switch ("Autopilot A command", "Autopilot B off" - which is also how a
-disconnect is heard), a mode button turning on or off ("Heading on", "Altitude hold off"), and
+disconnect is heard), a flight director, the autothrottle or thrust management turning on or off
+("Autothrottle off"), a mode button turning on or off ("Heading on", "Altitude hold off"), and
 the armed and captured modes as they come on ("Localizer armed", "Localizer captured", "VOR
 captured", "Glideslope armed", "Glideslope captured", "Altitude armed", "Flare", "Rollout").
+Your own press is not spoken back while the switch sits where you put it; if the aircraft moves
+it anywhere else - turning thrust management straight back off, say - you hear that.
 
 The flap handle, the parking brake and the ground spoiler arm are announced when something
 other than MSFS Blind Assist moves them - a hardware lever, or the aircraft's own automation

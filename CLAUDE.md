@@ -4,7 +4,7 @@ Guidance for Claude Code in this repository, kept small on purpose: each area's 
 
 ## Project Overview
 
-MSFS Blind Assist - C# Windows Forms accessibility application for Microsoft Flight Simulator. Multi-aircraft support (FlyByWire A320, Fenix A320, iniBuilds L-1011 and more, extensible). SimConnect integration, screen reader optimized (NVDA/JAWS). .NET 10, Windows Forms, SQLite.
+MSFS Blind Assist - C# Windows Forms accessibility application for Microsoft Flight Simulator. Multi-aircraft support (FlyByWire A320, Fenix A320, extensible). SimConnect integration, screen reader optimized (NVDA/JAWS). .NET 10, Windows Forms, SQLite.
 
 ## Build
 

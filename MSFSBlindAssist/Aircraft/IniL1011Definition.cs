@@ -28,7 +28,7 @@ namespace MSFSBlindAssist.Aircraft;
 /// <item>The 981 circuit breakers are never data definitions: the breaker window reads them through
 /// the Coherent debugger (<see cref="L1011CircuitBreakers"/>).</item>
 /// </list>
-/// The AFCS glareshield panel, the INS/PMS and the EFB are added by later sessions (design doc).
+/// The INS/PMS and the EFB are added by later sessions (design doc).
 /// </summary>
 public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
 {
