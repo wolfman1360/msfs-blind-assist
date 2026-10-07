@@ -12,8 +12,8 @@ READ THIS FIRST - WHAT THIS VERSION COVERS
 
 Choose iniBuilds L-1011 TriStar from the Aircraft menu. This version covers the TriStar's
 switch panels: the flight engineer's station, the overhead, the main instrument panel and the
-center console, in the order the TriStar's own preflight flows call for them. Not included yet:
-the glareshield autopilot panel, the three INS units and the two PMS units, and the Paper Flight
+center console, in the order the TriStar's own preflight flows call for them, and the glareshield
+autopilot. Not included yet: the three INS units and the two PMS units, and the Paper Flight
 Bag tablet. Until they arrive, operate those in the simulator.
 
 
@@ -52,6 +52,50 @@ TYPED VALUES - type, then press Set or Enter
   NAV 2 with their courses (see INPUT MODE below).
 
 
+THE AUTOPILOT
+
+The glareshield autopilot is the first panel of the Main Panel section, "Autopilot". It starts in
+the order of the manual's main panel preparation: both HSI navigation source switches, the
+selected speed, the selected heading and the Heading button, both flight directors, the
+Autopilot A and B engage switches (Command, CWS, Off) and an Autopilot disconnect button, both
+courses, the selected altitude and its reference, and the captain's takeoff go-around (TOGA)
+button. Then the rest of the glareshield from left to right: autothrottle, thrust management,
+VNAV, vertical speed with its selected value, altitude hold, IAS hold, Mach hold, turbulence,
+ILS, localizer, VOR, INS and back course, and last the captain's and first officer's autopilot
+alert reset buttons. Each value has a text box right before its knob. The panel's Status Display
+shows the pitch mode, the armed and captured modes, and the values the windows are set to.
+
+A heading, navigation or pitch mode button only works while the autopilot or a flight director
+is on; the TriStar turns it straight back off otherwise. So with both flight directors and the
+autopilot off you hear "turn on a flight director or the autopilot first" and nothing is pressed.
+Turning vertical speed mode on sets its target to the aircraft's current vertical speed, so turn
+the mode on before you type a vertical speed; typed while the mode is off you hear "turn vertical
+speed mode on first". Thrust management needs an autopilot in command and the PMS takeoff page
+filled in; without them the TriStar turns it straight back off.
+
+Ctrl+S, Ctrl+H, Ctrl+A and Ctrl+V (input mode) open a box for the speed, heading, altitude or
+vertical speed, with the buttons that go with it:
+  Speed: Autothrottle, Thrust management, IAS hold, Mach hold.
+  Heading: Heading, INS.
+  Altitude: Altitude hold, VNAV.
+  Vertical speed: Vertical speed.
+Each button shows its state. Press one and about a second later you hear what the aircraft did:
+"Heading on", or "Thrust management off" when the aircraft did not take it. Type a value and
+press Enter - speed 100 to 350 knots, altitude 0 to 50000 feet, vertical speed -6000 to 6000
+feet per minute (both in steps of 100), heading 0 to 359 - and you hear the value set
+("Heading 090"). The box stays open for another value; Escape closes it. Opening another box, or
+Ctrl+B, closes the one that is open.
+
+Ctrl+P (input mode) opens the autopilot window. Its first list reads the glareshield's windows
+line by line as the cockpit draws them ("Speed: IAS 250", "Pitch: VS -1500", "Heading: 090"),
+then the engaged modes, the armed and captured modes, the autothrottle, thrust management and
+both autopilots. It updates while the window is open without moving your place. Below the list:
+Flight director A and B, Turbulence, ILS, Localizer, VOR, Back course, Autopilot disconnect, the
+captain's autothrottle disconnect and the takeoff go-around button, each showing its state, then
+the Autopilot A and B combo boxes (Command, CWS, Off). Nothing is spoken when a press works: the
+button's label changes. Escape closes the window.
+
+
 CIRCUIT BREAKERS
 
 The Engineer Station's Circuit Breakers panel has an "Open circuit breaker list" button. The
@@ -63,6 +107,12 @@ read when the window opens; Refresh reads them again.
 
 
 OUTPUT MODE - Press right bracket to activate
+
+Autopilot:
+  Shift+H    Read the selected heading
+  Shift+S    Read the speed target
+  Shift+A    Read the selected altitude
+  Shift+V    Read the vertical speed target
 
 Aircraft state:
   L          Read the flap handle and the flap angle
@@ -188,6 +238,18 @@ VATSIM:
 
 INPUT MODE - Press [ to activate
 
+Autopilot:
+  Ctrl+S     Set speed (with Autothrottle, Thrust management, IAS hold and Mach hold)
+  Ctrl+H     Set heading (with Heading and INS)
+  Ctrl+A     Set altitude (with Altitude hold and VNAV)
+  Ctrl+V     Set vertical speed (with Vertical speed - turn it on first)
+  Ctrl+P     Autopilot window (the glareshield windows, modes, engage switches)
+  Shift+A    Autopilot A, Command or Off (read back)
+  Ctrl+O     Autopilot B, Command or Off (read back)
+  Ctrl+J     Autothrottle on or off (read back)
+  Ctrl+L     Localizer on or off (read back)
+  Shift+P    ILS on or off (read back)
+
 Teleport:
   Shift+R    Runway Teleport
   Shift+G    Gate Teleport
@@ -235,6 +297,12 @@ BACKGROUND ANNOUNCEMENTS - Ctrl+M
 Warning and caution lights are announced when they come on and when they go out ("Engine 1 fire
 light on"), once they have stayed that way for about a second, so a flashing light is heard
 once. The annunciator light test, which lights every lamp at once, is silent.
+
+The autopilot is announced when its state changes other than by your own choice in MSFS Blind
+Assist: an engage switch ("Autopilot A command", "Autopilot B off" - which is also how a
+disconnect is heard), a mode button turning on or off ("Heading on", "Altitude hold off"), and
+the armed and captured modes as they come on ("Localizer armed", "Localizer captured", "VOR
+captured", "Glideslope armed", "Glideslope captured", "Altitude armed", "Flare", "Rollout").
 
 The flap handle, the parking brake and the ground spoiler arm are announced when something
 other than MSFS Blind Assist moves them - a hardware lever, or the aircraft's own automation
