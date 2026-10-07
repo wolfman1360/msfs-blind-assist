@@ -62,8 +62,8 @@ public class IniL1011DefinitionTests
     {
         // MainForm hands an unparseable box to HandleUIVariableSet as 0 unless the field opts in, and
         // 0 is a valid squawk ("Squawk 0000"); NaN is refused by every typed value's own check.
-        var typed = L1011Levers.Keys.Where(k => k.EndsWith("_SET", StringComparison.Ordinal)).ToList();
-        Assert.Equal(12, typed.Count);   // 3 altimeters, the squawk, 6 COM and 2 NAV frequencies
+        var typed = L1011Levers.Keys.Where(k => k.EndsWith("_SET", StringComparison.Ordinal) && !L1011Afcs.Keys.Contains(k)).ToList();
+        Assert.Equal(12, typed.Count);   // 3 altimeters, the squawk, 6 COM and 2 NAV frequencies (the autopilot's are its own)
         var vars = Def.GetVariables();
         Assert.All(typed, k => Assert.True(vars[k].UnparseableTextAsNaN, k));
     }

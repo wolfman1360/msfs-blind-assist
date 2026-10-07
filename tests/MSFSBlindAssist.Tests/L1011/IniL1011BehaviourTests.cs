@@ -158,7 +158,7 @@ public class IniL1011BehaviourTests
     public void A_typed_value_that_is_not_a_number_is_an_error_and_confirms_nothing()
     {
         _def.CanLand = _ => true;   // the refusal must come from the value, not the calculator path
-        var typed = L1011Levers.Keys.Where(k => k.EndsWith("_SET", StringComparison.Ordinal)).ToList();
+        var typed = L1011Levers.Keys.Where(k => k.EndsWith("_SET", StringComparison.Ordinal) && !L1011Afcs.Keys.Contains(k)).ToList();
         var expected = new List<string>();
         foreach (var key in typed)
         {

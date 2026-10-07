@@ -29,14 +29,15 @@ public static class L1011Levers
     public static string ComStandbyKey(int radio) => $"L1011_COM{radio}_STANDBY_SET";
     public static string NavFrequencyKey(int radio) => $"L1011_NAV{radio}_SET";
 
-    public static IReadOnlySet<string> Keys { get; } = new HashSet<string>(StringComparer.Ordinal)
+    /// <summary>Every hand-written row key: these, plus the autopilot's rows (<see cref="L1011Afcs.RowKeys"/>).</summary>
+    public static IReadOnlySet<string> Keys { get; } = new HashSet<string>(new[]
     {
         BreakerListKey, FlapHandleKey, GearLeverKey, SpeedBrakeKey, GroundSpoilersKey, ParkingBrakeKey,
         CaptainAltimeterKey, FirstOfficerAltimeterKey, StandbyAltimeterKey, SquawkKey,
         ComActiveKey(1), ComActiveKey(2), ComActiveKey(3),
         ComStandbyKey(1), ComStandbyKey(2), ComStandbyKey(3),
         NavFrequencyKey(1), NavFrequencyKey(2),
-    };
+    }.Concat(L1011Afcs.RowKeys), StringComparer.Ordinal);
 
     /// <summary>The altimeter a key sets: 1 captain, 2 first officer, 3 standby; null for any other key.</summary>
     public static int? AltimeterIndex(string key) => key switch
