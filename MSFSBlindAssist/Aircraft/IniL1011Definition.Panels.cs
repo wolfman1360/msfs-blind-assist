@@ -48,6 +48,9 @@ public partial class IniL1011Definition
         var displays = new Dictionary<string, List<string>>();
         foreach (var (key, lamp) in _lamps)
             Add(displays, lamp.Panel, key);
+        Add(displays, "Autopilot", PitchModeKey);
+        foreach (var flag in L1011AfcsModes.Flags)
+            Add(displays, "Autopilot", flag.Key);
         foreach (var readout in L1011Readouts.All)
             Add(displays, readout.Panel, readout.Key);
 

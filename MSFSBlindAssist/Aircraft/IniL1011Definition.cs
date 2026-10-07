@@ -53,6 +53,9 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
     private SimConnectManager? _sim;
     private bool _disposed;
 
+    /// <summary>The Autopilot panel's pitch-mode status row.</summary>
+    public const string PitchModeKey = "L1011_AFCS_PITCH_MODE";
+
     /// <summary>The clock every timing rule reads (lamp settle, commanded-position hold); tests replace it.</summary>
     internal Func<long> Clock { get; set; } = () => Environment.TickCount64;
 
@@ -165,16 +168,49 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
 
         foreach (var readout in L1011Readouts.All)
         {
+            bool lvar = readout.SimVar.StartsWith("L:", StringComparison.Ordinal);
             vars[readout.Key] = new SimVarDefinition
             {
-                Name = readout.SimVar,
+                Name = lvar ? readout.SimVar.Substring(2) : readout.SimVar,
                 DisplayName = readout.Name,
-                Type = SimVarType.SimVar,
+                Type = lvar ? SimVarType.LVar : SimVarType.SimVar,
                 Units = readout.Units,
                 UpdateFrequency = UpdateFrequency.OnRequest,
                 RenderAsReadOnlyStatus = true,
             };
         }
+
+        // The autopilot's armed and captured flags: announced (L1011AfcsAnnouncer), listed in the
+        // Autopilot panel's status display, muteable in Ctrl+M.
+        foreach (var flag in L1011AfcsModes.Flags)
+        {
+            var def = new SimVarDefinition
+            {
+                Name = flag.Key,
+                DisplayName = flag.Name,
+                Type = SimVarType.LVar,
+                UpdateFrequency = UpdateFrequency.Continuous,
+                IsAnnounced = true,
+                ValueDescriptions = new Dictionary<double, string> { [0] = "off", [1] = "on" },
+                RenderAsReadOnlyStatus = true,
+            };
+            if (batchNames.Add(ContinuousBatchLayout.FullName(def)))
+                vars[flag.Key] = def;
+        }
+
+        // The pitch window's mode, the AFCS gauge's own VS_MASTER_SOURCE (L1011_AFCS.js update100).
+        vars[PitchModeKey] = new SimVarDefinition
+        {
+            Name = "VS_MASTER_SOURCE",
+            DisplayName = "Pitch mode",
+            Type = SimVarType.LVar,
+            UpdateFrequency = UpdateFrequency.OnRequest,
+            ValueDescriptions = new Dictionary<double, string>
+            {
+                [0] = "Takeoff", [1] = "VNAV", [2] = "Vertical speed", [3] = "Altitude", [4] = "IAS", [5] = "Mach",
+            },
+            RenderAsReadOnlyStatus = true,
+        };
 
         // End-to-end MobiFlight probe target: every TriStar write is a calculator-path string, and
         // with no WASM module installed each one is dropped with nothing to say so. Registering this
@@ -219,6 +255,9 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
             case L1011RowAction.Set:
             {
                 bool stockVar = control.StateVar!.StartsWith("A:", StringComparison.Ordinal);
+                // An autopilot engage switch or mode button speaks when the aircraft changes it
+                // (L1011AfcsAnnouncer), so it keeps a Ctrl+M row; every other position is silent.
+                bool announced = L1011AfcsModes.IsAnnounced(row.Key);
                 return new SimVarDefinition
                 {
                     Name = Bare(control.StateVar),
@@ -226,8 +265,8 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
                     Type = stockVar ? SimVarType.SimVar : SimVarType.LVar,
                     Units = stockVar ? control.StateUnit ?? "Bool" : "number",
                     UpdateFrequency = UpdateFrequency.Continuous,
-                    IsAnnounced = true,                    // batch-covered; consumed silently in ProcessSimVarUpdate
-                    ExcludeFromMonitorManager = true,      // a checkbox here would mute nothing
+                    IsAnnounced = true,                    // batch-covered; consumed in ProcessSimVarUpdate
+                    ExcludeFromMonitorManager = !announced, // a checkbox on a silent position would mute nothing
                     ValueDescriptions = new Dictionary<double, string>(row.Positions),
                     // The panel combo follows a change made elsewhere (the cockpit, the EFB's
                     // autocomplete): the write fires only on a user commit, so a refresh sends nothing.
@@ -283,6 +322,15 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
                 return new SimVarDefinition
                 {
                     Name = "MSFSBA_L1011_BREAKER_LIST",
+                    DisplayName = row.Name,
+                    Type = SimVarType.LVar,
+                    UpdateFrequency = UpdateFrequency.Never,
+                    RenderAsButton = true,
+                };
+            case L1011Afcs.DisconnectKey:
+                return new SimVarDefinition
+                {
+                    Name = "MSFSBA_" + row.Key,
                     DisplayName = row.Name,
                     Type = SimVarType.LVar,
                     UpdateFrequency = UpdateFrequency.Never,

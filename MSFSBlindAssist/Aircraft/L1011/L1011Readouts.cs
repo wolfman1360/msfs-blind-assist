@@ -5,7 +5,7 @@ namespace MSFSBlindAssist.Aircraft.L1011;
 /// <summary>One gauge value shown in a panel's status display.</summary>
 /// <param name="Key">The MSFSBA variable key.</param>
 /// <param name="Name">The spoken name ("Tank 1 fuel").</param>
-/// <param name="SimVar">The stock simulator variable it reads.</param>
+/// <param name="SimVar">The stock simulator variable it reads, or an aircraft L:var written <c>L:NAME</c>.</param>
 /// <param name="Units">The SimConnect unit it is requested in.</param>
 /// <param name="Format">A .NET numeric format applied with the invariant culture.</param>
 /// <param name="Suffix">Words after the number ("pounds"); empty for none.</param>
@@ -47,6 +47,12 @@ public static class L1011Readouts
             new("L1011_RO_ALTIMETER_1", "Captain altimeter setting", "KOHLSMAN SETTING MB:1", "Millibars", "0", "hectopascals", "Captain Instruments"),
             new("L1011_RO_ALTIMETER_2", "First officer altimeter setting", "KOHLSMAN SETTING MB:2", "Millibars", "0", "hectopascals", "First Officer Instruments"),
             new("L1011_RO_ALTIMETER_3", "Standby altimeter setting", "KOHLSMAN SETTING MB:3", "Millibars", "0", "hectopascals", "Standby Instruments"),
+            new("L1011_RO_AFCS_HEADING", "Heading window", "AUTOPILOT HEADING LOCK DIR", "Degrees", "000", string.Empty, "Autopilot"),
+            new("L1011_RO_AFCS_SPEED", "Speed target", "L:INI_AT_TARGET", "number", "0", "knots", "Autopilot"),
+            new("L1011_RO_AFCS_ALTITUDE", "Altitude window", "L:ALTITUDE_SETPOINT_0", "number", "0", "feet", "Autopilot"),
+            new("L1011_RO_AFCS_VS", "Vertical speed target", "L:INI_VS_PID_SETPOINT_2", "number", "+0;-0;0", "feet per minute", "Autopilot"),
+            new("L1011_RO_AFCS_COURSE_1", "Course 1 window", "NAV OBS:1", "Degrees", "000", string.Empty, "Autopilot"),
+            new("L1011_RO_AFCS_COURSE_2", "Course 2 window", "NAV OBS:2", "Degrees", "000", string.Empty, "Autopilot"),
         };
 
         string[] tanks = { "Tank 2 left inboard", "Tank 2 left outboard", "Tank 1", "Tank 1A", "Tank 3A", "Tank 3",

@@ -3,13 +3,15 @@ namespace MSFSBlindAssist.Aircraft.L1011;
 public static partial class L1011PanelLayout
 {
     /// <summary>
-    /// The main instrument panel: instrument sources (HSI source and navigation source first, as in
-    /// the manual's main-panel preparation), warning lights, each pilot's instruments, standby
-    /// instruments, landing gear and brakes, engine instruments, the surface position indicator and
-    /// pilot lighting. The AFCS glareshield panel is session 2.
+    /// The main instrument panel: the glareshield autopilot first (its HSI navigation sources lead,
+    /// as in the manual's main-panel preparation), then instrument sources, warning lights, each
+    /// pilot's instruments, standby instruments, landing gear and brakes, engine instruments, the
+    /// surface position indicator and pilot lighting.
     /// </summary>
     private static L1011LayoutPanel[] MainPanels() => new[]
     {
+        AutopilotPanel(),
+
         P("Captain Instrument Sources",
             R("SWITCH_INSTR_SRC_CPT_NAV", "Captain navigation source"),
             R("SWITCH_INSTR_SRC_CPT_HDG", "Captain heading source"),
