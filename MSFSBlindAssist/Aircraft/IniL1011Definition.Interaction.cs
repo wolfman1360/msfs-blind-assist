@@ -35,6 +35,12 @@ public partial class IniL1011Definition
         }
 
         var control = row.Control!;
+        if (AfcsRefusal(row, value, simConnect) is string afcsRefusal)
+        {
+            announcer.Announce($"{row.Name}: {afcsRefusal}");
+            SnapBack(row.Key, simConnect);
+            return true;
+        }
         var plan = row.Action switch
         {
             L1011RowAction.Set => L1011WritePlan.ForSet(control, value, CurrentPosition(row.Key, simConnect)),
@@ -171,6 +177,9 @@ public partial class IniL1011Definition
             case L1011Levers.BreakerListKey:
                 OpenCircuitBreakers?.Invoke();
                 return;
+            case L1011Afcs.DisconnectKey:
+                DisconnectAutopilot(sim, announcer);
+                return;
             case L1011Levers.FlapHandleKey:
                 SendCustom(row.Key, row.Name, L1011Levers.FlapRpn((int)Math.Round(value)), sim, announcer);
                 return;
@@ -195,6 +204,11 @@ public partial class IniL1011Definition
                 return;
         }
 
+        if (L1011Afcs.ValueFor(row.Key) != null)
+        {
+            SetAfcsValue(row.Key, value, sim, announcer);
+            return;
+        }
         if (L1011Levers.AltimeterIndex(row.Key) is int index)
         {
             if (L1011Levers.AltimeterMillibars(value) is double mb)
@@ -231,6 +245,8 @@ public partial class IniL1011Definition
         ScreenReaderAnnouncer announcer, Form parentForm, HotkeyManager hotkeyManager)
     {
         _sim = simConnect;
+        if (HandleAutopilotHotkey(action, simConnect, announcer, parentForm, hotkeyManager))
+            return true;
         switch (action)
         {
             case HotkeyAction.MonitorManager:
@@ -298,7 +314,8 @@ public partial class IniL1011Definition
     /// hectopascals, <see cref="L1011Levers.AltimeterMillibars"/>). One entry sets all three
     /// altimeters in one string. No STD or units buttons: the TriStar's altimeters are steam gauges.
     /// Nothing is pre-filled (the shared dialog has no initial value). Refused before the dialog
-    /// opens, and again when a value is set, when the calculator path cannot land.
+    /// opens, and again when a value is set, when the calculator path cannot land. It shares the
+    /// autopilot value boxes' slot (<see cref="ShowValueBox"/>), so Ctrl+H never re-shows it.
     /// </summary>
     private void ShowAltimetersDialog(SimConnectManager sim, ScreenReaderAnnouncer announcer, Form parentForm)
     {
@@ -307,19 +324,15 @@ public partial class IniL1011Definition
             announcer.AnnounceImmediate(L1011Levers.Unavailable(L1011Levers.AltimetersName));
             return;
         }
-        ShowTrackedWindow(
-            () => new ValueInputForm("Altimeter Setting", "altimeter",
-                "28.20 to 31.30 inches, or 955 to 1060 hectopascals; sets captain, first officer and standby",
-                announcer,
-                input => L1011Levers.AltimeterEntryMillibars(input) != null
-                    ? (true, "")
-                    : (false, L1011Levers.AltimetersEntryError),
-                new List<ToggleButtonDef>(),
-                input => SetAllAltimeters(input, sim, announcer))
-            {
-                ShowCancelButton = false,
-            },
-            ShowOrActivate<ValueInputForm>(parentForm));
+        ShowValueBox("Altimeter Setting", "altimeter",
+            "28.20 to 31.30 inches, or 955 to 1060 hectopascals; sets captain, first officer and standby",
+            announcer,
+            input => L1011Levers.AltimeterEntryMillibars(input) != null
+                ? (true, "")
+                : (false, L1011Levers.AltimetersEntryError),
+            new List<ToggleButtonDef>(),
+            input => SetAllAltimeters(input, sim, announcer),
+            parentForm);
     }
 
     /// <summary>Writes Ctrl+B's entry to the three altimeters and confirms the value ("Altimeters

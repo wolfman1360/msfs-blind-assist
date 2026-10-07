@@ -105,7 +105,8 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
     /// <summary>The map's circuit breakers, for the breaker window.</summary>
     public IReadOnlyList<L1011Breaker> Breakers => _map.Breakers;
 
-    // The glareshield AFCS panel is session 2; until then nothing here takes typed autopilot values.
+    // Unused by the TriStar: its typed autopilot values go through its own value boxes and panel rows
+    // (IniL1011Definition.Autopilot.cs), never MainForm's generic FCU dialogs.
     public override FCUControlType GetAltitudeControlType() => FCUControlType.IncrementDecrement;
     public override FCUControlType GetHeadingControlType() => FCUControlType.IncrementDecrement;
     public override FCUControlType GetSpeedControlType() => FCUControlType.IncrementDecrement;
@@ -375,6 +376,7 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
             return;
         _disposed = true;
         _seedGate.Disarm();
+        SetAfcsReader(false);   // the glareshield reader's socket, if Ctrl+P is still shown
         ReleaseOwedSteps();   // a held button is let go before the definition goes away
         _sim = null;
         DisposeTrackedWindows();

@@ -17,6 +17,10 @@ namespace MSFSBlindAssist.Aircraft;
 /// flap handle, parking brake and ground-spoiler arm (<see cref="L1011Levers.Announcement"/>), spoken
 /// from ProcessSimVarUpdate, where MainForm's wrap applies both the Ctrl+M mute and the UI echo —
 /// so the pilot's own combo pick is never spoken back.</item>
+/// <item>AUTOPILOT states (<see cref="L1011AfcsModes"/>): engage paddles, mode buttons and the
+/// armed/captured flags, through <see cref="L1011AfcsAnnouncer"/> inside ProcessSimVarUpdate, under the
+/// same wrap; a change MSFSBA itself commanded within <see cref="L1011CommandedState.HoldMs"/> is
+/// recorded silently.</item>
 /// </list>
 /// Switch positions are consumed silently: the panel combo follows them, nothing is spoken.
 /// </summary>
@@ -39,6 +43,18 @@ public partial class IniL1011Definition
         if (base.ProcessSimVarUpdate(varName, value, announcer))
             return true;
         _announcer = announcer;
+
+        if (L1011AfcsModes.IsAnnounced(varName))
+        {
+            if (_seedGate.Armed)
+                _seedGate.NoteValue(varName, value, ownedByAircraft: true);
+            // A change MSFSBA itself just commanded (a value box, Ctrl+P or a toggle key) is recorded
+            // but not spoken; MainForm's UI echo wrap covers a panel combo pick the same way.
+            bool ownCommand = _commanded.Resolve(varName, null, Clock()) is not null;
+            if (_afcs.Observe(varName, value, ownCommand) is string words)
+                announcer.Announce(words);
+            return true;   // a mode button or engage paddle is also a position: the open control follows it
+        }
 
         if (_lamps.ContainsKey(varName))
         {
@@ -112,6 +128,7 @@ public partial class IniL1011Definition
         _lampGate.Reset();
         _lightTest.Clear();
         _leverLast.Clear();
+        _afcs.Reset();
         _commanded.Clear();
         _seedGate.Arm(KnownSeedValues());
     }
@@ -120,7 +137,8 @@ public partial class IniL1011Definition
     private IEnumerable<string> SeedKeys() =>
         _lamps.Keys
             .Concat(new[] { L1011Levers.FlapHandleKey, L1011Levers.ParkingBrakeKey, L1011Levers.GroundSpoilersKey })
-            .Concat(L1011Annunciators.LightTestKeys);
+            .Concat(L1011Annunciators.LightTestKeys)
+            .Concat(L1011AfcsModes.All.Select(s => s.Key));
 
     private IEnumerable<KeyValuePair<string, double>> KnownSeedValues()
     {
@@ -142,6 +160,10 @@ public partial class IniL1011Definition
             if (_lamps.ContainsKey(key))
             {
                 if (_lampGate.Seed(key, value >= 0.5)) seeded++;
+            }
+            else if (L1011AfcsModes.IsAnnounced(key))
+            {
+                if (_afcs.Seed(key, value)) seeded++;
             }
             else if (L1011Annunciators.LightTestKeys.Contains(key))
             {
