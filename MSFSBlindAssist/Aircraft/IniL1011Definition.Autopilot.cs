@@ -328,6 +328,14 @@ public partial class IniL1011Definition
     // Hotkeys
     // =================================================================================
 
+    /// <summary>Shift+H's words: the selected heading rounded and wrapped into 0..359, so north reads
+    /// "000" and never "360".</summary>
+    internal static string HeadingReadout(double degrees)
+    {
+        int wrapped = ((int)Math.Round(degrees) % 360 + 360) % 360;
+        return "Selected heading " + L1011Afcs.Display(L1011AfcsValue.Heading, wrapped);
+    }
+
     /// <summary>The autopilot cases of <see cref="HandleHotkeyAction"/>; false for any other action.</summary>
     private bool HandleAutopilotHotkey(HotkeyAction action, SimConnectManager sim, ScreenReaderAnnouncer announcer,
         Form parentForm, HotkeyManager hotkeyManager)
@@ -375,8 +383,7 @@ public partial class IniL1011Definition
 
             // Output mode: the targets, read fresh.
             case HotkeyAction.ReadHeading:
-                _ = SpeakAsync(sim, announcer, "Selected heading",
-                    v => "Selected heading " + L1011Afcs.Display(L1011AfcsValue.Heading, (int)Math.Round(v[0])), "L1011_RO_AFCS_HEADING");
+                _ = SpeakAsync(sim, announcer, "Selected heading", v => HeadingReadout(v[0]), "L1011_RO_AFCS_HEADING");
                 return true;
             case HotkeyAction.ReadSpeed:
                 _ = SpeakAsync(sim, announcer, "Speed target",

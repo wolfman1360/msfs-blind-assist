@@ -185,6 +185,9 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
         // Autopilot panel's status display, muteable in Ctrl+M.
         foreach (var flag in L1011AfcsModes.Flags)
         {
+            var descriptions = new Dictionary<double, string> { [0] = "off", [1] = "on" };
+            if (flag.Key == "FLARE_ACTIVE")
+                descriptions[99] = "armed";   // it reads 99 while armed above 120 ft (L1011_INS.js); the status display would show the raw number
             var def = new SimVarDefinition
             {
                 Name = flag.Key,
@@ -192,7 +195,7 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
                 Type = SimVarType.LVar,
                 UpdateFrequency = UpdateFrequency.Continuous,
                 IsAnnounced = true,
-                ValueDescriptions = new Dictionary<double, string> { [0] = "off", [1] = "on" },
+                ValueDescriptions = descriptions,
                 RenderAsReadOnlyStatus = true,
             };
             if (batchNames.Add(ContinuousBatchLayout.FullName(def)))

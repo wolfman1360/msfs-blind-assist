@@ -106,6 +106,15 @@ public class IniL1011AutopilotDefinitionTests
     }
 
     [Fact]
+    public void An_armed_flare_reads_armed()
+    {
+        var vars = _def.GetVariables();
+        Assert.Equal("armed", vars["FLARE_ACTIVE"].ValueDescriptions![99]);   // L1011_INS.js: 99 while armed above 120 ft
+        Assert.Equal("on", vars["FLARE_ACTIVE"].ValueDescriptions![1]);
+        Assert.False(vars["ANN_LOC_ARM"].ValueDescriptions!.ContainsKey(99));
+    }
+
+    [Fact]
     public void The_status_display_lists_the_pitch_mode_the_flags_and_the_targets()
     {
         var shown = _def.GetPanelDisplayVariables()["Autopilot"];

@@ -328,6 +328,16 @@ public class IniL1011AutopilotBehaviourTests
         Assert.Empty(_freshReads);
     }
 
+    [Theory]
+    [InlineData(90, "Selected heading 090")]
+    [InlineData(359.6, "Selected heading 000")]   // rounds to 360, which the display wraps to north
+    [InlineData(360, "Selected heading 000")]
+    [InlineData(5, "Selected heading 005")]
+    public void The_heading_readout_wraps_north_to_000(double degrees, string spoken)
+    {
+        Assert.Equal(spoken, IniL1011Definition.HeadingReadout(degrees));
+    }
+
     [Fact]
     public void A_value_box_refuses_before_it_opens_when_it_cannot_land()
     {
