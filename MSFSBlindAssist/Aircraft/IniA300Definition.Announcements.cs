@@ -56,6 +56,10 @@ public partial class IniA300Definition
         if (varName == A300Idc.OptionKey)
             return true;
 
+        // The autobrake lamps: shown on the buttons' labels (TryDescribeControlState), never spoken.
+        if (A300Autobrake.StateKeys.Contains(varName))
+            return true;
+
         // An FMA source (some are switch rows too): read when its batch has finished dispatching
         // (OnDeferredFlushBatchDelivered), never spoken here.
         if (A300FmaSources.Keys.Contains(varName))

@@ -73,13 +73,20 @@ public partial class IniA300Definition
         }
     }
 
-    /// <summary>An FCU button's label state, from its lamp in the cache ("Heading select: On").</summary>
+    /// <summary>An FCU or autobrake button's label state, from its lamp in the cache ("Heading select:
+    /// On", "Autobrake low: Armed").</summary>
     public override bool TryDescribeControlState(string varKey, out string stateText)
     {
         if (A300FcuState.ByButton.TryGetValue(varKey, out var light)
             && _sim is { } sim && Cached(sim, light.Key) is double value)
         {
             stateText = A300FcuState.Describe(light, value);
+            return true;
+        }
+        if (A300Autobrake.ByButton.TryGetValue(varKey, out var autobrake) && _sim is { } abSim
+            && A300Autobrake.Describe(autobrake, Cached(abSim, A300Autobrake.LevelKey), Cached(abSim, autobrake.DecelKey)) is string lamp)
+        {
+            stateText = lamp;
             return true;
         }
         return base.TryDescribeControlState(varKey, out stateText);

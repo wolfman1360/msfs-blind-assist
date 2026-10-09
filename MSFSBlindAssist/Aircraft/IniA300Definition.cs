@@ -179,6 +179,8 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
             };
             if (A300FcuState.ByButton.TryGetValue(row.Key, out var buttonLight))
                 def.StateVariables = new[] { buttonLight.Key };
+            else if (A300Autobrake.ByButton.TryGetValue(row.Key, out var autobrake))
+                def.StateVariables = new[] { A300Autobrake.LevelKey, autobrake.DecelKey };
             if (A300Announcements.AnnouncedKeys.Contains(row.Key))
                 def.ExcludeFromMonitorManager = false;   // it speaks, so Ctrl+M can mute it
             if (ContinuousBatchLayout.RidesBatch(def) && !batchNames.Add(ContinuousBatchLayout.FullName(def)))
@@ -218,16 +220,13 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
 
         // The tablet's IDC option ([A300-19]): read before a transponder mode write, so it streams on its
         // own once-a-second subscription, never the batch ([A300-9]), and is consumed silently.
-        vars[A300Idc.OptionKey] = new SimVarDefinition
-        {
-            Name = A300Idc.OptionVar,
-            DisplayName = "IDC option",
-            Type = SimVarType.LVar,
-            UpdateFrequency = UpdateFrequency.Continuous,
-            IsAnnounced = true,
-            ExcludeFromBatch = true,
-            ExcludeFromMonitorManager = true,
-        };
+        vars[A300Idc.OptionKey] = OwnSubscription(A300Idc.OptionVar, "IDC option");
+
+        // The autobrake buttons' lamps ([A300-20]): the armed level and each button's DECEL light, shown
+        // on the buttons' labels only; their own subscriptions, never the batch ([A300-9]).
+        vars[A300Autobrake.LevelKey] = OwnSubscription(A300Autobrake.LevelVar, "Autobrake level");
+        foreach (var (rowKey, button) in A300Autobrake.ByButton)
+            vars[button.DecelKey] = OwnSubscription(button.DecelVar, (_rows.TryGetValue(rowKey, out var r) ? r.Name : rowKey) + " decel light");
 
         foreach (var readout in _readouts.Values)
         {
@@ -265,6 +264,19 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
         Log.Info("A300", $"Built {vars.Count} variables: {batched} batch-covered, {onRequest} on request, {_rows.Count} panel rows.");
         return vars;
     }
+
+    /// <summary>A state variable a label or a refusal reads: its own once-a-second subscription, never the
+    /// batch (a new batch name can split the FMA's sources, [A300-9]), consumed silently, no Ctrl+M row.</summary>
+    private static SimVarDefinition OwnSubscription(string var, string name) => new()
+    {
+        Name = var,
+        DisplayName = name,
+        Type = SimVarType.LVar,
+        UpdateFrequency = UpdateFrequency.Continuous,
+        IsAnnounced = true,
+        ExcludeFromBatch = true,
+        ExcludeFromMonitorManager = true,
+    };
 
     /// <summary>A map control's row.</summary>
     private static SimVarDefinition BuildRowVariable(A300PlacedRow row)

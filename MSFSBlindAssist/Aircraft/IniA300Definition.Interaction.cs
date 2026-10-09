@@ -55,7 +55,13 @@ public partial class IniA300Definition
         double? commanded = row.Action != A300RowAction.Set ? null
             : control.Kind == A300Kinds.Spring ? control.StateForPosition(control.Rest ?? 1)
             : value;
+        double? autobrakeBefore = Cached(simConnect, A300Autobrake.LevelKey);
         bool sent = Execute(row, plan, simConnect, announcer, commanded);
+
+        // An autobrake press meant to arm that the aircraft refused says so once it has had its
+        // chance; the label shows every other result ([A300-20]).
+        if (sent && A300Autobrake.ByButton.TryGetValue(row.Key, out var autobrake))
+            _ = CheckAutobrakeArmedAsync(autobrake.Level, autobrakeBefore, simConnect, announcer);
 
         // An FCU knob step is read back once it lands ("Heading 271"): a numeric confirmation, as a
         // typed value's is. The altitude window's own call-out is told it is an echo.
@@ -67,6 +73,29 @@ public partial class IniA300Definition
             _ = ReadBackAsync(simConnect, announcer, readoutKey, v => A300FcuWindows.Phrase(readoutKey, v, IsMach()));
         }
         return true;
+    }
+
+    /// <summary>
+    /// After an autobrake press, waits <see cref="ToggleReadBackMs"/> (the aircraft takes the button's
+    /// command on its next update) and reads the level fresh: a press meant to arm that left its level
+    /// unarmed says "Autobrake did not arm" (<see cref="A300Autobrake.DidNotArm"/>). Arming, and the
+    /// active level's own disarm, are silent: the button's label shows them.
+    /// </summary>
+    private async Task CheckAutobrakeArmedAsync(int level, double? before, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        try
+        {
+            await TypedDelay(ToggleReadBackMs);
+            if (_disposed)
+                return;
+            double? after = await ReadFresh(sim, A300Autobrake.LevelKey, ReadoutTimeoutMs);
+            if (!_disposed && A300Autobrake.DidNotArm(level, before, after))
+                announcer.AnnounceImmediate(A300Autobrake.DidNotArmMessage);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("A300", $"Autobrake check failed: {ex.Message}");
+        }
     }
 
     /// <summary>The value to plan from: what MSFSBA just commanded while it is fresh, else the cache.</summary>
