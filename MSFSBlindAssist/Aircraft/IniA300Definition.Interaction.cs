@@ -47,6 +47,10 @@ public partial class IniA300Definition
             A300RowAction.Decrease => A300WritePlan.ForStep(control, increase: false),
             _ => A300Plan.Refused(A300WritePlan.NotSettableRefusal),
         };
+        // While the tablet's IDC option is on, the IDC rewrites the transponder mode every frame: the
+        // write would be undone, so it is refused aloud and the combo put back ([A300-19]).
+        if (A300Idc.Refuses(row.Key, Cached(simConnect, A300Idc.OptionKey)))
+            plan = A300Plan.Refused(A300Idc.Refusal);
         // A spring switch returns to its rest, so the position to remember is the rest.
         double? commanded = row.Action != A300RowAction.Set ? null
             : control.Kind == A300Kinds.Spring ? control.StateForPosition(control.Rest ?? 1)

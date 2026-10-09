@@ -66,6 +66,10 @@ never gave the takeoff config test time to warn. Other test buttons are a short 
 Each cargo smoke agent switch has its guard just before it. The switch only moves while its
 guard is open, exactly as in the aircraft.
 
+With the tablet's IDC option on (Settings), the IDC sets the transponder mode and the aircraft
+puts the pedestal's mode knob back. So the Transponder and TCAS panel's mode combo then says
+"Transponder mode: set from the IDC" and returns to the mode the aircraft is in.
+
 Status Display (Ctrl+3): the FCU panel shows the four FCU windows; the Captain, First Officer
 and Center panels show the altimeter settings, the flex temperature and the landing elevation;
 the Navigation Radios panel shows the VOR and ILS courses. The Captain Panel also shows the

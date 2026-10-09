@@ -216,6 +216,19 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
             };
         }
 
+        // The tablet's IDC option ([A300-19]): read before a transponder mode write, so it streams on its
+        // own once-a-second subscription, never the batch ([A300-9]), and is consumed silently.
+        vars[A300Idc.OptionKey] = new SimVarDefinition
+        {
+            Name = A300Idc.OptionVar,
+            DisplayName = "IDC option",
+            Type = SimVarType.LVar,
+            UpdateFrequency = UpdateFrequency.Continuous,
+            IsAnnounced = true,
+            ExcludeFromBatch = true,
+            ExcludeFromMonitorManager = true,
+        };
+
         foreach (var readout in _readouts.Values)
         {
             // The altitude window rides the batch: it speaks a change MSFSBA did not make
