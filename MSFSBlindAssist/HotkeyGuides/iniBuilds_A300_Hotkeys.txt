@@ -57,6 +57,11 @@ A trim switch (aileron trim, rudder trim, the pitch trim switches on the yokes, 
 manual vertical speed switch) springs back: choosing a side holds it there for one second and
 lets it return, the way a short press does in the cockpit. Choose the side again for more.
 
+The fire tests on the Fire panel are held as long as the aircraft's own checklist holds them: 5
+seconds for an engine or APU loop test, 3 seconds for a squib test. The loop lights and the fire
+handle light a loop test brings on are announced (see Background Announcements). Other test
+buttons are a short press.
+
 Each cargo smoke agent switch has its guard just before it. The switch only moves while its
 guard is open, exactly as in the aircraft.
 
