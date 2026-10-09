@@ -438,7 +438,9 @@ public static partial class A300PanelLayout
     /// <see cref="ParsePositions"/> reads it. The two cargo smoke agent guards were read from the
     /// aircraft's own code: their agent switch springs back to off while the guard reads 0, so 0 is
     /// closed. The yoke pitch trim switches are the other way round from their tooltips: 0 trims nose
-    /// UP (measured 2026-10-06, and <c>AP::Update</c> calls the trim-up handler for 0 on both yokes).</summary>
+    /// UP (measured 2026-10-06, and <c>AP::Update</c> calls the trim-up handler for 0 on both yokes).
+    /// The pack mode buttons' tooltips say OFF and ON, but 0 is automatic and 1 manual (measured
+    /// 2026-10-04: in 1 the pack followed its manual temperature switch, in 0 it ignored it).</summary>
     private static readonly Dictionary<string, string> PositionOverrides = new(StringComparer.Ordinal)
     {
         ["NAVATTLEFT"] = "0=Off;1=Navigate;2=Attitude",
@@ -446,6 +448,8 @@ public static partial class A300PanelLayout
         ["NAVATTCTR"] = "0=Off;1=Navigate;2=Attitude",
         ["IRS_MODE_SELECT"] = "0=Test;1=Track and ground speed;2=Present position;3=Wind;4=Heading and status",
         ["IRS_SYS_DYSPL"] = "0=Off;1=System 1;2=System 2;3=System 3",
+        ["PACK1_MODE"] = "0=Auto;1=Manual",
+        ["PACK2_MODE"] = "0=Auto;1=Manual",
         ["PACK1_MAN"] = "0=Cold;1=Normal;2=Hot",
         ["PACK2_MAN"] = "0=Cold;1=Normal;2=Hot",
         ["TEMP_SELECT"] = "0=Forward cargo;1=Bulk cargo;2=Crew rest;3=Aft cabin;4=Mid cabin;5=Forward cabin;6=Cockpit",

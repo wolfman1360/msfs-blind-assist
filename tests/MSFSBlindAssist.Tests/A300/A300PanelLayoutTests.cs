@@ -106,6 +106,16 @@ public class A300PanelLayoutTests
     }
 
     [Theory]
+    [InlineData("A300_PACK1_MODE")]
+    [InlineData("A300_PACK2_MODE")]
+    public void Pack_mode_reads_auto_or_manual(string key)
+    {
+        // iniBuilds' tooltip says OFF and ON, but measured at KSFO (2026-10-04) 0 is automatic (the
+        // pack ignores its manual temperature switch) and 1 manual (the pack follows it).
+        Assert.Equal(new[] { "Auto", "Manual" }, Row(key).Positions.Values);
+    }
+
+    [Theory]
     [InlineData("A300_CPT_YOKE_TRIM")]
     [InlineData("A300_FO_YOKE_TRIM")]
     public void A_yoke_pitch_trim_switch_names_the_way_the_aircraft_trims(string key)
