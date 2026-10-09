@@ -24,9 +24,10 @@ public partial class IniA300Definition
     /// next 1 Hz delivery.</summary>
     public const int ReadoutTimeoutMs = 2500;
 
-    /// <summary>True while Ctrl+B's STD or QNH sequence is running: a second press in that time is
-    /// ignored, because it would decide from the 1 Hz cache, which still shows the old modes, and could
-    /// pull a side already in STD (saving 1013 over the pilot's QNH). Everything runs on the UI thread.</summary>
+    /// <summary>True while Ctrl+B's STD or QNH sequence or a typed value's push is running: a second press
+    /// in that time is ignored and a typed value refused aloud, because either would decide from the 1 Hz
+    /// cache, which still shows the old modes, and could pull a side already in STD (saving 1013 over the
+    /// pilot's QNH). Everything runs on the UI thread.</summary>
     private bool _altimetersBusy;
 
     /// <summary>The wait between a typed value's two steps; tests replace it.</summary>
@@ -100,9 +101,8 @@ public partial class IniA300Definition
                     ValueBoxButtons(A300AutoflightWindows.VerticalSpeed, sim, announcer), sim, announcer, parentForm, hotkeyManager);
                 return true;
             case HotkeyAction.FCUSetBaro:
-                ShowValueDialog(AllAltimetersKey, "Altimeter Setting", "Altimeters",
-                    "28.20 to 31.30 inches, or 955 to 1060 hectopascals; sets captain, first officer and standby",
-                    BaroButtons(sim, announcer), sim, announcer, parentForm, hotkeyManager);
+                ShowValueBox(AltimeterBoxTitle, AltimeterBoxName, () => CreateAltimeterBox(sim, announcer),
+                    sim, announcer, parentForm, hotkeyManager);
                 return true;
             case HotkeyAction.SetNavRadios:
                 hotkeyManager.ExitInputHotkeyMode();
@@ -181,8 +181,11 @@ public partial class IniA300Definition
         return false;
     }
 
-    /// <summary>Ctrl+B's key in <see cref="ShowValueDialog"/>: one entry for all three altimeters.</summary>
+    /// <summary>Ctrl+B's key in <see cref="CreateValueBox"/>: one entry for all three altimeters.</summary>
     private const string AllAltimetersKey = "A300_BARO_ALL_SET";
+
+    private const string AltimeterBoxTitle = "Altimeter Setting";
+    private const string AltimeterBoxName = "Altimeters";
 
     private string Readout(string key, double value) =>
         _readouts.TryGetValue(key, out var readout) ? readout.Format(value) : value.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -276,6 +279,13 @@ public partial class IniA300Definition
     /// <summary>The shared value box for one typed value and its buttons, tracked so an aircraft switch
     /// closes it.</summary>
     private void ShowValueDialog(string key, string title, string name, string hint, List<ToggleButtonDef> buttons,
+        SimConnectManager sim, ScreenReaderAnnouncer announcer, Form parentForm, HotkeyManager hotkeyManager) =>
+        ShowValueBox(title, name, () => CreateValueBox(key, title, name, name.ToLowerInvariant(), hint, buttons, sim, announcer),
+            sim, announcer, parentForm, hotkeyManager);
+
+    /// <summary>Shows a value box built by <paramref name="create"/>, replacing an open box with another
+    /// title first ([A300-17]).</summary>
+    private void ShowValueBox(string title, string name, Func<ValueInputForm> create,
         SimConnectManager sim, ScreenReaderAnnouncer announcer, Form parentForm, HotkeyManager hotkeyManager)
     {
         hotkeyManager.ExitInputHotkeyMode();
@@ -287,24 +297,7 @@ public partial class IniA300Definition
         if (A300AutoflightWindows.ReplacesOpenBox(_valueBox is { IsDisposed: false } open ? open.Text : null, title))
             _valueBox!.Close();
         ShowTrackedWindow(
-            () => _valueBox = new ValueInputForm(title, name.ToLowerInvariant(), hint, announcer,
-                input => Parse(input) is double v && PlanFor(key, v).Error == null ? (true, "") : (false, $"{name}: {hint}"),
-                buttons,
-                input =>
-                {
-                    if (Parse(input) is not double v || _disposed)
-                        return;
-                    var plan = PlanFor(key, v);
-                    if (plan.Error != null)
-                        announcer.AnnounceImmediate($"{name}: {plan.Error}");
-                    else if (!CanLand(sim))
-                        announcer.AnnounceImmediate($"{name} unavailable");
-                    else
-                        _ = SendTypedAsync(plan, sim, announcer);
-                })
-            {
-                ShowCancelButton = false,
-            },
+            () => _valueBox = create(),
             form =>
             {
                 if (form.Visible) form.Activate();
@@ -312,21 +305,116 @@ public partial class IniA300Definition
             });
     }
 
-    /// <summary>Ctrl+B's STD and QNH buttons, labelled with the altimeter knob's own words and showing
-    /// both sides' modes. Each speaks its own read-back, so the box's echo is off.</summary>
-    internal List<ToggleButtonDef> BaroButtons(SimConnectManager sim, ScreenReaderAnnouncer announcer)
-    {
-        string Words(string rowKey, string fallback) =>
-            _rows.TryGetValue(rowKey, out var row) && row.Control?.Action is string action
-                ? A300PanelLayout.SpokenWord(action) : fallback;
-        string State() => A300Baro.Describe(Cached(sim, A300Baro.Captain.ModeKey), Cached(sim, A300Baro.FirstOfficer.ModeKey));
-        return new List<ToggleButtonDef>
+    /// <summary>One value box: <paramref name="field"/> names the text box (the shared box reads it as
+    /// "{field} value"). Ctrl+B's typed value goes through <see cref="SetAltimetersAsync"/>.</summary>
+    private ValueInputForm CreateValueBox(string key, string title, string name, string field, string hint,
+        List<ToggleButtonDef> buttons, SimConnectManager sim, ScreenReaderAnnouncer announcer) =>
+        new(title, field, hint, announcer,
+            input => Parse(input) is double v && PlanFor(key, v).Error == null ? (true, "") : (false, $"{name}: {hint}"),
+            buttons,
+            input =>
+            {
+                if (Parse(input) is not double v || _disposed)
+                    return;
+                if (key == AllAltimetersKey)
+                {
+                    _ = SetAltimetersAsync(v, sim, announcer);
+                    return;
+                }
+                var plan = PlanFor(key, v);
+                if (plan.Error != null)
+                    announcer.AnnounceImmediate($"{name}: {plan.Error}");
+                else if (!CanLand(sim))
+                    announcer.AnnounceImmediate($"{name} unavailable");
+                else
+                    _ = SendTypedAsync(plan, sim, announcer);
+            })
         {
-            new(PMDGAutopilotRowBinder.ApplyMnemonic(Words(A300Baro.Captain.PullKey, "Set STD pressure") + ", both sides", 'S'),
-                State, () => _ = SetStandardAsync(sim, announcer)) { SuppressStateAnnounce = () => true },
-            new(PMDGAutopilotRowBinder.ApplyMnemonic(Words(A300Baro.Captain.PushKey, "Set QNH pressure") + ", both sides", 'Q'),
-                State, () => _ = SetQnhAsync(sim, announcer)) { SuppressStateAnnounce = () => true },
+            ShowCancelButton = false,
         };
+
+    /// <summary>Ctrl+B: one entry for all three altimeters, its field named with both units
+    /// (<see cref="A300Baro.FieldName"/>), and the one mode button.</summary>
+    internal ValueInputForm CreateAltimeterBox(SimConnectManager sim, ScreenReaderAnnouncer announcer) =>
+        CreateValueBox(AllAltimetersKey, AltimeterBoxTitle, AltimeterBoxName, A300Baro.FieldName,
+            "28.20 to 31.30 inches, or 955 to 1060 hectopascals; sets captain, first officer and standby",
+            BaroButtons(sim, announcer), sim, announcer);
+
+    /// <summary>
+    /// Ctrl+B's one mode button, labelled from the REPORTED modes ("Altimeter mode: QNH", or each side
+    /// while they differ), as the FBW A320 window's Mode control reads. A press runs STD from both QNH,
+    /// else QNH ([A300-22]); the sequence speaks its own read-back, so the box's echo is off.
+    /// </summary>
+    internal List<ToggleButtonDef> BaroButtons(SimConnectManager sim, ScreenReaderAnnouncer announcer) => new()
+    {
+        new("Altimeter &mode",   // Alt+M on "mode" (ApplyMnemonic would take the m in "Altimeter")
+            () => A300Baro.ModeState(Cached(sim, A300Baro.Captain.ModeKey), Cached(sim, A300Baro.FirstOfficer.ModeKey)),
+            () => _ = ToggleAltimeterModeAsync(sim, announcer)) { SuppressStateAnnounce = () => true },
+    };
+
+    /// <summary>The mode button's press: STD when both sides read QNH, QNH when either reads STD, refused
+    /// while a side is unread.</summary>
+    private Task ToggleAltimeterModeAsync(SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        switch (A300Baro.ToggleFor(Cached(sim, A300Baro.Captain.ModeKey), Cached(sim, A300Baro.FirstOfficer.ModeKey)))
+        {
+            case A300BaroToggle.Standard:
+                return SetStandardAsync(sim, announcer);
+            case A300BaroToggle.Qnh:
+                return SetQnhAsync(sim, announcer);
+            default:
+                if (!_altimetersBusy)
+                    announcer.AnnounceImmediate(A300Baro.UnknownModeRefusal);
+                return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    /// Ctrl+B's typed value ([A300-22]): every side in STD is first pushed to QNH and confirmed by reading
+    /// its mode back (<see cref="PressKnobsAsync"/>, which names a side that stays in STD, and then
+    /// nothing is written), because a side in STD did not take a typed setting (flight 2, 2026-10-06).
+    /// Then the value goes to all three altimeters and is confirmed as before. The PMDG 737's typed
+    /// altimeter takes STD off first the same way (<c>DisengageStdThenRotateAsync</c>).
+    /// </summary>
+    internal async Task SetAltimetersAsync(double value, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        var plan = A300TypedValues.AllAltimeters(value);
+        if (plan.Error != null)
+        {
+            announcer.AnnounceImmediate($"{AltimeterBoxName}: {plan.Error}");
+            return;
+        }
+        if (_altimetersBusy)
+        {
+            announcer.AnnounceImmediate(A300Baro.BusyRefusal);
+            return;
+        }
+        _altimetersBusy = true;
+        try
+        {
+            if (!CanLand(sim))
+            {
+                announcer.AnnounceImmediate(A300Baro.UnavailableRefusal);
+                return;
+            }
+            if (A300Baro.SidesInStd(Cached(sim, A300Baro.Captain.ModeKey), Cached(sim, A300Baro.FirstOfficer.ModeKey)) is not { } std)
+            {
+                announcer.AnnounceImmediate(A300Baro.UnknownModeRefusal);
+                return;
+            }
+            if (!await PressKnobsAsync(std, side => side.PushKey, wantStd: false, sim, announcer) || _disposed)
+                return;
+            Send(sim, plan.Rpn!);
+            announcer.Announce(plan.Confirmation!);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("A300", $"Typed altimeters failed: {ex.Message}");
+        }
+        finally
+        {
+            _altimetersBusy = false;
+        }
     }
 
     /// <summary>STD: pull the sides in QNH, confirm each reads STD, set all three to 1013.25, read back.</summary>

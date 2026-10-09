@@ -397,7 +397,11 @@ FCU Set Values (each opens a small window with its knob and mode buttons; type a
   Ctrl+H     Heading (heading knob push and pull, Heading select, NAV)
   Ctrl+A     Altitude (altitude knob push and pull, Altitude hold, Level change, Profile)
   Ctrl+V     Vertical speed (vertical speed knob push and pull)
-  Ctrl+B     Altimeters: one entry sets the captain's, first officer's and standby; STD and QNH buttons
+  Ctrl+B     Altimeters: one entry, in inches or hectopascals, sets the captain's, first officer's
+             and standby. A side in STD is pushed to QNH first; if it stays in STD you hear which
+             side and nothing is set. The Altimeter mode button (Alt+M) says QNH or STD, or each
+             side while they differ; pressing it goes to STD from QNH, and to QNH otherwise, then
+             reads the settings back
   Ctrl+N     VOR 1, VOR 2 and ILS, frequency and course
 
 Taxi Guidance:

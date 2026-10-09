@@ -7,7 +7,10 @@ namespace MSFSBlindAssist.Aircraft.A300;
 public sealed record A300BaroSide(string Name, int Index, string ModeKey, string ModeVar, string SavedKey,
     string SavedVar, string PushKey, string PullKey);
 
-/// <summary>What Ctrl+B's STD or QNH button does: press <paramref name="Pressed"/> sides' knobs, then
+/// <summary>What Ctrl+B's mode button runs: the STD sequence, the QNH sequence, or a refusal.</summary>
+public enum A300BaroToggle { Standard, Qnh, Unknown }
+
+/// <summary>What Ctrl+B's STD or QNH sequence does: press <paramref name="Pressed"/> sides' knobs, then
 /// (once each reads the new mode) send <paramref name="Rpn"/>; or say <paramref name="Refusal"/>.</summary>
 public sealed record A300BaroPlan(IReadOnlyList<A300BaroSide> Pressed, string? Rpn, string? Refusal,
     IReadOnlyList<string> Warnings)
@@ -17,7 +20,8 @@ public sealed record A300BaroPlan(IReadOnlyList<A300BaroSide> Pressed, string? R
 }
 
 /// <summary>
-/// Ctrl+B's STD and QNH buttons. Measured live (2026-10-05, gate, external power, package 1.0.11):
+/// Ctrl+B's mode button, its STD and QNH sequences, and its typed value. Measured live (2026-10-05,
+/// gate, external power, package 1.0.11):
 /// <list type="bullet">
 /// <item>Pulling the altimeter knob is STD and pushing is QNH, as iniBuilds' tooltips say; ignore the
 /// variable names, since the push writes one called "…STD_COMMAND".</item>
@@ -29,7 +33,8 @@ public sealed record A300BaroPlan(IReadOnlyList<A300BaroSide> Pressed, string? R
 /// saved value.</item>
 /// </list>
 /// So STD here also sets all three altimeters to 1013.25, and QNH puts each side's saved setting
-/// back ([A300-16]). Pure.
+/// back ([A300-16]). On flight 2 (2026-10-06) a value typed with both sides in STD reached only the
+/// standby, so a typed value first takes the STD sides to QNH ([A300-22]). Pure.
 /// </summary>
 public static class A300Baro
 {
@@ -55,9 +60,50 @@ public static class A300Baro
 
     public static bool IsStd(double mode) => mode >= 0.5;
 
-    /// <summary>"Captain QNH, first officer STD"; "unknown" for a side not read yet.</summary>
-    public static string Describe(double? captainMode, double? firstOfficerMode) =>
-        $"Captain {Word(captainMode)}, first officer {Word(firstOfficerMode)}";
+    /// <summary>A typed value while Ctrl+B's STD or QNH sequence is still running: the cache still shows
+    /// the old modes, so pushing from it could press a side the sequence has already moved.</summary>
+    public const string BusyRefusal = "Altimeters: still switching, try again in a moment";
+
+    /// <summary>The value box's field name: the shared box reads it as "… value", and both units work.</summary>
+    public const string FieldName = "altimeter setting in inches or hectopascals";
+
+    /// <summary>
+    /// The mode button's state, from the REPORTED modes: "QNH" or "STD" when both sides agree, else each
+    /// side ("captain STD, first officer QNH"; "unknown" for a side not read yet), and "" while neither
+    /// has been read, so the label is just "Altimeter mode".
+    /// </summary>
+    public static string ModeState(double? captainMode, double? firstOfficerMode)
+    {
+        if (captainMode is null && firstOfficerMode is null)
+            return "";
+        if (captainMode is double c && firstOfficerMode is double f && IsStd(c) == IsStd(f))
+            return IsStd(c) ? "STD" : "QNH";
+        return $"captain {Word(captainMode)}, first officer {Word(firstOfficerMode)}";
+    }
+
+    /// <summary>
+    /// What the mode button does: STD only when both sides read QNH; QNH when either reads STD (with the
+    /// sides differing, both end in QNH: the side already there is left alone, owner's default
+    /// 2026-10-09, since the FBW A320's Mode control reads one side only); unknown when a side is unread.
+    /// </summary>
+    public static A300BaroToggle ToggleFor(double? captainMode, double? firstOfficerMode)
+    {
+        if (captainMode is not double c || firstOfficerMode is not double f)
+            return A300BaroToggle.Unknown;
+        return IsStd(c) || IsStd(f) ? A300BaroToggle.Qnh : A300BaroToggle.Standard;
+    }
+
+    /// <summary>The sides a typed value must push to QNH first (the standby has no STD); null while a
+    /// side's mode is unread.</summary>
+    public static IReadOnlyList<A300BaroSide>? SidesInStd(double? captainMode, double? firstOfficerMode)
+    {
+        if (captainMode is not double c || firstOfficerMode is not double f)
+            return null;
+        var std = new List<A300BaroSide>();
+        if (IsStd(c)) std.Add(Captain);
+        if (IsStd(f)) std.Add(FirstOfficer);
+        return std;
+    }
 
     private static string Word(double? mode) => mode is double m ? (IsStd(m) ? "STD" : "QNH") : "unknown";
 

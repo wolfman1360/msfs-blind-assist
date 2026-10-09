@@ -68,14 +68,165 @@ public class IniA300BaroTests
     }
 
     [Fact]
-    public void The_buttons_carry_the_knobs_own_words_and_both_sides_modes()
+    public void One_mode_button_reads_the_reported_modes()
     {
-        var buttons = _def.BaroButtons(_sim, _speech);
-        Assert.Equal(new[] { "&Set STD pressure, both sides", "Set &QNH pressure, both sides" }, buttons.Select(b => b.Label));
+        var mode = Assert.Single(_def.BaroButtons(_sim, _speech));
+        Assert.Equal("Altimeter &mode", mode.Label);
+        Assert.Equal("", mode.GetCurrentState());   // nothing read yet: the label is "Altimeter mode"
         _cache[A300Baro.Captain.ModeKey] = 0;
+        _cache[A300Baro.FirstOfficer.ModeKey] = 0;
+        Assert.Equal("QNH", mode.GetCurrentState());
+        _cache[A300Baro.Captain.ModeKey] = 1;
         _cache[A300Baro.FirstOfficer.ModeKey] = 1;
-        Assert.Equal("Captain QNH, first officer STD", buttons[0].GetCurrentState());
-        Assert.True(buttons.All(b => b.SuppressStateAnnounce!()));
+        Assert.Equal("STD", mode.GetCurrentState());
+        _cache[A300Baro.FirstOfficer.ModeKey] = 0;
+        Assert.Equal("captain STD, first officer QNH", mode.GetCurrentState());
+        Assert.True(mode.SuppressStateAnnounce!());   // the sequence speaks its own read-back
+    }
+
+    [Fact]
+    public void The_mode_button_in_qnh_runs_the_std_sequence()
+    {
+        _cache[A300Baro.Captain.ModeKey] = 0;
+        _cache[A300Baro.FirstOfficer.ModeKey] = 0;
+        _def.BaroButtons(_sim, _speech)[0].OnPressed();
+        Assert.Equal(new[] { Press(A300Baro.Captain.PullKey), Press(A300Baro.FirstOfficer.PullKey) }, _sent);
+    }
+
+    [Fact]
+    public void The_mode_button_in_std_runs_the_qnh_sequence()
+    {
+        _cache[A300Baro.Captain.ModeKey] = 1;
+        _cache[A300Baro.FirstOfficer.ModeKey] = 1;
+        _fresh[A300Baro.Captain.SavedKey] = 16399;
+        _fresh[A300Baro.FirstOfficer.SavedKey] = 16288;
+        _def.BaroButtons(_sim, _speech)[0].OnPressed();
+        Assert.Equal(new[] { Press(A300Baro.Captain.PushKey), Press(A300Baro.FirstOfficer.PushKey) }, _sent);
+    }
+
+    [Fact]
+    public void The_mode_button_with_the_sides_differing_takes_both_to_qnh()
+    {
+        _cache[A300Baro.Captain.ModeKey] = 1;
+        _cache[A300Baro.FirstOfficer.ModeKey] = 0;
+        _fresh[A300Baro.Captain.SavedKey] = 16399;
+        _def.BaroButtons(_sim, _speech)[0].OnPressed();
+        Assert.Equal(new[] { Press(A300Baro.Captain.PushKey) }, _sent);   // the first officer is already QNH
+    }
+
+    [Fact]
+    public void The_mode_button_with_a_mode_unread_is_refused()
+    {
+        _cache[A300Baro.Captain.ModeKey] = 0;
+        _def.BaroButtons(_sim, _speech)[0].OnPressed();
+        Assert.Empty(_sent);
+        Assert.Equal(new[] { A300Baro.UnknownModeRefusal }, _speech.All);
+    }
+
+    [Fact]
+    public void The_value_field_names_both_units()
+    {
+        using var box = _def.CreateAltimeterBox(_sim, _speech);
+        var field = Assert.Single(box.Controls.OfType<System.Windows.Forms.TextBox>());
+        Assert.Equal("altimeter setting in inches or hectopascals value", field.AccessibleName);
+    }
+
+    private const string Typed1018 = "1 16288 (>K:2:KOHLSMAN_SET) 2 16288 (>K:2:KOHLSMAN_SET) 3 16288 (>K:2:KOHLSMAN_SET)";
+
+    [Fact]
+    public void A_typed_value_in_qnh_is_written_and_confirmed_as_before()
+    {
+        _cache[A300Baro.Captain.ModeKey] = 0;
+        _cache[A300Baro.FirstOfficer.ModeKey] = 0;
+        _ = _def.SetAltimetersAsync(1018, _sim, _speech);
+        Assert.Equal(new[] { Typed1018 }, _sent);
+        Assert.Equal(new[] { $"Altimeters {A300Readouts.Altimeter(1018)}" }, _speech.All);
+        Assert.Empty(_waits);
+    }
+
+    [Fact]
+    public void A_typed_value_with_a_side_in_std_pushes_it_to_qnh_confirms_then_writes()
+    {
+        _cache[A300Baro.Captain.ModeKey] = 1;
+        _cache[A300Baro.FirstOfficer.ModeKey] = 0;
+        _ = _def.SetAltimetersAsync(1018, _sim, _speech);
+        Assert.Equal(new[] { Press(A300Baro.Captain.PushKey) }, _sent);   // nothing written while it reads STD
+        Assert.Empty(_speech.All);
+
+        _fresh[A300Baro.Captain.ModeKey] = 0;
+        _waits.Single().SetResult();
+        Assert.Equal(new[] { Press(A300Baro.Captain.PushKey), Typed1018 }, _sent);
+        Assert.Equal(new[] { $"Altimeters {A300Readouts.Altimeter(1018)}" }, _speech.All);
+    }
+
+    [Fact]
+    public void A_typed_value_whose_side_stays_in_std_names_it_and_writes_nothing()
+    {
+        _cache[A300Baro.Captain.ModeKey] = 1;
+        _cache[A300Baro.FirstOfficer.ModeKey] = 1;
+        _ = _def.SetAltimetersAsync(1018, _sim, _speech);
+        Assert.Equal(new[] { Press(A300Baro.Captain.PushKey), Press(A300Baro.FirstOfficer.PushKey) }, _sent);
+        _fresh[A300Baro.Captain.ModeKey] = 0;
+        _fresh[A300Baro.FirstOfficer.ModeKey] = 1;
+        _waits.Single().SetResult();
+        Assert.DoesNotContain(Typed1018, _sent);
+        Assert.Equal(new[] { "First officer altimeter did not switch to QNH" }, _speech.All);
+    }
+
+    [Fact]
+    public void A_typed_value_with_a_mode_unread_is_refused()
+    {
+        _cache[A300Baro.Captain.ModeKey] = 0;
+        _ = _def.SetAltimetersAsync(1018, _sim, _speech);
+        Assert.Empty(_sent);
+        Assert.Equal(new[] { A300Baro.UnknownModeRefusal }, _speech.All);
+    }
+
+    [Fact]
+    public void A_typed_value_while_std_or_qnh_is_switching_is_refused_aloud()
+    {
+        _cache[A300Baro.Captain.ModeKey] = 0;
+        _cache[A300Baro.FirstOfficer.ModeKey] = 0;
+        _ = _def.SetStandardAsync(_sim, _speech);
+        _sent.Clear();
+        _ = _def.SetAltimetersAsync(1018, _sim, _speech);
+        Assert.Empty(_sent);
+        Assert.Equal(new[] { A300Baro.BusyRefusal }, _speech.All);
+    }
+
+    [Fact]
+    public void A_typed_value_out_of_range_or_unreachable_says_why()
+    {
+        _cache[A300Baro.Captain.ModeKey] = 0;
+        _cache[A300Baro.FirstOfficer.ModeKey] = 0;
+        _ = _def.SetAltimetersAsync(1200, _sim, _speech);
+        _canLand = false;
+        _ = _def.SetAltimetersAsync(1018, _sim, _speech);
+        Assert.Empty(_sent);
+        Assert.Equal(new[] { $"Altimeters: {A300TypedValues.AltimeterError}", A300Baro.UnavailableRefusal }, _speech.All);
+    }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void A_typed_value_after_a_push_reads_the_same_in_a_comma_decimal_culture(string culture)
+    {
+        var saved = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo(culture);
+            _cache[A300Baro.Captain.ModeKey] = 1;
+            _cache[A300Baro.FirstOfficer.ModeKey] = 0;
+            _ = _def.SetAltimetersAsync(30.06, _sim, _speech);
+            _fresh[A300Baro.Captain.ModeKey] = 0;
+            _waits.Single().SetResult();
+            Assert.Equal("1 16287 (>K:2:KOHLSMAN_SET) 2 16287 (>K:2:KOHLSMAN_SET) 3 16287 (>K:2:KOHLSMAN_SET)", _sent.Last());
+            Assert.Equal(new[] { "Altimeters 1018 hectopascals, 30.06 inches" }, _speech.All);
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = saved;
+        }
     }
 
     [Fact]

@@ -8,10 +8,34 @@ public class A300BaroTests
     private const string Standard = "1 16212 (>K:2:KOHLSMAN_SET) 2 16212 (>K:2:KOHLSMAN_SET) 3 16212 (>K:2:KOHLSMAN_SET)";
 
     [Theory]
-    [InlineData(0.0, 1.0, "Captain QNH, first officer STD")]
-    [InlineData(null, 0.0, "Captain unknown, first officer QNH")]
-    public void Each_side_is_described_by_its_mode(double? captain, double? firstOfficer, string words) =>
-        Assert.Equal(words, A300Baro.Describe(captain, firstOfficer));
+    [InlineData(0.0, 0.0, "QNH")]
+    [InlineData(1.0, 1.0, "STD")]
+    [InlineData(1.0, 0.0, "captain STD, first officer QNH")]
+    [InlineData(0.0, 1.0, "captain QNH, first officer STD")]
+    [InlineData(null, 1.0, "captain unknown, first officer STD")]
+    [InlineData(null, null, "")]
+    public void The_mode_button_reads_one_mode_or_each_side(double? captain, double? firstOfficer, string state) =>
+        Assert.Equal(state, A300Baro.ModeState(captain, firstOfficer));
+
+    [Theory]
+    [InlineData(0.0, 0.0, A300BaroToggle.Standard)]
+    [InlineData(1.0, 1.0, A300BaroToggle.Qnh)]
+    [InlineData(1.0, 0.0, A300BaroToggle.Qnh)]     // sides differ: both end in QNH (owner's default)
+    [InlineData(0.0, 1.0, A300BaroToggle.Qnh)]
+    [InlineData(null, 0.0, A300BaroToggle.Unknown)]
+    [InlineData(0.0, null, A300BaroToggle.Unknown)]
+    public void The_mode_button_goes_to_std_only_from_both_qnh(double? captain, double? firstOfficer, A300BaroToggle toggle) =>
+        Assert.Equal(toggle, A300Baro.ToggleFor(captain, firstOfficer));
+
+    [Fact]
+    public void A_typed_value_pushes_only_the_sides_in_std()
+    {
+        Assert.Empty(A300Baro.SidesInStd(0, 0)!);
+        Assert.Equal(new[] { A300Baro.Captain }, A300Baro.SidesInStd(1, 0));
+        Assert.Equal(new[] { A300Baro.Captain, A300Baro.FirstOfficer }, A300Baro.SidesInStd(1, 1));
+        Assert.Null(A300Baro.SidesInStd(null, 0));
+        Assert.Null(A300Baro.SidesInStd(1, null));
+    }
 
     [Fact]
     public void Standard_pulls_both_sides_in_qnh_then_sets_all_three_to_1013()
