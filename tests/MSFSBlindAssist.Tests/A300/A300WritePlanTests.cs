@@ -153,6 +153,23 @@ public class A300WritePlanTests
             s => Assert.Equal("0 (>B:AIRLINER_Test_Set)", Assert.IsType<A300CalcStep>(s).Rpn));
     }
 
+    [Theory]
+    [InlineData("AIRLINER_TO_CONFIG_TEST")]   // takeoff config test
+    [InlineData("AIRLINER_LDG_TEST")]         // landing gear warning test
+    [InlineData("AIRLINER_SMOKE_TEST")]       // smoke test
+    public void A_warning_test_is_held_five_seconds(string id)
+    {
+        // The KSFO ground probe (2026-10-04): a 250 ms takeoff config press reported nothing even in
+        // landing configuration, while a 5 s hold warned at about 3.7 s; the gear warning test's master
+        // warning came at about 3.5 s and the smoke test's ECAM warning at about 3.5 s.
+        var c = Control(A300Kinds.Hold, "");
+        c.Id = id;
+        Assert.Collection(A300WritePlan.ForPress(c).Steps,
+            s => Assert.Equal("2 (>B:AIRLINER_Test_Set)", Assert.IsType<A300CalcStep>(s).Rpn),
+            s => Assert.Equal(5000, Assert.IsType<A300DelayStep>(s).Milliseconds),
+            s => Assert.Equal("0 (>B:AIRLINER_Test_Set)", Assert.IsType<A300CalcStep>(s).Rpn));
+    }
+
     [Fact]
     public void Every_held_test_is_a_hold_button_on_the_shipped_map()
     {
