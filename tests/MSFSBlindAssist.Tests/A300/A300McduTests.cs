@@ -174,6 +174,53 @@ public class A300McduTests
         Assert.Null(manager.GetScreen(A300McduUnit.Captain));
     }
 
+    private static readonly DateTime T0 = new(2026, 10, 9, 12, 0, 0, DateTimeKind.Utc);
+    private static A300McduScreen Page() => A300McduText.Decode(A300McduUnit.Captain, InitPage())!;
+    private static A300McduScreen Blank() => A300McduText.Decode(A300McduUnit.Captain, new byte[A300McduText.DataSize])!;
+
+    [Fact]
+    public void The_blank_frame_between_pages_holds_the_page()
+    {
+        // The FMS publishes a blank frame of 70 to 370 ms on every page key (flight 1, 2026-10-04).
+        var filter = new A300McduBlankFilter();
+        Assert.Equal(A300McduDisplayAction.ShowContent, filter.Judge(Page(), T0));
+        Assert.Equal(A300McduDisplayAction.HoldLastPage, filter.Judge(Blank(), T0.AddMilliseconds(250)));
+        Assert.Equal(A300McduDisplayAction.HoldLastPage, filter.Judge(Blank(), T0.AddMilliseconds(620)));
+        Assert.Equal(A300McduDisplayAction.ShowContent, filter.Judge(Page(), T0.AddMilliseconds(750)));
+    }
+
+    [Fact]
+    public void A_blank_that_lasts_a_second_is_believed()
+    {
+        var filter = new A300McduBlankFilter();
+        Assert.Equal(A300McduDisplayAction.HoldLastPage, filter.Judge(Blank(), T0));
+        Assert.Equal(A300McduDisplayAction.HoldLastPage, filter.Judge(Blank(), T0.AddMilliseconds(999)));
+        Assert.Equal(A300McduDisplayAction.ShowBlank, filter.Judge(Blank(), T0.AddMilliseconds(1000)));
+    }
+
+    [Fact]
+    public void A_page_between_two_blanks_starts_the_wait_again()
+    {
+        var filter = new A300McduBlankFilter();
+        filter.Judge(Blank(), T0);
+        filter.Judge(Page(), T0.AddMilliseconds(500));
+        Assert.Equal(A300McduDisplayAction.HoldLastPage, filter.Judge(Blank(), T0.AddMilliseconds(900)));
+        Assert.Equal(A300McduDisplayAction.HoldLastPage, filter.Judge(Blank(), T0.AddMilliseconds(1800)));
+        Assert.Equal(A300McduDisplayAction.ShowBlank, filter.Judge(Blank(), T0.AddMilliseconds(1900)));
+    }
+
+    [Fact]
+    public void Starting_to_follow_a_unit_on_a_blank_waits_rather_than_holding_another_page()
+    {
+        // An open or a unit switch has no page of THIS unit on screen to hold.
+        var filter = new A300McduBlankFilter();
+        filter.Judge(Blank(), T0);
+        Assert.Equal(A300McduDisplayAction.ShowWaiting, filter.Restart(Blank(), T0.AddMilliseconds(5000)));
+        Assert.Equal(A300McduDisplayAction.HoldLastPage, filter.Judge(Blank(), T0.AddMilliseconds(5500)));
+        Assert.Equal(A300McduDisplayAction.ShowBlank, filter.Judge(Blank(), T0.AddMilliseconds(6000)));
+        Assert.Equal(A300McduDisplayAction.ShowContent, filter.Restart(Page(), T0.AddMilliseconds(6100)));
+    }
+
     [Theory]
     [InlineData(0x41330201u, A300McduUnit.Captain)]
     [InlineData(0x41330212u, A300McduUnit.FirstOfficer)]

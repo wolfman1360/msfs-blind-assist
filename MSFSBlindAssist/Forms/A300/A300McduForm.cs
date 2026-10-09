@@ -42,6 +42,7 @@ public sealed class A300McduForm : Form
     private IReadOnlyList<A300McduRow>? _rows;
     private readonly Dictionary<A300McduUnit, string> _lastTitle = new();
     private readonly CduScratchpadAnnouncer _scratchpad = new("Scratchpad cleared", stablePolls: 2);
+    private readonly A300McduBlankFilter _blank = new();
     private bool _clearing;
 
     /// <summary>Beyond the last queued key: the aircraft applying it, the client-data delivery and the
@@ -333,6 +334,11 @@ public sealed class A300McduForm : Form
             _statusBox.Text = $"{UnitName}: waiting for data";
             return;
         }
+        // The FMS's blank frame between pages: draw nothing, say nothing, leave the page and the
+        // cursor where they are. Judged before the reference check: a blank that stays is delivered
+        // once, so only a poll can tell that it has lasted.
+        if (_blank.Judge(screen, DateTime.UtcNow) == A300McduDisplayAction.HoldLastPage)
+            return;
         if (!ReferenceEquals(screen, _rendered))
             Render(screen, silent: false);
         if (!screen.IsBlank && _scratchpad.OnPoll(screen.Scratchpad.Trim(), DateTime.UtcNow) is { } say)
@@ -386,12 +392,21 @@ public sealed class A300McduForm : Form
         var screen = _sim.A300McduDataManager?.GetScreen(_unit);
         if (screen == null)
         {
-            _display.SetLines(new[] { $"{UnitName}: waiting for data" });
-            _statusBox.Text = $"{UnitName}: waiting for data";
+            ShowWaiting();
             return;
         }
-        Render(screen, silent: true);
+        // A blank not yet judged shows the waiting row, never "blank" (it may be a page change).
+        if (_blank.Restart(screen, DateTime.UtcNow) == A300McduDisplayAction.ShowWaiting)
+            ShowWaiting();
+        else
+            Render(screen, silent: true);
         _scratchpad.OnPoll(screen.Scratchpad.Trim(), DateTime.UtcNow);
+    }
+
+    private void ShowWaiting()
+    {
+        _display.SetLines(new[] { $"{UnitName}: waiting for data" });
+        _statusBox.Text = $"{UnitName}: waiting for data";
     }
 
     // ---------------------------------------------------------------------------------

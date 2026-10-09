@@ -87,6 +87,61 @@ public static class A300McduText
     }
 }
 
+/// <summary>What the MCDU window does with the frame a poll found.</summary>
+public enum A300McduDisplayAction
+{
+    /// <summary>Draw the page.</summary>
+    ShowContent,
+    /// <summary>Keep the page and the cursor where they are: the frame is the FMS between pages.</summary>
+    HoldLastPage,
+    /// <summary>The MCDU has stayed blank: say so.</summary>
+    ShowBlank,
+    /// <summary>The window has just started following this unit on a blank it cannot judge yet.</summary>
+    ShowWaiting,
+}
+
+/// <summary>
+/// Tells the A300 FMS's blank frame between pages from a blank MCDU, the MD-11 window's rule
+/// (<c>Md11McduPresence</c>). The FMS publishes an all-blank frame of 70 to 370 ms on every page key
+/// (flight 1, 2026-10-04: 60 of 363 frames during four key presses), and the window used to show
+/// "is blank. It may be unpowered." on the first one, dropping the cursor. A blank is believed only
+/// once it has lasted <see cref="SettleMs"/>; until then the page on screen is held. Pure: the
+/// window hands it each poll's frame and the time.
+/// </summary>
+public sealed class A300McduBlankFilter
+{
+    /// <summary>About 2.7 times the longest blank frame measured, and four of the window's 250 ms
+    /// polls, so a blank is never believed on one poll.</summary>
+    public const int SettleMs = 1000;
+
+    private DateTime? _blankSince;
+
+    /// <summary>A poll's frame on the unit the window is following.</summary>
+    public A300McduDisplayAction Judge(A300McduScreen screen, DateTime now)
+    {
+        if (!screen.IsBlank)
+        {
+            _blankSince = null;
+            return A300McduDisplayAction.ShowContent;
+        }
+        _blankSince ??= now;
+        return (now - _blankSince.Value).TotalMilliseconds >= SettleMs
+            ? A300McduDisplayAction.ShowBlank
+            : A300McduDisplayAction.HoldLastPage;
+    }
+
+    /// <summary>The window starts following a unit (an open, a re-show, a unit switch). Nothing on
+    /// screen is this unit's page to hold, so a blank not yet judged shows the waiting row; the
+    /// clock starts again, because while the window was not polling it could not see how long the
+    /// unit had been blank.</summary>
+    public A300McduDisplayAction Restart(A300McduScreen screen, DateTime now)
+    {
+        _blankSince = null;
+        var action = Judge(screen, now);
+        return action == A300McduDisplayAction.HoldLastPage ? A300McduDisplayAction.ShowWaiting : action;
+    }
+}
+
 /// <summary>Which screen row a line of the MCDU window's list stands for.</summary>
 public enum A300McduRowKind
 {
