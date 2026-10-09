@@ -128,7 +128,9 @@ Hardware setting) every time it opens, because the aircraft forgets it at each f
 
 How the screen reads: # is an empty box the MCDU wants filled (dashes are optional fields), the
 arrows beside a title mean there are more pages (Right Arrow or Alt+Right goes to the next one),
-and a degree sign is a degree sign. A blank screen says so: the MCDU is probably unpowered.
+and a degree sign is a degree sign. A screen that stays blank for a second says so: the MCDU is
+probably unpowered. The MCDU blanks for a moment on every page change; that is ignored, and the
+cursor stays where it was.
 
   Ctrl+1 to Ctrl+6   Left line-select keys 1 to 6
   Alt+1 to Alt+6     Right line-select keys 1 to 6
