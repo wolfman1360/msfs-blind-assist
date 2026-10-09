@@ -148,6 +148,35 @@ public class IniA300AutobrakeTests
     }
 
     [Fact]
+    public void Two_quick_presses_arm_then_disarm_and_say_nothing()
+    {
+        // The second press lands while the first is settling: the cache may still show the level before
+        // either, so neither press can be judged, and the label shows where the aircraft ended.
+        _cache[A300Autobrake.LevelKey] = 0;
+        Assert.True(Press("A300_AUTO_BRK_LO"));
+        Assert.True(Press("A300_AUTO_BRK_LO"));
+        Assert.Equal(2, _sent.Count);
+        _fresh[A300Autobrake.LevelKey] = 0;
+        foreach (var wait in _waits.ToList())
+            wait.SetResult();
+        Assert.Empty(_speech.All);
+    }
+
+    [Fact]
+    public void A_press_after_the_last_check_has_finished_is_judged_again()
+    {
+        _cache[A300Autobrake.LevelKey] = 0;
+        _fresh[A300Autobrake.LevelKey] = 1;
+        Assert.True(Press("A300_AUTO_BRK_LO"));
+        _waits[0].SetResult();
+        _cache[A300Autobrake.LevelKey] = 1;
+        _fresh[A300Autobrake.LevelKey] = 1;
+        Assert.True(Press("A300_AUTO_BRK_MAX"));   // refused: still low
+        _waits[1].SetResult();
+        Assert.Equal(new[] { A300Autobrake.DidNotArmMessage }, _speech.All);
+    }
+
+    [Fact]
     public void A_press_that_cannot_land_is_refused_and_not_checked()
     {
         _canLand = false;
