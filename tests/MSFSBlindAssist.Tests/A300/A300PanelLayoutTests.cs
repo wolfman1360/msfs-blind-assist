@@ -105,6 +105,20 @@ public class A300PanelLayoutTests
         Assert.Equal(new[] { "Released", "Set" }, Row("A300_PARKINGBRAKE").Positions.Values);
     }
 
+    [Theory]
+    [InlineData("A300_CPT_YOKE_TRIM")]
+    [InlineData("A300_FO_YOKE_TRIM")]
+    public void A_yoke_pitch_trim_switch_names_the_way_the_aircraft_trims(string key)
+    {
+        // Switch 0 trims nose UP: measured 2026-10-06 (Set 0 took ELEVATOR TRIM POSITION from 0 to
+        // +0.55), and AP::Update calls A300_elev_trim_up_handler for 0 and _down_handler for 2 on
+        // both yokes. iniBuilds' tooltip words have the two the other way round.
+        var words = Row(key).Positions;
+        Assert.Equal("Up", words[0]);
+        Assert.Equal("Neutral", words[1]);
+        Assert.Equal("Down", words[2]);
+    }
+
     [Fact]
     public void Each_lead_list_opens_its_panel()
     {

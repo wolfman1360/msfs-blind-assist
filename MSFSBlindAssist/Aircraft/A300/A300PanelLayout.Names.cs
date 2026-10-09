@@ -433,10 +433,12 @@ public static partial class A300PanelLayout
         ["MAIN_CARGO_DOOR_LIGHT_LOADER"] = "Loader tarmac light",
     };
 
-    /// <summary>Position words where iniBuilds' own are abbreviations or codes ("TK/GS", "SYS2") or
-    /// say nothing ("OFF"/"ON" on a guard). The number is the POSITION, as <see cref="ParsePositions"/>
-    /// reads it. The two cargo smoke agent guards were read from the aircraft's own code: their agent
-    /// switch springs back to off while the guard reads 0, so 0 is closed.</summary>
+    /// <summary>Position words where iniBuilds' own are abbreviations or codes ("TK/GS", "SYS2"), say
+    /// nothing ("OFF"/"ON" on a guard) or are wrong. The number is the POSITION, as
+    /// <see cref="ParsePositions"/> reads it. The two cargo smoke agent guards were read from the
+    /// aircraft's own code: their agent switch springs back to off while the guard reads 0, so 0 is
+    /// closed. The yoke pitch trim switches are the other way round from their tooltips: 0 trims nose
+    /// UP (measured 2026-10-06, and <c>AP::Update</c> calls the trim-up handler for 0 on both yokes).</summary>
     private static readonly Dictionary<string, string> PositionOverrides = new(StringComparer.Ordinal)
     {
         ["NAVATTLEFT"] = "0=Off;1=Navigate;2=Attitude",
@@ -484,6 +486,8 @@ public static partial class A300PanelLayout
         ["TCAS_ALT"] = "0=System 2;1=Off;2=System 1",
         ["XPDR_SWITCH"] = "0=System 1;1=System 2",
         ["MAN_GEAR_HANDLE_EXT"] = "0=Stowed;1=Extended",
+        ["CPT_YOKE_TRIM"] = "0=Up;1=Neutral;2=Down",
+        ["FO_YOKE_TRIM"] = "0=Up;1=Neutral;2=Down",
         ["CARGO_FWD_SMOKE_TOGGLE_GUARD"] = "0=Closed;1=Open",
         ["CARGO_AFT_SMOKE_TOGGLE_GUARD"] = "0=Closed;1=Open",
     };
