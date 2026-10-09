@@ -84,11 +84,12 @@ Status Display (Ctrl+3): the FCU panel shows the four FCU windows; the Captain, 
 and Center panels show the altimeter settings, the flex temperature and the landing elevation;
 the Center panel also has a TRP line with the thrust rating mode, the limit AUTO chose or the
 flex temperature, and the N1 limit ("TRP: AUTO, climb, N1 limit 95.3 percent"; no N1 limit with
-PW engines, whose panel shows EPR); the Navigation Radios panel shows the VOR and ILS courses. The Captain Panel also shows the
-master warning and master caution lights. Each panel with fault or warning lights shows them
-too ("Engine 1 generator fault light: On"): Fire, Electrical, Hydraulics, Flight Controls, Air
-Bleed and Air Conditioning, Cabin Pressure, Anti-Ice, Window and Probe Heat, APU, Throttle
-Quadrant, Center Panel, Captain EFIS, Captain Panel, ECAM Control and Cockpit Door.
+PW engines, whose panel shows EPR); the Navigation Radios panel shows the VOR and ILS courses.
+The Captain Panel also shows the master warning and master caution lights. Each panel with fault
+or warning lights shows them too ("Engine 1 generator fault light: On"): Fire, Electrical,
+Hydraulics, Flight Controls, Air Bleed and Air Conditioning, Cabin Pressure, Anti-Ice, Window and
+Probe Heat, APU, Throttle Quadrant, Center Panel, Captain EFIS, Captain Panel, ECAM Control and
+Cockpit Door.
 
 
 TYPED VALUES - type, then press Set or Enter
