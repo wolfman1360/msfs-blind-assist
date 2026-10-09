@@ -72,6 +72,9 @@ public partial class IniA300Definition
                 _altitudeWindow.SuppressEcho(Clock());
             _ = ReadBackAsync(simConnect, announcer, readoutKey, v => A300FcuWindows.Phrase(readoutKey, v, IsMach()));
         }
+        // A flex temperature knob step, the same way ("Flex temperature 46 degrees", [A300-21]).
+        if (sent && row.Action is A300RowAction.Increase or A300RowAction.Decrease && control.Key == A300Trp.FlexKnobKey)
+            _ = ReadBackAsync(simConnect, announcer, A300Readouts.FlexTemperatureKey, A300Trp.FlexPhrase);
         return true;
     }
 

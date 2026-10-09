@@ -66,6 +66,11 @@ never gave the takeoff config test time to warn. Other test buttons are a short 
 Each cargo smoke agent switch has its guard just before it. The switch only moves while its
 guard is open, exactly as in the aircraft.
 
+The thrust rating panel's buttons on the Center panel say whether their light is on: "TRP climb:
+On". In AUTO only the AUTO button is on; the aircraft picks the limit itself, and the Center
+panel's status display says which (see below). Pressing the flex temperature knob's increase or
+decrease button reads the new temperature back once it has moved ("Flex temperature 46 degrees").
+
 The autobrake buttons on the Center panel say what their lights show: "Autobrake low: Armed",
 "Decel" while the autobrake is braking, or "Off". Pressing the armed level again turns the
 autobrake off, as in the aircraft. The aircraft arms it only with the gear lever down and
@@ -77,7 +82,9 @@ puts the pedestal's mode knob back. So the Transponder and TCAS panel's mode com
 
 Status Display (Ctrl+3): the FCU panel shows the four FCU windows; the Captain, First Officer
 and Center panels show the altimeter settings, the flex temperature and the landing elevation;
-the Navigation Radios panel shows the VOR and ILS courses. The Captain Panel also shows the
+the Center panel also has a TRP line with the thrust rating mode, the limit AUTO chose or the
+flex temperature, and the N1 limit ("TRP: AUTO, climb, N1 limit 95.3 percent"; no N1 limit with
+PW engines, whose panel shows EPR); the Navigation Radios panel shows the VOR and ILS courses. The Captain Panel also shows the
 master warning and master caution lights. Each panel with fault or warning lights shows them
 too ("Engine 1 generator fault light: On"): Fire, Electrical, Hydraulics, Flight Controls, Air
 Bleed and Air Conditioning, Cabin Pressure, Anti-Ice, Window and Probe Heat, APU, Throttle

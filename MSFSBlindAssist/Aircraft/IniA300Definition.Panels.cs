@@ -55,6 +55,7 @@ public partial class IniA300Definition
         foreach (var readout in A300Readouts.All)
             if (!A300DisplayPanels.IsDisplayPanel(readout.Panel))
                 Add(displays, readout.Panel, readout.Key);
+        Add(displays, A300Trp.Panel, A300Trp.ModeKey);   // the TRP line ([A300-21])
         foreach (var panel in A300DisplayPanels.Panels)
         {
             controls[panel] = new List<string>();
@@ -87,6 +88,12 @@ public partial class IniA300Definition
             && A300Autobrake.Describe(autobrake, Cached(abSim, A300Autobrake.LevelKey), Cached(abSim, autobrake.DecelKey)) is string lamp)
         {
             stateText = lamp;
+            return true;
+        }
+        if (A300Trp.ModeByButton.TryGetValue(varKey, out var trpMode) && _sim is { } trpSim
+            && A300Trp.ButtonState(trpMode, Cached(trpSim, A300Trp.ModeKey)) is string trpLamp)
+        {
+            stateText = trpLamp;
             return true;
         }
         return base.TryDescribeControlState(varKey, out stateText);
@@ -141,6 +148,11 @@ public partial class IniA300Definition
                 return A300DisplayText.Feet(value);
             case "GROUND_VELOCITY":
                 return A300DisplayText.Knots(value);
+            case A300Trp.ModeKey:
+                return _sim is { } trpSim
+                    ? A300Trp.Line(value, Cached(trpSim, A300Trp.AutoModeKey), Cached(trpSim, A300Readouts.FlexTemperatureKey),
+                        Cached(trpSim, A300Trp.N1LimitKey), Cached(trpSim, A300Trp.PwEnginesKey))
+                    : A300Trp.Line(value, null, null, null, null);
         }
         if (A300EcamPages.KilogramKeys.Contains(key))
             return A300EcamPages.Weight(value, IsMetric());

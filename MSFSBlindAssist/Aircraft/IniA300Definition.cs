@@ -181,6 +181,8 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
                 def.StateVariables = new[] { buttonLight.Key };
             else if (A300Autobrake.ByButton.TryGetValue(row.Key, out var autobrake))
                 def.StateVariables = new[] { A300Autobrake.LevelKey, autobrake.DecelKey };
+            else if (A300Trp.ModeByButton.ContainsKey(row.Key))
+                def.StateVariables = new[] { A300Trp.ModeKey };
             if (A300Announcements.AnnouncedKeys.Contains(row.Key))
                 def.ExcludeFromMonitorManager = false;   // it speaks, so Ctrl+M can mute it
             if (ContinuousBatchLayout.RidesBatch(def) && !batchNames.Add(ContinuousBatchLayout.FullName(def)))
@@ -227,6 +229,20 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
         vars[A300Autobrake.LevelKey] = OwnSubscription(A300Autobrake.LevelVar, "Autobrake level");
         foreach (var (rowKey, button) in A300Autobrake.ByButton)
             vars[button.DecelKey] = OwnSubscription(button.DecelVar, (_rows.TryGetValue(rowKey, out var r) ? r.Name : rowKey) + " decel light");
+
+        // The thrust rating panel ([A300-21]): the mode lights the buttons and is the Center Panel's
+        // "TRP" line, which also reads AUTO's limit, the flex temperature (that panel's own readout)
+        // and, on GE engines, the N1 limit. Their own subscriptions, never the batch ([A300-9]).
+        var trp = OwnSubscription(A300Trp.ModeVar, "TRP");
+        trp.RenderAsReadOnlyStatus = true;
+        trp.StateVariables = new[]   // any part changing repaints the line; its own key too (consumed)
+        {
+            A300Trp.ModeKey, A300Trp.AutoModeKey, A300Readouts.FlexTemperatureKey, A300Trp.N1LimitKey, A300Trp.PwEnginesKey,
+        };
+        vars[A300Trp.ModeKey] = trp;
+        vars[A300Trp.AutoModeKey] = OwnSubscription(A300Trp.AutoModeVar, "TRP auto limit");
+        vars[A300Trp.N1LimitKey] = OwnSubscription(A300Trp.N1LimitVar, "TRP N1 limit");
+        vars[A300Trp.PwEnginesKey] = OwnSubscription(A300Trp.PwEnginesVar, "PW engines");
 
         foreach (var readout in _readouts.Values)
         {

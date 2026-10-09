@@ -24,6 +24,7 @@ public static class A300Readouts
     public const string BaroFirstOfficerKey = "A300_RO_BARO_FO";
     public const string BaroStandbyKey = "A300_RO_BARO_STBY";
     public const string FuelTotalKey = "A300_RO_FUEL_TOTAL";
+    public const string FlexTemperatureKey = "A300_RO_FLEX_TEMP";
 
     // The PFD status box (A300DisplayPanels).
     public const string PfdHeadingKey = "A300_RO_PFD_HEADING";

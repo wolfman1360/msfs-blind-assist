@@ -60,6 +60,10 @@ public partial class IniA300Definition
         if (A300Autobrake.StateKeys.Contains(varName))
             return true;
 
+        // The TRP: shown on its buttons' labels and the Center Panel's TRP line, never spoken.
+        if (A300Trp.StateKeys.Contains(varName))
+            return true;
+
         // An FMA source (some are switch rows too): read when its batch has finished dispatching
         // (OnDeferredFlushBatchDelivered), never spoken here.
         if (A300FmaSources.Keys.Contains(varName))
