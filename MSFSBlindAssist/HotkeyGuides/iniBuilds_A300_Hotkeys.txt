@@ -155,6 +155,12 @@ cursor stays where it was.
 The scratchpad is read back once what you typed has landed. An entry holding a character the MCDU
 keyboard does not have (a comma, for example) is not sent at all, and stays in the box to edit.
 
+INIT B, the second INIT page: type the zero fuel weight and press Alt+2 (right line-select key 2).
+The take-off weight on right line-select key 3 is worked out by the FMS; typing one there gets NOT
+ALLOWED. The MCDU's own SimBrief request (Menu, then ACARS) loads the route, alternate, cruise
+level, flight number, cost index and winds, but never the weights, so the zero fuel weight is
+always yours to type.
+
 
 THE TABLET - Press left bracket, then Shift+T
 
