@@ -2,6 +2,7 @@ using MSFSBlindAssist.Accessibility;
 using MSFSBlindAssist.Aircraft.A300;
 using MSFSBlindAssist.Hotkeys;
 using MSFSBlindAssist.SimConnect;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Aircraft;
 
@@ -97,7 +98,7 @@ public partial class IniA300Definition
                 _ = SpeakAsync(sim, announcer, "VMAX", v => $"VMAX {A300DisplayText.Speed(v[0])}", A300Readouts.VmaxKey);
                 return true;
             case HotkeyAction.ReadSpeedGD:
-                SpeakFlapSpeed(sim, announcer, "Green dot", A300Readouts.GreenDotKey);
+                _ = SpeakGreenDotAsync(sim, announcer);
                 return true;
             case HotkeyAction.ReadSpeedS:
                 SpeakFlapSpeed(sim, announcer, "S speed", A300Readouts.SSpeedKey);
@@ -113,4 +114,34 @@ public partial class IniA300Definition
         _ = SpeakAsync(sim, announcer, name,
             v => $"{name} {A300DisplayText.FlapSpeed(A300Readouts.FlapSpeeds[key], v[0], v[1])}",
             key, A300Levers.FlapsKey);
+
+    /// <summary>
+    /// Shift+1: green dot, or, at a flap setting where the tape does not draw it, the speed the tape
+    /// shows in its place ("Green dot not shown. S speed 198 knots"; [A300-10]: S at lever 1, F at
+    /// levers 2 and 3). At lever 4 the tape draws none of the three.
+    /// </summary>
+    private async Task SpeakGreenDotAsync(SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        try
+        {
+            if (await ReadFresh(sim, A300Readouts.GreenDotKey, ReadoutTimeoutMs) is not double greenDot
+                || await ReadFresh(sim, A300Levers.FlapsKey, ReadoutTimeoutMs) is not double lever)
+            {
+                announcer.AnnounceImmediate("Green dot unavailable");
+                return;
+            }
+            if (A300DisplayText.TapeSpeedAt(lever) is not A300PfdSpeed shown || shown == A300PfdSpeed.GreenDot)
+            {
+                announcer.AnnounceImmediate($"Green dot {A300DisplayText.FlapSpeed(A300PfdSpeed.GreenDot, greenDot, lever)}");
+                return;
+            }
+            double? instead = await ReadFresh(sim, shown == A300PfdSpeed.S ? A300Readouts.SSpeedKey : A300Readouts.FSpeedKey,
+                ReadoutTimeoutMs);
+            announcer.AnnounceImmediate(A300DisplayText.GreenDotNotShown(shown, instead));
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("A300", $"Green dot readout failed: {ex.Message}");
+        }
+    }
 }

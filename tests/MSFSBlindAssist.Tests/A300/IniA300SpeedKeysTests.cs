@@ -44,7 +44,7 @@ public class IniA300SpeedKeysTests
 
     [Theory]
     [InlineData(HotkeyAction.ReadSpeedGD, A300Readouts.GreenDotKey, 0, "Green dot 187 knots")]
-    [InlineData(HotkeyAction.ReadSpeedGD, A300Readouts.GreenDotKey, 1, "Green dot not shown at this flap setting")]
+    [InlineData(HotkeyAction.ReadSpeedGD, A300Readouts.GreenDotKey, 4, "Green dot not shown at this flap setting")]
     [InlineData(HotkeyAction.ReadSpeedS, A300Readouts.SSpeedKey, 1, "S speed 187 knots")]
     [InlineData(HotkeyAction.ReadSpeedF, A300Readouts.FSpeedKey, 3, "F speed 187 knots")]
     [InlineData(HotkeyAction.ReadSpeedF, A300Readouts.FSpeedKey, 0, "F speed not shown at this flap setting")]
@@ -53,6 +53,33 @@ public class IniA300SpeedKeysTests
         _fresh[key] = 187.4;
         _fresh[A300Levers.FlapsKey] = flapLever;
         Assert.Equal(new[] { said }, Press(action));
+    }
+
+    [Theory]
+    [InlineData(1, A300Readouts.SSpeedKey, "Green dot not shown. S speed 198 knots")]
+    [InlineData(2, A300Readouts.FSpeedKey, "Green dot not shown. F speed 198 knots")]
+    [InlineData(3, A300Readouts.FSpeedKey, "Green dot not shown. F speed 198 knots")]
+    public void Green_dot_off_the_tape_says_the_speed_shown_instead(double flapLever, string shownKey, string said)
+    {
+        _fresh[A300Readouts.GreenDotKey] = 187.4;
+        _fresh[A300Levers.FlapsKey] = flapLever;
+        _fresh[shownKey] = 197.6;
+        Assert.Equal(new[] { said }, Press(HotkeyAction.ReadSpeedGD));
+    }
+
+    [Fact]
+    public void Green_dot_off_the_tape_with_the_other_speed_unanswered_says_so()
+    {
+        _fresh[A300Readouts.GreenDotKey] = 187.4;
+        _fresh[A300Levers.FlapsKey] = 1;
+        Assert.Equal(new[] { "Green dot not shown. S speed unavailable" }, Press(HotkeyAction.ReadSpeedGD));
+    }
+
+    [Fact]
+    public void Green_dot_with_no_flap_lever_says_unavailable()
+    {
+        _fresh[A300Readouts.GreenDotKey] = 187.4;
+        Assert.Equal(new[] { "Green dot unavailable" }, Press(HotkeyAction.ReadSpeedGD));
     }
 
     [Fact]

@@ -58,15 +58,25 @@ public static class A300DisplayText
     {
         if (flapLever is not double lever)
             return "not available";
-        int position = (int)Math.Round(lever);
-        bool shown = speed switch
-        {
-            A300PfdSpeed.GreenDot => position == 0,
-            A300PfdSpeed.S => position == 1,
-            _ => position is 2 or 3,
-        };
-        return shown ? Speed(knots) : NotShown;
+        return TapeSpeedAt(lever) == speed ? Speed(knots) : NotShown;
     }
+
+    /// <summary>
+    /// Which of green dot, S and F the speed tape draws at this flap lever position
+    /// (PFD::drawSpeedTape, 1.0.11): green dot at 0, S at 1, F at 2 and 3, none of them at 4.
+    /// </summary>
+    public static A300PfdSpeed? TapeSpeedAt(double flapLever) => (int)Math.Round(flapLever) switch
+    {
+        0 => A300PfdSpeed.GreenDot,
+        1 => A300PfdSpeed.S,
+        2 or 3 => A300PfdSpeed.F,
+        _ => null,
+    };
+
+    /// <summary>Green dot off the tape, and the speed the tape shows in its place ("Green dot not shown.
+    /// S speed 198 knots"); <paramref name="knots"/> null is a speed that did not answer.</summary>
+    public static string GreenDotNotShown(A300PfdSpeed shown, double? knots) =>
+        $"Green dot not shown. {(shown == A300PfdSpeed.S ? "S speed" : "F speed")} {(knots is double k ? Speed(k) : "unavailable")}";
 
     /// <summary>The minimums set on the EFIS panel, in feet; zero is not set.</summary>
     public static string Minimums(double feet) =>

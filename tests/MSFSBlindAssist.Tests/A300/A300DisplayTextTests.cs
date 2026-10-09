@@ -67,6 +67,28 @@ public class A300DisplayTextTests
     }
 
     [Theory]
+    [InlineData(0, A300PfdSpeed.GreenDot)]
+    [InlineData(1, A300PfdSpeed.S)]
+    [InlineData(2, A300PfdSpeed.F)]
+    [InlineData(3, A300PfdSpeed.F)]
+    [InlineData(4, null)]
+    public void The_tape_draws_one_of_the_three_speeds_at_each_lever_but_the_last(double flapLever, A300PfdSpeed? drawn)
+    {
+        // PFD::drawSpeedTape (1.0.11): green dot at lever 0, S at 1, F at 2 and 3, none of them at 4.
+        Assert.Equal(drawn, A300DisplayText.TapeSpeedAt(flapLever));
+    }
+
+    [Theory]
+    [InlineData(A300PfdSpeed.S, 197.6, "Green dot not shown. S speed 198 knots")]
+    [InlineData(A300PfdSpeed.F, 155.2, "Green dot not shown. F speed 155 knots")]
+    [InlineData(A300PfdSpeed.S, 0.0, "Green dot not shown. S speed not available")]
+    [InlineData(A300PfdSpeed.F, null, "Green dot not shown. F speed unavailable")]
+    public void Green_dot_not_shown_names_the_speed_the_tape_shows_instead(A300PfdSpeed shown, double? knots, string text)
+    {
+        Assert.Equal(text, A300DisplayText.GreenDotNotShown(shown, knots));
+    }
+
+    [Theory]
     [InlineData(200, "200 feet")]
     [InlineData(0, "not set")]
     public void Minimums_read_in_feet_or_not_set(double feet, string text)
@@ -154,6 +176,7 @@ public class A300DisplayTextTests
             Assert.Equal("12,000 feet", A300DisplayText.Feet(12000));
             Assert.Equal("12.3 nautical miles", A300DisplayText.WaypointDistance(12.34));
             Assert.Equal("116.55 megahertz", A300DisplayText.Megahertz(116.55));
+            Assert.Equal("Green dot not shown. S speed 198 knots", A300DisplayText.GreenDotNotShown(A300PfdSpeed.S, 197.6));
         }
         finally
         {

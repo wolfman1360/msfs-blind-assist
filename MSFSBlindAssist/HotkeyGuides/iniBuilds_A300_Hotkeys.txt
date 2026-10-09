@@ -218,7 +218,8 @@ FCU:
   Shift+V    Read the FCU vertical speed window
 
 Speed tape:
-  Shift+1    Read green dot
+  Shift+1    Read green dot. At a flap setting where the tape does not show it, you hear the
+             speed the tape shows instead: "Green dot not shown. S speed 198 knots"
   Shift+2    Read S speed
   Shift+3    Read F speed
   Shift+4    Read VLS
