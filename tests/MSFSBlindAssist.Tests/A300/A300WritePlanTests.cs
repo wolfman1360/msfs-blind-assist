@@ -134,6 +134,34 @@ public class A300WritePlanTests
             s => Assert.Equal("0 (>B:AIRLINER_Test_Set)", Assert.IsType<A300CalcStep>(s).Rpn));
     }
 
+    [Theory]
+    [InlineData("AIRLINER_ENG1_FIRE_PUSH2", 5000)]   // engine 1 loop test
+    [InlineData("AIRLINER_ENG2_FIRE_PUSH2", 5000)]   // engine 2 loop test
+    [InlineData("AIRLINER_APU_FIRE_PUSH2", 5000)]    // APU loop test
+    [InlineData("AIRLINER_ENG1_FIRE_PUSH1", 3000)]   // engine 1 squib test
+    [InlineData("AIRLINER_ENG2_FIRE_PUSH1", 3000)]   // engine 2 squib test
+    [InlineData("AIRLINER_APU_FIRE_PUSH1", 3000)]    // APU squib test
+    public void A_fire_test_is_held_as_long_as_the_aircrafts_own_checklist_holds_it(string id, int ms)
+    {
+        // Airbus_A300_Checklist.xml holds each loop test 5.0 s and each squib test 3.0 s; 250 ms
+        // never finished the APU loop test, whose fire handle light comes at about 3 s (2026-10-04).
+        var c = Control(A300Kinds.Hold, "");
+        c.Id = id;
+        Assert.Collection(A300WritePlan.ForPress(c).Steps,
+            s => Assert.Equal("2 (>B:AIRLINER_Test_Set)", Assert.IsType<A300CalcStep>(s).Rpn),
+            s => Assert.Equal(ms, Assert.IsType<A300DelayStep>(s).Milliseconds),
+            s => Assert.Equal("0 (>B:AIRLINER_Test_Set)", Assert.IsType<A300CalcStep>(s).Rpn));
+    }
+
+    [Fact]
+    public void Every_held_test_is_a_hold_button_on_the_shipped_map()
+    {
+        var map = A300ControlMap.Load();
+        Assert.NotEmpty(A300WritePlan.TestHoldMs);
+        foreach (var id in A300WritePlan.TestHoldMs.Keys)
+            Assert.Equal(A300Kinds.Hold, map.Find(id)?.Kind);
+    }
+
     [Fact]
     public void An_encoder_steps_one_click_either_way()
     {

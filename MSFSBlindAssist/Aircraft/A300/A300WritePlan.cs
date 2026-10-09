@@ -31,8 +31,9 @@ public sealed record A300Plan(IReadOnlyList<A300Step> Steps, string? Refusal)
 /// measured live 2026-10-03), so it is sent only when the current position is KNOWN and differs;
 /// an unknown position is refused, because a flip sent the wrong way round inverts the switch.</item>
 /// <item>Selectors and knobs are absolute: Set n is position n, whatever the aircraft held.</item>
-/// <item>A hold button is pressed with Set 2 and released with Set 0 after <see cref="HoldMs"/>; a
-/// spring switch is held at the picked side for <see cref="SpringHoldMs"/>, then returned to rest.</item>
+/// <item>A hold button is pressed with Set 2 and released with Set 0 after <see cref="HoldMs"/> (a
+/// fire test after its own <see cref="TestHoldMs"/>); a spring switch is held at the picked side for
+/// <see cref="SpringHoldMs"/>, then returned to rest.</item>
 /// </list>
 /// </summary>
 public static class A300WritePlan
@@ -45,6 +46,30 @@ public static class A300WritePlan
 
     /// <summary>How long a spring switch is held off centre (one trim nudge).</summary>
     public const int SpringHoldMs = 1000;
+
+    /// <summary>
+    /// The fire tests, held as long as the aircraft's own checklist holds them
+    /// (<c>Airbus_A300_Checklist.xml</c>, package 1.0.11: <c>WaitForDuration</c> 5.0 s on each loop
+    /// test and 3.0 s on each squib test, written to the same L:vars these buttons' Set events
+    /// write). 250 ms never finished one: the APU loop test lights loop A at about 1.5 s and the fire
+    /// handle at about 3 s, and the engine loop tests their fire handle at about 4.9 s (measured
+    /// 2026-10-04). The lights the test brings on speak through the fault-light path. Every other
+    /// hold button keeps <see cref="HoldMs"/>: the aircraft gives no duration for it.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, int> TestHoldMs =
+        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["AIRLINER_ENG1_FIRE_PUSH2"] = 5000,   // engine 1 loop test: INI_ENGINE1_LOOP_TEST_SWITCH
+            ["AIRLINER_ENG2_FIRE_PUSH2"] = 5000,   // engine 2 loop test: INI_ENGINE2_LOOP_TEST_SWITCH
+            ["AIRLINER_APU_FIRE_PUSH2"] = 5000,    // APU loop test: INI_APU_LOOP_TEST_SWITCH
+            ["AIRLINER_ENG1_FIRE_PUSH1"] = 3000,   // engine 1 squib test: INI_ENG1_SQUIB_TEST
+            ["AIRLINER_ENG2_FIRE_PUSH1"] = 3000,   // engine 2 squib test: INI_ENG2_SQUIB_TEST
+            ["AIRLINER_APU_FIRE_PUSH1"] = 3000,    // APU squib test: INI_APU_SQUIB_TEST
+        };
+
+    /// <summary>How long this hold button is held: its test's own duration, else <see cref="HoldMs"/>.</summary>
+    public static int HoldMsFor(A300Control control) =>
+        TestHoldMs.TryGetValue(control.Id, out var ms) ? ms : HoldMs;
 
     public const string UnknownPositionRefusal = "position unknown, try again in a moment";
     public const string NotAPositionRefusal = "not a position of this control";
@@ -100,7 +125,7 @@ public static class A300WritePlan
     public static A300Plan ForPress(A300Control control) => control.Kind switch
     {
         A300Kinds.Button => Steps(Set(control, control.Press ?? 1)),
-        A300Kinds.Hold => Steps(Set(control, control.Press ?? 2), new A300DelayStep(HoldMs), Set(control, 0)),
+        A300Kinds.Hold => Steps(Set(control, control.Press ?? 2), new A300DelayStep(HoldMsFor(control)), Set(control, 0)),
         _ => A300Plan.Refused(NotSettableRefusal),
     };
 
