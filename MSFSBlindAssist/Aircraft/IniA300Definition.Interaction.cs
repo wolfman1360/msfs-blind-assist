@@ -75,6 +75,18 @@ public partial class IniA300Definition
         if (sent && row.Action is A300RowAction.Increase or A300RowAction.Decrease
             && A300Readouts.KnobReadBacks.TryGetValue(control.Key, out var readBack))
             _ = ReadBackAsync(simConnect, announcer, readBack.Readout, readBack.Phrase);
+        // A VHF or ADF knob's window, named by its role now ("VHF 1 standby 124.805"), and a transfer's new frequency
+        // in use: the transfer switch picks a window, it does not swap them (A300Radios).
+        if (sent && row.Action is A300RowAction.Increase or A300RowAction.Decrease
+            && A300Radios.ByKnob.TryGetValue(control.Key, out var knob))
+        {
+            string windowKey = knob.Window == 1 ? knob.Radio.Window1Key : knob.Radio.Window2Key;
+            _ = ReadBackWhenSettledAsync(simConnect, announcer, knob.Radio.Name,
+                v => knob.Radio.KnobPhrase(knob.Window, v[0], v[1]), windowKey, knob.Radio.TransferKey);
+        }
+        if (sent && row.Action == A300RowAction.Press && A300Radios.ByTransfer.TryGetValue(control.Key, out var radio))
+            _ = ReadBackWhenSettledAsync(simConnect, announcer, radio.Name,
+                v => radio.TransferPhrase(v[0], v[1], v[2]), radio.Window1Key, radio.Window2Key, radio.TransferKey);
         return true;
     }
 
@@ -151,6 +163,29 @@ public partial class IniA300Definition
         catch (Exception ex)
         {
             Log.Warn("A300", $"Re-read of {row.Key} failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>Speaks a read-back composed from several values once the change has had time to land. The values
+    /// are read together: one after another, a radio's read-back came 3 s after the press (2026-10-10).</summary>
+    private async Task ReadBackWhenSettledAsync(SimConnectManager sim, ScreenReaderAnnouncer announcer, string what,
+        Func<double[], string> compose, params string[] keys)
+    {
+        try
+        {
+            await TypedDelay(ToggleReadBackMs);
+            if (_disposed)
+                return;
+            var values = await Task.WhenAll(keys.Select(key => ReadFresh(sim, key, ReadoutTimeoutMs)));
+            if (_disposed)
+                return;
+            announcer.AnnounceImmediate(values.All(v => v.HasValue)
+                ? compose(values.Select(v => v!.Value).ToArray())
+                : $"{what} unavailable");
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("A300", $"{what} read-back failed: {ex.Message}");
         }
     }
 

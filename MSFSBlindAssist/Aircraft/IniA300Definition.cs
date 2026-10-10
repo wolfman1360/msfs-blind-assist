@@ -298,6 +298,21 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
         // The rudder trim display's direction and digits its line is composed from (A300Trim), the same way.
         foreach (var (key, var) in A300Trim.RudderDigits)
             vars[key] = OwnSubscription(var, key);
+        // The VHF and ADF windows and transfer switches their lines and read-backs are composed from (A300Radios),
+        // and each ADF's signal, which gates its bearing line.
+        foreach (var radio in A300Radios.All)
+        {
+            vars[radio.Window1Key] = OwnSubscription(radio.Window1Var, radio.Window1Key);
+            vars[radio.Window2Key] = OwnSubscription(radio.Window2Var, radio.Window2Key);
+            vars[radio.TransferKey] = OwnSubscription(radio.TransferVar, radio.TransferKey);
+        }
+        foreach (var (signalKey, signalVar) in A300Radios.BearingLines.Values)
+        {
+            var signal = OwnSubscription(signalVar, signalKey);
+            signal.Type = SimVarType.SimVar;
+            signal.Units = "number";
+            vars[signalKey] = signal;
+        }
 
         foreach (var readout in _readouts.Values)
         {

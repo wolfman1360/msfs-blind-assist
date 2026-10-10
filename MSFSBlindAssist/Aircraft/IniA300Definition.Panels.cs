@@ -206,6 +206,14 @@ public partial class IniA300Definition
             var digits = digitKeys.Select(k => _sim is { } clockSim ? Cached(clockSim, k) : null).ToArray();
             return digits.All(d => d.HasValue) ? A300Clock.Time(digits[0]!.Value, digits[1]!.Value, digits[2]!.Value, digits[3]!.Value) : null;
         }
+        if (A300Radios.ByLine.TryGetValue(key, out var line))
+        {
+            if (_sim is not { } radioSim || Cached(radioSim, line.Radio.Window1Key) is not double w1 || Cached(radioSim, line.Radio.Window2Key) is not double w2)
+                return null;
+            return line.Active ? line.Radio.Active(w1, w2, value) : line.Radio.Standby(w1, w2, value);
+        }
+        if (A300Radios.BearingLines.TryGetValue(key, out var bearing))
+            return _sim is { } adfSim && Cached(adfSim, bearing.SignalKey) is double signal ? A300Radios.Bearing(signal, value) : null;
         if (key == A300Trim.RudderKey)
         {
             var display = A300Trim.RudderDigitKeys.Select(k => _sim is { } trimSim ? Cached(trimSim, k) : null).ToArray();

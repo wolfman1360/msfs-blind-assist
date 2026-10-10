@@ -98,6 +98,15 @@ degrees down"); the tilt slider runs from 15 degrees down at 0 to 15 degrees up 
 Transponder panel's status display reads the squawk code, and each step of a code knob says the
 new code: "Squawk 7100". The large knob changes the first two digits, the small knob the last two.
 
+The VHF and ADF panels each have two windows with their own knobs, and a transfer switch that picks
+which window is in use. It does not swap them, so after a transfer the knobs called "standby" tune
+the frequency in use. Each knob step says which it changed: "VHF 1 standby 124.810" or "VHF 1
+active 124.805". A transfer says the frequency now in use: "VHF 1 active 124.805". The status
+displays read each radio's active and standby frequencies, and each ADF's bearing to its station
+("45 degrees right", or "no signal"). The Navigation Radios panel's status display reads the VOR
+and ILS frequencies and courses, and each knob step says the new value: "ILS 109.00", "VOR 1
+course 091". The aircraft tunes the VORs itself, so their frequency knobs may not change them.
+
 The fire tests on the Fire panel are held as a pilot holds them: 7 seconds for an engine loop
 test, 5 seconds for the APU loop test, 3 seconds for a squib test. The loop lights and the fire
 handle light a loop test brings on, and the squib lights a squib test brings on, are announced (see

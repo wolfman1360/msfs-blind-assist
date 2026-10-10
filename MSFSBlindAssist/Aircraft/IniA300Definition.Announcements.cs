@@ -85,8 +85,9 @@ public partial class IniA300Definition
         if (A300Trp.StateKeys.Contains(varName))
             return true;
 
-        // The clocks' digits and button states: the Clock box's time lines and the buttons' labels, never spoken.
-        if (A300Clock.SilentKeys.Contains(varName) || A300Trim.RudderDigitKeys.Contains(varName))
+        // The clocks' digits and button states, the rudder trim display and the radio windows: box lines, labels
+        // and read-backs are composed from them, never spoken.
+        if (A300Clock.SilentKeys.Contains(varName) || A300Trim.RudderDigitKeys.Contains(varName) || A300Radios.SilentKeys.Contains(varName))
             return true;
 
         // The two master lights, the four levers and the SAS levers (the fault lights went to the board

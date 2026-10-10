@@ -60,9 +60,12 @@ public static class A300Readouts
     public const string StandbyAltitudeKey = "A300_RO_STBY_ALTITUDE";
     public const string StandbyCompassKey = "A300_RO_STBY_COMPASS";
     public const string SquawkCodeKey = "A300_RO_SQUAWK";
+    public const string NavVor1Key = "A300_RO_NAV_VOR1";
+    public const string NavVor2Key = "A300_RO_NAV_VOR2";
+    public const string NavIlsKey = "A300_RO_NAV_ILS";
 
-    public static readonly IReadOnlyList<A300Readout> All = new[]
-    {
+    public static readonly IReadOnlyList<A300Readout> All =
+    [
         new A300Readout("A300_RO_FCU_SPEED", "Speed window", "FCU", "INI_Airspeed_Dial", false, "number",
             v => $"{Whole(v)} knots"),
         new A300Readout("A300_RO_FCU_HEADING", "Heading window", "FCU", "INI_HEADING_DIAL", false, "number",
@@ -87,6 +90,10 @@ public static class A300Readouts
             v => $"{Heading(v)} degrees"),
         new A300Readout(IlsCourseKey, "ILS course", "Navigation Radios", "INI_ils_course", false, "number",
             v => $"{Heading(v)} degrees"),
+        // The frequency selectors' windows, as the ND box's lines read them.
+        new A300Readout(NavVor1Key, "VOR 1", "Navigation Radios", "NAV ACTIVE FREQUENCY:1", true, "MHz", A300DisplayText.Megahertz),
+        new A300Readout(NavVor2Key, "VOR 2", "Navigation Radios", "NAV ACTIVE FREQUENCY:2", true, "MHz", A300DisplayText.Megahertz),
+        new A300Readout(NavIlsKey, "ILS", "Navigation Radios", "NAV ACTIVE FREQUENCY:3", true, "MHz", A300DisplayText.Megahertz),
         new A300Readout(FuelTotalKey, "Total fuel", "Fuel", "FUEL TOTAL QUANTITY WEIGHT", true, "pounds",
             v => $"{Math.Round(v).ToString("#,0", Inv)} pounds"),
 
@@ -118,6 +125,14 @@ public static class A300Readouts
 
         // The transponder code as its display shows it, read as BCO16 as the FBW A320 and A380 read it.
         new A300Readout(SquawkCodeKey, "Squawk code", "Transponder", "TRANSPONDER CODE:1", true, "BCO16", Squawk),
+
+        // The VHF and ADF panels (A300Radios): each line is composed from both windows and the transfer switch,
+        // whose variable carries it; and each ADF's bearing, read only while it has a signal.
+        .. RadioLines("VHF 1"), .. RadioLines("VHF 2"),
+        .. RadioLines("ADF 1"),
+        new A300Readout("A300_RO_ADF1_BEARING", "ADF 1 bearing", "ADF Radios", "ADF RADIAL:1", true, "degrees", _ => "unavailable"),
+        .. RadioLines("ADF 2"),
+        new A300Readout("A300_RO_ADF2_BEARING", "ADF 2 bearing", "ADF Radios", "ADF RADIAL:2", true, "degrees", _ => "unavailable"),
 
         // The two clocks (A300Clock): the time line is composed from the clock's GMT digits, so its own value
         // (the seconds) reads only when they are unknown.
@@ -164,7 +179,7 @@ public static class A300Readouts
         // The standby instruments: the standby altimeter has its own baro setting (altimeter 3).
         new A300Readout(StandbyAltitudeKey, "Standby altitude", "Standby Instruments", "INDICATED ALTITUDE:3", true, "feet", A300DisplayText.Feet),
         new A300Readout(StandbyCompassKey, "Standby compass", "Standby Instruments", "WISKEY COMPASS INDICATION DEGREES", true, "degrees", Heading),
-    };
+    ];
 
     /// <summary>A knob whose step is read back once it lands, as the FCU's: knob control key → its readout and
     /// the phrase. A numeric confirmation always speaks ([CORE-7]).</summary>
@@ -174,7 +189,29 @@ public static class A300Readouts
             ["A300_LANDING_ELEV_SET"] = ("A300_RO_LANDING_ELEV", v => $"Landing elevation {Whole(v)} feet"),
             ["A300_TCAS_BIG"] = (SquawkCodeKey, v => $"Squawk {Squawk(v)}"),
             ["A300_TCAS_SMALL"] = (SquawkCodeKey, v => $"Squawk {Squawk(v)}"),
+            ["A300_VOR100_CAPT"] = (NavVor1Key, v => $"VOR 1 {Tuned(v)}"),
+            ["A300_VOR10_CAPT"] = (NavVor1Key, v => $"VOR 1 {Tuned(v)}"),
+            ["A300_VOR100_FO"] = (NavVor2Key, v => $"VOR 2 {Tuned(v)}"),
+            ["A300_VOR10_FO"] = (NavVor2Key, v => $"VOR 2 {Tuned(v)}"),
+            ["A300_ILS_100"] = (NavIlsKey, v => $"ILS {Tuned(v)}"),
+            ["A300_ILS_10"] = (NavIlsKey, v => $"ILS {Tuned(v)}"),
+            ["A300_VOR_CRS_CAPT"] = ("A300_RO_VOR1_COURSE", v => $"VOR 1 course {Heading(Math.Round(v))}"),
+            ["A300_VOR_CRS_FO"] = ("A300_RO_VOR2_COURSE", v => $"VOR 2 course {Heading(Math.Round(v))}"),
+            ["A300_ILS_CRS"] = (IlsCourseKey, v => $"ILS course {Heading(Math.Round(v))}"),
         };
+
+    private static A300Readout[] RadioLines(string name)
+    {
+        var radio = A300Radios.All.Single(r => r.Name == name);
+        return new[]
+        {
+            new A300Readout(radio.ActiveKey, $"{name} active", radio.Panel, radio.TransferVar, false, "number", _ => "unavailable"),
+            new A300Readout(radio.StandbyKey, $"{name} standby", radio.Panel, radio.TransferVar, false, "number", _ => "unavailable"),
+        };
+    }
+
+    /// <summary>A VOR or ILS window: "113.15".</summary>
+    private static string Tuned(double megahertz) => megahertz.ToString("0.00", Inv);
 
     /// <summary>"7000": each BCO16 nibble a digit.</summary>
     private static string Squawk(double bcd)

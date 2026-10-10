@@ -185,6 +185,35 @@ public class IniA300BehaviourTests
         Assert.Equal(new[] { "Landing elevation 50 feet" }, _speech.All);
     }
 
+    private void ReadFreshReturns(Dictionary<string, double> values)
+    {
+        _def.TypedDelay = _ => Task.CompletedTask;
+        _def.ReadFresh = (_, k, _) => Task.FromResult<double?>(values.TryGetValue(k, out var v) ? v : null);
+    }
+
+    [Theory]
+    // The transfer switch picks the window in use; it does not swap them (2026-10-10). After a transfer, the
+    // knob iniBuilds calls "standby" tunes the frequency in use, and its read-back says so.
+    [InlineData("A300_CPT_VHF2_KHZ#INC", 1, "VHF 1 active 124.805")]
+    [InlineData("A300_CPT_VHF2_MHZ#DEC", 0, "VHF 1 standby 124.805")]
+    [InlineData("A300_CPT_VHF1_KHZ#INC", 0, "VHF 1 active 122.800")]
+    public void A_vhf_knob_step_is_read_back_by_its_windows_role(string row, double transfer, string phrase)
+    {
+        var vhf = A300Radios.ByTransfer["A300_CPT_VHF_TFR"];
+        ReadFreshReturns(new() { [vhf.Window1Key] = 122800, [vhf.Window2Key] = 124805, [vhf.TransferKey] = transfer });
+        Assert.True(Set(row, 1));
+        Assert.Equal(new[] { phrase }, _speech.All);
+    }
+
+    [Fact]
+    public void A_transfer_is_read_back_with_the_frequency_now_in_use()
+    {
+        var adf = A300Radios.ByTransfer["A300_ADF1_TFR"];
+        ReadFreshReturns(new() { [adf.Window1Key] = 900, [adf.Window2Key] = 990, [adf.TransferKey] = 0 });
+        Assert.True(Set("A300_ADF1_TFR", 1));
+        Assert.Equal(new[] { "ADF 1 active 990" }, _speech.All);
+    }
+
     [Fact]
     public void The_crossbleed_reads_open_or_closed_and_its_mode_auto_or_manual()
     {

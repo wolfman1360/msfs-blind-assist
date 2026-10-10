@@ -142,6 +142,39 @@ public class A300LeversAndReadoutsTests
         Assert.Equal("Squawk 7100", phrase(0x7100));
     }
 
+    [Fact]
+    public void The_navigation_radios_panel_reads_its_frequencies_and_courses()
+    {
+        // The VOR/ILS frequency selectors' windows: VOR 1 and 2 are NAV 1 and 2, the ILS is NAV 3 ([A300-10]).
+        var lines = A300Readouts.All.Where(r => r.Panel == "Navigation Radios").Select(r => (r.Name, r.Var)).ToArray();
+        Assert.Equal(new[]
+        {
+            ("VOR 1 course", "NAV OBS:1"),
+            ("VOR 2 course", "NAV OBS:2"),
+            ("ILS course", "INI_ils_course"),
+            ("VOR 1", "NAV ACTIVE FREQUENCY:1"),
+            ("VOR 2", "NAV ACTIVE FREQUENCY:2"),
+            ("ILS", "NAV ACTIVE FREQUENCY:3"),
+        }, lines);
+    }
+
+    [Theory]
+    [InlineData("A300_VOR100_CAPT", 113.15, "VOR 1 113.15")]
+    [InlineData("A300_VOR10_CAPT", 113.15, "VOR 1 113.15")]
+    [InlineData("A300_VOR100_FO", 113.9, "VOR 2 113.90")]
+    [InlineData("A300_VOR10_FO", 113.9, "VOR 2 113.90")]
+    [InlineData("A300_ILS_100", 109.5, "ILS 109.50")]
+    [InlineData("A300_ILS_10", 109.5, "ILS 109.50")]
+    [InlineData("A300_VOR_CRS_CAPT", 91, "VOR 1 course 091")]
+    [InlineData("A300_VOR_CRS_FO", 91, "VOR 2 course 091")]
+    [InlineData("A300_ILS_CRS", 91, "ILS course 091")]
+    public void A_navigation_radio_knob_step_reads_its_window_back(string knob, double value, string phrase)
+    {
+        var (readout, words) = A300Readouts.KnobReadBacks[knob];
+        Assert.Equal("Navigation Radios", A300Readouts.All.Single(r => r.Key == readout).Panel);
+        Assert.Equal(phrase, words(value));
+    }
+
     [Theory]
     [InlineData("en-US")]
     [InlineData("de-DE")]
