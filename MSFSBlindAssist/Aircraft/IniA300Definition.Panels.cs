@@ -57,8 +57,10 @@ public partial class IniA300Definition
         foreach (var (panel, lines) in A300DisplayPanels.SystemLines)
             foreach (var key in lines)
                 Add(displays, panel, key);
+        // A readout whose variable the panel's ECAM page already reads is not repeated (total fuel: the page's
+        // follows the tablet's weight unit; the pounds readout stays registered for the fuel hotkey).
         foreach (var readout in A300Readouts.All)
-            if (!A300DisplayPanels.IsDisplayPanel(readout.Panel))
+            if (!A300DisplayPanels.IsDisplayPanel(readout.Panel) && !ShownBySystemLines(readout))
                 Add(displays, readout.Panel, readout.Key);
         Add(displays, A300Trp.Panel, A300Trp.ModeKey);   // the TRP line ([A300-21])
         foreach (var panel in A300DisplayPanels.Panels)
@@ -79,6 +81,11 @@ public partial class IniA300Definition
                 list.Add(key);
         }
     }
+
+    private bool ShownBySystemLines(A300Readout readout) =>
+        A300DisplayPanels.SystemLines.TryGetValue(readout.Panel, out var lines)
+        && lines.Any(key => _readouts.TryGetValue(key, out var line) && line.Key != readout.Key
+                            && string.Equals(line.Var, readout.Var, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>An FCU, autobrake or TRP button's label state, from its lamp in the cache ("Heading
     /// select: On", "Autobrake low: Armed", "TRP climb: On"), and a fault light's status box, as the

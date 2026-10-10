@@ -106,6 +106,28 @@ public class A300PanelLampTests
         Assert.Equal((var, A300LightPower.Dc), (lamp.Primary.Name, lamp.Power));
     }
 
+    [Theory]
+    [InlineData("OUT_TK_PMP_L1_SEQ1_LIGHT", "Left outer tank pump 1 low pressure light", "INI_OUTER_TANK1_LEFT_low_pressure")]
+    [InlineData("OUT_TK_PMP_L2_SEQ1_LIGHT", "Left outer tank pump 2 low pressure light", "INI_OUTER_TANK2_LEFT_low_pressure")]
+    [InlineData("OUT_TK_PMP_R1_SEQ1_LIGHT", "Right outer tank pump 1 low pressure light", "INI_OUTER_TANK1_RIGHT_low_pressure")]
+    [InlineData("OUT_TK_PMP_R2_SEQ1_LIGHT", "Right outer tank pump 2 low pressure light", "INI_OUTER_TANK2_RIGHT_low_pressure")]
+    [InlineData("INR_TK_PMP_L1_SEQ1_LIGHT", "Left inner tank pump 1 low pressure light", "INI_INNER_TANK1_LEFT_low_pressure")]
+    [InlineData("INR_TK_PMP_L2_SEQ1_LIGHT", "Left inner tank pump 2 low pressure light", "INI_INNER_TANK2_LEFT_low_pressure")]
+    [InlineData("INR_TK_PMP_R1_SEQ1_LIGHT", "Right inner tank pump 1 low pressure light", "INI_INNER_TANK1_RIGHT_low_pressure")]
+    [InlineData("INR_TK_PMP_R2_SEQ1_LIGHT", "Right inner tank pump 2 low pressure light", "INI_INNER_TANK2_RIGHT_low_pressure")]
+    // iniBuilds wires the left center pump's lamp to the right inner pump 1's flag: read as the cockpit lights it.
+    [InlineData("CTR_TK_PMP_L_SEQ1_LIGHT", "Left center tank pump low pressure light", "INI_INNER_TANK1_RIGHT_low_pressure")]
+    [InlineData("CTR_TK_PMP_R_SEQ1_LIGHT", "Right center tank pump low pressure light", "INI_CENTER_TANK2_low_pressure")]
+    [InlineData("TRMTK_1_PMP_SEQ1_LIGHT", "Left trim tank pump low pressure light", "INI_trim_tank_pump1_low_pressure")]
+    [InlineData("TRMTK_2_PMP_SEQ1_LIGHT", "Right trim tank pump low pressure light", "INI_trim_tank_pump2_low_pressure")]
+    [InlineData("TRMTK_ISO_SEQ1_LIGHT", "Trim tank isolation valve flow bar light", "INI_TRIM_TANK_ISOL_VALVE_BAR")]
+    public void The_fuel_lights_are_named_from_their_buttons_on_the_ac_light_bus(string node, string name, string var)
+    {
+        Assert.Equal((name, "Fuel"), (Lamp(node).Name, Lamp(node).Panel));
+        var lamp = A300PanelLamps.Resolved.Single(l => l.Lamp.Node == node);
+        Assert.Equal((var, A300LightPower.Ac), (lamp.Primary.Name, lamp.Power));
+    }
+
     [Fact]
     public void The_fire_handle_lights_are_the_lamps_the_cockpit_draws()
     {

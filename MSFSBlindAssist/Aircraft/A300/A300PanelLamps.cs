@@ -88,6 +88,23 @@ public static class A300PanelLamps
         new("FIRE_2_AG1_SEQ1_LIGHT", "Engine 2 agent 1 squib light", "Fire"),
         new("FIRE_2_AG2_SEQ1_LIGHT", "Engine 2 agent 2 squib light", "Fire"),
         new("FIRE_APU_AG_SEQ1_LIGHT", "APU agent squib light", "Fire"),
+
+        // Fuel: each pump's LO PR legend and the trim tank isolation valve's flow bar (the valve, which the
+        // trim logic opens; the four tank isolation valves' bars follow their switches, so they are left out).
+        // iniBuilds wires the left center pump's lamp to the right inner pump 1's flag: read as it lights.
+        new("OUT_TK_PMP_L1_SEQ1_LIGHT", "Left outer tank pump 1 low pressure light", "Fuel"),
+        new("OUT_TK_PMP_L2_SEQ1_LIGHT", "Left outer tank pump 2 low pressure light", "Fuel"),
+        new("OUT_TK_PMP_R1_SEQ1_LIGHT", "Right outer tank pump 1 low pressure light", "Fuel"),
+        new("OUT_TK_PMP_R2_SEQ1_LIGHT", "Right outer tank pump 2 low pressure light", "Fuel"),
+        new("INR_TK_PMP_L1_SEQ1_LIGHT", "Left inner tank pump 1 low pressure light", "Fuel"),
+        new("INR_TK_PMP_L2_SEQ1_LIGHT", "Left inner tank pump 2 low pressure light", "Fuel"),
+        new("INR_TK_PMP_R1_SEQ1_LIGHT", "Right inner tank pump 1 low pressure light", "Fuel"),
+        new("INR_TK_PMP_R2_SEQ1_LIGHT", "Right inner tank pump 2 low pressure light", "Fuel"),
+        new("CTR_TK_PMP_L_SEQ1_LIGHT", "Left center tank pump low pressure light", "Fuel"),
+        new("CTR_TK_PMP_R_SEQ1_LIGHT", "Right center tank pump low pressure light", "Fuel"),
+        new("TRMTK_1_PMP_SEQ1_LIGHT", "Left trim tank pump low pressure light", "Fuel"),
+        new("TRMTK_2_PMP_SEQ1_LIGHT", "Right trim tank pump low pressure light", "Fuel"),
+        new("TRMTK_ISO_SEQ1_LIGHT", "Trim tank isolation valve flow bar light", "Fuel"),
     };
 
     /// <summary>Each named lamp with its rule from the shipped map; a lamp the map lacks is left out, loudly

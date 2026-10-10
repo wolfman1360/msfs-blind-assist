@@ -69,5 +69,6 @@ public static class A300DisplayPanels
             ["Electrical"] = Lines["ECAM Electrical AC"].Concat(Lines["ECAM Electrical DC"]).ToArray(),
             ["APU"] = Lines["ECAM APU"],
             ["Hydraulics"] = Lines["ECAM Hydraulics"],
+            ["Fuel"] = Lines["ECAM Fuel"],
         };
 }

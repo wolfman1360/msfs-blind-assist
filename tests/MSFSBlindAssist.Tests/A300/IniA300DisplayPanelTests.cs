@@ -68,12 +68,24 @@ public class IniA300DisplayPanelTests
     [Theory]
     [InlineData("APU", "ECAM APU", "A300_LT_APU_AVAIL_SEQ1_LIGHT")]
     [InlineData("Hydraulics", "ECAM Hydraulics", "A300_LAMP_HYD_BLUE_LIGHT")]
+    [InlineData("Fuel", "ECAM Fuel", "A300_LT_OUT_TK_PMP_L1_SEQ1_LIGHT")]
     public void A_system_status_box_has_its_lights_then_its_ecam_page(string panel, string page, string light)
     {
         var box = _def.GetPanelDisplayVariables()[panel];
         var ecam = A300DisplayPanels.Lines[page];
         Assert.Equal(ecam, box.Skip(box.Count - ecam.Count));
         Assert.Contains(light, box.Take(box.Count - ecam.Count));
+    }
+
+    [Fact]
+    public void The_fuel_box_reads_total_fuel_once_in_the_tablets_unit()
+    {
+        // The ECAM page's total follows the tablet's weight unit; the pounds readout (the fuel hotkey's)
+        // reads the same variable and is not repeated in the box.
+        var fuel = _def.GetPanelDisplayVariables()["Fuel"];
+        Assert.Contains("A300_SD_FUEL_TOTAL", fuel);
+        Assert.DoesNotContain(A300Readouts.FuelTotalKey, fuel);
+        Assert.True(_def.GetVariables().ContainsKey(A300Readouts.FuelTotalKey));
     }
 
     [Fact]
