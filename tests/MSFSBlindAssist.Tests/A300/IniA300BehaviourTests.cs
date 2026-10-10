@@ -161,6 +161,17 @@ public class IniA300BehaviourTests
         Assert.Empty(_reReads);
     }
 
+    [Theory]
+    [InlineData("A300_LANDING_ELEV_SET#INC")]
+    [InlineData("A300_LANDING_ELEV_SET#DEC")]
+    public void A_landing_elevation_knob_step_is_read_back(string row)
+    {
+        // A numeric confirmation, as the FCU and flex temperature knobs' (the box alone said it, 2026-10-10).
+        ReadFreshReturns("A300_RO_LANDING_ELEV", 50);
+        Assert.True(Set(row, 1));
+        Assert.Equal(new[] { "Landing elevation 50 feet" }, _speech.All);
+    }
+
     [Fact]
     public void The_crossbleed_reads_open_or_closed_and_its_mode_auto_or_manual()
     {

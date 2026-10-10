@@ -121,6 +121,13 @@ public partial class IniA300Definition
             stateText = selected;
             return true;
         }
+        if (A300Clock.ButtonStates.TryGetValue(varKey, out var clock) && _sim is { } clockSim
+            && Cached(clockSim, A300Clock.StateKey(varKey)) is double clockState
+            && clock.Words.TryGetValue(Math.Round(clockState), out var clockWord))
+        {
+            stateText = clockWord;
+            return true;
+        }
         return base.TryDescribeControlState(varKey, out stateText);
     }
 
@@ -193,6 +200,11 @@ public partial class IniA300Definition
                     ? A300Trp.Line(value, Cached(trpSim, A300Trp.AutoModeKey), Cached(trpSim, A300Readouts.FlexTemperatureKey),
                         Cached(trpSim, A300Trp.N1LimitKey), Cached(trpSim, A300Trp.PwEnginesKey))
                     : A300Trp.Line(value, null, null, null, null);
+        }
+        if (A300Clock.DigitKeysByLine.TryGetValue(key, out var digitKeys))
+        {
+            var digits = digitKeys.Select(k => _sim is { } clockSim ? Cached(clockSim, k) : null).ToArray();
+            return digits.All(d => d.HasValue) ? A300Clock.Time(digits[0]!.Value, digits[1]!.Value, digits[2]!.Value, digits[3]!.Value) : null;
         }
         if (A300EcamPages.KilogramKeys.Contains(key))
             return A300EcamPages.Weight(value, IsMetric());

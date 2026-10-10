@@ -73,7 +73,7 @@ public partial class IniA300Definition
                 _lampSpeech.NotePowerChange(Clock());
             foreach (var change in _lampBoard.Update(varName, value))
             {
-                if (announcer.Suppressed || IsMuted(change.Lamp.MuteKey))
+                if (announcer.Suppressed || IsMuted(change.Lamp.MuteKey) || IsPressedButtonsLamp(change.Lamp.Id))
                     continue;
                 _lampSpeech.Add(new A300LampChange(change.Lamp.Name, change.On), Clock());
                 _lampAnnouncer = announcer;
@@ -83,6 +83,10 @@ public partial class IniA300Definition
 
         // The TRP: shown on its buttons' labels and the Center Panel's TRP line, never spoken.
         if (A300Trp.StateKeys.Contains(varName))
+            return true;
+
+        // The clocks' digits and button states: the Clock box's time lines and the buttons' labels, never spoken.
+        if (A300Clock.SilentKeys.Contains(varName))
             return true;
 
         // The two master lights, the four levers and the SAS levers (the fault lights went to the board

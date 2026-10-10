@@ -56,8 +56,16 @@ test".
 
 A switch is a combo box with the aircraft's own position words. A push button is a button.
 Buttons with a light say what it shows: "Pressurization system 1: On" (pressing system 2 picks
-it and puts system 1 off), and on the EFIS panels "Airports: On", "FPA: On", "Decision height
-push: On". The map filters pick one at a time. A
+it and puts system 1 off), on the EFIS panels "Airports: On", "FPA: On", "Decision height
+push: On", and on the Source Switching panel "Captain air data to system 2: On". The map filters
+pick one at a time. When you press one, your screen reader reads its new label, and you hear only
+the other lights it changes ("Captain waypoints light off").
+
+The Clock panel's buttons say their state: "Captain chrono: Running" (each press goes reset,
+running, stopped) and "Captain elapsed time: Running" (each press starts or stops it; it restarts
+from zero). Its status display reads each clock: "Captain clock: 07:42 GMT", "Captain chrono: 1
+minute 5 seconds", "Captain elapsed time: 1 hour 5 minutes". The landing elevation knob says its
+value after each step: "Landing elevation 50 feet". A
 dimmer or temperature knob is a slider. A knob that only turns, such as the FCU speed knob or a
 radio frequency knob, is a pair of buttons, "increase" and "decrease", each one click of the
 knob. The flaps lever, the speed brake lever and the ground spoiler arm are the Flaps and Speed

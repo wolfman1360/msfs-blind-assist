@@ -54,6 +54,8 @@ public partial class IniA300Definition
         bool sent = Execute(row, plan, simConnect, announcer, commanded);
         if (sent && commanded is double target && control.Kind is A300Kinds.Toggle or A300Kinds.Command or A300Kinds.Selector)
             _ = CheckMovedAsync(row, target, simConnect, announcer, ++_pickSeq);
+        if (sent && row.Action == A300RowAction.Press && A300PanelLamps.ByButton.TryGetValue(row.Key, out var ownLamp))
+            _pressedLampUntil[ownLamp] = Clock() + PressedLampMs;
 
         // An FCU knob step is read back once it lands ("Heading 271"): a numeric confirmation, as a
         // typed value's is. The altitude window's own call-out is told it is an echo.
@@ -67,8 +69,23 @@ public partial class IniA300Definition
         // A flex temperature knob step, the same way ("Flex temperature 46 degrees", [A300-21]).
         if (sent && row.Action is A300RowAction.Increase or A300RowAction.Decrease && control.Key == A300Trp.FlexKnobKey)
             _ = ReadBackAsync(simConnect, announcer, A300Readouts.FlexTemperatureKey, A300Trp.FlexPhrase);
+        // Any other knob that reads back ("Landing elevation 50 feet").
+        if (sent && row.Action is A300RowAction.Increase or A300RowAction.Decrease
+            && A300Readouts.KnobReadBacks.TryGetValue(control.Key, out var readBack))
+            _ = ReadBackAsync(simConnect, announcer, readBack.Readout, readBack.Phrase);
         return true;
     }
+
+    /// <summary>How long a pressed button's own light is left to its label: the screen reader reads the
+    /// focused button's new label ("Pressurization system 2: On"), so speaking the light too would repeat it
+    /// ([CORE-7]). Long enough for the 1 Hz light delivery and the gather window.</summary>
+    public const long PressedLampMs = 3000;
+
+    private readonly Dictionary<string, long> _pressedLampUntil = new(StringComparer.Ordinal);
+
+    /// <summary>Whether this light is a just-pressed button's own, which its label already says.</summary>
+    private bool IsPressedButtonsLamp(string lampKey) =>
+        _pressedLampUntil.TryGetValue(lampKey, out var until) && Clock() <= until;
 
     /// <summary>Each row's latest pick, its target, and whether a delivery has reached it since.</summary>
     private readonly Dictionary<string, (int Pick, double Target, bool Reached)> _pendingPicks = new(StringComparer.Ordinal);

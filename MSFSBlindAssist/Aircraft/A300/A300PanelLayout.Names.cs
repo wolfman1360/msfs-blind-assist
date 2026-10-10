@@ -449,11 +449,13 @@ public static partial class A300PanelLayout
 
     /// <summary>Controls the map reads as switches that are push buttons in the cockpit, so they are buttons, not
     /// On/Off rows, labelled by their light (<see cref="A300PanelLamps.ByButton"/>): the pressurization system
-    /// buttons pick one system or the other (a press of the picked one does nothing), and the stop rudder input
-    /// test switches reset themselves about 6 s after a press (both measured 2026-10-10).</summary>
+    /// buttons pick one system or the other (a press of the picked one does nothing), the stop rudder input
+    /// test switches reset themselves about 6 s after a press, and each clock's elapsed time button toggles
+    /// running and stopped (all measured 2026-10-10). The clock buttons are labelled by their state
+    /// (<see cref="A300Clock.ButtonStates"/>).</summary>
     public static readonly IReadOnlySet<string> ButtonRows = new HashSet<string>(StringComparer.Ordinal)
     {
-        "PRESS_SYS_1", "PRESS_SYS_2", "STOP_CAPT", "STOP_FO",
+        "PRESS_SYS_1", "PRESS_SYS_2", "STOP_CAPT", "STOP_FO", "CPT_CLOCK_RUN", "FO_CLOCK_RUN",
     };
 
     /// <summary>Position words where iniBuilds' own are abbreviations or codes ("TK/GS", "SYS2"), say

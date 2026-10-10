@@ -186,6 +186,16 @@ public static class A300PanelLamps
         new("INDICATOR_AUTOBRK_LIGHT", "Autobrake light", "Autobrake"),
         new("INDICATOR_BRKFAIL_LIGHT", "Brake fail light", "Autobrake"),
         new("BRAKE_FAN_SEQ1_LIGHT", "Brakes hot light", "Autobrake"),
+
+        // Source switching: each button carries both pilots' legends, crossed; each pilot's own labels their button.
+        new("CPT_ATT_HDG_SEQ2_LIGHT", "Captain attitude and heading to IRS 3 light", "Source Switching"),
+        new("CPT_ADC_INST_SEQ2_LIGHT", "Captain air data to system 2 light", "Source Switching"),
+        new("CPT_FD_PUSH_SEQ2_LIGHT", "Captain flight director to system 2 light", "Source Switching"),
+        new("CPT_EFIS_SGU_SEQ2_LIGHT", "Captain EFIS to SGU 3 light", "Source Switching"),
+        new("FO_SW_ATT_SEQ2_LIGHT", "First officer attitude and heading to IRS 3 light", "Source Switching"),
+        new("FO_SW_ADC_SEQ2_LIGHT", "First officer air data to system 2 light", "Source Switching"),
+        new("FO_SW_FD_SEQ2_LIGHT", "First officer flight director to system 2 light", "Source Switching"),
+        new("FO_SW_EFIS_SEQ2_LIGHT", "First officer EFIS to SGU 3 light", "Source Switching"),
     };
 
     /// <summary>A button's own light, which labels it ("Pressurization system 1: On"): row key → lamp key.</summary>
@@ -211,6 +221,14 @@ public static class A300PanelLamps
         ["A300_ATC_FO"] = "A300_LT_ATC_FO_SEQ1_LIGHT",
         ["A300_STOP_CAPT"] = "A300_LT_STOP_CAPT_SEQ1_LIGHT",
         ["A300_STOP_FO"] = "A300_LT_STOP_FO_SEQ1_LIGHT",
+        ["A300_CPT_ATT_HDG"] = "A300_LT_CPT_ATT_HDG_SEQ2_LIGHT",
+        ["A300_CPT_ADC_INST"] = "A300_LT_CPT_ADC_INST_SEQ2_LIGHT",
+        ["A300_CPT_FD_PUSH"] = "A300_LT_CPT_FD_PUSH_SEQ2_LIGHT",
+        ["A300_CPT_EFIS_SGU"] = "A300_LT_CPT_EFIS_SGU_SEQ2_LIGHT",
+        ["A300_FO_SW_ATT"] = "A300_LT_FO_SW_ATT_SEQ2_LIGHT",
+        ["A300_FO_SW_ADC"] = "A300_LT_FO_SW_ADC_SEQ2_LIGHT",
+        ["A300_FO_SW_FD"] = "A300_LT_FO_SW_FD_SEQ2_LIGHT",
+        ["A300_FO_SW_EFIS"] = "A300_LT_FO_SW_EFIS_SEQ2_LIGHT",
     };
 
     /// <summary>Each named lamp with its rule from the shipped map; a lamp the map lacks is left out, loudly

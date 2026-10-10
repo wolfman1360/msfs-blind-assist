@@ -241,6 +241,23 @@ public class A300PanelLampTests
     }
 
     [Theory]
+    // Each switching button carries both pilots' legends, crossed; each pilot's own legend labels their button.
+    [InlineData("CPT_ATT_HDG_SEQ2_LIGHT", "Captain attitude and heading to IRS 3 light", "A300_CPT_ATT_HDG", "INI_capt_switch_att_hdg_sys3")]
+    [InlineData("CPT_ADC_INST_SEQ2_LIGHT", "Captain air data to system 2 light", "A300_CPT_ADC_INST", "INI_capt_switch_adc_inst_fo1")]
+    [InlineData("CPT_FD_PUSH_SEQ2_LIGHT", "Captain flight director to system 2 light", "A300_CPT_FD_PUSH", "INI_capt_switch_fd_fo1")]
+    [InlineData("CPT_EFIS_SGU_SEQ2_LIGHT", "Captain EFIS to SGU 3 light", "A300_CPT_EFIS_SGU", "INI_capt_switch_efis_sgu_fo3")]
+    [InlineData("FO_SW_ATT_SEQ2_LIGHT", "First officer attitude and heading to IRS 3 light", "A300_FO_SW_ATT", "INI_fo_switch_att_hdg_sys3")]
+    [InlineData("FO_SW_ADC_SEQ2_LIGHT", "First officer air data to system 2 light", "A300_FO_SW_ADC", "INI_fo_switch_adc_inst_fo1")]
+    [InlineData("FO_SW_FD_SEQ2_LIGHT", "First officer flight director to system 2 light", "A300_FO_SW_FD", "INI_fo_switch_fd_fo1")]
+    [InlineData("FO_SW_EFIS_SEQ2_LIGHT", "First officer EFIS to SGU 3 light", "A300_FO_SW_EFIS", "INI_fo_switch_efis_sgu_fo3")]
+    public void A_source_switching_button_is_labelled_by_its_pilots_legend(string node, string name, string button, string var)
+    {
+        Assert.Equal((name, "Source Switching"), (Lamp(node).Name, Lamp(node).Panel));
+        Assert.Equal(Lamp(node).Key, A300PanelLamps.ByButton[button]);
+        Assert.Equal(var, A300PanelLamps.Resolved.Single(l => l.Lamp.Node == node).Primary.Name);
+    }
+
+    [Theory]
     [InlineData("STOP_CAPT_SEQ1_LIGHT", "Captain stop rudder input light", "EFIS Captain")]
     [InlineData("STOP_FO_SEQ1_LIGHT", "First officer stop rudder input light", "EFIS First Officer")]
     public void The_stop_rudder_input_lights_are_read(string node, string name, string panel)
@@ -400,6 +417,39 @@ public class A300PanelLampTests
         def.ProcessSimVarUpdate(key, 0, speech);
         BatchEnd();
         Assert.Single(speech.All);
+    }
+
+    [Fact]
+    public void A_pressed_buttons_own_light_is_left_to_its_label()
+    {
+        // The screen reader reads a focused button's new label ("Pressurization system 2: On"), so the
+        // button's own light is not spoken again ([CORE-7]); the other light it puts out still is.
+        var speech = new SpeechCapture();
+        long now = 10_000;
+        var def = new IniA300Definition
+        {
+            Clock = () => now, IsMuted = _ => false, CanLand = _ => true, Send = (_, _) => { },
+            Cached = (_, _) => null, Delay = _ => Task.CompletedTask,
+        };
+        var sim = new SimConnectManager(IntPtr.Zero);
+        def.Attach(sim);
+        string sys1 = Lamp("PRESS_SYS_1_SEQ1_LIGHT").Key, sys2 = Lamp("PRESS_SYS_2_SEQ1_LIGHT").Key;
+        void BatchEnd() { now += A300LampSpeech.GatherMs; def.OnContinuousBatchDelivered(1); }
+        def.ProcessSimVarUpdate(A300LampBoard.AcPowerKey, 1, speech);
+        def.ProcessSimVarUpdate(sys1, 1, speech);
+        def.ProcessSimVarUpdate(sys2, 0, speech);
+        BatchEnd();
+        def.HandleUIVariableSet("A300_PRESS_SYS_2", 1, def.GetVariables()["A300_PRESS_SYS_2"], sim, speech);
+        def.ProcessSimVarUpdate(sys2, 1, speech);
+        def.ProcessSimVarUpdate(sys1, 0, speech);
+        BatchEnd();
+        Assert.Equal(new[] { "Pressurization system 1 light off" }, speech.All);
+
+        speech.All.Clear();
+        now += 10_000;   // later, the aircraft changes it by itself: spoken
+        def.ProcessSimVarUpdate(sys2, 0, speech);
+        BatchEnd();
+        Assert.Equal(new[] { "Pressurization system 2 light off" }, speech.All);
     }
 
     private static IEnumerable<string> Said(IReadOnlyList<A300BoardChange> changes) =>

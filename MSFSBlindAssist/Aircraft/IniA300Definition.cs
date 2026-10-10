@@ -220,6 +220,8 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
                 def.StateVariables = new[] { A300Trp.ModeKey };
             else if (A300PanelLamps.ByButton.TryGetValue(row.Key, out var lampKey))
                 def.StateVariables = new[] { lampKey, A300LampBoard.AcPowerKey, A300LampBoard.DcPowerKey };
+            else if (A300Clock.ButtonStates.ContainsKey(row.Key))
+                def.StateVariables = new[] { A300Clock.StateKey(row.Key) };
             if (A300Announcements.AnnouncedKeys.Contains(row.Key))
                 def.ExcludeFromMonitorManager = false;   // it speaks, so Ctrl+M can mute it
             // A row whose variable another row already carries on the batch (an IDC copy, the crew oxygen
@@ -286,6 +288,13 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
         vars[A300Trp.AutoModeKey] = OwnSubscription(A300Trp.AutoModeVar, "TRP auto limit");
         vars[A300Trp.N1LimitKey] = OwnSubscription(A300Trp.N1LimitVar, "TRP N1 limit");
         vars[A300Trp.PwEnginesKey] = OwnSubscription(A300Trp.PwEnginesVar, "PW engines");
+
+        // The clocks (A300Clock): the GMT digits a time line is composed from, and the chrono and elapsed time
+        // buttons' states that label them. Their own subscriptions, never the batch ([A300-9]); consumed silently.
+        foreach (var (key, var) in A300Clock.Digits)
+            vars[key] = OwnSubscription(var, key);
+        foreach (var (button, state) in A300Clock.ButtonStates)
+            vars[A300Clock.StateKey(button)] = OwnSubscription(state.Var, A300Clock.StateKey(button));
 
         foreach (var readout in _readouts.Values)
         {

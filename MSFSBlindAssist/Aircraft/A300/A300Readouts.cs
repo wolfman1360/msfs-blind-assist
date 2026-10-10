@@ -105,6 +105,15 @@ public static class A300Readouts
         new A300Readout("A300_RO_BRAKE_LEFT", "Left brake pressure", "Autobrake", "INI_BRAKE_PRESSURE_LEFT", false, "number", ThousandsPsi),
         new A300Readout("A300_RO_BRAKE_RIGHT", "Right brake pressure", "Autobrake", "INI_BRAKE_PRESSURE_RIGHT", false, "number", ThousandsPsi),
 
+        // The two clocks (A300Clock): the time line is composed from the clock's GMT digits, so its own value
+        // (the seconds) reads only when they are unknown.
+        new A300Readout(A300Clock.CaptainTimeKey, "Captain clock", A300Clock.Panel, "INI_CLOCK_GMT_SECONDS", false, "number", _ => "unavailable"),
+        new A300Readout("A300_RO_CHRONO_CPT", "Captain chrono", A300Clock.Panel, "INI_CHRONO_TIME", false, "number", A300Clock.Chrono),
+        new A300Readout("A300_RO_ET_CPT", "Captain elapsed time", A300Clock.Panel, "INI_ET_TIME", false, "number", A300Clock.Elapsed),
+        new A300Readout(A300Clock.FirstOfficerTimeKey, "First officer clock", A300Clock.Panel, "INI_CLOCK_GMT_SECONDS_FO", false, "number", _ => "unavailable"),
+        new A300Readout("A300_RO_CHRONO_FO", "First officer chrono", A300Clock.Panel, "INI_CHRONO_TIME_FO", false, "number", A300Clock.Chrono),
+        new A300Readout("A300_RO_ET_FO", "First officer elapsed time", A300Clock.Panel, "INI_ET_TIME_FO", false, "number", A300Clock.Elapsed),
+
         // The PFD: what the speed tape, attitude and altitude show. VMAX is the top of the tape
         // (VMO, or the gear or flap limit: 270 with the gear down), green dot, S and F are read only
         // at the flap settings the tape shows them (the definition's display text), and VS is the
@@ -142,6 +151,14 @@ public static class A300Readouts
         new A300Readout(StandbyAltitudeKey, "Standby altitude", "Standby Instruments", "INDICATED ALTITUDE:3", true, "feet", A300DisplayText.Feet),
         new A300Readout(StandbyCompassKey, "Standby compass", "Standby Instruments", "WISKEY COMPASS INDICATION DEGREES", true, "degrees", Heading),
     };
+
+    /// <summary>A knob whose step is read back once it lands, as the FCU's: knob control key → its readout and
+    /// the phrase. A numeric confirmation always speaks ([CORE-7]).</summary>
+    public static readonly IReadOnlyDictionary<string, (string Readout, Func<double, string> Phrase)> KnobReadBacks =
+        new Dictionary<string, (string, Func<double, string>)>(StringComparer.Ordinal)
+        {
+            ["A300_LANDING_ELEV_SET"] = ("A300_RO_LANDING_ELEV", v => $"Landing elevation {Whole(v)} feet"),
+        };
 
     /// <summary>The three speeds the tape shows only at some flap settings.</summary>
     public static readonly IReadOnlyDictionary<string, A300PfdSpeed> FlapSpeeds = new Dictionary<string, A300PfdSpeed>(StringComparer.Ordinal)
