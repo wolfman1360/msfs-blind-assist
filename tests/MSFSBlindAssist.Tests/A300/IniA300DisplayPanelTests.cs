@@ -65,13 +65,15 @@ public class IniA300DisplayPanelTests
         Assert.Equal(ecam, _def.GetPanelDisplayVariables()["ECAM Electrical AC"].Concat(_def.GetPanelDisplayVariables()["ECAM Electrical DC"]));
     }
 
-    [Fact]
-    public void The_apu_status_box_has_its_lights_then_the_ecam_apu_values()
+    [Theory]
+    [InlineData("APU", "ECAM APU", "A300_LT_APU_AVAIL_SEQ1_LIGHT")]
+    [InlineData("Hydraulics", "ECAM Hydraulics", "A300_LAMP_HYD_BLUE_LIGHT")]
+    public void A_system_status_box_has_its_lights_then_its_ecam_page(string panel, string page, string light)
     {
-        var apu = _def.GetPanelDisplayVariables()["APU"];
-        var ecam = A300DisplayPanels.Lines["ECAM APU"];
-        Assert.Equal(ecam, apu.Skip(apu.Count - ecam.Count));
-        Assert.Contains("A300_LT_APU_AVAIL_SEQ1_LIGHT", apu.Take(apu.Count - ecam.Count));
+        var box = _def.GetPanelDisplayVariables()[panel];
+        var ecam = A300DisplayPanels.Lines[page];
+        Assert.Equal(ecam, box.Skip(box.Count - ecam.Count));
+        Assert.Contains(light, box.Take(box.Count - ecam.Count));
     }
 
     [Fact]

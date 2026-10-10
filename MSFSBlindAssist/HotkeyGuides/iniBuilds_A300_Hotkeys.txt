@@ -155,7 +155,7 @@ The standby instruments (attitude, airspeed, the standby altimeter and its setti
 are read on the Instrument section's Standby Instruments panel, with its knob and cage. A system
 panel's own status display also carries its ECAM page's numbers after its lights: Electrical
 shows the AC and DC voltages, frequencies and currents; APU shows its speed, EGT, bleed pressure
-and generator. Oxygen shows its six gauges: the crew and courier low pressure and the four crew
+and generator; Hydraulics shows the blue, green and yellow pressures. Oxygen shows its six gauges: the crew and courier low pressure and the four crew
 oxygen high pressure gauges, in psi ("Crew oxygen high pressure 1: 1,500 psi").
 
 On the Oxygen panel, the crew oxygen supply button works the courier low pressure supply in this
