@@ -220,11 +220,11 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
                 def.StateVariables = new[] { A300Trp.ModeKey };
             if (A300Announcements.AnnouncedKeys.Contains(row.Key))
                 def.ExcludeFromMonitorManager = false;   // it speaks, so Ctrl+M can mute it
+            // A row whose variable another row already carries on the batch (an IDC copy, the crew oxygen
+            // supply button wired to the courier supply's variable) streams on its own subscription ([VAR-7]):
+            // read only at panel open, it went stale after the other row's write and planned from it.
             if (ContinuousBatchLayout.RidesBatch(def) && !batchNames.Add(ContinuousBatchLayout.FullName(def)))
-            {
-                def.UpdateFrequency = UpdateFrequency.OnRequest;
-                def.IsAnnounced = false;
-            }
+                def.ExcludeFromBatch = true;
             vars[row.Key] = def;
         }
 

@@ -89,6 +89,16 @@ public static class A300Readouts
         new A300Readout(FuelTotalKey, "Total fuel", "Fuel", "FUEL TOTAL QUANTITY WEIGHT", true, "pounds",
             v => $"{Math.Round(v).ToString("#,0", Inv)} pounds"),
 
+        // The overhead oxygen panel's six needles, from their animation code. The LP faces read psi, the HP
+        // faces "PSI x 1000" (0 to 2). iniBuilds' "HIGH_PRESSURE_CURRENT" is the courier low pressure gauge:
+        // it rises with the courier low pressure supply.
+        new A300Readout("A300_RO_OXY_CREW_LP", "Crew oxygen low pressure", "Oxygen", "INI_OXYGEN_LOW_PRESSURE_CURRENT", false, "number", Psi),
+        new A300Readout("A300_RO_OXY_COURIER_LP", "Courier oxygen low pressure", "Oxygen", "INI_OXYGEN_HIGH_PRESSURE_CURRENT", false, "number", Psi),
+        new A300Readout("A300_RO_OXY_HP_1", "Crew oxygen high pressure 1", "Oxygen", "INI_OXYGEN_HIGH_PRESSURE_CURRENT1", false, "number", ThousandsPsi),
+        new A300Readout("A300_RO_OXY_HP_2", "Crew oxygen high pressure 2", "Oxygen", "INI_OXYGEN_HIGH_PRESSURE_CURRENT2", false, "number", ThousandsPsi),
+        new A300Readout("A300_RO_OXY_HP_3", "Crew oxygen high pressure 3", "Oxygen", "INI_OXYGEN_HIGH_PRESSURE_CURRENT3", false, "number", ThousandsPsi),
+        new A300Readout("A300_RO_OXY_HP_4", "Crew oxygen high pressure 4", "Oxygen", "INI_OXYGEN_HIGH_PRESSURE_CURRENT4", false, "number", ThousandsPsi),
+
         // The PFD: what the speed tape, attitude and altitude show. VMAX is the top of the tape
         // (VMO, or the gear or flap limit: 270 with the gear down), green dot, S and F are read only
         // at the flap settings the tape shows them (the definition's display text), and VS is the
@@ -148,4 +158,10 @@ public static class A300Readouts
         string text = Math.Round(value).ToString("0", Inv);
         return text == "-0" ? "0" : text;
     }
+
+    /// <summary>"1,500 psi", as the ECAM pages write pressures.</summary>
+    private static string Psi(double value) => $"{Math.Round(value).ToString("#,0", Inv)} psi";
+
+    /// <summary>A "PSI x 1000" face: 1.5 is "1,500 psi".</summary>
+    private static string ThousandsPsi(double value) => Psi(value * 1000);
 }

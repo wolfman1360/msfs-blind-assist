@@ -73,4 +73,42 @@ public class A300LeversAndReadoutsTests
 
     [Fact]
     public void A_negative_zero_reads_as_zero() => Assert.Equal("0 feet per minute", Readout("A300_RO_FCU_VS").Format(-0.3));
+
+    [Fact]
+    public void The_oxygen_panel_reads_its_six_gauges_named_from_what_they_measure()
+    {
+        // The needles' own animation code, on the overhead oxygen panel. The courier gauge's variable is
+        // iniBuilds' "HIGH_PRESSURE_CURRENT", but it rises with the courier low pressure supply (live, 2026-10-09).
+        Assert.Equal(new[]
+        {
+            ("Crew oxygen low pressure", "INI_OXYGEN_LOW_PRESSURE_CURRENT"),
+            ("Courier oxygen low pressure", "INI_OXYGEN_HIGH_PRESSURE_CURRENT"),
+            ("Crew oxygen high pressure 1", "INI_OXYGEN_HIGH_PRESSURE_CURRENT1"),
+            ("Crew oxygen high pressure 2", "INI_OXYGEN_HIGH_PRESSURE_CURRENT2"),
+            ("Crew oxygen high pressure 3", "INI_OXYGEN_HIGH_PRESSURE_CURRENT3"),
+            ("Crew oxygen high pressure 4", "INI_OXYGEN_HIGH_PRESSURE_CURRENT4"),
+        }, A300Readouts.All.Where(r => r.Panel == "Oxygen").Select(r => (r.Name, r.Var)).ToArray());
+    }
+
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public void The_oxygen_gauges_read_in_psi_as_their_faces_show_them(string culture)
+    {
+        var saved = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo(culture);
+            var oxygen = A300Readouts.All.Where(r => r.Panel == "Oxygen").ToArray();
+            // The LP face reads PSI; the HP face reads "PSI x 1000", 0 to 2.
+            Assert.Equal("70 psi", oxygen[0].Format(69.99998474121094));
+            Assert.Equal("1,500 psi", oxygen[2].Format(1.5));
+            Assert.Equal("1,850 psi", oxygen[5].Format(1.85));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = saved;
+        }
+    }
 }

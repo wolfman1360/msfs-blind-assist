@@ -67,6 +67,30 @@ public class IniA300BehaviourTests
     }
 
     [Fact]
+    public void A_row_sharing_its_variable_with_another_reads_it_live_on_its_own_subscription()
+    {
+        // The crew oxygen supply button toggles the courier supply's variable (iniBuilds' wiring): read
+        // once at panel open, its row went stale after the other row's write, and its next pick was
+        // planned from the old position. [VAR-7]: the copy stays off the batch.
+        var vars = _def.GetVariables();
+        var courier = vars["A300_COURIER_O2_SUPPLY"];
+        var crew = vars["A300_PAX_OXY_SUPPLY"];
+        Assert.Equal(courier.Name, crew.Name);
+        Assert.True(ContinuousBatchLayout.RidesBatch(courier));
+        Assert.Equal((UpdateFrequency.Continuous, true, true),
+            (crew.UpdateFrequency, crew.IsAnnounced, crew.ExcludeFromBatch));
+    }
+
+    [Fact]
+    public void Every_position_row_follows_the_cockpit_live()
+    {
+        // Every combo; a knob's slider is read when its panel opens.
+        var rows = _def.GetVariables().Values.Where(v => v.ValueDescriptions?.Count > 0 && !v.RenderAsSlider);
+        Assert.NotEmpty(rows);
+        Assert.Empty(rows.Where(v => v.UpdateFrequency != UpdateFrequency.Continuous).Select(v => $"{v.DisplayName} ({v.Name})"));
+    }
+
+    [Fact]
     public void A_switch_in_an_unknown_position_is_refused_aloud_and_snapped_back()
     {
         Assert.True(Set("A300_BATT_1", 1));

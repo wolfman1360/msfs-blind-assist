@@ -62,7 +62,7 @@ public static partial class A300PanelLayout
         ["APU_BLEEDSWITCH"] = "APU bleed",
         ["CREW_O2_SUPPLY"] = "Crew low pressure supply",
         ["COURIER_O2_SUPPLY"] = "Courier low pressure supply",
-        ["PAX_OXY_SUPPLY"] = "Passenger oxygen supply",
+        ["PAX_OXY_SUPPLY"] = "Crew oxygen supply",   // iniBuilds' title; it toggles the courier supply's variable
         ["AC_BUS_SELECT"] = "AC indication selector",
         ["DC_BUS_SELECT"] = "DC indication selector",
         ["IDG1_PUSH"] = "IDG 1 disconnect",

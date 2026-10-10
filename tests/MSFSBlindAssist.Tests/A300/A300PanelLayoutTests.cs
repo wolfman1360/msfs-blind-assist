@@ -223,6 +223,15 @@ public class A300PanelLayoutTests
     public void Rows_carry_the_names_a_pilot_says(string key, string name) => Assert.Equal(name, Row(key).Name);
 
     [Fact]
+    public void The_third_oxygen_button_is_named_as_the_aircraft_titles_it()
+    {
+        // Its node is PAX_OXY_SUPPLY, but iniBuilds' tooltip titles it "CREW OXYGEN SUPPLY" (the manual's
+        // "Crew Oxygen" in Securing Aircraft); it toggles the courier supply's own variable.
+        Assert.Equal("Crew oxygen supply", Row("A300_PAX_OXY_SUPPLY").Name);
+        Assert.Contains(Row("A300_PAX_OXY_SUPPLY"), Placement.RowsByPanel["Oxygen"]);
+    }
+
+    [Fact]
     public void The_first_officers_altimeter_is_not_named_after_the_captains()
     {
         // iniBuilds titles both altimeter knobs "CPT BAROMETER".
