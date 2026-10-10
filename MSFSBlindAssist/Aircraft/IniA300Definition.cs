@@ -308,6 +308,21 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
             vars[radio.Window2Key] = OwnSubscription(radio.Window2Var, radio.Window2Key);
             vars[radio.TransferKey] = OwnSubscription(radio.TransferVar, radio.TransferKey);
         }
+        // The E/WD memos' inputs (A300EwdMemos), and the memo line, which carries the "ECAM memos" Ctrl+M row.
+        foreach (var input in A300EwdMemos.Inputs)
+        {
+            var def = OwnSubscription(input.Var, input.Key);
+            if (input.IsStock)
+            {
+                def.Type = SimVarType.SimVar;
+                def.Units = input.Units;
+            }
+            vars[input.Key] = def;
+        }
+        var memoLine = OwnSubscription(A300EwdMemos.Inputs[0].Var, "ECAM memos");
+        memoLine.ExcludeFromMonitorManager = false;
+        memoLine.RenderAsReadOnlyStatus = true;
+        vars[A300EwdMemos.LineKey] = memoLine;
         // The cargo door's flags its line is composed from, and which angle button is picked (A300CargoDoor).
         foreach (var (key, var) in A300CargoDoor.Flags.Concat(A300CargoDoor.AngleButtons.Values))
             vars[key] = OwnSubscription(var, key);

@@ -20,10 +20,14 @@ ECAM system pages. It also speaks what you need while flying: the take-off call-
 Rotate, V2), the fault and warning lights, autopilot and autothrottle disconnects, and the FCU
 altitude window. Everything is read from the aircraft's own values, not from pictures.
 
-Not included: the upper ECAM's warnings and memos, and the ND's waypoint name and bearing. The
-A300 keeps these inside its own display software, not in values the simulator shares, so read
-the next waypoint on the MCDU's F-PLN page (Shift+M), and hear warnings by the master warning and
-master caution call-outs. The AI display reads are not available on the A300.
+The upper ECAM's memos are read as the aircraft shows them: the ECAM Memos status box in the
+Displays section lists them ("APU running, Parking brake on, Seat belts on"), and a memo is
+announced when it appears ("Memo: No smoking on"). Its Ctrl+M row is "ECAM memos".
+
+Not included: the upper ECAM's warnings, and the ND's waypoint name and bearing. The A300 keeps
+these inside its own display software, not in values the simulator shares, so read the next
+waypoint on the MCDU's F-PLN page (Shift+M), and hear warnings by the master warning and master
+caution call-outs. The AI display reads are not available on the A300.
 
 
 THE PANELS

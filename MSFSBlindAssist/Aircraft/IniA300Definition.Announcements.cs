@@ -88,7 +88,7 @@ public partial class IniA300Definition
         // The clocks' digits and button states, the rudder trim display and the radio windows: box lines, labels
         // and read-backs are composed from them, never spoken.
         if (A300Clock.SilentKeys.Contains(varName) || A300Trim.RudderDigitKeys.Contains(varName) || A300Radios.SilentKeys.Contains(varName)
-            || A300CargoDoor.SilentKeys.Contains(varName))
+            || A300CargoDoor.SilentKeys.Contains(varName) || A300EwdMemos.IsInputOrLine(varName))
             return true;
 
         // The two master lights, the four levers and the SAS levers (the fault lights went to the board
@@ -151,6 +151,8 @@ public partial class IniA300Definition
         _lampSpeech.Clear();
         _commanded.Clear();
         _pendingPicks.Clear();
+        _memoTracker.Reset();
+        _memoLine = null;
         _seedGate.Arm(KnownSeedValues());
     }
 

@@ -48,6 +48,7 @@ public static class A300DisplayPanels
             ("PFD", Pfd),
             ("ND", Nd),
             ("Engine Instruments", A300EcamPages.EngineInstruments),
+            (A300EwdMemos.Panel, new[] { A300EwdMemos.LineKey }),
         }
         .Concat(A300EcamPages.Pages)
         .ToArray();

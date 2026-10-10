@@ -33,10 +33,11 @@ public class A300EcamPagesTests
     public void The_pages_follow_the_engine_instruments_in_cockpit_order()
     {
         // The standby instruments are the Instrument section's Standby Instruments panel, the fleet's ISIS
-        // panel: its controls and its readings in one place (a panel name can be in only one section).
+        // panel: its controls and its readings in one place (a panel name can be in only one section). The left
+        // ECAM display's memos come before the system pages the right one shows.
         Assert.Equal(new[]
         {
-            "PFD", "ND", "Engine Instruments",
+            "PFD", "ND", "Engine Instruments", "ECAM Memos",
             "ECAM Engine", "ECAM Electrical AC", "ECAM Electrical DC", "ECAM Hydraulics", "ECAM Bleed",
             "ECAM Air Conditioning", "ECAM Pressurization", "ECAM Fuel", "ECAM APU",
         }, _def.GetPanelStructure()[A300DisplayPanels.Section]);

@@ -1,0 +1,271 @@
+using MSFSBlindAssist.Aircraft;
+using MSFSBlindAssist.Aircraft.A300;
+using MSFSBlindAssist.SimConnect;
+
+namespace MSFSBlindAssist.Tests.A300;
+
+/// <summary>
+/// The E/WD memos, transcribed from the A300's own EWD code (v1.0.11, 2026-10-10): the twenty
+/// <c>Message_MemoN::is_active</c> conditions, shown in their fixed order once active for 2.5 s
+/// (<c>EWD::UpdateMemo</c>).
+/// </summary>
+public class A300EwdMemosTests
+{
+    private static Func<string, double?> Reading(params (string Var, double Value)[] set)
+    {
+        // Every input known and at rest; the named ones as given.
+        var values = A300EwdMemos.Inputs.ToDictionary(i => i.Var, i => i.Var switch
+        {
+            "INI_LANDING_LIGHT_L_SWITCH" or "INI_LANDING_LIGHT_R_SWITCH" => 2.0,   // retracted
+            "INI_tcas_mode_pedestal" => 2.0,                                     // TA/RA
+            "TOTAL AIR TEMPERATURE" => 20.0,
+            _ => 0.0,
+        });
+        foreach (var (var, value) in set)
+            values[var] = value;
+        var byKey = A300EwdMemos.Inputs.ToDictionary(i => i.Key, i => values[i.Var]);
+        return key => byKey.TryGetValue(key, out var v) ? v : null;
+    }
+
+    private static string[] ActiveWords(Func<string, double?> read) =>
+        A300EwdMemos.All.Where(m => m.IsActive(read) == true).Select(m => m.Words).ToArray();
+
+    [Fact]
+    public void The_twenty_memos_are_in_the_aircrafts_order_with_its_texts()
+    {
+        Assert.Equal(new[]
+        {
+            "CAB PRESS MAN CTL", "TAT IN ICING RANGE", "APU RUNNING", "CONTINUOUS RELIGHT ON", "FUEL X FEED",
+            "EXT PWR CONNECTED", "PARKING BRAKE ON", "SEAT BELTS ON", "NO SMOKING ON", "FUEL FEED MAN CTL",
+            "SPD BRAKES EXTENDED", "LDG LIGHT EXTENDED", "ECON FLOW SELECTED", "MAX COOL ON", "EMER CANCEL ON",
+            "ENG ANTI ICE ON", "WING ANTI ICE ON", "CTR TANK FEEDING", "IRS IN ALIGN", "TCAS STBY",
+        }, A300EwdMemos.All.Select(m => m.Text));
+    }
+
+    [Fact]
+    public void Nothing_is_active_at_rest() => Assert.Empty(ActiveWords(Reading()));
+
+    [Theory]
+    [InlineData("INI_CABIN_MAN_PRESS_ARROW", 1, "Cabin pressure manual control")]
+    [InlineData("INI_apu_available", 1, "APU running")]
+    [InlineData("INI_eng_ignition_switch", 4, "Continuous relight on")]
+    [InlineData("INI_xfeed_transfer_on", 1, "Fuel crossfeed")]
+    [InlineData("EXTERNAL POWER ON:1", 1, "External power connected")]
+    [InlineData("INI_PARKING_BRAKE_STATUS", 1, "Parking brake on")]
+    [InlineData("INI_SEATBELTS_SWITCH", 1, "Seat belts on")]
+    [InlineData("INI_NO_SMOKING_ON", 1, "No smoking on")]
+    [InlineData("INI_FUEL_FEED_MAN_CTL", 1, "Fuel feed manual control")]
+    [InlineData("SPOILERS HANDLE POSITION", 3, "Speed brakes extended")]
+    [InlineData("INI_LANDING_LIGHT_L_SWITCH", 1, "Landing light extended")]
+    [InlineData("INI_LANDING_LIGHT_R_SWITCH", 0, "Landing light extended")]
+    [InlineData("INI_econ_flow_selected", 1, "Economy flow selected")]
+    [InlineData("INI_max_cool", 1, "Max cool on")]
+    [InlineData("INI_EMER_CANCEL", 1, "Emergency cancel on")]
+    [InlineData("INI_ENG1_ANTI_ICE", 1, "Engine anti ice on")]
+    [InlineData("INI_ENG2_ANTI_ICE", 1, "Engine anti ice on")]
+    [InlineData("INI_WING_ANTI_ICE", 1, "Wing anti ice on")]
+    [InlineData("INI_CENTER_TANK_IS_FEEDING", 1, "Center tank feeding")]
+    [InlineData("INI_tcas_mode_pedestal", 1, "TCAS standby")]
+    [InlineData("INI_tcas_mode_pedestal", 0, "TCAS standby")]
+    public void Each_memo_shows_on_its_own_condition(string var, double value, string words) =>
+        Assert.Equal(new[] { words }, ActiveWords(Reading((var, value))));
+
+    [Theory]
+    [InlineData(-15, true)]
+    [InlineData(5, true)]
+    [InlineData(-15.5, false)]
+    [InlineData(5.5, false)]
+    public void Tat_in_icing_range_is_minus_15_to_5(double tat, bool shown) =>
+        Assert.Equal(shown, ActiveWords(Reading(("TOTAL AIR TEMPERATURE", tat))).Contains("TAT in icing range"));
+
+    [Theory]
+    // An IRS aligning with time remaining; an IRS whose time has run out, or not aligning, is not.
+    [InlineData("INI_IRS3_IS_ALIGNING", "INI_IRS3_TIME_REMAIN", 1, 120, true)]
+    [InlineData("INI_IRS1_IS_ALIGNING", "INI_IRS1_TIME_REMAIN", 1, 0, false)]
+    [InlineData("INI_IRS2_IS_ALIGNING", "INI_IRS2_TIME_REMAIN", 0, 300, false)]
+    public void Irs_in_align_needs_an_irs_aligning_with_time_left(string aligning, string remain, double a, double t, bool shown) =>
+        Assert.Equal(shown, ActiveWords(Reading((aligning, a), (remain, t))).Contains("IRS in align"));
+
+    [Fact]
+    public void An_unread_input_makes_its_memo_unknown()
+    {
+        var read = Reading();
+        Func<string, double?> partial = key => key == A300EwdMemos.Inputs.First(i => i.Var == "INI_apu_available").Key ? null : read(key);
+        Assert.Null(A300EwdMemos.All.Single(m => m.Text == "APU RUNNING").IsActive(partial));
+    }
+
+    [Fact]
+    public void A_memo_shows_once_active_for_two_and_a_half_seconds()
+    {
+        var tracker = new A300MemoTracker();
+        var off = Reading();
+        var on = Reading(("INI_apu_available", 1));
+        tracker.Update(off, 0);   // the baseline: nothing active
+        Assert.Empty(tracker.Update(on, 1000).Shown);
+        Assert.Empty(tracker.Update(on, 3000).Shown);       // 2 s
+        var update = tracker.Update(on, 3600);               // 2.6 s
+        Assert.Equal(new[] { "APU running" }, update.Shown.Select(m => m.Words));
+        Assert.Equal(new[] { "APU running" }, update.Displayed.Select(m => m.Words));
+        Assert.Empty(tracker.Update(on, 4600).Shown);       // once
+        Assert.Empty(tracker.Update(off, 5600).Displayed);
+    }
+
+    [Fact]
+    public void A_memo_that_drops_out_starts_its_wait_again()
+    {
+        var tracker = new A300MemoTracker();
+        var on = Reading(("INI_SEATBELTS_SWITCH", 1));
+        tracker.Update(Reading(), 0);
+        tracker.Update(on, 1000);
+        tracker.Update(Reading(), 2000);
+        tracker.Update(on, 3000);
+        Assert.Empty(tracker.Update(on, 4000).Shown);   // 1 s since it came back
+        Assert.Single(tracker.Update(on, 6000).Shown);
+    }
+
+    [Fact]
+    public void Memos_active_at_the_first_complete_reading_are_its_baseline()
+    {
+        // A flight load shows its memos without their being changes: none is spoken.
+        var tracker = new A300MemoTracker();
+        var loaded = Reading(("INI_PARKING_BRAKE_STATUS", 1), ("EXTERNAL POWER ON:1", 1));
+        var first = tracker.Update(loaded, 0);
+        Assert.Empty(first.Shown);
+        Assert.Equal(new[] { "External power connected", "Parking brake on" }, first.Displayed.Select(m => m.Words));
+        Assert.Empty(tracker.Update(loaded, 5000).Shown);
+        tracker.Reset();
+        Assert.Empty(tracker.Update(loaded, 6000).Shown);
+    }
+
+    [Fact]
+    public void The_baseline_waits_for_every_input()
+    {
+        var tracker = new A300MemoTracker();
+        Assert.Empty(tracker.Update(_ => null, 0).Displayed);
+        var on = Reading(("INI_apu_available", 1));
+        Assert.Empty(tracker.Update(on, 1000).Shown);   // the first complete reading: the baseline
+        Assert.Empty(tracker.Update(on, 9000).Shown);
+    }
+
+    [Theory]
+    [InlineData(new string[0], "none")]
+    [InlineData(new[] { "APU running" }, "APU running")]
+    [InlineData(new[] { "APU running", "Seat belts on" }, "APU running, Seat belts on")]
+    public void The_line_lists_the_memos_shown(string[] words, string line) =>
+        Assert.Equal(line, A300EwdMemos.Line(words));
+
+    [Theory]
+    [InlineData(new[] { "APU running" }, "Memo: APU running")]
+    [InlineData(new[] { "APU running", "Seat belts on" }, "Memos: APU running, Seat belts on")]
+    public void New_memos_are_said_in_one_sentence(string[] words, string phrase) =>
+        Assert.Equal(phrase, A300EwdMemos.Phrase(words));
+}
+
+/// <summary>How the A300 definition carries the memos: their inputs on their own subscriptions, consumed silently,
+/// read at the end of each sample (where the FMA is composed), shown on the ECAM Memos box and spoken as they appear.</summary>
+public class IniA300MemoBehaviourTests
+{
+    private long _now = 10_000;
+    private readonly IniA300Definition _def;
+    private readonly SpeechCapture _speech = new();
+    private readonly Dictionary<string, double> _cache = new();
+    private readonly HashSet<string> _muted = new();
+
+    public IniA300MemoBehaviourTests()
+    {
+        _def = new IniA300Definition
+        {
+            Clock = () => _now,
+            CanLand = _ => true,
+            Cached = (_, key) => _cache.TryGetValue(key, out var v) ? v : null,
+            IsMuted = key => _muted.Contains(key),
+        };
+        _def.Attach(new SimConnectManager(IntPtr.Zero));
+        foreach (var input in A300EwdMemos.Inputs)
+            _cache[input.Key] = input.Var switch
+            {
+                "INI_LANDING_LIGHT_L_SWITCH" or "INI_LANDING_LIGHT_R_SWITCH" or "INI_tcas_mode_pedestal" => 2,
+                "TOTAL AIR TEMPERATURE" => 20,
+                _ => 0,
+            };
+    }
+
+    private void Input(string var, double value) => _cache[A300EwdMemos.Inputs.Single(i => i.Var == var).Key] = value;
+
+    private string[] Sample(long advanceMs = 1000)
+    {
+        _now += advanceMs;
+        _speech.All.Clear();
+        _def.OnDeferredFlushBatchDelivered(_speech);
+        return _speech.All.Where(s => s.StartsWith("Memo", StringComparison.Ordinal)).ToArray();
+    }
+
+    private string BoxLine() =>
+        _def.TryGetDisplayOverride(A300EwdMemos.LineKey, 0, out var text) ? text : "(no line)";
+
+    [Fact]
+    public void Every_input_streams_on_its_own_subscription_and_is_consumed_silently()
+    {
+        var vars = _def.GetVariables();
+        foreach (var input in A300EwdMemos.Inputs)
+        {
+            var def = vars[input.Key];
+            Assert.Equal(input.Var, def.Name);
+            Assert.True(def.ExcludeFromBatch && def.ExcludeFromMonitorManager, input.Key);
+            Assert.Equal(input.IsStock ? SimVarType.SimVar : SimVarType.LVar, def.Type);
+            Assert.True(_def.ProcessSimVarUpdate(input.Key, 1, _speech), input.Key);
+        }
+        Assert.Empty(_speech.All);
+    }
+
+    [Fact]
+    public void The_memo_line_is_on_the_ecam_memos_box_and_carries_the_ctrl_m_row()
+    {
+        var line = _def.GetVariables()[A300EwdMemos.LineKey];
+        Assert.Equal("ECAM memos", line.DisplayName);
+        Assert.True(line.IsAnnounced);
+        Assert.False(line.ExcludeFromMonitorManager);
+        Assert.Contains(A300EwdMemos.LineKey, _def.GetPanelDisplayVariables()[A300EwdMemos.Panel]);
+        Assert.Contains(A300EwdMemos.Panel, _def.GetPanelStructure()[A300DisplayPanels.Section]);
+        Assert.True(_def.ProcessSimVarUpdate(A300EwdMemos.LineKey, 1, _speech));
+    }
+
+    [Fact]
+    public void A_memo_appearing_is_spoken_and_shown()
+    {
+        Assert.Empty(Sample());   // the baseline
+        Assert.Equal("none", BoxLine());
+        Input("INI_SEATBELTS_SWITCH", 1);
+        Assert.Empty(Sample());
+        Assert.Empty(Sample(2000));
+        Assert.Equal(new[] { "Memo: Seat belts on" }, Sample());
+        Assert.Equal("Seat belts on", BoxLine());
+        Input("INI_SEATBELTS_SWITCH", 0);
+        Assert.Empty(Sample());   // a memo going is not spoken
+        Assert.Equal("none", BoxLine());
+    }
+
+    [Fact]
+    public void Memos_at_load_are_the_baseline_and_a_muted_row_is_silent()
+    {
+        Input("INI_PARKING_BRAKE_STATUS", 1);
+        Assert.Empty(Sample());
+        Assert.Equal("Parking brake on", BoxLine());
+        _muted.Add(A300EwdMemos.LineKey);
+        Input("INI_apu_available", 1);
+        Sample();
+        Sample(3000);
+        Assert.Empty(Sample());
+        Assert.Equal("APU running, Parking brake on", BoxLine());
+    }
+
+    [Fact]
+    public void A_context_reset_makes_the_next_reading_a_baseline()
+    {
+        Sample();
+        _def.OnSimContextReset();
+        Input("INI_apu_available", 1);
+        for (int i = 0; i < 8; i++)
+            Assert.Empty(Sample());
+    }
+}

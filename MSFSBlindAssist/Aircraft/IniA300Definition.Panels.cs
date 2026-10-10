@@ -218,6 +218,8 @@ public partial class IniA300Definition
                 return null;
             return line.Active ? line.Radio.Active(w1, w2, value) : line.Radio.Standby(w1, w2, value);
         }
+        if (key == A300EwdMemos.LineKey)
+            return _memoLine ?? "unavailable";
         if (key == A300CargoDoor.StatusKey)
         {
             var flags = A300CargoDoor.Flags.Select(f => _sim is { } doorSim ? Cached(doorSim, f.Key) : null).ToArray();
