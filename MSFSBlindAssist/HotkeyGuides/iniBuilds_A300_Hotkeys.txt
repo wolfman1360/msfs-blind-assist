@@ -24,10 +24,11 @@ The upper ECAM's memos are read as the aircraft shows them: the ECAM Memos statu
 Displays section lists them ("APU running, Parking brake on, Seat belts on"), and a memo is
 announced when it appears ("Memo: No smoking on"). Its Ctrl+M row is "ECAM memos".
 
-Not included: the upper ECAM's warnings, and the ND's waypoint name and bearing. The A300 keeps
-these inside its own display software, not in values the simulator shares, so read the next
-waypoint on the MCDU's F-PLN page (Shift+M), and hear warnings by the master warning and master
-caution call-outs. The AI display reads are not available on the A300.
+Not in the status boxes: the upper ECAM's warnings, and the ND's waypoint name and bearing. The
+A300 keeps these inside its own display software, not in values the simulator shares. Read them
+with the AI display reads in output mode (Alt+E for the ECAM warning display, Alt+N for the ND;
+see "Display reads" below), read the next waypoint on the MCDU's F-PLN page (Shift+M), and hear
+warnings by the master warning and master caution call-outs.
 
 
 THE PANELS
@@ -331,6 +332,19 @@ Speed tape:
   Shift+4    Read VLS
   Shift+5    Read VS (the speed at the bottom of the tape)
   Shift+6    Read VMAX (the top of the tape: the gear or flap limit when one applies)
+
+Display reads (AI; needs an AI key in File > Settings > AI tab):
+  Alt+P      Read the captain's PFD
+  Alt+N      Read the captain's Navigation Display, waypoint names included
+  Alt+E      Read the ECAM warning display (the left ECAM screen: warnings and memos)
+  Alt+S      Read the ECAM system display (the right ECAM screen: the page shown)
+
+  The app moves the simulator camera to the display it is reading and puts
+  your own view back before the AI is asked. From an outside or drone view it
+  says "Switch to a cockpit view first" and does nothing. The status boxes
+  stay the everyday read: they come from the aircraft's own values, while
+  these keys describe a picture of the screen. Alt+I does nothing on the
+  A300: the standby instruments are all on the Standby Instruments panel.
 
 Aircraft state:
   L          Read the flaps lever ("Flaps 15/15")

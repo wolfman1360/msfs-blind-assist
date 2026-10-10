@@ -100,6 +100,10 @@ public partial class IniA300Definition
     private bool OwnPick(string key, bool isOn, long nowMs) =>
         _commanded.Resolve(key, null, nowMs) is double commanded && (commanded >= 0.5) == isOn;
 
+    /// <summary>The four AI display reads (Alt+P, N, E and S), run by the base class's dispatch. Only these
+    /// keys use AI; the boxes and call-outs stay data-only ([A300-8]).</summary>
+    protected override IReadOnlyList<AiDisplayRead> DisplayReads => A300DisplayReads.All;
+
     /// <summary>
     /// The speed-tape keys, as on the A320s: VLS, VS, the maximum speed (VMAX, on the A320's VFE
     /// key: the top of the tape, which is the flap or gear limit whenever one applies), and green dot,
