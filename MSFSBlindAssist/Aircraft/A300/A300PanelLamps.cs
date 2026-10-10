@@ -35,8 +35,8 @@ public sealed class A300ResolvedLamp
 
 /// <summary>
 /// The cockpit lights read through their own rule, generated from the aircraft's emissive code
-/// (<see cref="A300LampRule"/>, [A300-25]), named here panel by panel as each is swept (owner decision,
-/// 2026-10-09: every light that can be read is spoken). A switch's OFF or ON legend that only mirrors its
+/// (<see cref="A300LampRule"/>, [A300-25]), named here panel by panel (owner decision, 2026-10-09: every
+/// light that can be read is spoken). A switch's OFF or ON legend that only mirrors its
 /// position is left out: the row already says the position. The older fault lights stay in
 /// <see cref="A300FaultLights"/>; a lamp named here never repeats one.
 /// </summary>

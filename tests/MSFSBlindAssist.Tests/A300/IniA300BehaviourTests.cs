@@ -241,6 +241,23 @@ public class IniA300BehaviourTests
     }
 
     [Fact]
+    public void A_later_pick_of_a_spring_drops_the_earlier_picks_release()
+    {
+        // Open, Neutral, then Open again within the 35 s hold: the first hold's release must not stop the second.
+        _cache["A300_MAIN_CARGO_DOOR_SWITCH"] = 1;
+        DoorReadsOpen70();
+        Set("A300_MAIN_CARGO_DOOR_SWITCH", 0);
+        var firstHold = _waits[0];
+        Set("A300_MAIN_CARGO_DOOR_SWITCH", 1);
+        Set("A300_MAIN_CARGO_DOOR_SWITCH", 0);
+        _sent.Clear();
+        firstHold.SetResult();
+        Assert.Empty(_sent);
+        ReleaseAllWaits();
+        Assert.Equal(new[] { "1 (>B:AIRLINER_MAIN_CARGO_DOOR_SWITCH_Set)" }, _sent);
+    }
+
+    [Fact]
     public void A_cargo_door_pick_overtaken_by_neutral_speaks_once_for_the_stop()
     {
         _cache["A300_MAIN_CARGO_DOOR_SWITCH"] = 1;

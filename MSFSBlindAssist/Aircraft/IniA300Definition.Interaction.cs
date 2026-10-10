@@ -230,17 +230,23 @@ public partial class IniA300Definition
         }
         if (commandedValue is double target)
             _commanded.Record(row.Key, target, Clock());
-        _ = RunAsync(plan.Steps, sim);
+        _ = RunAsync(row.Key, plan.Steps, sim);
         return true;
     }
 
+    /// <summary>Each row's latest run: an earlier run of the same row stops at its next wait.</summary>
+    private readonly Dictionary<string, int> _latestRunByRow = new(StringComparer.Ordinal);
+
     /// <summary>
     /// Runs a plan's steps on the UI thread (each await resumes there, so SimConnect is never used
-    /// from a pool thread). The steps after a wait are recorded as owed until they have run.
+    /// from a pool thread). The steps after a wait are recorded as owed until they have run. A later
+    /// pick of the same row takes over: the earlier run's steps after its wait are dropped, so a spring's
+    /// old release cannot cut a new hold short (the cargo door, picked Open again within its 35 s hold).
     /// </summary>
-    private async Task RunAsync(IReadOnlyList<A300Step> steps, SimConnectManager sim)
+    private async Task RunAsync(string rowKey, IReadOnlyList<A300Step> steps, SimConnectManager sim)
     {
         int run = ++_nextRunId;
+        _latestRunByRow[rowKey] = run;
         try
         {
             for (int i = 0; i < steps.Count; i++)
@@ -256,6 +262,8 @@ public partial class IniA300Definition
                         _owed[run] = steps.Skip(i + 1).ToList();
                         await Delay(delay.Milliseconds);
                         _owed.Remove(run);
+                        if (_latestRunByRow.GetValueOrDefault(rowKey) != run)
+                            return;
                         break;
                 }
             }
