@@ -113,6 +113,10 @@ public static class A300PanelLamps
         new("PACK_2_VALVE_IND_004_LIGHT", "Pack 2 flow bar light", "Air Conditioning"),
         new("RAM_AIR_SEQ1_LIGHT", "Ram air valve open light", "Air Conditioning"),
 
+        // Bleed: an indicator with no button of its own, named from its node (its legend is in no file); it
+        // followed the APU bleed (2026-10-10). The other bleed legends are positions or never-written faults.
+        new("GND_BLEED_VLVE_SEQ1_LIGHT", "Ground bleed valve light", "Bleed"),
+
         // Pressurization: the two system buttons pick one system or the other, so they are buttons
         // (A300PanelLayout.SelectButtons) labelled by these lights; the lights speak a press and an automatic
         // change. The regulator and outflow legends are positions; the fault lights are A300FaultLights.

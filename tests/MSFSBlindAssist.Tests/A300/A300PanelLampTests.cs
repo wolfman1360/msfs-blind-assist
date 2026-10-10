@@ -142,6 +142,15 @@ public class A300PanelLampTests
     }
 
     [Fact]
+    public void The_bleed_panels_ground_bleed_valve_light_is_read()
+    {
+        // An indicator with no button of its own, on the AC light bus; it followed the APU bleed (2026-10-10).
+        Assert.Equal(("Ground bleed valve light", "Bleed"), (Lamp("GND_BLEED_VLVE_SEQ1_LIGHT").Name, Lamp("GND_BLEED_VLVE_SEQ1_LIGHT").Panel));
+        var lamp = A300PanelLamps.Resolved.Single(l => l.Lamp.Node == "GND_BLEED_VLVE_SEQ1_LIGHT");
+        Assert.Equal(("INI_GND_BLEED", A300LightPower.Ac), (lamp.Primary.Name, lamp.Power));
+    }
+
+    [Fact]
     public void A_pack_flow_bar_is_lit_from_half_open()
     {
         var bar = A300PanelLamps.Resolved.Single(l => l.Lamp.Node == "PACK_1_VALVE_IND_003_LIGHT");
