@@ -71,9 +71,12 @@ class FixtureBuilder:
         parts.append('</InputEvent>')
         self._inputevents.append(''.join(parts))
 
-    def material(self, code):
-        self._materials.append('<Material><EmissiveFactor><Code StringID="%s"/></EmissiveFactor></Material>'
-                               % self._string(code))
+    def material(self, code, owner=None):
+        """An emissive material; owner is the index of the component (cockpit node) it lights."""
+        attr = '' if owner is None else ' OwnerID="%d"' % owner
+        self._materials.append('<Material%s><EmissiveFactor OverrideBaseEmissive="True"><Parameter>'
+                               '<Code StringID="%s"/></Parameter></EmissiveFactor></Material>'
+                               % (attr, self._string(code)))
 
     def build(self):
         comps = ''.join('<Component ID="%s"%s/>' % (cid, '' if owner is None else ' OwnerID="%d"' % owner)

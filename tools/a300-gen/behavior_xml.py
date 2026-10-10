@@ -57,6 +57,9 @@ class Behavior:
                 self._ie_by_upper.setdefault(d['id'].upper(), d)
 
         self.material_codes = []
+        # The emissive materials: which node each lights (its OwnerID is that component's index, the root
+        # component included) and the code for how brightly.
+        self.emissive = []
         mats = root.find('Materials')
         if mats is not None:
             for m in mats.findall('Material'):
@@ -64,6 +67,10 @@ class Behavior:
                     code = self._code(code_el)
                     if code:
                         self.material_codes.append(code)
+                factor = m.find('EmissiveFactor')
+                code = self._code(factor.find('.//Code')) if factor is not None else ''
+                if code and m.attrib.get('OwnerID') is not None:
+                    self.emissive.append({'owner': int(m.attrib['OwnerID']), 'code': code})
 
     @classmethod
     def from_file(cls, path):

@@ -221,5 +221,68 @@ class GenerateA300MapTests(unittest.TestCase):
         self.assertEqual('1.0.11', json.loads(gen.to_json(_map()))['package_version'])
 
 
+_TAIL = ' (L:INI_ANNLT_SWITCH) 0 == + 1 min (L:INI_GENERAL_LIGHT_MULTIPLIER) * 1 1 * * {power}'
+
+
+def _lamp_map():
+    """Cockpit lamps in the emissive code's real shapes (package 1.0.11, A300_Interior.behavior.xml)."""
+    f = FixtureBuilder()
+    root = f.component('A300_INTERIOR_COMPONENT')
+    def lamp(node, code):
+        f.material(code, owner=f.component(node, root))
+    lamp('ENG_1_START_SEQ1_LIGHT', '(L:INI_STARTER1_OPEN)' + _TAIL.format(power='(L:INI_AC_LIGHTS_FAILURE) *'))
+    lamp('BATT_1_SEQ2_LIGHT', '(L:INI_BAT1_ON) !' + _TAIL.format(power='(L:INI_DC_LIGHTS_FAILURE) *'))
+    lamp('EXT_PWR_SEQ1_LIGHT', '(L:INI_gpu_avail, Bool) (A:EXTERNAL POWER ON:1, Bool) ! and' + _TAIL.format(power='1 *'))
+    lamp('GEN_1_SEQ2_LIGHT', '(L:INI_gpu_avail, Bool) (A:EXTERNAL POWER ON:1, Bool) and (L:INI_AC_LIGHTS_FAILURE) *'
+         + _TAIL.format(power=''))
+    lamp('INDICATOR_LOWER_DOWN1_LIGHT', '(A:GEAR POSITION:1, Percent) 100 ==' + _TAIL.format(power='(L:INI_AC_LIGHTS_FAILURE) *'))
+    lamp('FIRE_HANDLE_ENG1_LIGHT', '(L:INI_ENG1_FIRE_TEST, Bool) (L:INI_ANNLT_SWITCH) 0 == or'
+         + _TAIL.format(power='(L:INI_DC_LIGHTS_FAILURE) *').replace(' 1 1 * *', ' 0.1 *'))
+    lamp('B_RSVR_005_LIGHT', '0' + _TAIL.format(power='(L:INI_AC_LIGHTS_FAILURE) *'))
+    # iniBuilds' SELCAL lamps read only the test switch, in a malformed form: a test-only lamp.
+    lamp('SELCAL_1_SEQ1_LIGHT', '(L:INI_ANNLT_SWITCH) == 0' + _TAIL.format(power='(L:INI_AC_LIGHTS_FAILURE) *'))
+    lamp('OVERHEAD_FUEL', '(L:INI_POTENTIOMETER_3) 0.01 *')   # panel backlight: no annunciator test, not a lamp
+    return gen.build_map(Behavior(f.build()), {}, '1.0.11')
+
+
+def _lamps():
+    return {l['node']: l for l in _lamp_map()['lamps']}
+
+
+class LampTests(unittest.TestCase):
+    def test_a_lamp_keeps_its_state_and_its_bus(self):
+        self.assertEqual({'node': 'ENG_1_START_SEQ1_LIGHT', 'state': '(L:INI_STARTER1_OPEN)', 'power': 'AC'},
+                         _lamps()['ENG_1_START_SEQ1_LIGHT'])
+
+    def test_a_negated_state_is_kept_whole(self):
+        self.assertEqual(('(L:INI_BAT1_ON) !', 'DC'),
+                         (_lamps()['BATT_1_SEQ2_LIGHT']['state'], _lamps()['BATT_1_SEQ2_LIGHT']['power']))
+
+    def test_a_lamp_with_no_light_power_term_has_none(self):
+        lamp = _lamps()['EXT_PWR_SEQ1_LIGHT']
+        self.assertEqual('(L:INI_gpu_avail, Bool) (A:EXTERNAL POWER ON:1, Bool) ! and', lamp['state'])
+        self.assertIsNone(lamp['power'])
+
+    def test_a_power_term_before_the_test_term_is_lifted_out(self):
+        lamp = _lamps()['GEN_1_SEQ2_LIGHT']
+        self.assertEqual(('(L:INI_gpu_avail, Bool) (A:EXTERNAL POWER ON:1, Bool) and', 'AC'), (lamp['state'], lamp['power']))
+
+    def test_a_stock_variable_state_is_kept(self):
+        self.assertEqual('(A:GEAR POSITION:1, Percent) 100 ==', _lamps()['INDICATOR_LOWER_DOWN1_LIGHT']['state'])
+
+    def test_a_lamp_that_also_lights_in_the_test_drops_the_test_term(self):
+        self.assertEqual(('(L:INI_ENG1_FIRE_TEST, Bool)', 'DC'),
+                         (_lamps()['FIRE_HANDLE_ENG1_LIGHT']['state'], _lamps()['FIRE_HANDLE_ENG1_LIGHT']['power']))
+
+    def test_a_test_only_lamp_and_a_backlight_are_not_lamps(self):
+        self.assertNotIn('B_RSVR_005_LIGHT', _lamps())
+        self.assertNotIn('OVERHEAD_FUEL', _lamps())
+        self.assertNotIn('SELCAL_1_SEQ1_LIGHT', _lamps())
+
+    def test_lamps_are_sorted_by_node(self):
+        nodes = [l['node'] for l in _lamp_map()['lamps']]
+        self.assertEqual(sorted(nodes), nodes)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -26,6 +26,10 @@ public sealed class A300ControlMap
     [JsonPropertyName("controls")]
     public List<A300Control> Controls { get; set; } = new();
 
+    /// <summary>Every annunciator lamp in the cockpit, with its own state rule (<see cref="A300LampRule"/>).</summary>
+    [JsonPropertyName("lamps")]
+    public List<A300MapLamp> Lamps { get; set; } = new();
+
     private readonly Dictionary<string, A300Control> _byId = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, A300Control> _byKey = new(StringComparer.Ordinal);
 
@@ -91,6 +95,26 @@ public sealed class A300ControlMap
             return new A300ControlMap();
         }
     }
+}
+
+/// <summary>One cockpit annunciator lamp, from its emissive code: lit = <see cref="State"/> AND its bus's
+/// light power, as the cockpit draws it (the annunciator test term left out, as everywhere, [A300-23]).</summary>
+public sealed class A300MapLamp
+{
+    /// <summary>The cockpit node it lights, e.g. <c>ENG_1_START_SEQ1_LIGHT</c> (SEQ1 the upper legend).</summary>
+    [JsonPropertyName("node")] public string Node { get; set; } = string.Empty;
+    /// <summary>The state rule in the cockpit's own RPN, e.g. <c>(L:INI_STARTER1_OPEN)</c>.</summary>
+    [JsonPropertyName("state")] public string State { get; set; } = string.Empty;
+    /// <summary>"AC", "DC", or null when the lamp has no light power term.</summary>
+    [JsonPropertyName("power")] public string? PowerText { get; set; }
+
+    [JsonIgnore]
+    public A300LightPower Power => PowerText switch
+    {
+        "AC" => A300LightPower.Ac,
+        "DC" => A300LightPower.Dc,
+        _ => A300LightPower.None,
+    };
 }
 
 /// <summary>The control kinds the generator emits (<c>tools/a300-gen/generate_a300_map.py</c>).</summary>

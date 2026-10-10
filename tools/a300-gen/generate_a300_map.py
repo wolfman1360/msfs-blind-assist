@@ -256,6 +256,49 @@ def classify(entry, ie, loc):
     return entry
 
 
+_TEST_TERM = '(L:INI_ANNLT_SWITCH) 0 =='
+_POWER = {'(L:INI_AC_LIGHTS_FAILURE)': 'AC', '(L:INI_DC_LIGHTS_FAILURE)': 'DC'}
+
+
+def lamp_rule(code):
+    """(state, power) of an annunciator lamp's emissive code, or None for anything else.
+
+    Every annunciator lamp's brightness is (state OR annunciator test) x brightness x its bus's light
+    power, in one of two shapes: "STATE (L:INI_ANNLT_SWITCH) 0 == + 1 min ... (L:INI_DC_LIGHTS_FAILURE) *"
+    or, for a lamp the test also lights a second way, "STATE (L:INI_ANNLT_SWITCH) 0 == or (L:...) 0 == + ...".
+    The state is everything before the first test term; a power factor written into it
+    ("... and (L:INI_AC_LIGHTS_FAILURE) *") is lifted out. A lamp whose state is a bare number lights only
+    in the test, and a code with no test term (a panel backlight) is not a lamp."""
+    at = code.find(_TEST_TERM)
+    if at < 0:
+        return None
+    state, rest = code[:at].strip(), code[at:]
+    power = None
+    for token, bus in _POWER.items():
+        if state.endswith(token + ' *'):
+            state, power = state[:-len(token + ' *')].strip(), bus
+        elif token in rest:
+            power = bus
+    if not state or re.fullmatch(r'[0-9.]+', state):
+        return None
+    # A state that reads nothing but the test switch (iniBuilds' SELCAL lamps) lights only in the test.
+    if set(re.findall(r'\((?:L|A):[^,)]+', state)) == {'(L:INI_ANNLT_SWITCH'}:
+        return None
+    return state, power
+
+
+def lamps(behavior):
+    """Every annunciator lamp in the cockpit: the node it lights, its state rule and its bus."""
+    found = {}
+    for m in behavior.emissive:
+        rule = lamp_rule(m['code'])
+        if rule is None or not 0 <= m['owner'] < len(behavior.components):
+            continue
+        node = behavior.components[m['owner']]['id']
+        found.setdefault(node, OrderedDict([('node', node), ('state', rule[0]), ('power', rule[1])]))
+    return [found[n] for n in sorted(found)]
+
+
 def build_map(behavior, loc, package_version=''):
     controls = []
     for ie in behavior.inputevents:
@@ -272,7 +315,8 @@ def build_map(behavior, loc, package_version=''):
         ('generator', 'tools/a300-gen/generate_a300_map.py'),
         ('package', 'inibuilds-aircraft-a300'),
         ('package_version', package_version),
-        ('controls', controls)])
+        ('controls', controls),
+        ('lamps', lamps(behavior))])
 
 
 def to_json(data):

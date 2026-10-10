@@ -45,6 +45,15 @@ class BehaviorXmlTests(unittest.TestCase):
         b = Behavior(_storm_light_fixture())
         self.assertEqual('AIRLINER_STORMLIGHT', b.inputevent('airliner_stormlight')['id'])
 
+    def test_an_emissive_material_keeps_the_node_it_lights(self):
+        f = FixtureBuilder()
+        root = f.component('A300_INTERIOR_COMPONENT')
+        lamp = f.component('ENG_1_START_SEQ1_LIGHT', root)
+        f.material('(L:INI_STARTER1_OPEN) (L:INI_ANNLT_SWITCH) 0 == + 1 min', owner=lamp)
+        b = Behavior(f.build())
+        self.assertEqual([{'owner': 1, 'code': '(L:INI_STARTER1_OPEN) (L:INI_ANNLT_SWITCH) 0 == + 1 min'}],
+                         b.emissive)
+
 
 if __name__ == '__main__':
     unittest.main()
