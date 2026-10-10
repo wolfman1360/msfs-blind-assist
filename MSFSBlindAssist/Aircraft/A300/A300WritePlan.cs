@@ -98,7 +98,9 @@ public static class A300WritePlan
                     return A300Plan.Refused(UnknownPositionRefusal);
                 if (Math.Abs(now - target) < SameValueTolerance)
                     return A300Plan.AlreadyThere;
-                return Steps(Set(control, position));
+                return A300PanelLayout.PositionEvent(control, position) is string other
+                    ? Steps(new A300CalcStep($"1 (>B:{other})"))
+                    : Steps(Set(control, position));
             }
             case A300Kinds.Selector:
             {

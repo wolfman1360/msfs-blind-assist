@@ -15,10 +15,10 @@ namespace MSFSBlindAssist.Aircraft.A300;
 /// D = DC), so it is spoken only as the cockpit shows it (<see cref="A300LampBoard"/>, [A300-23]).
 ///
 /// Left out on purpose: the FCU lamps (already on the FCU buttons' labels); the servo OFF and
-/// override supply lights (switch positions the panel already shows); the gear unlock, reverser and
-/// altitude alert lights (frequent, and the gear lever and the FMA already speak); and lights the
-/// cockpit model draws nowhere (FADEC, IRS warn). The fire handle lights are read through the lamps the
-/// cockpit draws (<see cref="A300PanelLamps"/>).
+/// override supply lights (switch positions the panel already shows); the reverser and altitude alert
+/// lights (frequent, and the FMA already speaks); and lights the cockpit model draws nowhere (FADEC, IRS
+/// warn). The fire handle and gear lights are read through the lamps the cockpit draws
+/// (<see cref="A300PanelLamps"/>).
 /// </summary>
 public static class A300FaultLights
 {

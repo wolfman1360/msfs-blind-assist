@@ -166,6 +166,26 @@ public static class A300PanelLamps
         new("FO_DH_SEQ1_LIGHT", "First officer decision height light", "EFIS First Officer"),
         new("ATC_FO_SEQ1_LIGHT", "First officer ATC message light", "EFIS First Officer"),
         new("STOP_FO_SEQ1_LIGHT", "First officer stop rudder input light", "EFIS First Officer"),
+
+        // Gear (owner decision 2026-10-09: spoken): each gear's green down light (the overhead gear panel), and
+        // its unlocked and door open lights (the main panel's; the overhead repeats them). Stock gear index 0 is
+        // the nose, 1 left, 2 right; iniBuilds' GEAR1 is the nose and GEAR2 the left, as its overhead pairs them.
+        new("GEAR_2_UNLK_SEQ2_LIGHT", "Nose gear down light", "Gear"),
+        new("GEAR_1_UNLK_SEQ2_LIGHT", "Left gear down light", "Gear"),
+        new("GEAR_3_UNLK_SEQ2_LIGHT", "Right gear down light", "Gear"),
+        new("INDICATOR_LOWER_UNLK2_LIGHT", "Nose gear unlocked light", "Gear"),
+        new("INDICATOR_LOWER_UNLK1_LIGHT", "Left gear unlocked light", "Gear"),
+        new("INDICATOR_LOWER_UNLK3_LIGHT", "Right gear unlocked light", "Gear"),
+        new("INDICATOR_LOWER_DOOR2_LIGHT", "Nose gear door open light", "Gear"),
+        new("INDICATOR_LOWER_DOOR1_LIGHT", "Left gear door open light", "Gear"),
+        new("INDICATOR_LOWER_DOOR3_LIGHT", "Right gear door open light", "Gear"),
+
+        // The flap and slat indicator's speed brake light, and the brakes: the autobrake panel's two indicators
+        // (named from their nodes; neither lit with autobrake armed) and the brake fan button's HOT legend.
+        new("INDICATOR_SPDBRK_LIGHT", "Speed brake light", "Flaps and Speed Brake"),
+        new("INDICATOR_AUTOBRK_LIGHT", "Autobrake light", "Autobrake"),
+        new("INDICATOR_BRKFAIL_LIGHT", "Brake fail light", "Autobrake"),
+        new("BRAKE_FAN_SEQ1_LIGHT", "Brakes hot light", "Autobrake"),
     };
 
     /// <summary>A button's own light, which labels it ("Pressurization system 1: On"): row key → lamp key.</summary>

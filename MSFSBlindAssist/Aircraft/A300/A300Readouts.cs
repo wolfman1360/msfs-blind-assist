@@ -99,6 +99,12 @@ public static class A300Readouts
         new A300Readout("A300_RO_OXY_HP_3", "Crew oxygen high pressure 3", "Oxygen", "INI_OXYGEN_HIGH_PRESSURE_CURRENT3", false, "number", ThousandsPsi),
         new A300Readout("A300_RO_OXY_HP_4", "Crew oxygen high pressure 4", "Oxygen", "INI_OXYGEN_HIGH_PRESSURE_CURRENT4", false, "number", ThousandsPsi),
 
+        // The main panel's triple brake indicator, from its needles' animation code: ACCU PRESS (0 to 4) and the
+        // two BRAKES needles (0 to 3), "PSI x 1000" (the gauge face).
+        new A300Readout("A300_RO_BRAKE_ACCU", "Brake accumulator pressure", "Autobrake", "INI_BRAKE_PRESSURE_ACCU_PRESS", false, "number", ThousandsPsi),
+        new A300Readout("A300_RO_BRAKE_LEFT", "Left brake pressure", "Autobrake", "INI_BRAKE_PRESSURE_LEFT", false, "number", ThousandsPsi),
+        new A300Readout("A300_RO_BRAKE_RIGHT", "Right brake pressure", "Autobrake", "INI_BRAKE_PRESSURE_RIGHT", false, "number", ThousandsPsi),
+
         // The PFD: what the speed tape, attitude and altitude show. VMAX is the top of the tape
         // (VMO, or the gear or flap limit: 270 with the gear down), green dot, S and F are read only
         // at the flap settings the tape shows them (the definition's display text), and VS is the

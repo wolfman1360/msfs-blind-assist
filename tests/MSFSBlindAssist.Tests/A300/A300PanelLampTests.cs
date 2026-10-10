@@ -250,6 +250,29 @@ public class A300PanelLampTests
         Assert.Equal("INI_STOP_RUDDER_INPUT_BUTTON_LIGHT", A300PanelLamps.Resolved.Single(l => l.Lamp.Node == node).Primary.Name);
     }
 
+    [Theory]
+    // Owner decision 2026-10-09: the gear lights are spoken. Stock gear index 0 is the nose, 1 left, 2 right;
+    // iniBuilds' GEAR1 is the nose and GEAR2 the left, as its overhead lamps pair them with those indices.
+    [InlineData("GEAR_2_UNLK_SEQ2_LIGHT", "Nose gear down light", "Gear", "GEAR POSITION:0")]
+    [InlineData("GEAR_1_UNLK_SEQ2_LIGHT", "Left gear down light", "Gear", "GEAR POSITION:1")]
+    [InlineData("GEAR_3_UNLK_SEQ2_LIGHT", "Right gear down light", "Gear", "GEAR POSITION:2")]
+    [InlineData("INDICATOR_LOWER_UNLK2_LIGHT", "Nose gear unlocked light", "Gear", "INI_GEAR1_UNLK_LIGHT")]
+    [InlineData("INDICATOR_LOWER_UNLK1_LIGHT", "Left gear unlocked light", "Gear", "INI_GEAR2_UNLK_LIGHT")]
+    [InlineData("INDICATOR_LOWER_UNLK3_LIGHT", "Right gear unlocked light", "Gear", "INI_GEAR3_UNLK_LIGHT")]
+    [InlineData("INDICATOR_LOWER_DOOR2_LIGHT", "Nose gear door open light", "Gear", "INI_landing_gear1_door_ratio")]
+    [InlineData("INDICATOR_LOWER_DOOR1_LIGHT", "Left gear door open light", "Gear", "INI_landing_gear2_door_ratio")]
+    [InlineData("INDICATOR_LOWER_DOOR3_LIGHT", "Right gear door open light", "Gear", "INI_landing_gear3_door_ratio")]
+    [InlineData("INDICATOR_SPDBRK_LIGHT", "Speed brake light", "Flaps and Speed Brake", "INI_SPOILERS_HANDLE_POSITION")]
+    [InlineData("INDICATOR_AUTOBRK_LIGHT", "Autobrake light", "Autobrake", "INI_AUTOBRK_LIGHT")]
+    [InlineData("INDICATOR_BRKFAIL_LIGHT", "Brake fail light", "Autobrake", "INI_AUTOBRK_FAIL")]
+    [InlineData("BRAKE_FAN_SEQ1_LIGHT", "Brakes hot light", "Autobrake", "INI_brakes_hot")]
+    public void The_gear_and_brake_lights_are_on_the_ac_light_bus(string node, string name, string panel, string var)
+    {
+        Assert.Equal((name, panel), (Lamp(node).Name, Lamp(node).Panel));
+        var lamp = A300PanelLamps.Resolved.Single(l => l.Lamp.Node == node);
+        Assert.Equal((var, A300LightPower.Ac), (lamp.Primary.Name, lamp.Power));
+    }
+
     [Fact]
     public void The_fire_handle_lights_are_the_lamps_the_cockpit_draws()
     {

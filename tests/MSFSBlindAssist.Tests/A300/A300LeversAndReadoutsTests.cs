@@ -90,6 +90,21 @@ public class A300LeversAndReadoutsTests
         }, A300Readouts.All.Where(r => r.Panel == "Oxygen").Select(r => (r.Name, r.Var)).ToArray());
     }
 
+    [Fact]
+    public void The_autobrake_panel_reads_the_brake_gauge()
+    {
+        // The triple brake indicator's needles (ACCU PRESS 0 to 4, BRAKES 0 to 3, PSI x 1000).
+        var brakes = A300Readouts.All.Where(r => r.Panel == "Autobrake").ToArray();
+        Assert.Equal(new[]
+        {
+            ("Brake accumulator pressure", "INI_BRAKE_PRESSURE_ACCU_PRESS"),
+            ("Left brake pressure", "INI_BRAKE_PRESSURE_LEFT"),
+            ("Right brake pressure", "INI_BRAKE_PRESSURE_RIGHT"),
+        }, brakes.Select(r => (r.Name, r.Var)).ToArray());
+        Assert.Equal("3,000 psi", brakes[0].Format(2.9999992847442627));
+        Assert.Equal("2,300 psi", brakes[1].Format(2.2999987602233887));
+    }
+
     [Theory]
     [InlineData("en-US")]
     [InlineData("de-DE")]

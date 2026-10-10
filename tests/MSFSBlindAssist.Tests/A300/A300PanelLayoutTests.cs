@@ -282,6 +282,18 @@ public class A300PanelLayoutTests
     }
 
     [Fact]
+    public void The_gravity_extension_handle_is_stowed_by_its_stow_clickspot()
+    {
+        // Its own event only pulls it (INI_GRAVITY_HANDLE_CMD): picking Stowed "stayed Extended" (2026-10-10).
+        // iniBuilds stows it with a separate clickspot, which clears the handle (INI_GRAVITY_HANDLE_ANIM 0).
+        var c = Row("A300_MAN_GEAR_HANDLE_EXT").Control!;
+        Assert.Equal(new[] { "1 (>B:AIRLINER_Man_Gear_Handle_Hide_Set)" },
+            A300WritePlan.ForSet(c, 0, 1).Steps.Cast<A300CalcStep>().Select(s => s.Rpn));
+        Assert.Equal(new[] { "1 (>B:AIRLINER_Man_Gear_Handle_Ext_Set)" },
+            A300WritePlan.ForSet(c, 1, 0).Steps.Cast<A300CalcStep>().Select(s => s.Rpn));
+    }
+
+    [Fact]
     public void Position_words_are_spoken_forms()
     {
         Assert.Equal(new[] { "Off", "Navigate", "Attitude" }, Row("A300_NAVATTLEFT").Positions.Values);

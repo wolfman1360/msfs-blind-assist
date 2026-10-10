@@ -435,6 +435,18 @@ public static partial class A300PanelLayout
         ["MAIN_CARGO_DOOR_LIGHT_LOADER"] = "Loader tarmac light",
     };
 
+    /// <summary>A position another clickspot reaches: the gravity extension handle's own event only pulls it
+    /// (INI_GRAVITY_HANDLE_CMD), and iniBuilds stows it with a separate clickspot that clears it (measured
+    /// 2026-10-10: picking Stowed through its own event stayed Extended). Control id → position → event.</summary>
+    private static readonly Dictionary<string, Dictionary<double, string>> PositionEvents = new(StringComparer.Ordinal)
+    {
+        ["MAN_GEAR_HANDLE_EXT"] = new() { [0] = "AIRLINER_Man_Gear_Handle_Hide_Set" },
+    };
+
+    /// <summary>The event that reaches <paramref name="position"/> when it is not the control's own, or null.</summary>
+    public static string? PositionEvent(A300Control control, double position) =>
+        PositionEvents.TryGetValue(Short(control.Id), out var events) && events.TryGetValue(position, out var ev) ? ev : null;
+
     /// <summary>Controls the map reads as switches that are push buttons in the cockpit, so they are buttons, not
     /// On/Off rows, labelled by their light (<see cref="A300PanelLamps.ByButton"/>): the pressurization system
     /// buttons pick one system or the other (a press of the picked one does nothing), and the stop rudder input
