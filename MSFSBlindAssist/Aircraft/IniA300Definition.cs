@@ -398,7 +398,7 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
             return;
         _disposed = true;
         _seedGate.Disarm();
-        _pendingLamps.Clear();
+        _lampSpeech.Clear();
         ReleaseOwedSteps();   // a held button or a spring switch is let go before the definition goes away
         ReleaseMcduKeys();
         _sim = null;

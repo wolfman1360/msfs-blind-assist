@@ -87,6 +87,11 @@ public sealed class A300LampBoard
 
     public bool Handles(string key) => InputKeys.Contains(key);
 
+    /// <summary>Whether this delivery turns a bus's light power on or off (a first value is a baseline,
+    /// never a flip). Ask before <see cref="Update"/>.</summary>
+    public bool PowerFlips(string key, double value) =>
+        key is AcPowerKey or DcPowerKey && _values.TryGetValue(key, out var was) && On(was) != On(value);
+
     /// <summary>Takes one delivery and returns the lights it turned on or off.</summary>
     public IReadOnlyList<A300BoardChange> Update(string key, double value)
     {

@@ -440,7 +440,9 @@ annunciator light test does not trigger these announcements.
 
 A light is announced only as the cockpit shows it: lit needs its fault and its electrical power.
 So switching power on reads the lights that come on, switching it off reads the lit ones going
-out, and a fault that sets or clears while its light has no power says nothing. The autobrake
+out, and a fault that sets or clears while its light has no power says nothing. After power
+changes, the lights wait about 2.5 seconds for the systems to settle, then are read once: a light
+that flickers on and back off during the change is not read at all. The autobrake
 lights are announced the same way. Each light has its own row in Ctrl+M; "Autobrake armed lights"
 covers the three autobrake armed lights.
 

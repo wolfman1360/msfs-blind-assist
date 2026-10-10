@@ -180,4 +180,22 @@ public class A300LampBoardTests
         var lamp = A300LampBoard.Lamps.Single(l => l.Name == "Engine 1 generator fault light");
         Assert.Null(A300LampBoard.IsLit(lamp, k => k == KeyOf("INI_elec_gen1_fault") ? 1 : null));
     }
+
+    [Fact]
+    public void A_light_power_flag_turning_on_or_off_is_a_power_flip()
+    {
+        _board.Update(A300LampBoard.AcPowerKey, 0);
+        Assert.True(_board.PowerFlips(A300LampBoard.AcPowerKey, 1));
+        _board.Update(A300LampBoard.AcPowerKey, 1);
+        Assert.True(_board.PowerFlips(A300LampBoard.AcPowerKey, 0));
+    }
+
+    [Fact]
+    public void The_first_power_value_the_same_value_and_a_fault_are_not_power_flips()
+    {
+        Assert.False(_board.PowerFlips(A300LampBoard.DcPowerKey, 1));   // nothing read yet: a baseline
+        _board.Update(A300LampBoard.DcPowerKey, 1);
+        Assert.False(_board.PowerFlips(A300LampBoard.DcPowerKey, 1));
+        Assert.False(_board.PowerFlips(KeyOf("INI_elec_gen1_fault"), 1));
+    }
 }

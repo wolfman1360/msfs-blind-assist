@@ -28,8 +28,9 @@ public partial class IniA300Definition
     /// <summary>The fault and autobrake lights as the cockpit shows them ([A300-23]).</summary>
     private readonly A300LampBoard _lampBoard = new();
 
-    /// <summary>The light changes since the last continuous batch ended, spoken when the next one ends.</summary>
-    private readonly List<A300LampChange> _pendingLamps = new();
+    /// <summary>The light changes waiting to be spoken: at a batch end, netted, once a power change has
+    /// settled ([A300-24]).</summary>
+    private readonly A300LampSpeech _lampSpeech = new();
     private ScreenReaderAnnouncer? _lampAnnouncer;
 
     /// <summary>A variable that changes several lights (a light power flag, the autobrake level or a DECEL
@@ -66,11 +67,13 @@ public partial class IniA300Definition
         {
             if (_seedGate.Armed)
                 _seedGate.NoteValue(varName, value, ownedByAircraft: true);
+            if (_lampBoard.PowerFlips(varName, value))
+                _lampSpeech.NotePowerChange(Clock());
             foreach (var change in _lampBoard.Update(varName, value))
             {
                 if (announcer.Suppressed || IsMuted(change.Lamp.MuteKey))
                     continue;
-                _pendingLamps.Add(new A300LampChange(change.Lamp.Name, change.On));
+                _lampSpeech.Add(new A300LampChange(change.Lamp.Name, change.On));
                 _lampAnnouncer = announcer;
             }
             return true;
@@ -136,21 +139,19 @@ public partial class IniA300Definition
         _altitudeWindow.Reset();
         _takeoffCallouts.Reset();
         _lampBoard.Reset();
-        _pendingLamps.Clear();
+        _lampSpeech.Clear();
         _commanded.Clear();
         _seedGate.Arm(KnownSeedValues());
     }
 
-    /// <summary>Speaks the fault lights changed since the last batch ended, as one sentence (<see cref="A300LampCallouts"/>).</summary>
+    /// <summary>Speaks the lights changed since the last sentence, netted, as one sentence, unless a power
+    /// change is still settling (<see cref="A300LampSpeech"/>).</summary>
     private void FlushLamps()
     {
-        if (_pendingLamps.Count == 0)
+        if (_lampSpeech.Flush(Clock()) is not string text)
             return;
-        var announcer = _lampAnnouncer;
-        string text = A300LampCallouts.Compose(_pendingLamps);
-        _pendingLamps.Clear();
         if (!_disposed)
-            announcer?.Announce(text);
+            _lampAnnouncer?.Announce(text);
     }
 
     private IEnumerable<KeyValuePair<string, double>> KnownSeedValues()

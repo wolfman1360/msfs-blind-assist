@@ -13,11 +13,13 @@ public class A300FaultLightTests
     private readonly IniA300Definition _def;
     private readonly SpeechCapture _speech = new();
     private readonly Dictionary<string, double> _cache = new();
+    private long _now = 10_000;
 
     public A300FaultLightTests()
     {
         _def = new IniA300Definition
         {
+            Clock = () => _now,
             Cached = (_, key) => _cache.TryGetValue(key, out var v) ? v : null,
             IsMuted = _ => false,
         };
@@ -203,7 +205,61 @@ public class A300FaultLightTests
         Assert.Empty(_speech.All);
         _def.ProcessSimVarUpdate(A300LampBoard.AcPowerKey, 1, _speech);   // external power
         BatchEnd();
+        Assert.Empty(_speech.All);   // still settling
+        _now += A300LampSpeech.SettleMs;
+        BatchEnd();
         Assert.Equal(new[] { "Standby generator fault light on" }, _speech.All);
+    }
+
+    [Fact]
+    public void A_fault_clearing_just_after_its_power_comes_on_says_nothing()
+    {
+        // Measured on external power, 2026-10-09: the cabin regulator fault cleared in the cockpit 500 ms
+        // before the AC light power rose, but MSFSBA heard the power first and the clear a second later,
+        // and said "Cabin regulator 2 fault light on", then "off".
+        var standby = Lamp("INI_elec_standby_gen_fault");
+        var regulator = Lamp("INI_cabin_sys2_regulator_fault");
+        _def.ProcessSimVarUpdate(A300LampBoard.AcPowerKey, 0, _speech);
+        Deliver(standby, 1);
+        Deliver(regulator, 1);
+        BatchEnd();
+        _def.ProcessSimVarUpdate(A300LampBoard.AcPowerKey, 1, _speech);
+        BatchEnd();
+        _now += 1000;
+        Deliver(regulator, 0);
+        BatchEnd();
+        _now += A300LampSpeech.SettleMs;
+        BatchEnd();
+        Assert.Equal(new[] { "Standby generator fault light on" }, _speech.All);
+    }
+
+    [Fact]
+    public void A_light_that_goes_on_and_off_inside_one_batch_says_nothing()
+    {
+        PowerUp();
+        var pack = Lamp("INI_PACK1_FAULT");
+        Deliver(pack, 0);
+        BatchEnd();
+        Deliver(pack, 1);
+        Deliver(pack, 0);
+        BatchEnd();
+        Assert.Empty(_speech.All);
+    }
+
+    [Fact]
+    public void Power_going_off_waits_too_and_speaks_what_went_dark()
+    {
+        PowerUp();
+        var pack = Lamp("INI_PACK1_FAULT");
+        Deliver(pack, 1);
+        BatchEnd();
+        _now += A300LampSpeech.SettleMs;
+        _def.ProcessSimVarUpdate(A300LampBoard.DcPowerKey, 0, _speech);
+        BatchEnd();
+        Assert.Empty(_speech.All);
+        _now += A300LampSpeech.SettleMs;
+        BatchEnd();
+        Assert.Equal(new[] { "Pack 1 fault light off" }, _speech.All);
     }
 
     [Fact]
