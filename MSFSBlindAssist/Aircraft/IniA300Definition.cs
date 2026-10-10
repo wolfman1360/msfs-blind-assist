@@ -146,6 +146,37 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
             vars[lamp.Key] = def;
         }
 
+        // The lights read through their own generated rule ([A300-25]): each streams the rule's first variable
+        // on its own subscription under its own key, which carries its Ctrl+M row and its status box line; the
+        // rule's other variables stream once each under a shared key, consumed silently. Never the batch ([A300-9]).
+        foreach (var lamp in A300PanelLamps.Resolved)
+        {
+            var primary = lamp.Primary;
+            var keys = lamp.Rule.Inputs.Select(lamp.KeyFor).ToList();
+            if (A300LampBoard.PowerKeyFor(lamp.Power) is string power)
+                keys.Add(power);
+            vars[lamp.Lamp.Key] = new SimVarDefinition
+            {
+                Name = primary.Name,
+                DisplayName = lamp.Lamp.Name,
+                Type = primary.IsStock ? SimVarType.SimVar : SimVarType.LVar,
+                Units = primary.IsStock ? primary.Units : "number",
+                UpdateFrequency = UpdateFrequency.Continuous,
+                IsAnnounced = true,                  // spoken from ProcessSimVarUpdate (A300LampBoard)
+                ExcludeFromBatch = true,
+                ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "On" },
+                RenderAsReadOnlyStatus = true,
+                StateVariables = keys.Distinct().ToArray(),
+            };
+        }
+        foreach (var input in A300PanelLamps.SharedInputs)
+        {
+            var shared = OwnSubscription(input.Name, input.Name);
+            shared.Type = input.IsStock ? SimVarType.SimVar : SimVarType.LVar;
+            shared.Units = input.IsStock ? input.Units : "number";
+            vars[A300PanelLamps.InputKey(input)] = shared;
+        }
+
         // The FCU buttons' lamps: batch-covered, consumed silently, shown only on the buttons' labels.
         foreach (var light in A300FcuState.ByButton.Values)
         {

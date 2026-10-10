@@ -30,7 +30,12 @@ public class A300FaultLightTests
 
     private void Deliver(A300Lamp lamp, double value) => _def.ProcessSimVarUpdate(lamp.Key, value, _speech);
 
-    private void BatchEnd() => _def.OnContinuousBatchDelivered(1);
+    /// <summary>A batch end once the changes delivered before it have gathered (A300LampSpeech.GatherMs).</summary>
+    private void BatchEnd()
+    {
+        _now += A300LampSpeech.GatherMs;
+        _def.OnContinuousBatchDelivered(1);
+    }
 
     /// <summary>Both buses' light power on, as the cockpit has with power up.</summary>
     private void PowerUp()

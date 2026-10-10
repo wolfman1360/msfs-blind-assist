@@ -46,6 +46,26 @@ public class IniA300DisplayPanelTests
     }
 
     [Fact]
+    public void No_panel_name_is_in_two_sections()
+    {
+        // MainForm keys a panel's controls and status box by its name alone.
+        var names = _def.GetPanelStructure().Values.SelectMany(p => p).ToList();
+        Assert.Equal(names.Count, names.Distinct().Count());
+    }
+
+    [Fact]
+    public void A_system_panels_status_box_has_its_lights_then_its_ecam_values()
+    {
+        // Owner decision 2026-10-09, as the FBW A320's panels carry their system's values.
+        var electrical = _def.GetPanelDisplayVariables()["Electrical"];
+        var ecam = A300DisplayPanels.Lines["ECAM Electrical AC"].Concat(A300DisplayPanels.Lines["ECAM Electrical DC"]).ToList();
+        Assert.Equal(ecam, electrical.Skip(electrical.Count - ecam.Count));
+        Assert.Contains(A300FaultLights.All.Single(l => l.Var == "INI_elec_gen1_fault").Key, electrical.Take(electrical.Count - ecam.Count));
+        Assert.Contains("A300_LT_AC_BUS_1_OFF_LIGHT", electrical.Take(electrical.Count - ecam.Count));
+        Assert.Equal(ecam, _def.GetPanelDisplayVariables()["ECAM Electrical AC"].Concat(_def.GetPanelDisplayVariables()["ECAM Electrical DC"]));
+    }
+
+    [Fact]
     public void The_displays_section_follows_the_instrument_panel()
     {
         var sections = _def.GetPanelStructure().Keys.ToList();
@@ -180,9 +200,11 @@ public class IniA300DisplayPanelTests
     }
 
     [Fact]
-    public void The_standby_box_reads_the_standby_altimeter()
+    public void The_standby_instruments_panel_has_its_controls_and_reads_the_standby_instruments()
     {
-        // Its place in the section is pinned by A300EcamPagesTests.The_pages_follow_the_standby_box_in_cockpit_order.
+        // One panel, in the Instrument section, like the FBW Airbuses' ISIS and the Fenix's Standby Instruments.
+        Assert.Contains("Standby Instruments", _def.GetPanelStructure()["Instrument"]);
+        Assert.Contains("A300_ADI_CAGE", _def.GetPanelControls()["Standby Instruments"]);
         Assert.Equal(new[]
         {
             "PLANE_PITCH_DEGREES", "PLANE_BANK_DEGREES", A300Readouts.PfdAirspeedKey,

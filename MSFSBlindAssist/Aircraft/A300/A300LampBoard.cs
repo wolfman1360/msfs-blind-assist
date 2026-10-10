@@ -53,11 +53,13 @@ public sealed class A300LampBoard
     public const string DcPowerKey = "A300_LIGHTS_DC_POWER";
     public const string DcPowerVar = "INI_DC_LIGHTS_FAILURE";
 
-    /// <summary>Every light the board decides: the fault lights, then the autobrake lights.</summary>
-    public static readonly IReadOnlyList<A300BoardLamp> Lamps = FaultLamps().Concat(AutobrakeLamps()).ToArray();
+    /// <summary>Every light the board decides: the fault lights, the autobrake lights, and the lights read
+    /// through their own generated rule (<see cref="A300PanelLamps"/>).</summary>
+    public static readonly IReadOnlyList<A300BoardLamp> Lamps = FaultLamps().Concat(AutobrakeLamps()).Concat(RuleLamps()).ToArray();
 
-    /// <summary>The fault lights' keys: the lights a panel status box shows.</summary>
-    public static readonly IReadOnlySet<string> FaultLampKeys = A300FaultLights.All.Select(l => l.Key).ToHashSet(StringComparer.Ordinal);
+    /// <summary>The keys of the lights a panel status box shows: the fault lights and the rule lights.</summary>
+    public static readonly IReadOnlySet<string> StatusLampKeys = A300FaultLights.All.Select(l => l.Key)
+        .Concat(A300PanelLamps.Resolved.Select(l => l.Lamp.Key)).ToHashSet(StringComparer.Ordinal);
 
     public static readonly IReadOnlyDictionary<string, A300BoardLamp> ById = Lamps.ToDictionary(l => l.Id, StringComparer.Ordinal);
 
@@ -142,6 +144,21 @@ public sealed class A300LampBoard
                 read(light.Key) is not double state ? null
                 : power == null ? On(state)
                 : read(power) is double powered ? On(state) && On(powered) : null);
+        });
+
+    /// <summary>A light read through its generated rule: lit while its rule holds AND its bus's light power is
+    /// on (a lamp with no power term, such as external power AVAIL, needs only its rule).</summary>
+    private static IEnumerable<A300BoardLamp> RuleLamps() =>
+        A300PanelLamps.Resolved.Select(lamp =>
+        {
+            string? power = PowerKeyFor(lamp.Power);
+            var inputs = lamp.Rule.Inputs.Select(lamp.KeyFor).Distinct().ToList();
+            if (power != null)
+                inputs.Add(power);
+            return new A300BoardLamp(lamp.Lamp.Key, lamp.Lamp.Name, lamp.Lamp.Key, inputs, read =>
+                lamp.Rule.IsLit(input => read(lamp.KeyFor(input))) is not bool state ? null
+                : power == null ? state
+                : read(power) is double powered ? state && On(powered) : null);
         });
 
     private static IEnumerable<A300BoardLamp> AutobrakeLamps()

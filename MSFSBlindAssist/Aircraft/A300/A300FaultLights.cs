@@ -40,9 +40,11 @@ public static class A300FaultLights
         ("INI_elec_gen1_fault", "Engine 1 generator fault light", "Electrical", D),
         ("INI_elec_gen2_fault", "Engine 2 generator fault light", "Electrical", D),
         ("INI_elec_standby_gen_fault", "Standby generator fault light", "Electrical", A),
-        ("INI_BAT1_light", "Battery 1 fault light", "Electrical", D),
-        ("INI_BAT2_light", "Battery 2 fault light", "Electrical", D),
-        ("INI_BAT3_light", "Battery 3 fault light", "Electrical", D),
+        // The battery buttons' upper legend follows the battery's charge current (measured on flight 2,
+        // 2026-10-06), so the owner had it named a charge light (2026-10-09).
+        ("INI_BAT1_light", "Battery 1 charge light", "Electrical", D),
+        ("INI_BAT2_light", "Battery 2 charge light", "Electrical", D),
+        ("INI_BAT3_light", "Battery 3 charge light", "Electrical", D),
 
         ("INI_hyd_blue_light", "Engine 1 blue pump fault light", "Hydraulics", D),
         ("INI_hyd_green1_light", "Engine 1 green pump fault light", "Hydraulics", D),

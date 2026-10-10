@@ -39,14 +39,15 @@ public static class A300DisplayPanels
         A300Readouts.StandbyAltitudeKey, "A300_RO_BARO_STBY", A300Readouts.StandbyCompassKey,
     };
 
-    /// <summary>The panels, in the order the section lists them, with their lines.</summary>
+    /// <summary>The panels, in the order the section lists them, with their lines. The standby instruments
+    /// are not here: they are the Instrument section's Standby Instruments panel (<see cref="SystemLines"/>),
+    /// the fleet's ISIS panel, and MainForm keys a panel by its name alone.</summary>
     private static readonly (string Panel, IReadOnlyList<string> Keys)[] Ordered =
         new (string, IReadOnlyList<string>)[]
         {
             ("PFD", Pfd),
             ("ND", Nd),
             ("Engine Instruments", A300EcamPages.EngineInstruments),
-            ("Standby Instruments", Standby),
         }
         .Concat(A300EcamPages.Pages)
         .ToArray();
@@ -57,4 +58,14 @@ public static class A300DisplayPanels
         Ordered.ToDictionary(p => p.Panel, p => p.Keys);
 
     public static bool IsDisplayPanel(string panel) => Lines.ContainsKey(panel);
+
+    /// <summary>The display lines a system panel's status box carries after its lights (owner decision
+    /// 2026-10-09, as the FBW A320's panels carry their system's values): its ECAM page's values, and the
+    /// standby instruments' readings on their own panel. The Displays section keeps the ECAM pages too.</summary>
+    public static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> SystemLines =
+        new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal)
+        {
+            ["Standby Instruments"] = Standby,
+            ["Electrical"] = Lines["ECAM Electrical AC"].Concat(Lines["ECAM Electrical DC"]).ToArray(),
+        };
 }

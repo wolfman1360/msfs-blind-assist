@@ -1,16 +1,18 @@
 namespace MSFSBlindAssist.Aircraft.A300;
 
 /// <summary>
-/// When the A300's light changes are spoken ([A300-24]). They wait for the end of the next continuous
-/// batch and are spoken as one sentence (<see cref="A300LampCallouts"/>), netted per light: a light that
-/// went on and back off since the last sentence says nothing.
+/// When the A300's light changes are spoken ([A300-24]): as one sentence (<see cref="A300LampCallouts"/>)
+/// at the first batch end once they are due, netted per light, so a light that went on and back off since
+/// the last sentence says nothing.
 ///
-/// After either bus's light power changes they wait <see cref="SettleMs"/> as well. The power flag and
-/// the fault flags reach MSFSBA on separate once-a-second subscriptions, so the aircraft's own order is
-/// lost: measured on external power (2026-10-09), the cabin regulator 2 fault cleared 500 ms BEFORE the
-/// AC light power rose, MSFSBA heard the power first, and said the light on and then, a second later,
-/// off. Like the fleet, a power change still speaks every light it lights or darkens; it is said once,
-/// when the power has settled. Pure.
+/// The light power flags and the fault flags reach MSFSBA on separate once-a-second subscriptions, so the
+/// aircraft's own order is lost, both ways (measured 2026-10-09): on external power on, the cabin regulator 2
+/// fault cleared 500 ms BEFORE the AC light power rose and MSFSBA heard the power first; on external power
+/// off, the rudder travel limiter 2 fault arrived a second before the power flag. Either way MSFSBA said a
+/// light on that the cockpit never lit, then off. So a first change waits <see cref="GatherMs"/> (one
+/// subscription period, for a power flag still on its way), and a power change holds everything
+/// <see cref="SettleMs"/>. Like the fleet, a power change still speaks every light it lights or darkens,
+/// once, when the power has settled. Pure.
 /// </summary>
 public sealed class A300LampSpeech
 {
@@ -18,16 +20,26 @@ public sealed class A300LampSpeech
     /// the power to arrive after it.</summary>
     public const int SettleMs = 2500;
 
+    /// <summary>How long a first change waits: one subscription period and a little, so a power flag
+    /// arriving just after it still nets with it.</summary>
+    public const int GatherMs = 1500;
+
     private readonly List<A300LampChange> _pending = new();
     private long _holdUntil = long.MinValue;
 
-    public void Add(A300LampChange change) => _pending.Add(change);
+    /// <summary>Takes a change; the first one since the last sentence opens the gather period.</summary>
+    public void Add(A300LampChange change, long now)
+    {
+        if (_pending.Count == 0)
+            _holdUntil = Math.Max(_holdUntil, now + GatherMs);
+        _pending.Add(change);
+    }
 
     /// <summary>A bus's light power changed: hold the pending changes until it settles.</summary>
-    public void NotePowerChange(long now) => _holdUntil = now + SettleMs;
+    public void NotePowerChange(long now) => _holdUntil = Math.Max(_holdUntil, now + SettleMs);
 
-    /// <summary>The sentence to speak now, or null: nothing pending, still settling, or it all netted out.
-    /// Clears what it returns.</summary>
+    /// <summary>The sentence to speak now, or null: nothing pending, still gathering or settling, or it all
+    /// netted out. Clears what it returns.</summary>
     public string? Flush(long now)
     {
         if (_pending.Count == 0 || now < _holdUntil)

@@ -73,7 +73,7 @@ public partial class IniA300Definition
             {
                 if (announcer.Suppressed || IsMuted(change.Lamp.MuteKey))
                     continue;
-                _lampSpeech.Add(new A300LampChange(change.Lamp.Name, change.On));
+                _lampSpeech.Add(new A300LampChange(change.Lamp.Name, change.On), Clock());
                 _lampAnnouncer = announcer;
             }
             return true;

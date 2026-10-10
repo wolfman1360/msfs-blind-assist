@@ -146,10 +146,14 @@ The Displays section has a status box (Ctrl+3) for each screen:
                        airspeed, wind, VOR 1 and 2 with DME, the ILS with localizer and
                        glideslope reception, ADF 1 and 2.
   Engine Instruments   N1, EGT, N2 and fuel flow for each engine.
-  Standby Instruments  Attitude, airspeed, the standby altimeter and its setting, the compass.
   ECAM pages           Engine, Electrical AC, Electrical DC, Hydraulics, Bleed, Air
                        Conditioning, Pressurization, Fuel and APU: the numbers each ECAM page
                        prints. Fuel reads in the weight unit set on the tablet.
+
+The standby instruments (attitude, airspeed, the standby altimeter and its setting, the compass)
+are read on the Instrument section's Standby Instruments panel, with its knob and cage. A system
+panel's own status display also carries its ECAM page's numbers after its lights: Electrical
+shows the AC and DC voltages, frequencies and currents.
 
 
 THE MCDU WINDOW - Press left bracket, then Shift+M
@@ -444,11 +448,15 @@ The master warning and master caution lights are announced when they come on ("M
 warning"). Pressing the light to acknowledge it is not spoken back.
 
 Fault and warning lights are announced both ways: "Engine 1 generator fault light off", "Engine 1
-fire handle light on". 58 of them: the fire loops and handles, generators and batteries,
-hydraulic pumps, spoilers, pitch feel, rudder travel limiters, flap and slat systems, packs and
-isolation valves, cabin pressure, anti-ice, window heat, the APU, the engine master switches and
-oil pressure, autoland, GPWS, below glide slope, the MCDU message light, ECAM clear and the
-cockpit door. Lights that change together are read as one sentence, about once a second, so an
+fire handle light on". They include the fire loops and handles, generators, the battery charge
+lights, hydraulic pumps, spoilers, pitch feel, rudder travel limiters, flap and slat systems, packs
+and isolation valves, cabin pressure, anti-ice, window heat, the APU, the engine master switches
+and oil pressure, autoland, GPWS, below glide slope, the MCDU message light, ECAM clear and the
+cockpit door. The Electrical panel adds external power available, AC bus 1 and 2 off, AC
+essential bus off, AC emergency bus on inverter, DC normal bus off, DC essential bus on battery,
+IDG 1 and 2 disconnected, and override supply 1 and 2 flow. More panels are being added. A
+switch's own OFF or ON legend is not read as a light: the switch already says its position.
+Lights that change together are read as one sentence, about a second and a half later, so an
 engine start sounds like "3 lights off: Spoiler 7 fault, Spoiler 6 fault, Spoiler 5 fault". The
 annunciator light test does not trigger these announcements.
 

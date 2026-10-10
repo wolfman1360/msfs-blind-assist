@@ -53,11 +53,13 @@ public class IniA300AutobrakeTests
     private readonly List<TaskCompletionSource> _waits = new();
     private readonly HashSet<string> _muted = new();
     private bool _canLand = true;
+    private long _now = 10_000;
 
     public IniA300AutobrakeTests()
     {
         _def = new IniA300Definition
         {
+            Clock = () => _now,
             CanLand = _ => _canLand,
             Cached = (_, key) => _cache.TryGetValue(key, out var v) ? v : null,
             Send = (_, rpn) => _sent.Add(rpn),
@@ -77,7 +79,12 @@ public class IniA300AutobrakeTests
 
     private void Deliver(string key, double value) => _def.ProcessSimVarUpdate(key, value, _speech);
 
-    private void BatchEnd() => _def.OnContinuousBatchDelivered(1);
+    /// <summary>A batch end once the changes delivered before it have gathered (A300LampSpeech.GatherMs).</summary>
+    private void BatchEnd()
+    {
+        _now += A300LampSpeech.GatherMs;
+        _def.OnContinuousBatchDelivered(1);
+    }
 
     private void Baseline(double level = 0, double ac = 1)
     {

@@ -52,6 +52,11 @@ public partial class IniA300Definition
         var displays = new Dictionary<string, List<string>>();
         foreach (var lamp in A300Announcements.Lamps)
             Add(displays, lamp.Panel, lamp.Key);
+        foreach (var lamp in A300PanelLamps.Resolved)
+            Add(displays, lamp.Lamp.Panel, lamp.Lamp.Key);
+        foreach (var (panel, lines) in A300DisplayPanels.SystemLines)
+            foreach (var key in lines)
+                Add(displays, panel, key);
         foreach (var readout in A300Readouts.All)
             if (!A300DisplayPanels.IsDisplayPanel(readout.Panel))
                 Add(displays, readout.Panel, readout.Key);
@@ -70,7 +75,8 @@ public partial class IniA300Definition
         {
             if (!map.TryGetValue(panel, out var list))
                 map[panel] = list = new List<string>();
-            list.Add(key);
+            if (!list.Contains(key))   // a readout a system panel's lines already list
+                list.Add(key);
         }
     }
 
@@ -79,10 +85,9 @@ public partial class IniA300Definition
     /// cockpit shows it: "On" only while its bus's light power is on too ([A300-23]).</summary>
     public override bool TryDescribeControlState(string varKey, out string stateText)
     {
-        if (A300LampBoard.FaultLampKeys.Contains(varKey) && _sim is { } lampSim
-            && A300LampBoard.IsLit(A300LampBoard.ById[varKey], key => Cached(lampSim, key)) is bool lit)
+        if (LampStatus(varKey) is string lampState)
         {
-            stateText = lit ? "On" : "Off";
+            stateText = lampState;
             return true;
         }
         if (A300FcuState.ByButton.TryGetValue(varKey, out var light)
@@ -109,8 +114,23 @@ public partial class IniA300Definition
 
     /// <summary>A readout's value as the status display shows it ("1013 hectopascals, 29.92 inches").
     /// The speed window reads as Mach while SPD/MACH is in Mach.</summary>
+    /// <summary>"On" or "Off" for a status box light as the cockpit shows it ([A300-23], [A300-25]), or null
+    /// when it is not a light or an input is still unread.</summary>
+    private string? LampStatus(string varKey) =>
+        A300LampBoard.StatusLampKeys.Contains(varKey) && _sim is { } sim
+        && A300LampBoard.IsLit(A300LampBoard.ById[varKey], key => Cached(sim, key)) is bool lit
+            ? lit ? "On" : "Off"
+            : null;
+
     public override bool TryGetDisplayOverride(string varKey, double value, out string displayText)
     {
+        // The status list composes its lines here (MainForm.UpdateDisplayText), so a light reads as the
+        // cockpit shows it, not its first variable's raw value.
+        if (LampStatus(varKey) is string lamp)
+        {
+            displayText = lamp;
+            return true;
+        }
         if (TryGetDisplayText(varKey, value) is string text)
         {
             displayText = text;
