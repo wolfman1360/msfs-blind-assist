@@ -334,6 +334,40 @@ public class A300PanelLayoutTests
     }
 
     [Fact]
+    public void After_its_lead_rows_each_panel_follows_the_aircrafts_checklist()
+    {
+        // Owner decision, 2026-10-10: a panel's rows in the order the A300's own checklist sets them (each control's
+        // first checklist step, from the generated map), then the rows it never names, in their own order.
+        Assert.Contains(Map.Controls, c => c.Checklist != null);
+        foreach (var (panel, rows) in Placement.RowsByPanel)
+        {
+            int lead = A300PanelLayout.LeadRows.TryGetValue(panel, out var keys) ? keys.Length : 0;
+            var steps = rows.Skip(lead).Select(r => A300PanelLayout.ChecklistStep(rows, r)).ToList();
+            int firstUnnamed = steps.FindIndex(s => s == null);
+            if (firstUnnamed >= 0)
+                Assert.True(steps.Skip(firstUnnamed).All(s => s == null), $"{panel}: a checklist row after an unnamed one");
+            var named = steps.TakeWhile(s => s != null).Select(s => s!.Value).ToList();
+            Assert.True(named.SequenceEqual(named.OrderBy(s => s)), $"{panel}: rows out of checklist order");
+        }
+    }
+
+    [Fact]
+    public void A_row_inside_a_group_one_checklist_step_names_stays_in_the_group()
+    {
+        // The checklist sets both ADFs in one step but never names their transfer buttons: each stays with its radio.
+        var adf = Placement.RowsByPanel["ADF Radios"].Select(r => r.Name).ToList();
+        Assert.Equal(adf.IndexOf("ADF 1 standby units decrease") + 1, adf.IndexOf("ADF 1 transfer"));
+        Assert.Equal(adf.IndexOf("ADF 2 standby units decrease") + 1, adf.IndexOf("ADF 2 transfer"));
+    }
+
+    [Fact]
+    public void The_signs_follow_the_checklist()
+    {
+        Assert.Equal(new[] { "No smoking signs", "Seat belt signs", "Emergency exit lights" },
+            Placement.RowsByPanel["Signs"].Take(3).Select(r => r.Name));
+    }
+
+    [Fact]
     public void Electrical_opens_on_the_batteries_and_the_levers_open_their_panels()
     {
         Assert.Equal(new[] { "A300_BATT_1", "A300_BATT_2", "A300_BATT_3", "A300_EXT_PWR" },

@@ -52,9 +52,10 @@ ADF Radios, Audio Control Panel Captain and First Officer, MCDU Brightness, IDC,
 Lighting.
 Cockpit: Yokes, RAT, Circuit Breakers, Cockpit. Cargo: the freighter's main deck cargo door.
 
-A few panels open on what the checklist sets first: Electrical on the batteries and external
-power, Signs and Exterior Lighting in the order the checklist sets them, Warnings on the
-captain's buttons, Gear on the gear lever, and Flaps and Speed Brake on the flaps lever. Where both
+Within each panel, the controls come in the order the aircraft's own checklist sets them, then
+the ones it never mentions. A few panels open on a set start: Electrical on the batteries,
+external power and generators, Warnings on the captain's buttons, Gear on the gear lever, and
+Flaps and Speed Brake on the flaps lever. Where both
 pilots' controls share a panel, each says its side first: "Captain chrono", "First officer GPWS
 test".
 

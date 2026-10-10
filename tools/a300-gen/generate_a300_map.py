@@ -150,7 +150,7 @@ def new_entry(ie, area, panel, title):
         ('id', ie['id']), ('key', 'A300_' + short.upper()), ('area', area), ('panel', panel),
         ('title', title), ('kind', NONE), ('event', set_event(ie)), ('state_var', None),
         ('state_unit', None), ('scale', None), ('positions', OrderedDict()), ('values', None),
-        ('press', None), ('rest', None), ('note', None)])
+        ('press', None), ('rest', None), ('note', None), ('checklist', None)])
 
 
 def classify(entry, ie, loc):
@@ -319,6 +319,40 @@ def build_map(behavior, loc, package_version=''):
         ('lamps', lamps(behavior))])
 
 
+CHECKLIST_FILE = os.path.join('SimObjects', 'Airplanes', 'A300-600', 'common', 'Checklist', 'Airbus_A300_Checklist.xml')
+CODE_L_RE = re.compile(r'\(>?L:([A-Za-z0-9_]+)')
+CODE_B_RE = re.compile(r'\(>B:([A-Za-z0-9_]+)\)')
+
+
+def add_checklist_steps(data, checklist_text):
+    """Gives each control the number of the first checklist step that names it, counting the live checkpoints
+    of the aircraft's own checklist in order: by a cockpit part the step points at (Instrument id = the control's
+    id without AIRLINER_), a variable it tests or sets (the control's state variable) or an event it fires (the
+    control's Set event). A panel's rows follow these steps. Commented-out checkpoints are not steps."""
+    import xml.etree.ElementTree as ET
+    root = ET.fromstring(re.sub(r'<!--.*?-->', '', checklist_text, flags=re.S).encode('utf-8'))
+    by_part, by_state, by_event = {}, {}, {}
+    for c in data['controls']:
+        by_part.setdefault(c['id'].upper(), []).append(c)
+        if (c['state_var'] or '').startswith('L:'):
+            by_state.setdefault(c['state_var'][2:].upper(), []).append(c)
+        if c['event']:
+            by_event.setdefault(c['event'].upper(), []).append(c)
+    for step, checkpoint in enumerate(root.iter('Checkpoint'), start=1):
+        named = []
+        for el in checkpoint.iter():
+            if el.tag == 'Instrument':
+                named += by_part.get(PREFIX + el.attrib.get('id', '').upper(), [])
+            code = el.attrib.get('Code', '')
+            for var in CODE_L_RE.findall(code):
+                named += by_state.get(var.upper(), [])
+            for event in CODE_B_RE.findall(code):
+                named += by_event.get(event.upper(), [])
+        for c in named:
+            if c['checklist'] is None:
+                c['checklist'] = step
+
+
 def to_json(data):
     return json.dumps(data, indent=1, ensure_ascii=False) + '\n'
 
@@ -341,6 +375,8 @@ def main(argv=None):
     with open(os.path.join(args.package, 'manifest.json'), 'r', encoding='utf-8-sig') as f:
         version = json.load(f).get('package_version', '')
     data = build_map(read_behavior(os.path.join(args.package, BEHAVIOR_FILE)), load_loc(args.package), version)
+    with open(os.path.join(args.package, CHECKLIST_FILE), 'r', encoding='utf-8-sig') as f:
+        add_checklist_steps(data, f.read())
     with open(args.out, 'w', encoding='utf-8', newline='\n') as f:
         f.write(to_json(data))
     kinds = {}

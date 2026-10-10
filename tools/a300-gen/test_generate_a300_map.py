@@ -221,6 +221,45 @@ class GenerateA300MapTests(unittest.TestCase):
         self.assertEqual('1.0.11', json.loads(gen.to_json(_map()))['package_version'])
 
 
+# The aircraft's checklist in its real shapes (common/Checklist/Airbus_A300_Checklist.xml, package 1.0.11): a
+# checkpoint names the cockpit parts it points at (Instrument) and the variables it tests and sets (Code).
+_CHECKLIST = """<?xml version="1.0" encoding="utf-8"?>
+<SimBase.Document><Checklist.Checklist><Step>
+<!-- <Checkpoint ReferenceId="A300.CHECKLISTS.PRELIM.STORM"><Instrument id="StormLight"/></Checkpoint> -->
+<Checkpoint Id="A300.CHECKLISTS.PRELIM.TRIM"><Instrument id="NOSE_TRIM"/></Checkpoint>
+<Checkpoint Id="A300.CHECKLISTS.PRELIM.HYDP"><Instrument id="HYD_PRESS_B_POINTER"/></Checkpoint>
+<Checkpoint Id="A300.CHECKLISTS.PRELIM.STRM"><Sequence SeqType="Parallel"><Test><TestValue>
+  <Val Code="(L:INI_STORM_LIGHT_SWITCH, Number) 1 =="/></TestValue>
+  <Action Copilot="True" Condition="TestValueFalse" Code="1 (&gt;L:INI_STORM_LIGHT_SWITCH, Number)"/>
+</Test></Sequence></Checkpoint>
+<Checkpoint Id="A300.CHECKLISTS.TAXI.GEAR"><Action Code="1 (&gt;B:AIRLINER_GEAR_LEVER_Set)"/>
+  <Instrument id="StormLight"/></Checkpoint>
+</Step></Checklist.Checklist></SimBase.Document>
+"""
+
+
+class ChecklistTests(unittest.TestCase):
+    """Each control's first checklist step, which orders a panel's rows as the checklist sets them."""
+
+    def _steps(self):
+        data = _map()
+        gen.add_checklist_steps(data, _CHECKLIST)
+        return {c['id']: c['checklist'] for c in data['controls']}
+
+    def test_a_control_takes_the_first_step_that_names_it(self):
+        steps = self._steps()
+        # Steps count every live checkpoint, commented ones excluded: TRIM 1, HYDP 2, STRM 3, GEAR 4.
+        self.assertEqual(1, steps['AIRLINER_NOSE_TRIM'])               # by the part it points at
+        self.assertEqual(3, steps['AIRLINER_StormLight'])              # by the variable it tests, before step 4
+        self.assertEqual(4, steps['AIRLINER_GEAR_LEVER'])              # by the event it fires
+
+    def test_a_control_no_step_names_has_none(self):
+        self.assertIsNone(self._steps()['AIRLINER_TCAS_ABV'])
+
+    def test_every_control_carries_the_field(self):
+        self.assertTrue(all('checklist' in c for c in _map()['controls']))
+
+
 _TAIL = ' (L:INI_ANNLT_SWITCH) 0 == + 1 min (L:INI_GENERAL_LIGHT_MULTIPLIER) * 1 1 * * {power}'
 
 

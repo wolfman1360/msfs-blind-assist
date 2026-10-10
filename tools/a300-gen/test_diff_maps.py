@@ -28,6 +28,12 @@ class DiffMapsTests(unittest.TestCase):
         new = {'controls': [dict(control('A'), action='HEADING')]}
         self.assertIn('changed A action: "AIRCRAFT HEADING" -> "HEADING"', diff_maps.diff(old, new))
 
+    def test_a_changed_checklist_step_is_reported(self):
+        # It moves the row within its panel.
+        old = {'controls': [dict(control('A'), checklist=None)]}
+        new = {'controls': [dict(control('A'), checklist=12)]}
+        self.assertIn('changed A checklist: null -> 12', diff_maps.diff(old, new))
+
 
 if __name__ == '__main__':
     unittest.main()

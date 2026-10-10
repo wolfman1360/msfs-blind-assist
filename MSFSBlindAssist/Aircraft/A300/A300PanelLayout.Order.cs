@@ -41,26 +41,34 @@ public static partial class A300PanelLayout
     };
 
     /// <summary>
-    /// Rows that open their panel, in this order; the panel's other rows follow in their own order.
-    /// Electrical opens on the batteries (it opened on the indication selectors in cockpit-file order);
-    /// Signs and Exterior Lighting follow the A300 checklist (the exterior lights in the order it sets
-    /// them); Warnings has the captain's two buttons, then the first officer's; Gear opens on the lever;
-    /// the levers' panel on the flaps.
+    /// Rows that open their panel, in this order, ahead of the checklist's order (<see cref="ChecklistStep"/>);
+    /// the panel's other rows follow it. Electrical opens on the batteries, external power and the generators
+    /// (the checklist names no generator); Warnings has the captain's two buttons, then the first officer's;
+    /// Gear opens on the lever; the levers' panel on the flaps (its rows are not map controls).
     /// </summary>
     public static readonly IReadOnlyDictionary<string, string[]> LeadRows = new Dictionary<string, string[]>(StringComparer.Ordinal)
     {
         ["Electrical"] = new[] { "A300_BATT_1", "A300_BATT_2", "A300_BATT_3", "A300_EXT_PWR", "A300_APU_GEN", "A300_GEN_1", "A300_GEN_2" },
-        ["Signs"] = new[] { "A300_SEATBELT", "A300_NOSMOKING", "A300_EMERGEXIT_SWITCH" },
-        ["Exterior Lighting"] = new[]
-        {
-            "A300_NOSELIGHTSWITCH", "A300_LANDINGLEFTSWITCH", "A300_LANDINGRIGHTSWITCH", "A300_WINGLIGHTSWITCH",
-            "A300_STROBESWITCH", "A300_BEACONSWITCH", "A300_RWY_TOFF_L", "A300_RWY_TOFF_R", "A300_NAVLIGHT_SWITCH",
-        },
         ["Warnings"] = new[] { "A300_MASTER_WARNING_CPT", "A300_MASTER_CAUTION_CPT", "A300_MASTER_WARNING_FO", "A300_MASTER_CAUTION_FO" },
         ["Gear"] = new[] { "A300_GEAR_LEVER" },
         ["Engines"] = new[] { "A300_ENG1_CUTOFF", "A300_ENG2_CUTOFF" },
         [A300Levers.Panel] = new[] { A300Levers.FlapsKey, A300Levers.SpeedBrakeKey, A300Levers.SpoilersArmKey },
     };
+
+    /// <summary>
+    /// The checklist step a row is ordered by: its control's own, or, for a row the checklist does not name, the
+    /// step of the group it sits inside when the rows on both sides of it share one step (the checklist sets both
+    /// ADFs in one step and never names their transfer buttons, which stay with their radios); else null.
+    /// </summary>
+    public static int? ChecklistStep(IReadOnlyList<A300PlacedRow> rows, A300PlacedRow row)
+    {
+        if (row.Control?.Checklist is int own)
+            return own;
+        int at = rows.ToList().IndexOf(row);
+        int? before = rows.Take(at).Reverse().Select(r => r.Control?.Checklist).FirstOrDefault(s => s != null);
+        int? after = rows.Skip(at + 1).Select(r => r.Control?.Checklist).FirstOrDefault(s => s != null);
+        return before != null && before == after ? before : null;
+    }
 
     /// <summary>The listed names that are present, in list order, then the rest in their own order.</summary>
     public static List<string> Ordered(IEnumerable<string> present, IReadOnlyList<string> order)
@@ -76,6 +84,19 @@ public static partial class A300PanelLayout
         foreach (var section in placement.Structure.Keys.ToList())
             if (PanelOrder.TryGetValue(section, out var order))
                 placement.Structure[section] = Ordered(placement.Structure[section], order);
+
+        // Each panel follows the aircraft's own checklist (owner decision, 2026-10-10): the rows it names, by the
+        // first step that names them (the generated map's `checklist`), then the rest in their own order. Stable,
+        // so an encoder's two rows and the controls one step names together keep their order.
+        foreach (var rows in placement.RowsByPanel.Values)
+        {
+            var steps = rows.Select(row => ChecklistStep(rows, row)).ToList();
+            var sorted = rows.Select((row, i) => (row, i))
+                .OrderBy(x => steps[x.i] ?? int.MaxValue).ThenBy(x => x.i)
+                .Select(x => x.row).ToList();
+            rows.Clear();
+            rows.AddRange(sorted);
+        }
 
         foreach (var (panel, keys) in LeadRows)
         {

@@ -173,6 +173,9 @@ public sealed class A300Control
     /// <summary>Springs: the position they return to.</summary>
     [JsonPropertyName("rest")] public double? Rest { get; set; }
     [JsonPropertyName("note")] public string? Note { get; set; }
+    /// <summary>The first step of the aircraft's own checklist that names this control, or null: its panel's
+    /// rows follow these steps.</summary>
+    [JsonPropertyName("checklist")] public int? Checklist { get; set; }
     /// <summary>A knob push or pull: what it does, in iniBuilds' tooltip words ("AIRCRAFT HEADING");
     /// null for every other control.</summary>
     [JsonPropertyName("action")] public string? Action { get; set; }

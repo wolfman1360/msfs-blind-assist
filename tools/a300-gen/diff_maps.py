@@ -10,7 +10,7 @@ import json
 import sys
 
 COMPARED = ('key', 'area', 'panel', 'title', 'kind', 'event', 'state_var', 'state_unit', 'scale',
-            'positions', 'values', 'press', 'rest', 'action')
+            'positions', 'values', 'press', 'rest', 'action', 'checklist')
 
 
 def diff(old, new):
