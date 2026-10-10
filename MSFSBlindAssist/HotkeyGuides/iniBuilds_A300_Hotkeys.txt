@@ -74,7 +74,8 @@ decrease button reads the new temperature back once it has moved ("Flex temperat
 The autobrake buttons on the Center panel say what their lights show: "Autobrake low: Armed",
 "Decel" while the autobrake is braking, or "Off". Pressing the armed level again turns the
 autobrake off, as in the aircraft. The aircraft arms it only with the gear lever down and
-hydraulic pressure; if a press does not arm it, you hear "Autobrake did not arm".
+hydraulic pressure. A press says nothing; the autobrake lights are announced as they change, like
+the other lights: "Autobrake max armed light on", "Autobrake low decel light on".
 
 Status Display (Ctrl+3): the FCU panel shows the four FCU windows; the Captain, First Officer
 and Center panels show the altimeter settings, the flex temperature and the landing elevation;
@@ -436,6 +437,12 @@ oil pressure, autoland, GPWS, below glide slope, the MCDU message light, ECAM cl
 cockpit door. Lights that change together are read as one sentence, about once a second, so an
 engine start sounds like "3 lights off: Spoiler 7 fault, Spoiler 6 fault, Spoiler 5 fault". The
 annunciator light test does not trigger these announcements.
+
+A light is announced only as the cockpit shows it: lit needs its fault and its electrical power.
+So switching power on reads the lights that come on, switching it off reads the lit ones going
+out, and a fault that sets or clears while its light has no power says nothing. The autobrake
+lights are announced the same way. Each light has its own row in Ctrl+M; "Autobrake armed lights"
+covers the three autobrake armed lights.
 
 Take-off: "V1", "Rotate" and "V2" as the airspeed reaches them on the take-off roll. V1 and VR
 come from the MCDU's TAKE OFF page. V2 is the FCU speed, which the A300 crew sets to V2 for

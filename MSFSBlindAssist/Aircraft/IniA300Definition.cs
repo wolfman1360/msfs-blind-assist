@@ -137,6 +137,10 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
                 ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "On" },
                 RenderAsReadOnlyStatus = true,
             };
+            // A light's status box shows what the cockpit shows, its state AND its bus's light power
+            // (TryDescribeControlState, [A300-23]), so a power change repaints it too.
+            if (A300LampBoard.PowerKeyFor(lamp.Power) is string powerKey)
+                def.StateVariables = new[] { lamp.Key, powerKey };
             if (ContinuousBatchLayout.RidesBatch(def))
                 batchNames.Add(ContinuousBatchLayout.FullName(def));
             vars[lamp.Key] = def;
@@ -180,7 +184,7 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
             if (A300FcuState.ByButton.TryGetValue(row.Key, out var buttonLight))
                 def.StateVariables = new[] { buttonLight.Key };
             else if (A300Autobrake.ByButton.TryGetValue(row.Key, out var autobrake))
-                def.StateVariables = new[] { A300Autobrake.LevelKey, autobrake.DecelKey };
+                def.StateVariables = new[] { A300Autobrake.LevelKey, autobrake.DecelKey, A300LampBoard.AcPowerKey };
             else if (A300Trp.ModeByButton.ContainsKey(row.Key))
                 def.StateVariables = new[] { A300Trp.ModeKey };
             if (A300Announcements.AnnouncedKeys.Contains(row.Key))
@@ -220,11 +224,21 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
             };
         }
 
-        // The autobrake buttons' lamps ([A300-20]): the armed level and each button's DECEL light, shown
-        // on the buttons' labels only; their own subscriptions, never the batch ([A300-9]).
-        vars[A300Autobrake.LevelKey] = OwnSubscription(A300Autobrake.LevelVar, "Autobrake level");
-        foreach (var (rowKey, button) in A300Autobrake.ByButton)
-            vars[button.DecelKey] = OwnSubscription(button.DecelVar, (_rows.TryGetValue(rowKey, out var r) ? r.Name : rowKey) + " decel light");
+        // The two buses' light power ([A300-23]): every light is lit only while its bus's is on. Their own
+        // subscriptions, never the batch ([A300-9]); consumed silently, no Ctrl+M row of their own.
+        vars[A300LampBoard.AcPowerKey] = OwnSubscription(A300LampBoard.AcPowerVar, "AC light power");
+        vars[A300LampBoard.DcPowerKey] = OwnSubscription(A300LampBoard.DcPowerVar, "DC light power");
+
+        // The autobrake buttons' lamps ([A300-20]): the armed level and each button's DECEL light, on the
+        // buttons' labels and spoken as they change (A300LampBoard), so each carries a Ctrl+M row: the
+        // level's mutes the three armed lights it lights. Their own subscriptions, never the batch ([A300-9]).
+        vars[A300Autobrake.LevelKey] = OwnSubscription(A300Autobrake.LevelVar, "Autobrake armed lights");
+        vars[A300Autobrake.LevelKey].ExcludeFromMonitorManager = false;
+        foreach (var button in A300Autobrake.ByButton.Values)
+        {
+            vars[button.DecelKey] = OwnSubscription(button.DecelVar, button.Name + " decel light");
+            vars[button.DecelKey].ExcludeFromMonitorManager = false;
+        }
 
         // The thrust rating panel ([A300-21]): the mode lights the buttons and is the Center Panel's
         // "TRP" line, which also reads AUTO's limit, the flex temperature (that panel's own readout)

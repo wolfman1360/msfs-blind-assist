@@ -75,9 +75,16 @@ public partial class IniA300Definition
     }
 
     /// <summary>An FCU, autobrake or TRP button's label state, from its lamp in the cache ("Heading
-    /// select: On", "Autobrake low: Armed", "TRP climb: On").</summary>
+    /// select: On", "Autobrake low: Armed", "TRP climb: On"), and a fault light's status box, as the
+    /// cockpit shows it: "On" only while its bus's light power is on too ([A300-23]).</summary>
     public override bool TryDescribeControlState(string varKey, out string stateText)
     {
+        if (A300LampBoard.FaultLampKeys.Contains(varKey) && _sim is { } lampSim
+            && A300LampBoard.IsLit(A300LampBoard.ById[varKey], key => Cached(lampSim, key)) is bool lit)
+        {
+            stateText = lit ? "On" : "Off";
+            return true;
+        }
         if (A300FcuState.ByButton.TryGetValue(varKey, out var light)
             && _sim is { } sim && Cached(sim, light.Key) is double value)
         {
@@ -85,7 +92,8 @@ public partial class IniA300Definition
             return true;
         }
         if (A300Autobrake.ByButton.TryGetValue(varKey, out var autobrake) && _sim is { } abSim
-            && A300Autobrake.Describe(autobrake, Cached(abSim, A300Autobrake.LevelKey), Cached(abSim, autobrake.DecelKey)) is string lamp)
+            && A300Autobrake.Describe(autobrake, Cached(abSim, A300Autobrake.LevelKey), Cached(abSim, autobrake.DecelKey),
+                Cached(abSim, A300LampBoard.AcPowerKey)) is string lamp)
         {
             stateText = lamp;
             return true;

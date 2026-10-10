@@ -11,6 +11,10 @@ namespace MSFSBlindAssist.Aircraft.A300;
 /// spoken together when the next continuous batch ends (<see cref="A300LampCallouts"/>). The
 /// annunciator light test does not move these variables (measured), so it says nothing.
 ///
+/// Each light names the bus its lamp draws light power from in the aircraft's emissive code (A = AC,
+/// D = DC; the three fire handle lights have no power term), so it is spoken only as the cockpit shows
+/// it (<see cref="A300LampBoard"/>, [A300-23]).
+///
 /// Left out on purpose: the FCU lamps (already on the FCU buttons' labels); the servo OFF and
 /// override supply lights (switch positions the panel already shows); the gear unlock, reverser and
 /// altitude alert lights (frequent, and the gear lever and the FMA already speak); and lights the
@@ -19,82 +23,84 @@ namespace MSFSBlindAssist.Aircraft.A300;
 /// </summary>
 public static class A300FaultLights
 {
-    public static readonly IReadOnlyList<A300Lamp> All = new (string Var, string Name, string Panel)[]
+    private const A300LightPower A = A300LightPower.Ac, D = A300LightPower.Dc, N = A300LightPower.None;
+
+    public static readonly IReadOnlyList<A300Lamp> All = new (string Var, string Name, string Panel, A300LightPower Power)[]
     {
-        ("INI_fire_handle_engine1_light", "Engine 1 fire handle light", "Fire"),
-        ("INI_fire_handle_engine2_light", "Engine 2 fire handle light", "Fire"),
-        ("INI_fire_handle_apu_light", "APU fire handle light", "Fire"),
-        ("INI_ENG1_LOOP_A_LIGHT", "Engine 1 loop A fault light", "Fire"),
-        ("INI_ENG1_LOOP_B_LIGHT", "Engine 1 loop B fault light", "Fire"),
-        ("INI_ENG2_LOOP_A_LIGHT", "Engine 2 loop A fault light", "Fire"),
-        ("INI_ENG2_LOOP_B_LIGHT", "Engine 2 loop B fault light", "Fire"),
-        ("INI_APU_LOOP_A_LIGHT", "APU loop A fault light", "Fire"),
-        ("INI_APU_LOOP_B_LIGHT", "APU loop B fault light", "Fire"),
+        ("INI_fire_handle_engine1_light", "Engine 1 fire handle light", "Fire", N),
+        ("INI_fire_handle_engine2_light", "Engine 2 fire handle light", "Fire", N),
+        ("INI_fire_handle_apu_light", "APU fire handle light", "Fire", N),
+        ("INI_ENG1_LOOP_A_LIGHT", "Engine 1 loop A fault light", "Fire", D),
+        ("INI_ENG1_LOOP_B_LIGHT", "Engine 1 loop B fault light", "Fire", D),
+        ("INI_ENG2_LOOP_A_LIGHT", "Engine 2 loop A fault light", "Fire", D),
+        ("INI_ENG2_LOOP_B_LIGHT", "Engine 2 loop B fault light", "Fire", D),
+        ("INI_APU_LOOP_A_LIGHT", "APU loop A fault light", "Fire", D),
+        ("INI_APU_LOOP_B_LIGHT", "APU loop B fault light", "Fire", D),
 
-        ("INI_elec_gen1_fault", "Engine 1 generator fault light", "Electrical"),
-        ("INI_elec_gen2_fault", "Engine 2 generator fault light", "Electrical"),
-        ("INI_elec_standby_gen_fault", "Standby generator fault light", "Electrical"),
-        ("INI_BAT1_light", "Battery 1 fault light", "Electrical"),
-        ("INI_BAT2_light", "Battery 2 fault light", "Electrical"),
-        ("INI_BAT3_light", "Battery 3 fault light", "Electrical"),
+        ("INI_elec_gen1_fault", "Engine 1 generator fault light", "Electrical", D),
+        ("INI_elec_gen2_fault", "Engine 2 generator fault light", "Electrical", D),
+        ("INI_elec_standby_gen_fault", "Standby generator fault light", "Electrical", A),
+        ("INI_BAT1_light", "Battery 1 fault light", "Electrical", D),
+        ("INI_BAT2_light", "Battery 2 fault light", "Electrical", D),
+        ("INI_BAT3_light", "Battery 3 fault light", "Electrical", D),
 
-        ("INI_hyd_blue_light", "Engine 1 blue pump fault light", "Hydraulics"),
-        ("INI_hyd_green1_light", "Engine 1 green pump fault light", "Hydraulics"),
-        ("INI_hyd_green2_light", "Engine 2 green pump fault light", "Hydraulics"),
-        ("INI_hyd_yellow_light", "Engine 2 yellow pump fault light", "Hydraulics"),
+        ("INI_hyd_blue_light", "Engine 1 blue pump fault light", "Hydraulics", D),
+        ("INI_hyd_green1_light", "Engine 1 green pump fault light", "Hydraulics", D),
+        ("INI_hyd_green2_light", "Engine 2 green pump fault light", "Hydraulics", D),
+        ("INI_hyd_yellow_light", "Engine 2 yellow pump fault light", "Hydraulics", D),
 
-        ("INI_SPEEDBRAKE7_FAULT", "Spoiler 7 fault light", "Flight Controls"),
-        ("INI_SPEEDBRAKE6_FAULT", "Spoiler 6 fault light", "Flight Controls"),
-        ("INI_SPEEDBRAKE5_FAULT", "Spoiler 5 fault light", "Flight Controls"),
-        ("INI_SPEEDBRAKE4_1_FAULT", "Spoilers 4 and 1 fault light", "Flight Controls"),
-        ("INI_SPEEDBRAKE3_2_FAULT", "Spoilers 3 and 2 fault light", "Flight Controls"),
-        ("INI_PITCH_FEEL1_FAULT", "Pitch feel system 1 fault light", "Flight Controls"),
-        ("INI_PITCH_FEEL2_FAULT", "Pitch feel system 2 fault light", "Flight Controls"),
-        ("INI_RUDDER_TRAVEL1_FAULT", "Rudder travel limiter system 1 fault light", "Flight Controls"),
-        ("INI_RUDDER_TRAVEL2_FAULT", "Rudder travel limiter system 2 fault light", "Flight Controls"),
-        ("INI_FLAPS_SYS1_FAULT", "Flap system 1 fault light", "Flight Controls"),
-        ("INI_FLAPS_SYS2_FAULT", "Flap system 2 fault light", "Flight Controls"),
-        ("INI_SLATS_SYS1_FAULT", "Slat system 1 fault light", "Flight Controls"),
-        ("INI_SLATS_SYS2_FAULT", "Slat system 2 fault light", "Flight Controls"),
+        ("INI_SPEEDBRAKE7_FAULT", "Spoiler 7 fault light", "Flight Controls", A),
+        ("INI_SPEEDBRAKE6_FAULT", "Spoiler 6 fault light", "Flight Controls", A),
+        ("INI_SPEEDBRAKE5_FAULT", "Spoiler 5 fault light", "Flight Controls", A),
+        ("INI_SPEEDBRAKE4_1_FAULT", "Spoilers 4 and 1 fault light", "Flight Controls", A),
+        ("INI_SPEEDBRAKE3_2_FAULT", "Spoilers 3 and 2 fault light", "Flight Controls", A),
+        ("INI_PITCH_FEEL1_FAULT", "Pitch feel system 1 fault light", "Flight Controls", D),
+        ("INI_PITCH_FEEL2_FAULT", "Pitch feel system 2 fault light", "Flight Controls", A),
+        ("INI_RUDDER_TRAVEL1_FAULT", "Rudder travel limiter system 1 fault light", "Flight Controls", D),
+        ("INI_RUDDER_TRAVEL2_FAULT", "Rudder travel limiter system 2 fault light", "Flight Controls", A),
+        ("INI_FLAPS_SYS1_FAULT", "Flap system 1 fault light", "Flight Controls", D),
+        ("INI_FLAPS_SYS2_FAULT", "Flap system 2 fault light", "Flight Controls", D),
+        ("INI_SLATS_SYS1_FAULT", "Slat system 1 fault light", "Flight Controls", D),
+        ("INI_SLATS_SYS2_FAULT", "Slat system 2 fault light", "Flight Controls", D),
 
-        ("INI_PACK1_FAULT", "Pack 1 fault light", "Air Bleed and Air Conditioning"),
-        ("INI_PACK2_FAULT", "Pack 2 fault light", "Air Bleed and Air Conditioning"),
-        ("INI_ISOLATION_VALVE_LEFT_FAULT", "Left isolation valve fault light", "Air Bleed and Air Conditioning"),
-        ("INI_ISOLATION_VALVE_RIGHT_FAULT", "Right isolation valve fault light", "Air Bleed and Air Conditioning"),
+        ("INI_PACK1_FAULT", "Pack 1 fault light", "Air Bleed and Air Conditioning", D),
+        ("INI_PACK2_FAULT", "Pack 2 fault light", "Air Bleed and Air Conditioning", D),
+        ("INI_ISOLATION_VALVE_LEFT_FAULT", "Left isolation valve fault light", "Air Bleed and Air Conditioning", A),
+        ("INI_ISOLATION_VALVE_RIGHT_FAULT", "Right isolation valve fault light", "Air Bleed and Air Conditioning", A),
 
-        ("INI_cabin_sys1_regulator_fault", "Cabin regulator 1 fault light", "Cabin Pressure"),
-        ("INI_cabin_sys2_regulator_fault", "Cabin regulator 2 fault light", "Cabin Pressure"),
-        ("INI_CABIN_RATE_LIGHT", "Excessive cabin rate light", "Cabin Pressure"),
-        ("INI_CABIN_LO_DELTA_PSI_LIGHT", "Low cabin differential pressure light", "Cabin Pressure"),
+        ("INI_cabin_sys1_regulator_fault", "Cabin regulator 1 fault light", "Cabin Pressure", A),
+        ("INI_cabin_sys2_regulator_fault", "Cabin regulator 2 fault light", "Cabin Pressure", A),
+        ("INI_CABIN_RATE_LIGHT", "Excessive cabin rate light", "Cabin Pressure", A),
+        ("INI_CABIN_LO_DELTA_PSI_LIGHT", "Low cabin differential pressure light", "Cabin Pressure", A),
 
-        ("INI_ENG1_ANTI_ICE_FAULT", "Engine 1 anti-ice fault light", "Anti-Ice"),
-        ("INI_ENG2_ANTI_ICE_FAULT", "Engine 2 anti-ice fault light", "Anti-Ice"),
-        ("INI_ANTI_ICE_WING_MODE_FAULT", "Wing anti-ice supply mode fault light", "Anti-Ice"),
+        ("INI_ENG1_ANTI_ICE_FAULT", "Engine 1 anti-ice fault light", "Anti-Ice", A),
+        ("INI_ENG2_ANTI_ICE_FAULT", "Engine 2 anti-ice fault light", "Anti-Ice", A),
+        ("INI_ANTI_ICE_WING_MODE_FAULT", "Wing anti-ice supply mode fault light", "Anti-Ice", A),
 
-        ("INI_WINDOW_HEAT1_FAULT", "Lateral window heat fault light", "Window and Probe Heat"),
-        ("INI_WINDOW_HEAT2_FAULT", "Windshield and lateral window heat fault light", "Window and Probe Heat"),
+        ("INI_WINDOW_HEAT1_FAULT", "Lateral window heat fault light", "Window and Probe Heat", A),
+        ("INI_WINDOW_HEAT2_FAULT", "Windshield and lateral window heat fault light", "Window and Probe Heat", A),
 
-        ("INI_APU_FAULT", "APU fault light", "APU"),
-        ("INI_APU_LO_PR", "APU fuel low pressure light", "APU"),
+        ("INI_APU_FAULT", "APU fault light", "APU", D),
+        ("INI_APU_LO_PR", "APU fuel low pressure light", "APU", D),
 
-        ("INI_ENG1_MASTER_SWITCH_LIGHT", "Engine 1 master switch fault light", "Throttle Quadrant"),
-        ("INI_ENG2_MASTER_SWITCH_LIGHT", "Engine 2 master switch fault light", "Throttle Quadrant"),
+        ("INI_ENG1_MASTER_SWITCH_LIGHT", "Engine 1 master switch fault light", "Throttle Quadrant", D),
+        ("INI_ENG2_MASTER_SWITCH_LIGHT", "Engine 2 master switch fault light", "Throttle Quadrant", D),
 
-        ("INI_engine1_oil_low_press_light", "Engine 1 oil low pressure light", "Center Panel"),
-        ("INI_engine2_oil_low_press_light", "Engine 2 oil low pressure light", "Center Panel"),
+        ("INI_engine1_oil_low_press_light", "Engine 1 oil low pressure light", "Center Panel", A),
+        ("INI_engine2_oil_low_press_light", "Engine 2 oil low pressure light", "Center Panel", A),
 
-        ("INI_AUTOLAND_LIGHT", "Autoland warning light", "Captain EFIS"),
+        ("INI_AUTOLAND_LIGHT", "Autoland warning light", "Captain EFIS", D),
 
-        ("INI_GPWS_LIGHT", "GPWS warning light", "Captain Panel"),
-        ("INI_GLIDESLOPE_LIGHT", "Below glide slope light", "Captain Panel"),
-        ("INI_TERR_MODE_FAULT", "Terrain mode fault light", "Captain Panel"),
-        ("INI_FMS1_message_light", "MCDU message light", "Captain Panel"),
+        ("INI_GPWS_LIGHT", "GPWS warning light", "Captain Panel", A),
+        ("INI_GLIDESLOPE_LIGHT", "Below glide slope light", "Captain Panel", A),
+        ("INI_TERR_MODE_FAULT", "Terrain mode fault light", "Captain Panel", A),
+        ("INI_FMS1_message_light", "MCDU message light", "Captain Panel", A),
 
-        ("INI_ECAM_CLR_LIGHT", "ECAM clear light", "ECAM Control"),
+        ("INI_ECAM_CLR_LIGHT", "ECAM clear light", "ECAM Control", A),
 
-        ("INI_COCKPIT_DOOR_FAULT", "Cockpit door fault light", "Cockpit Door"),
+        ("INI_COCKPIT_DOOR_FAULT", "Cockpit door fault light", "Cockpit Door", D),
     }
-    .Select(l => new A300Lamp("A300_LAMP_" + l.Var.Substring(4).ToUpperInvariant(), l.Var, l.Name, l.Panel, SpeaksOff: true))
+    .Select(l => new A300Lamp("A300_LAMP_" + l.Var.Substring(4).ToUpperInvariant(), l.Var, l.Name, l.Panel, SpeaksOff: true, l.Power))
     .ToArray();
 }
 

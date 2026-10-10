@@ -1,8 +1,10 @@
 namespace MSFSBlindAssist.Aircraft.A300;
 
 /// <summary>One light the A300 speaks. A master light speaks only as it comes on; a light with
-/// <paramref name="SpeaksOff"/> (<see cref="A300FaultLights"/>) speaks both ways.</summary>
-public sealed record A300Lamp(string Key, string Var, string Name, string Panel, bool SpeaksOff = false);
+/// <paramref name="SpeaksOff"/> (<see cref="A300FaultLights"/>) speaks both ways, as the cockpit shows it:
+/// lit only while its bus's <paramref name="Power"/> is on (<see cref="A300LampBoard"/>).</summary>
+public sealed record A300Lamp(string Key, string Var, string Name, string Panel, bool SpeaksOff = false,
+    A300LightPower Power = A300LightPower.None);
 
 /// <summary>
 /// What the A300 says on its own about its lights and levers: the two master lights when they come

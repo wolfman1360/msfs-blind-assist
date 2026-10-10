@@ -12,10 +12,15 @@ public class A300FaultLightTests
 {
     private readonly IniA300Definition _def;
     private readonly SpeechCapture _speech = new();
+    private readonly Dictionary<string, double> _cache = new();
 
     public A300FaultLightTests()
     {
-        _def = new IniA300Definition();
+        _def = new IniA300Definition
+        {
+            Cached = (_, key) => _cache.TryGetValue(key, out var v) ? v : null,
+            IsMuted = _ => false,
+        };
         _def.Attach(new SimConnectManager(IntPtr.Zero));   // never connected
     }
 
@@ -24,6 +29,13 @@ public class A300FaultLightTests
     private void Deliver(A300Lamp lamp, double value) => _def.ProcessSimVarUpdate(lamp.Key, value, _speech);
 
     private void BatchEnd() => _def.OnContinuousBatchDelivered(1);
+
+    /// <summary>Both buses' light power on, as the cockpit has with power up.</summary>
+    private void PowerUp()
+    {
+        _def.ProcessSimVarUpdate(A300LampBoard.AcPowerKey, 1, _speech);
+        _def.ProcessSimVarUpdate(A300LampBoard.DcPowerKey, 1, _speech);
+    }
 
     [Fact]
     public void Every_light_is_distinct_named_and_on_a_real_panel()
@@ -74,6 +86,7 @@ public class A300FaultLightTests
     [Fact]
     public void A_light_speaks_both_ways_at_the_end_of_its_batch()
     {
+        PowerUp();
         var gen = Lamp("INI_elec_gen1_fault");
         Assert.True(_def.ProcessSimVarUpdate(gen.Key, 1, _speech));   // baseline, consumed
         BatchEnd();
@@ -90,6 +103,7 @@ public class A300FaultLightTests
     [Fact]
     public void Lights_changing_together_are_one_sentence()
     {
+        PowerUp();
         var lamps = new[] { Lamp("INI_SPEEDBRAKE7_FAULT"), Lamp("INI_SPEEDBRAKE6_FAULT"), Lamp("INI_SPEEDBRAKE5_FAULT"), Lamp("INI_APU_FAULT") };
         foreach (var lamp in lamps)
             Deliver(lamp, lamp.Var == "INI_APU_FAULT" ? 0 : 1);
@@ -103,6 +117,7 @@ public class A300FaultLightTests
     [Fact]
     public void A_muted_light_is_not_collected()
     {
+        PowerUp();
         var gen = Lamp("INI_elec_gen1_fault");
         Deliver(gen, 1);
         _speech.Suppressed = true;   // MainForm's wrap around a muted row's delivery
@@ -126,10 +141,80 @@ public class A300FaultLightTests
     [Fact]
     public void A_context_reset_drops_what_was_waiting()
     {
+        PowerUp();
         var gen = Lamp("INI_elec_gen1_fault");
         Deliver(gen, 1);
         Deliver(gen, 0);
         _def.OnSimContextReset();
+        BatchEnd();
+        Assert.Empty(_speech.All);
+    }
+
+    [Fact]
+    public void The_two_light_power_flags_stream_on_their_own_subscriptions_silently_with_no_ctrl_m_row()
+    {
+        var vars = _def.GetVariables();
+        foreach (var (key, name) in new[] { (A300LampBoard.AcPowerKey, "INI_AC_LIGHTS_FAILURE"), (A300LampBoard.DcPowerKey, "INI_DC_LIGHTS_FAILURE") })
+        {
+            var def = vars[key];
+            Assert.Equal((name, UpdateFrequency.Continuous, true, true),
+                (def.Name, def.UpdateFrequency, def.ExcludeFromBatch, def.ExcludeFromMonitorManager));
+            Assert.False(ContinuousBatchLayout.RidesBatch(def));   // [A300-9]
+            Assert.True(_def.ProcessSimVarUpdate(key, 1, _speech));
+        }
+        BatchEnd();
+        Assert.Empty(_speech.All);
+    }
+
+    [Fact]
+    public void A_lights_status_box_repaints_when_its_power_changes()
+    {
+        var vars = _def.GetVariables();
+        Assert.Equal(new[] { Lamp("INI_elec_gen1_fault").Key, A300LampBoard.DcPowerKey }, vars[Lamp("INI_elec_gen1_fault").Key].StateVariables);
+        Assert.Equal(new[] { Lamp("INI_PACK1_FAULT").Key, A300LampBoard.DcPowerKey }, vars[Lamp("INI_PACK1_FAULT").Key].StateVariables);
+        Assert.Equal(new[] { Lamp("INI_ECAM_CLR_LIGHT").Key, A300LampBoard.AcPowerKey }, vars[Lamp("INI_ECAM_CLR_LIGHT").Key].StateVariables);
+        Assert.Null(vars[Lamp("INI_fire_handle_engine1_light").Key].StateVariables);
+    }
+
+    [Fact]
+    public void A_lights_status_box_shows_what_the_cockpit_shows()
+    {
+        var gen = Lamp("INI_elec_gen1_fault");
+        Assert.False(_def.TryDescribeControlState(gen.Key, out _));   // nothing read: the plain value path
+        _cache[gen.Key] = 1;
+        _cache[A300LampBoard.DcPowerKey] = 0;
+        Assert.True(_def.TryDescribeControlState(gen.Key, out var dark));
+        _cache[A300LampBoard.DcPowerKey] = 1;
+        Assert.True(_def.TryDescribeControlState(gen.Key, out var lit));
+        Assert.Equal(("Off", "On"), (dark, lit));
+    }
+
+    [Fact]
+    public void Power_coming_on_speaks_the_lights_that_light_and_a_fault_clearing_on_a_dark_bus_stays_silent()
+    {
+        var standby = Lamp("INI_elec_standby_gen_fault");
+        var regulator = Lamp("INI_cabin_sys1_regulator_fault");
+        _def.ProcessSimVarUpdate(A300LampBoard.AcPowerKey, 0, _speech);   // batteries only: AC lights dark
+        Deliver(standby, 1);
+        Deliver(regulator, 1);
+        BatchEnd();
+        Deliver(regulator, 0);   // its fault clears while the light is dark
+        BatchEnd();
+        Assert.Empty(_speech.All);
+        _def.ProcessSimVarUpdate(A300LampBoard.AcPowerKey, 1, _speech);   // external power
+        BatchEnd();
+        Assert.Equal(new[] { "Standby generator fault light on" }, _speech.All);
+    }
+
+    [Fact]
+    public void A_light_lit_by_a_power_change_still_honours_its_own_ctrl_m_row()
+    {
+        var standby = Lamp("INI_elec_standby_gen_fault");
+        _def.IsMuted = key => key == standby.Key;
+        _def.ProcessSimVarUpdate(A300LampBoard.AcPowerKey, 0, _speech);
+        Deliver(standby, 1);
+        BatchEnd();
+        _def.ProcessSimVarUpdate(A300LampBoard.AcPowerKey, 1, _speech);
         BatchEnd();
         Assert.Empty(_speech.All);
     }

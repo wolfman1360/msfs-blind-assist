@@ -25,9 +25,16 @@ public partial class IniA300Definition
     /// <summary>The FCU altitude window's call-out (<see cref="A300FcuWindows"/>).</summary>
     private readonly A300WindowTracker _altitudeWindow = new();
 
-    /// <summary>The fault light changes since the last continuous batch ended, spoken when the next one ends.</summary>
+    /// <summary>The fault and autobrake lights as the cockpit shows them ([A300-23]).</summary>
+    private readonly A300LampBoard _lampBoard = new();
+
+    /// <summary>The light changes since the last continuous batch ended, spoken when the next one ends.</summary>
     private readonly List<A300LampChange> _pendingLamps = new();
     private ScreenReaderAnnouncer? _lampAnnouncer;
+
+    /// <summary>A variable that changes several lights (a light power flag, the autobrake level or a DECEL
+    /// light) checks each light's own Ctrl+M row itself, so MainForm must not wrap it in its own (VAR-8).</summary>
+    public override bool IsMuteWrapExempt(string varName) => A300LampBoard.SharedInputKeys.Contains(varName);
 
     /// <summary>
     /// WHEN, after a context reset, the lights and levers a flight load left unchanged get their
@@ -52,9 +59,22 @@ public partial class IniA300Definition
         if (A300Baro.ModeKeys.Contains(varName))
             return true;
 
-        // The autobrake lamps: shown on the buttons' labels (TryDescribeControlState), never spoken.
-        if (A300Autobrake.StateKeys.Contains(varName))
+        // The fault lights and the autobrake lights, as the cockpit shows them ([A300-23]): a change is
+        // kept only when it would be heard now, against each light's own Ctrl+M row, because a light
+        // power flag or the autobrake level changes several lights at once (IsMuteWrapExempt).
+        if (_lampBoard.Handles(varName))
+        {
+            if (_seedGate.Armed)
+                _seedGate.NoteValue(varName, value, ownedByAircraft: true);
+            foreach (var change in _lampBoard.Update(varName, value))
+            {
+                if (announcer.Suppressed || IsMuted(change.Lamp.MuteKey))
+                    continue;
+                _pendingLamps.Add(new A300LampChange(change.Lamp.Name, change.On));
+                _lampAnnouncer = announcer;
+            }
             return true;
+        }
 
         // The TRP: shown on its buttons' labels and the Center Panel's TRP line, never spoken.
         if (A300Trp.StateKeys.Contains(varName))
@@ -76,24 +96,13 @@ public partial class IniA300Definition
             return true;
         }
 
+        // The two master lights and the four levers (the fault lights went to the board above).
         if (A300Announcements.AnnouncedKeys.Contains(varName))
         {
             if (_seedGate.Armed)
                 _seedGate.NoteValue(varName, value, ownedByAircraft: _lamps.ContainsKey(varName));
             if (_tracker.Observe(varName, value) is string phrase)
-            {
-                if (_lamps.TryGetValue(varName, out var lamp) && lamp.SpeaksOff)
-                {
-                    // Spoken at the batch's end, outside the wrap: kept only if it would be heard now.
-                    if (!announcer.Suppressed)
-                    {
-                        _pendingLamps.Add(new A300LampChange(lamp.Name, value >= 0.5));
-                        _lampAnnouncer = announcer;
-                    }
-                }
-                else
-                    announcer.Announce(phrase);
-            }
+                announcer.Announce(phrase);
             return true;
         }
 
@@ -126,6 +135,7 @@ public partial class IniA300Definition
         _engagementTracker.Reset();
         _altitudeWindow.Reset();
         _takeoffCallouts.Reset();
+        _lampBoard.Reset();
         _pendingLamps.Clear();
         _commanded.Clear();
         _seedGate.Arm(KnownSeedValues());
@@ -148,7 +158,7 @@ public partial class IniA300Definition
         var sim = _sim;
         if (sim == null)
             yield break;
-        foreach (var key in A300Announcements.AnnouncedKeys.Append(A300Readouts.AltitudeKey))
+        foreach (var key in A300Announcements.AnnouncedKeys.Union(A300LampBoard.InputKeys).Append(A300Readouts.AltitudeKey))
             if (Cached(sim, key) is double value)
                 yield return new KeyValuePair<string, double>(key, value);
     }
@@ -158,6 +168,9 @@ public partial class IniA300Definition
         int seeded = 0;
         foreach (var key in A300Announcements.AnnouncedKeys)
             if (Cached(sim, key) is double value && _tracker.Seed(key, value))
+                seeded++;
+        foreach (var key in A300LampBoard.InputKeys)
+            if (Cached(sim, key) is double value && _lampBoard.Seed(key, value))
                 seeded++;
         if (Cached(sim, A300Readouts.AltitudeKey) is double altitude && _altitudeWindow.Seed(A300FcuWindows.Altitude(altitude)))
             seeded++;
