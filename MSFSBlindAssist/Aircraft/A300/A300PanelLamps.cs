@@ -219,6 +219,14 @@ public static class A300PanelLamps
         new("ECAM_FCTL_SEQ2_LIGHT", "Flight controls page light", "ECAM Control Panel"),
         new("ECAM_DOOR_SEQ2_LIGHT", "Doors page light", "ECAM Control Panel"),
         new("ECAM_WHEEL_SEQ2_LIGHT", "Wheels page light", "ECAM Control Panel"),
+
+        // Audio control panels: the VHF transmit key picked on each side is lit, and labels its key.
+        new("CPT_VHF1_LX_LIGHT", "Captain VHF 1 transmit light", "Audio Control Panel Captain"),
+        new("CPT_VHF2_LX_LIGHT", "Captain VHF 2 transmit light", "Audio Control Panel Captain"),
+        new("CPT_VHF3_LX_LIGHT", "Captain VHF 3 transmit light", "Audio Control Panel Captain"),
+        new("FO_VHF1_LX_LIGHT", "First officer VHF 1 transmit light", "Audio Control Panel First Officer"),
+        new("FO_VHF2_LX_LIGHT", "First officer VHF 2 transmit light", "Audio Control Panel First Officer"),
+        new("FO_VHF3_LX_LIGHT", "First officer VHF 3 transmit light", "Audio Control Panel First Officer"),
     };
 
     /// <summary>A button's own light, which labels it ("Pressurization system 1: On"): row key → lamp key.</summary>
@@ -266,6 +274,12 @@ public static class A300PanelLamps
         ["A300_ECAM_DOOR"] = "A300_LT_ECAM_DOOR_SEQ2_LIGHT",
         ["A300_ECAM_WHEEL"] = "A300_LT_ECAM_WHEEL_SEQ2_LIGHT",
         ["A300_ECAM_CLR"] = "A300_LAMP_ECAM_CLR_LIGHT",   // a fault light, lit while there is something to clear
+        ["A300_CPT_VHF1_PUSH"] = "A300_LT_CPT_VHF1_LX_LIGHT",
+        ["A300_CPT_VHF2_PUSH"] = "A300_LT_CPT_VHF2_LX_LIGHT",
+        ["A300_CPT_VHF3_PUSH"] = "A300_LT_CPT_VHF3_LX_LIGHT",
+        ["A300_FO_VHF1_PUSH"] = "A300_LT_FO_VHF1_LX_LIGHT",
+        ["A300_FO_VHF2_PUSH"] = "A300_LT_FO_VHF2_LX_LIGHT",
+        ["A300_FO_VHF3_PUSH"] = "A300_LT_FO_VHF3_LX_LIGHT",
     };
 
     /// <summary>Each named lamp with its rule from the shipped map; a lamp the map lacks is left out, loudly

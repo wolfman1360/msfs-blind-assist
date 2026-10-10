@@ -284,6 +284,25 @@ public class A300PanelLampTests
         Assert.Equal((true, true, false, false), (Lit(page, 1), Lit(page, 2), Lit(page, 0), Lit(page == 1 ? 2 : 1, 1)));
     }
 
+    [Theory]
+    // Each audio panel's VHF transmit keys pick one radio to transmit on (XMLVAR_COM_PANEL1/2_Transmit_Channel 0, 1, 2,
+    // measured 2026-10-10): the picked key is lit, and its light labels it.
+    [InlineData("CPT_VHF1_LX_LIGHT", "Captain VHF 1 transmit light", "Audio Control Panel Captain", "A300_CPT_VHF1_PUSH", 0)]
+    [InlineData("CPT_VHF2_LX_LIGHT", "Captain VHF 2 transmit light", "Audio Control Panel Captain", "A300_CPT_VHF2_PUSH", 1)]
+    [InlineData("CPT_VHF3_LX_LIGHT", "Captain VHF 3 transmit light", "Audio Control Panel Captain", "A300_CPT_VHF3_PUSH", 2)]
+    [InlineData("FO_VHF1_LX_LIGHT", "First officer VHF 1 transmit light", "Audio Control Panel First Officer", "A300_FO_VHF1_PUSH", 0)]
+    [InlineData("FO_VHF2_LX_LIGHT", "First officer VHF 2 transmit light", "Audio Control Panel First Officer", "A300_FO_VHF2_PUSH", 1)]
+    [InlineData("FO_VHF3_LX_LIGHT", "First officer VHF 3 transmit light", "Audio Control Panel First Officer", "A300_FO_VHF3_PUSH", 2)]
+    public void A_vhf_transmit_key_is_labelled_by_its_light(string node, string name, string panel, string button, int channel)
+    {
+        Assert.Equal((name, panel), (Lamp(node).Name, Lamp(node).Panel));
+        Assert.Equal(Lamp(node).Key, A300PanelLamps.ByButton[button]);
+        Assert.Equal(panel, Placement.RowsByPanel.Single(p => p.Value.Any(r => r.Key == button)).Key);
+        var lamp = A300PanelLamps.Resolved.Single(l => l.Lamp.Node == node);
+        bool Lit(double picked) => A300LampBoard.IsLit(A300LampBoard.ById[lamp.Lamp.Key], k => k == lamp.Lamp.Key ? picked : 1) == true;
+        Assert.Equal((true, false), (Lit(channel), Lit((channel + 1) % 3)));
+    }
+
     [Fact]
     public void The_ecam_clear_button_is_labelled_by_its_light()
     {

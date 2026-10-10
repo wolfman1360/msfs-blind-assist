@@ -107,6 +107,9 @@ displays read each radio's active and standby frequencies, and each ADF's bearin
 and ILS frequencies and courses, and each knob step says the new value: "ILS 109.00", "VOR 1
 course 091". The aircraft tunes the VORs itself, so their frequency knobs may not change them.
 
+On each Audio Control Panel, the VHF transmit keys say which one you transmit on: "VHF 1
+transmit: On". Each receiver switch turns that radio on or off in the headset.
+
 The fire tests on the Fire panel are held as a pilot holds them: 7 seconds for an engine loop
 test, 5 seconds for the APU loop test, 3 seconds for a squib test. The loop lights and the fire
 handle light a loop test brings on, and the squib lights a squib test brings on, are announced (see
