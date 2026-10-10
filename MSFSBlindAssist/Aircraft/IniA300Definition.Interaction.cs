@@ -57,7 +57,7 @@ public partial class IniA300Definition
         if (sent && row.Action == A300RowAction.Press && A300PanelLamps.ByButton.TryGetValue(row.Key, out var ownLamp))
             _pressedLampUntil[ownLamp] = Clock() + PressedLampMs;
         if (sent && control.Kind == A300Kinds.Spring && row.Action == A300RowAction.Set)
-            _ = ReReadAfterSpringAsync(row, simConnect);
+            _ = ReReadAfterSpringAsync(row, value, simConnect, announcer, ++_pickSeq);
 
         // An FCU knob step is read back once it lands ("Heading 271"): a numeric confirmation, as a
         // typed value's is. The altitude window's own call-out is told it is an echo.
@@ -151,20 +151,34 @@ public partial class IniA300Definition
 
     /// <summary>A spring switch's hold can fall between two 1 Hz deliveries, which then see no change, so its
     /// combo kept the side picked after the switch had returned (the rudder trim, 2026-10-10): read it again
-    /// once the hold is over, so it goes back to its rest.</summary>
-    private async Task ReReadAfterSpringAsync(A300PlacedRow row, SimConnectManager sim)
+    /// once the hold is over, so it goes back to its rest. The cargo door then says where it stopped, unless a
+    /// later pick of its switch took over.</summary>
+    private async Task ReReadAfterSpringAsync(A300PlacedRow row, double picked, SimConnectManager sim,
+        ScreenReaderAnnouncer announcer, int pick)
     {
+        var control = row.Control!;
+        _latestSpringPick[row.Key] = pick;
         try
         {
-            await Delay(A300WritePlan.SpringHoldMs + SpringSettleMs);
-            if (!_disposed)
-                ReRead(row.Key, sim);
+            bool atRest = control.PositionForState(picked) is double position
+                && Math.Abs(position - (control.Rest ?? 1)) < A300WritePlan.SameValueTolerance;
+            await Delay((atRest ? 0 : A300WritePlan.SpringHoldMsFor(control)) + SpringSettleMs);
+            if (_disposed || _latestSpringPick.GetValueOrDefault(row.Key) != pick)
+                return;
+            ReRead(row.Key, sim);
+            if (row.Key == A300CargoDoor.SwitchKey)
+                await ReadBackWhenSettledAsync(sim, announcer, "Cargo door",
+                    v => $"Cargo door {A300CargoDoor.Status(v[0], v[1], v[2], v[3], v[4])}",
+                    A300CargoDoor.Flags.Select(f => f.Key).Prepend(A300CargoDoor.StatusKey).ToArray());
         }
         catch (Exception ex)
         {
             Log.Warn("A300", $"Re-read of {row.Key} failed: {ex.Message}");
         }
     }
+
+    /// <summary>Each spring row's latest pick: an earlier pick's re-read and read-back are dropped.</summary>
+    private readonly Dictionary<string, int> _latestSpringPick = new(StringComparer.Ordinal);
 
     /// <summary>Speaks a read-back composed from several values once the change has had time to land. The values
     /// are read together: one after another, a radio's read-back came 3 s after the press (2026-10-10).</summary>

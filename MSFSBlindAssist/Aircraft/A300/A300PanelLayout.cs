@@ -112,8 +112,7 @@ public static partial class A300PanelLayout
 
     private static readonly Regex Excluded = new(
         @"^AIRLINER_(.*_IDC(_BUTTON)?|TABLET_.*|MAN_GEAR_HANDLE|MAN_GEAR_HANDLE_HIDE|CPT_ARMREST|FO_ARMREST|" +
-        @"CPT_YOKE_BASE|FO_YOKE_BASE|CPT_VISOR|FO_VISOR|SEAT_.*|OIL_ENG\d_QTY_LIMIT_MANIP(_PW)?|AT_DISCO2|RAT_FO|" +
-        @"MAIN_CARGO_DOOR_SWITCH)$",
+        @"CPT_YOKE_BASE|FO_YOKE_BASE|CPT_VISOR|FO_VISOR|SEAT_.*|OIL_ENG\d_QTY_LIMIT_MANIP(_PW)?|AT_DISCO2|RAT_FO)$",
         RegexOptions.CultureInvariant);
 
     private static readonly Regex Audio = new(

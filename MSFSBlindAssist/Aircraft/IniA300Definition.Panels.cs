@@ -128,6 +128,12 @@ public partial class IniA300Definition
             stateText = clockWord;
             return true;
         }
+        if (A300CargoDoor.AngleButtons.TryGetValue(varKey, out var angle) && _sim is { } doorSim
+            && Cached(doorSim, angle.Key) is double picked)
+        {
+            stateText = A300CargoDoor.AngleLabel(picked);
+            return true;
+        }
         return base.TryDescribeControlState(varKey, out stateText);
     }
 
@@ -211,6 +217,13 @@ public partial class IniA300Definition
             if (_sim is not { } radioSim || Cached(radioSim, line.Radio.Window1Key) is not double w1 || Cached(radioSim, line.Radio.Window2Key) is not double w2)
                 return null;
             return line.Active ? line.Radio.Active(w1, w2, value) : line.Radio.Standby(w1, w2, value);
+        }
+        if (key == A300CargoDoor.StatusKey)
+        {
+            var flags = A300CargoDoor.Flags.Select(f => _sim is { } doorSim ? Cached(doorSim, f.Key) : null).ToArray();
+            return flags.All(f => f.HasValue)
+                ? A300CargoDoor.Status(value, flags[0]!.Value, flags[1]!.Value, flags[2]!.Value, flags[3]!.Value)
+                : null;
         }
         if (A300Radios.BearingLines.TryGetValue(key, out var bearing))
             return _sim is { } adfSim && Cached(adfSim, bearing.SignalKey) is double signal ? A300Radios.Bearing(signal, value) : null;

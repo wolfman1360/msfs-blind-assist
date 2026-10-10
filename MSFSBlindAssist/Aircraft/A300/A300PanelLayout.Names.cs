@@ -430,6 +430,7 @@ public static partial class A300PanelLayout
         ["CB_TCAS"] = "TCAS circuit breaker",
         ["A300_MAIN_CARGO_DOOR_145"] = "Cargo door 145 degrees",
         ["A300_MAIN_CARGO_DOOR_70"] = "Cargo door 70 degrees",
+        ["MAIN_CARGO_DOOR_SWITCH"] = "Cargo door switch",
         ["MAIN_CARGO_DOOR_LIGHT_CARGO"] = "Cargo compartment light",
         ["MAIN_CARGO_DOOR_LIGHT_ENTRY"] = "Cargo entry light",
         ["MAIN_CARGO_DOOR_LIGHT_LOADER"] = "Loader tarmac light",

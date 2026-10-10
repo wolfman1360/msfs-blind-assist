@@ -214,6 +214,43 @@ public class IniA300BehaviourTests
         Assert.Equal(new[] { "ADF 1 active 990" }, _speech.All);
     }
 
+    private void ReleaseAllWaits()
+    {
+        while (_waits.FirstOrDefault(w => !w.Task.IsCompleted) is { } wait)
+            wait.SetResult();
+    }
+
+    private void DoorReadsOpen70() => ReadFreshReturns(new()
+    {
+        [A300CargoDoor.StatusKey] = 0.7, [A300CargoDoor.ClosedKey] = 0, [A300CargoDoor.LockedKey] = 0,
+        [A300CargoDoor.At70Key] = 1, [A300CargoDoor.At145Key] = 0,
+    });
+
+    [Fact]
+    public void The_cargo_door_says_where_it_stopped_once_its_switch_is_let_go()
+    {
+        // The door moves only while its switch is held, about 30 s end to end (2026-10-10): the hold's end is
+        // the only moment the pilot learns where it went, which the screen reader cannot say.
+        _cache["A300_MAIN_CARGO_DOOR_SWITCH"] = 1;
+        DoorReadsOpen70();
+        Assert.True(Set("A300_MAIN_CARGO_DOOR_SWITCH", 0));
+        Assert.Empty(_speech.All);
+        ReleaseAllWaits();
+        Assert.Equal(new[] { "Cargo door open 70 degrees" }, _speech.All);
+        Assert.Equal(new[] { "A300_MAIN_CARGO_DOOR_SWITCH" }, _reReads);
+    }
+
+    [Fact]
+    public void A_cargo_door_pick_overtaken_by_neutral_speaks_once_for_the_stop()
+    {
+        _cache["A300_MAIN_CARGO_DOOR_SWITCH"] = 1;
+        DoorReadsOpen70();
+        Set("A300_MAIN_CARGO_DOOR_SWITCH", 0);
+        Set("A300_MAIN_CARGO_DOOR_SWITCH", 1);   // stopped part way
+        ReleaseAllWaits();
+        Assert.Equal(new[] { "Cargo door open 70 degrees" }, _speech.All);
+    }
+
     [Fact]
     public void The_crossbleed_reads_open_or_closed_and_its_mode_auto_or_manual()
     {

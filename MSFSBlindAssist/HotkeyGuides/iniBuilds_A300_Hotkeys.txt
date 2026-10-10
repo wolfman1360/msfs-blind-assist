@@ -110,6 +110,13 @@ course 091". The aircraft tunes the VORs itself, so their frequency knobs may no
 On each Audio Control Panel, the VHF transmit keys say which one you transmit on: "VHF 1
 transmit: On". Each receiver switch turns that radio on or off in the headset.
 
+The Cargo Door panel (Cargo section) opens and closes the main cargo door. Pick how far it opens
+with "Cargo door 70 degrees" or "Cargo door 145 degrees" (the picked one says "Selected"), then
+choose Open or Close on the cargo door switch. MSFS Blind Assist holds the switch until the door
+has had time to finish, about 35 seconds, then says where it stopped: "Cargo door open 70
+degrees", "Cargo door closed and locked". Choose Neutral to stop it sooner. The status display
+reads the door too.
+
 The fire tests on the Fire panel are held as a pilot holds them: 7 seconds for an engine loop
 test, 5 seconds for the APU loop test, 3 seconds for a squib test. The loop lights and the fire
 handle light a loop test brings on, and the squib lights a squib test brings on, are announced (see

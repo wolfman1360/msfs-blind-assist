@@ -126,6 +126,9 @@ public static class A300Readouts
         // The transponder code as its display shows it, read as BCO16 as the FBW A320 and A380 read it.
         new A300Readout(SquawkCodeKey, "Squawk code", "Transponder", "TRANSPONDER CODE:1", true, "BCO16", Squawk),
 
+        // The main cargo door (A300CargoDoor): its line is composed from its travel and flags.
+        new A300Readout(A300CargoDoor.StatusKey, "Cargo door", A300CargoDoor.Panel, A300CargoDoor.TravelVar, false, "number", _ => "unavailable"),
+
         // The VHF and ADF panels (A300Radios): each line is composed from both windows and the transfer switch,
         // whose variable carries it; and each ADF's bearing, read only while it has a signal.
         .. RadioLines("VHF 1"), .. RadioLines("VHF 2"),

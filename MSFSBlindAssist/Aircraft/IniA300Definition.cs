@@ -222,6 +222,8 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
                 def.StateVariables = new[] { lampKey, A300LampBoard.AcPowerKey, A300LampBoard.DcPowerKey };
             else if (A300Clock.ButtonStates.ContainsKey(row.Key))
                 def.StateVariables = new[] { A300Clock.StateKey(row.Key) };
+            else if (A300CargoDoor.AngleButtons.TryGetValue(row.Key, out var angle))
+                def.StateVariables = new[] { angle.Key };
             if (A300Announcements.AnnouncedKeys.Contains(row.Key))
                 def.ExcludeFromMonitorManager = false;   // it speaks, so Ctrl+M can mute it
             // A row whose variable another row already carries on the batch (an IDC copy, the crew oxygen
@@ -306,6 +308,9 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
             vars[radio.Window2Key] = OwnSubscription(radio.Window2Var, radio.Window2Key);
             vars[radio.TransferKey] = OwnSubscription(radio.TransferVar, radio.TransferKey);
         }
+        // The cargo door's flags its line is composed from, and which angle button is picked (A300CargoDoor).
+        foreach (var (key, var) in A300CargoDoor.Flags.Concat(A300CargoDoor.AngleButtons.Values))
+            vars[key] = OwnSubscription(var, key);
         foreach (var (signalKey, signalVar) in A300Radios.BearingLines.Values)
         {
             var signal = OwnSubscription(signalVar, signalKey);

@@ -361,7 +361,6 @@ public class A300PanelLayoutTests
     [InlineData("AIRLINER_TABLET_BRT_UP")]
     [InlineData("AIRLINER_SEAT_CPT_FWD")]
     [InlineData("AIRLINER_AT_DISCO2")]
-    [InlineData("AIRLINER_MAIN_CARGO_DOOR_SWITCH")]
     public void Copies_and_cosmetic_parts_are_not_placed(string id)
     {
         if (Map.Find(id) is { } control)

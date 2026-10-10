@@ -94,6 +94,18 @@ public class A300WritePlanTests
     }
 
     [Fact]
+    public void The_cargo_door_switch_is_held_for_the_doors_whole_travel()
+    {
+        // The door moves only while its switch is held: 0 to 145 degrees or back to locked took about 30 s
+        // (2026-10-10); it stops by itself at the picked angle or locked, and a pick of Neutral stops it.
+        var door = Control(A300Kinds.Spring, "0=OPEN;1=NEUTRAL;2=CLOSE", rest: 1);
+        door.Id = "AIRLINER_MAIN_CARGO_DOOR_SWITCH";
+        var plan = A300WritePlan.ForSet(door, 0, current: 1);
+        Assert.Equal(35000, Assert.IsType<A300DelayStep>(plan.Steps[1]).Milliseconds);
+        Assert.Equal(35000, A300WritePlan.SpringHoldMsFor(door));
+    }
+
+    [Fact]
     public void Picking_a_springs_rest_just_returns_it()
     {
         var plan = A300WritePlan.ForSet(Control(A300Kinds.Spring, "0=DOWN;1=NEUTRAL;2=UP", rest: 1), 1, current: 2);

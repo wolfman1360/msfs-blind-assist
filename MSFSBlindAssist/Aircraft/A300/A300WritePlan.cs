@@ -47,6 +47,19 @@ public static class A300WritePlan
     /// <summary>How long a spring switch is held off centre (one trim nudge).</summary>
     public const int SpringHoldMs = 1000;
 
+    /// <summary>A spring switch that does its work only while held: the main cargo door moves while its switch
+    /// is held, and 0 to 145 degrees or back to locked took about 30 s (2026-10-10). It stops by itself at the
+    /// picked angle or locked; a pick of the rest stops it sooner.</summary>
+    public static readonly IReadOnlyDictionary<string, int> SpringHolds =
+        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["AIRLINER_MAIN_CARGO_DOOR_SWITCH"] = 35000,
+        };
+
+    /// <summary>How long this spring switch is held: its own duration, else <see cref="SpringHoldMs"/>.</summary>
+    public static int SpringHoldMsFor(A300Control control) =>
+        SpringHolds.TryGetValue(control.Id, out var ms) ? ms : SpringHoldMs;
+
     /// <summary>
     /// The tests that need a long press. The fire tests are held as long as the aircraft's own
     /// checklist holds them (<c>Airbus_A300_Checklist.xml</c>, package 1.0.11: <c>WaitForDuration</c>
@@ -117,7 +130,7 @@ public static class A300WritePlan
                 double rest = control.Rest ?? 1;
                 if (Math.Abs(position - rest) < SameValueTolerance)
                     return Steps(Set(control, rest));
-                return Steps(Set(control, position), new A300DelayStep(SpringHoldMs), Set(control, rest));
+                return Steps(Set(control, position), new A300DelayStep(SpringHoldMsFor(control)), Set(control, rest));
             }
             case A300Kinds.Knob:
             {
