@@ -46,6 +46,8 @@ public partial class IniA300Definition
 
     public override bool ProcessSimVarUpdate(string varName, double value, ScreenReaderAnnouncer announcer)
     {
+        NotePickReached(varName, value);   // a picked switch got there (CheckMovedAsync)
+
         // First: the take-off call-outs peek SIM_ON_GROUND, which the base may consume.
         if (TryHandleTakeoffCallouts(varName, value, announcer))
             return true;
@@ -83,6 +85,17 @@ public partial class IniA300Definition
         if (A300Trp.StateKeys.Contains(varName))
             return true;
 
+        // The two master lights, the four levers and the SAS levers (the fault lights went to the board
+        // above). Before the FMA sources: the pitch trim levers are both, and still feed the FMA from the cache.
+        if (A300Announcements.AnnouncedKeys.Contains(varName))
+        {
+            if (_seedGate.Armed)
+                _seedGate.NoteValue(varName, value, ownedByAircraft: _lamps.ContainsKey(varName));
+            if (_tracker.Observe(varName, value) is string phrase)
+                announcer.Announce(phrase);
+            return true;
+        }
+
         // An FMA source (some are switch rows too): read when its batch has finished dispatching
         // (OnDeferredFlushBatchDelivered), never spoken here.
         if (A300FmaSources.Keys.Contains(varName))
@@ -96,16 +109,6 @@ public partial class IniA300Definition
                 _seedGate.NoteValue(varName, value, ownedByAircraft: true);
             if (_altitudeWindow.Observe(A300FcuWindows.Altitude(value), Clock()) is string window)
                 announcer.Announce(window);
-            return true;
-        }
-
-        // The two master lights and the four levers (the fault lights went to the board above).
-        if (A300Announcements.AnnouncedKeys.Contains(varName))
-        {
-            if (_seedGate.Armed)
-                _seedGate.NoteValue(varName, value, ownedByAircraft: _lamps.ContainsKey(varName));
-            if (_tracker.Observe(varName, value) is string phrase)
-                announcer.Announce(phrase);
             return true;
         }
 
@@ -141,6 +144,7 @@ public partial class IniA300Definition
         _lampBoard.Reset();
         _lampSpeech.Clear();
         _commanded.Clear();
+        _pendingPicks.Clear();
         _seedGate.Arm(KnownSeedValues());
     }
 

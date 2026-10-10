@@ -501,7 +501,9 @@ vertical speed windows are not announced on their own, because the autopilot mov
 
 The flaps lever, the ground spoiler arm, the gear lever and the parking brake are announced when
 something other than MSFS Blind Assist moves them - a hardware lever, or the aircraft itself
-("Flaps 15/15", "Parking brake set"). Changes you make in MSFS Blind Assist are not.
+("Flaps 15/15", "Parking brake set"). Changes you make in MSFS Blind Assist are not. The same
+goes for the pitch trim and yaw damper levers on the SAS Control panel, which the aircraft drops
+by itself when their system cannot hold them: "Pitch trim 1 off". Each has its own Ctrl+M row.
 
 Each of these has its own Ctrl+M row: every light, V1 call-out, Rotate call-out, V2 call-out,
 Autopilot engagement, Autothrottle engagement, Altitude window, and the flight mode annunciator's

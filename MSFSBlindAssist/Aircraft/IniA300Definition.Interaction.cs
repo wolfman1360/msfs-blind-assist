@@ -70,27 +70,36 @@ public partial class IniA300Definition
         return true;
     }
 
-    /// <summary>Each row's latest pick, so only that pick's check speaks.</summary>
-    private readonly Dictionary<string, int> _latestPick = new(StringComparer.Ordinal);
+    /// <summary>Each row's latest pick, its target, and whether a delivery has reached it since.</summary>
+    private readonly Dictionary<string, (int Pick, double Target, bool Reached)> _pendingPicks = new(StringComparer.Ordinal);
     private int _pickSeq;
+
+    /// <summary>A delivery that reaches a pending pick's target: the switch moved, whatever it does next.</summary>
+    private void NotePickReached(string key, double value)
+    {
+        if (_pendingPicks.TryGetValue(key, out var p) && !p.Reached && Math.Abs(value - p.Target) < A300WritePlan.SameValueTolerance)
+            _pendingPicks[key] = p with { Reached = true };
+    }
 
     /// <summary>
     /// Reads a picked switch back once it has had time to move. When the aircraft ignored the write (the
     /// crossbleed button in auto mode), the combo would keep the pick while the switch stayed put, and the
     /// next pick would be planned from it: so the row is read again, the stayed position is remembered, and
-    /// it is said once ("Crossbleed stayed Open"), what the screen reader cannot say ([CORE-7]).
+    /// it is said once ("Crossbleed stayed Open"), what the screen reader cannot say ([CORE-7]). A switch that
+    /// reached the pick and then dropped by itself (a SAS lever) moved: its drop is the aircraft's, spoken as such.
     /// </summary>
     private async Task CheckMovedAsync(A300PlacedRow row, double target, SimConnectManager sim,
         ScreenReaderAnnouncer announcer, int pick)
     {
-        _latestPick[row.Key] = pick;
+        _pendingPicks[row.Key] = (pick, target, false);
+        bool Superseded() => !_pendingPicks.TryGetValue(row.Key, out var p) || p.Pick != pick || p.Reached;
         try
         {
             await TypedDelay(ToggleReadBackMs);
-            if (_disposed || _latestPick.GetValueOrDefault(row.Key) != pick)
+            if (_disposed || Superseded())
                 return;
             if (await ReadFresh(sim, row.Key, ReadoutTimeoutMs) is not double now
-                || _latestPick.GetValueOrDefault(row.Key) != pick
+                || Superseded()
                 || Math.Abs(now - target) < A300WritePlan.SameValueTolerance)
                 return;
             _commanded.Record(row.Key, now, Clock());
@@ -101,6 +110,11 @@ public partial class IniA300Definition
         catch (Exception ex)
         {
             Log.Warn("A300", $"Read-back of {row.Key} failed: {ex.Message}");
+        }
+        finally
+        {
+            if (_pendingPicks.TryGetValue(row.Key, out var p) && p.Pick == pick)
+                _pendingPicks.Remove(row.Key);
         }
     }
 

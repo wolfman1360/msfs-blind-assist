@@ -143,6 +143,25 @@ public class IniA300BehaviourTests
     }
 
     [Fact]
+    public void A_lever_that_moved_then_dropped_is_not_said_to_have_stayed()
+    {
+        // Pitch trim 2 picked on with no hydraulics: it engaged, then dropped before the read-back, which said
+        // "Pitch trim 2 stayed Off" after the drop's own "Pitch trim 2 off" (2026-10-10).
+        var release = new TaskCompletionSource();
+        _def.TypedDelay = _ => release.Task;
+        _def.ReadFresh = (_, _, _) => Task.FromResult<double?>(0);
+        _cache["A300_PITCH_TRIM_2"] = 0;
+        Deliver("A300_PITCH_TRIM_2", 0);
+        Set("A300_PITCH_TRIM_2", 1);
+        Deliver("A300_PITCH_TRIM_2", 1);
+        _speech.All.Clear();   // the engage: the real announcer drops it inside the echo wrap
+        Deliver("A300_PITCH_TRIM_2", 0);
+        release.SetResult();
+        Assert.Equal(new[] { "Pitch trim 2 off" }, _speech.All);
+        Assert.Empty(_reReads);
+    }
+
+    [Fact]
     public void The_crossbleed_reads_open_or_closed_and_its_mode_auto_or_manual()
     {
         var vars = _def.GetVariables();
@@ -236,6 +255,23 @@ public class IniA300BehaviourTests
         Deliver(A300Announcements.ParkingBrakeKey, 1);
         Deliver(A300Announcements.ParkingBrakeKey, 0);
         Assert.Equal(new[] { "Flaps 15/15", "Parking brake released" }, _speech.All);
+    }
+
+    [Theory]
+    [InlineData("A300_PITCH_TRIM_1", "Pitch trim 1 off")]
+    [InlineData("A300_PITCH_TRIM_2", "Pitch trim 2 off")]
+    [InlineData("A300_YAW_DAMPER_1", "Yaw damper 1 off")]
+    [InlineData("A300_YAW_DAMPER_2", "Yaw damper 2 off")]
+    public void A_sas_lever_that_drops_by_itself_is_spoken(string key, string phrase)
+    {
+        // A pitch trim lever picked on with no hydraulics engaged, then dropped by itself 2.1 s later (2026-10-10).
+        // MainForm's echo wrap silences the engage, the pilot's own pick; the drop is the aircraft's.
+        Deliver(key, 0);
+        Deliver(key, 1);
+        _speech.All.Clear();   // the real announcer drops this inside the echo wrap; SpeechCapture records all
+        Deliver(key, 0);
+        Assert.Equal(new[] { phrase }, _speech.All);
+        Assert.False(_def.GetVariables()[key].ExcludeFromMonitorManager);   // Ctrl+M can mute it
     }
 
     [Fact]

@@ -89,7 +89,9 @@ public class IniA300FmaBehaviourTests
         Assert.Equal("Roll mode", rows[A300FmaSources.RollModeKey]);
         Assert.Equal("Land, flare, rollout and go-around", rows[A300FmaSources.CommonModeKey]);
         Assert.Equal("Armed modes", rows[A300FmaSources.ArmedKey]);
-        var other = A300FmaSources.All.Select(s => s.Key).Except(A300FmaSources.MuteKeys).ToHashSet();
+        // The pitch trim levers are FMA sources too, and carry their own row: they speak when they drop.
+        var other = A300FmaSources.All.Select(s => s.Key).Except(A300FmaSources.MuteKeys)
+            .Except(A300Announcements.SasLevers.Keys).ToHashSet();
         Assert.DoesNotContain(rows.Keys, other.Contains);
     }
 

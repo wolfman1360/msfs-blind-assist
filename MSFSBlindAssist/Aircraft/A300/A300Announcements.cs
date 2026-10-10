@@ -36,9 +36,21 @@ public static class A300Announcements
 
     private static readonly Dictionary<string, A300Lamp> LampByKey = Lamps.ToDictionary(l => l.Key, StringComparer.Ordinal);
 
-    /// <summary>Every key that speaks: the lights and the four levers.</summary>
+    /// <summary>The SAS control panel's pitch trim and yaw damper levers, which the aircraft drops by itself
+    /// (a pitch trim lever picked on with no hydraulics engaged, then dropped 2.1 s later, 2026-10-10).
+    /// The autothrottle levers are spoken by <see cref="A300EngagementTracker"/>.</summary>
+    public static readonly IReadOnlyDictionary<string, string> SasLevers = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["A300_PITCH_TRIM_1"] = "Pitch trim 1",
+        ["A300_PITCH_TRIM_2"] = "Pitch trim 2",
+        ["A300_YAW_DAMPER_1"] = "Yaw damper 1",
+        ["A300_YAW_DAMPER_2"] = "Yaw damper 2",
+    };
+
+    /// <summary>Every key that speaks: the lights, the four levers and the SAS levers.</summary>
     public static readonly IReadOnlySet<string> AnnouncedKeys = Lamps.Select(l => l.Key)
         .Concat(new[] { A300Levers.FlapsKey, A300Levers.SpoilersArmKey, GearLeverKey, ParkingBrakeKey })
+        .Concat(SasLevers.Keys)
         .ToHashSet(StringComparer.Ordinal);
 
     /// <summary>The phrase a key's value speaks, or null when that value says nothing (a master light
@@ -59,6 +71,7 @@ public static class A300Announcements
         A300Levers.SpoilersArmKey => value >= 0.5 ? "Ground spoilers armed" : "Ground spoilers disarmed",
         GearLeverKey => value >= 0.5 ? "Gear lever down" : "Gear lever up",
         ParkingBrakeKey => value >= 0.5 ? "Parking brake set" : "Parking brake released",
+        _ when SasLevers.TryGetValue(key, out var lever) => $"{lever} {(value >= 0.5 ? "on" : "off")}",
         _ => null,
     };
 }
