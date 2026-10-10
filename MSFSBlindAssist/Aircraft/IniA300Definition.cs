@@ -134,6 +134,7 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
                 // 58 more names there pushed the FMA's pitch trim sources into a second batch, and
                 // the FMA must read one complete sample. The two master lights ride the batch.
                 ExcludeFromBatch = lamp.SpeaksOff,
+                HighFrequency = lamp.Flashes,        // every change, so the off hold sees a flash (A300LampSpeech)
                 ValueDescriptions = new Dictionary<double, string> { [0] = "Off", [1] = "On" },
                 RenderAsReadOnlyStatus = true,
             };

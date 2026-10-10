@@ -173,6 +173,8 @@ public class IniA300AutobrakeTests
         Assert.Single(_sent);   // never blocked: the aircraft disarms it by design
         Deliver(A300Autobrake.LevelKey, 0);
         BatchEnd();
+        _now += A300LampSpeech.OffHoldMs;   // an off waits until the light has stayed dark
+        BatchEnd();
         Assert.Equal(new[] { "Autobrake low armed light off" }, _speech.All);
     }
 

@@ -48,11 +48,12 @@ public class A300LampSpeechTests
     }
 
     [Fact]
-    public void A_pair_that_nets_to_nothing_says_nothing()
+    public void A_pair_that_nets_to_nothing_while_the_power_settles_says_nothing()
     {
+        _speech.NotePowerChange(10_000);
         _speech.Add(On("Cabin regulator 2 fault light"), 10_000);
         _speech.Add(Off("Cabin regulator 2 fault light"), 10_000);
-        Assert.Null(_speech.Flush(10_000 + A300LampSpeech.GatherMs));
+        Assert.Null(_speech.Flush(10_000 + A300LampSpeech.SettleMs));
     }
 
     [Fact]
@@ -94,4 +95,78 @@ public class A300LampSpeechTests
     [Fact]
     public void The_settle_window_covers_two_subscription_periods_and_the_gather_period_one() =>
         Assert.Equal((true, true), (A300LampSpeech.SettleMs is >= 2000 and <= 3000, A300LampSpeech.GatherMs is >= 1000 and < 2000));
+
+    [Fact]
+    public void A_light_going_off_is_spoken_only_once_it_has_stayed_off_for_the_hold()
+    {
+        _speech.Add(Off("Pack 1 fault light"), 10_000);
+        Assert.Null(_speech.Flush(10_000 + A300LampSpeech.GatherMs));
+        Assert.Null(_speech.Flush(10_000 + A300LampSpeech.OffHoldMs - 1));
+        Assert.Equal("Pack 1 fault light off", _speech.Flush(10_000 + A300LampSpeech.OffHoldMs));
+    }
+
+    [Fact]
+    public void A_flashing_light_says_on_once_and_off_only_once_it_stops()
+    {
+        // The autoland warning light flashes about 0.6 s on, 0.6 s off (measured 2026-10-10, its test switch),
+        // and streams every change; batches end once a second.
+        const string light = "Autoland warning light";
+        var said = new List<string>();
+        long next = 10_000;
+        for (long t = 10_000; t < 20_000; t += 600)
+        {
+            _speech.Add((t - 10_000) / 600 % 2 == 0 ? On(light) : Off(light), t);
+            for (; next <= t; next += 1000)
+                if (_speech.Flush(next) is string text)
+                    said.Add(text);
+        }
+        _speech.Add(Off(light), 20_200);   // the test switch released: it stays dark
+        for (; next <= 20_200 + A300LampSpeech.OffHoldMs + 1000; next += 1000)
+            if (_speech.Flush(next) is string text)
+                said.Add(text);
+        Assert.Equal(new[] { "Autoland warning light on", "Autoland warning light off" }, said);
+    }
+
+    [Fact]
+    public void A_flashing_light_is_spoken_on_at_the_first_batch_end_after_its_gather()
+    {
+        // Live, 2026-10-10: the dark phases netted with the unspoken "on" until a batch end fell in a lit phase,
+        // so "on" came 4 s after the light first lit.
+        const string light = "Autoland warning light";
+        _speech.Add(On(light), 10_000);
+        _speech.Add(Off(light), 10_600);
+        _speech.Add(On(light), 11_200);
+        _speech.Add(Off(light), 11_800);
+        Assert.Equal("Autoland warning light on", _speech.Flush(12_000));
+    }
+
+    [Fact]
+    public void A_light_that_blinks_once_is_spoken_on_then_off_once_it_has_stayed_dark()
+    {
+        _speech.Add(On("Pack 1 fault light"), 10_000);
+        _speech.Add(Off("Pack 1 fault light"), 10_500);
+        Assert.Equal("Pack 1 fault light on", _speech.Flush(10_000 + A300LampSpeech.GatherMs));
+        Assert.Null(_speech.Flush(10_500 + A300LampSpeech.OffHoldMs - 1));
+        Assert.Equal("Pack 1 fault light off", _speech.Flush(10_500 + A300LampSpeech.OffHoldMs));
+    }
+
+    [Fact]
+    public void A_light_power_change_darkening_a_light_is_not_held_past_the_settle()
+    {
+        _speech.NotePowerChange(10_000);
+        _speech.Add(Off("Pack 1 fault light"), 10_000);
+        Assert.Equal("Pack 1 fault light off", _speech.Flush(10_000 + A300LampSpeech.SettleMs));
+    }
+
+    [Fact]
+    public void Clearing_drops_an_off_still_held()
+    {
+        _speech.Add(Off("Pack 1 fault light"), 10_000);
+        _speech.Clear();
+        Assert.Null(_speech.Flush(10_000 + A300LampSpeech.OffHoldMs));
+    }
+
+    [Fact]
+    public void The_off_hold_outlasts_a_flash_and_two_subscription_periods() =>
+        Assert.True(A300LampSpeech.OffHoldMs is >= 2500 and <= 3500);
 }

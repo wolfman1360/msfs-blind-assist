@@ -504,11 +504,15 @@ public class A300PanelLampTests
         def.ProcessSimVarUpdate(sys2, 1, speech);
         def.ProcessSimVarUpdate(sys1, 0, speech);
         BatchEnd();
+        now += A300LampSpeech.OffHoldMs;   // an off waits until the light has stayed dark
+        BatchEnd();
         Assert.Equal(new[] { "Pressurization system 1 light off" }, speech.All);
 
         speech.All.Clear();
         now += 10_000;   // later, the aircraft changes it by itself: spoken
         def.ProcessSimVarUpdate(sys2, 0, speech);
+        BatchEnd();
+        now += A300LampSpeech.OffHoldMs;
         BatchEnd();
         Assert.Equal(new[] { "Pressurization system 2 light off" }, speech.All);
     }

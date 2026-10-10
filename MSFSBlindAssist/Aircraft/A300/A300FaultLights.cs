@@ -24,6 +24,13 @@ public static class A300FaultLights
 {
     private const A300LightPower A = A300LightPower.Ac, D = A300LightPower.Dc;
 
+    /// <summary>The lights the aircraft flashes: the autoland warning light, about 0.6 s on and 0.6 s off
+    /// (measured on its test switch; the aircraft's other flashing code drives the PFD, not lamps). Sampled once a
+    /// second that aliases to about 3 s on, 3 s off, so it streams every change and the off hold
+    /// (<see cref="A300LampSpeech.OffHoldMs"/>) sees each dark phase as the short one it is. Declared before
+    /// <see cref="All"/>, which reads it as it initialises.</summary>
+    private static readonly HashSet<string> FlashingVars = new(StringComparer.Ordinal) { "INI_AUTOLAND_LIGHT" };
+
     public static readonly IReadOnlyList<A300Lamp> All = new (string Var, string Name, string Panel, A300LightPower Power)[]
     {
         ("INI_ENG1_LOOP_A_LIGHT", "Engine 1 loop A fault light", "Fire", D),
@@ -98,7 +105,8 @@ public static class A300FaultLights
 
         ("INI_COCKPIT_DOOR_FAULT", "Cockpit door fault light", "Cockpit Door", D),
     }
-    .Select(l => new A300Lamp("A300_LAMP_" + l.Var.Substring(4).ToUpperInvariant(), l.Var, l.Name, l.Panel, SpeaksOff: true, l.Power))
+    .Select(l => new A300Lamp("A300_LAMP_" + l.Var.Substring(4).ToUpperInvariant(), l.Var, l.Name, l.Panel, SpeaksOff: true, l.Power,
+        Flashes: FlashingVars.Contains(l.Var)))
     .ToArray();
 }
 

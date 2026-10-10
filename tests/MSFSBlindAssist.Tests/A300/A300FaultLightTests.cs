@@ -76,10 +76,20 @@ public class A300FaultLightTests
             Assert.Equal(UpdateFrequency.Continuous, def.UpdateFrequency);
             Assert.True(def.IsAnnounced);
             Assert.True(def.ExcludeFromBatch);
-            Assert.False(def.HighFrequency);   // once a second is plenty for a light
+            Assert.Equal(lamp.Var == "INI_AUTOLAND_LIGHT", def.HighFrequency);   // once a second is plenty for a steady light
             Assert.False(def.ExcludeFromMonitorManager);
             Assert.Equal(lamp.Name, def.DisplayName);
         }
+    }
+
+    [Fact]
+    public void The_flashing_autoland_light_streams_every_change()
+    {
+        // It flashes about 0.6 s on, 0.6 s off (measured 2026-10-10); sampled once a second that aliases to
+        // about 3 s on, 3 s off, longer than the off hold, so it would still be spoken on and off.
+        var autoland = Lamp("INI_AUTOLAND_LIGHT");
+        Assert.True(autoland.Flashes);
+        Assert.Equal(new[] { autoland }, A300FaultLights.All.Where(l => l.Flashes));
     }
 
     [Fact]
@@ -101,6 +111,9 @@ public class A300FaultLightTests
         Deliver(gen, 0);
         Assert.Empty(_speech.All);   // held until the batch ends
         BatchEnd();
+        Assert.Empty(_speech.All);   // an off waits until the light has stayed dark (A300LampSpeech.OffHoldMs)
+        _now += A300LampSpeech.OffHoldMs;
+        BatchEnd();
         Deliver(gen, 1);
         BatchEnd();
         Assert.Equal(new[] { "Engine 1 generator fault light off", "Engine 1 generator fault light on" }, _speech.All);
@@ -108,17 +121,19 @@ public class A300FaultLightTests
     }
 
     [Fact]
-    public void Lights_changing_together_are_one_sentence()
+    public void Lights_changing_together_are_one_sentence_each_way()
     {
         PowerUp();
-        var lamps = new[] { Lamp("INI_SPEEDBRAKE7_FAULT"), Lamp("INI_SPEEDBRAKE6_FAULT"), Lamp("INI_SPEEDBRAKE5_FAULT"), Lamp("INI_APU_FAULT") };
+        var lamps = new[] { Lamp("INI_SPEEDBRAKE7_FAULT"), Lamp("INI_SPEEDBRAKE6_FAULT"), Lamp("INI_SPEEDBRAKE5_FAULT"), Lamp("INI_APU_FAULT"), Lamp("INI_PACK1_FAULT") };
         foreach (var lamp in lamps)
-            Deliver(lamp, lamp.Var == "INI_APU_FAULT" ? 0 : 1);
+            Deliver(lamp, lamp.Var is "INI_APU_FAULT" or "INI_PACK1_FAULT" ? 0 : 1);
         BatchEnd();
         foreach (var lamp in lamps)
-            Deliver(lamp, lamp.Var == "INI_APU_FAULT" ? 1 : 0);
+            Deliver(lamp, lamp.Var is "INI_APU_FAULT" or "INI_PACK1_FAULT" ? 1 : 0);
         BatchEnd();
-        Assert.Equal(new[] { "APU fault light on. 3 lights off: Spoiler 7 fault, Spoiler 6 fault, Spoiler 5 fault" }, _speech.All);
+        _now += A300LampSpeech.OffHoldMs;
+        BatchEnd();
+        Assert.Equal(new[] { "2 lights on: APU fault, Pack 1 fault", "3 lights off: Spoiler 7 fault, Spoiler 6 fault, Spoiler 5 fault" }, _speech.All);
     }
 
     [Fact]
@@ -238,8 +253,9 @@ public class A300FaultLightTests
     }
 
     [Fact]
-    public void A_light_that_goes_on_and_off_inside_one_batch_says_nothing()
+    public void A_light_that_blinks_inside_one_batch_says_on_then_off_once_it_has_stayed_dark()
     {
+        // The iFly 737's flash filter (owner, 2026-10-10): "on" at once, "off" only after the hold.
         PowerUp();
         var pack = Lamp("INI_PACK1_FAULT");
         Deliver(pack, 0);
@@ -247,7 +263,10 @@ public class A300FaultLightTests
         Deliver(pack, 1);
         Deliver(pack, 0);
         BatchEnd();
-        Assert.Empty(_speech.All);
+        Assert.Equal(new[] { "Pack 1 fault light on" }, _speech.All);
+        _now += A300LampSpeech.OffHoldMs;
+        BatchEnd();
+        Assert.Equal(new[] { "Pack 1 fault light on", "Pack 1 fault light off" }, _speech.All);
     }
 
     [Fact]
