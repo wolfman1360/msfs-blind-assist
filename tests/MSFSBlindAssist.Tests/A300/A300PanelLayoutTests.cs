@@ -248,6 +248,16 @@ public class A300PanelLayoutTests
         Assert.Equal(new[] { "Closed", "Open" }, Row("A300_CARGO_FWD_SMOKE_TOGGLE_GUARD").Positions.Values);
     }
 
+    [Theory]
+    [InlineData("A300_FIRE_1_AG1")]
+    [InlineData("A300_FIRE_1_AG2")]
+    [InlineData("A300_FIRE_2_AG1")]
+    [InlineData("A300_FIRE_2_AG2")]
+    [InlineData("A300_FIRE_APU_AG")]
+    public void An_agent_button_reads_discharged_as_its_disch_legend_lights(string key) =>
+        // Its state is the agent's discharge flag, which lights the button's DISCH legend (Fenix: "Agent 1 Discharge").
+        Assert.Equal(new[] { "Off", "Discharged" }, Row(key).Positions.Values);
+
     [Fact]
     public void Position_words_are_spoken_forms()
     {

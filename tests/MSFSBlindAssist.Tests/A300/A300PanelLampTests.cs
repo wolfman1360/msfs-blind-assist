@@ -91,6 +91,30 @@ public class A300PanelLampTests
     }
 
     [Theory]
+    [InlineData("FIRE_HANDLE_ENG1_LIGHT", "Engine 1 fire handle light", "INI_ENG1_FIRE_TEST")]
+    [InlineData("FIRE_HANDLE_ENG2_LIGHT", "Engine 2 fire handle light", "INI_ENG2_FIRE_TEST")]
+    [InlineData("FIRE_HANDLE_APU_LIGHT", "APU fire handle light", "INI_APU_FIRE_TEST")]
+    [InlineData("FIRE_1_AG1_SEQ1_LIGHT", "Engine 1 agent 1 squib light", "INI_engine1_agent1_squib")]
+    [InlineData("FIRE_1_AG2_SEQ1_LIGHT", "Engine 1 agent 2 squib light", "INI_engine1_agent2_squib")]
+    [InlineData("FIRE_2_AG1_SEQ1_LIGHT", "Engine 2 agent 1 squib light", "INI_engine2_agent1_squib")]
+    [InlineData("FIRE_2_AG2_SEQ1_LIGHT", "Engine 2 agent 2 squib light", "INI_engine2_agent2_squib")]
+    [InlineData("FIRE_APU_AG_SEQ1_LIGHT", "APU agent squib light", "INI_apu_agent_squib")]
+    public void The_fire_lights_are_named_from_their_buttons_on_the_dc_light_bus(string node, string name, string var)
+    {
+        Assert.Equal((name, "Fire"), (Lamp(node).Name, Lamp(node).Panel));
+        var lamp = A300PanelLamps.Resolved.Single(l => l.Lamp.Node == node);
+        Assert.Equal((var, A300LightPower.Dc), (lamp.Primary.Name, lamp.Power));
+    }
+
+    [Fact]
+    public void The_fire_handle_lights_are_the_lamps_the_cockpit_draws()
+    {
+        // MSFSBA read INI_fire_handle_*_light with no light power; the handle lamps draw INI_*_FIRE_TEST on the
+        // DC light bus. Both light together in the fire test (sampled 2026-10-09).
+        Assert.DoesNotContain(A300FaultLights.All, l => l.Var.StartsWith("INI_fire_handle_", StringComparison.Ordinal));
+    }
+
+    [Theory]
     [InlineData("INI_BAT1_light", "Battery 1 charge light")]
     [InlineData("INI_BAT3_light", "Battery 3 charge light")]
     public void The_battery_lights_are_charge_lights(string var, string name) =>

@@ -26,14 +26,12 @@ public class A300LampBoardTests
     [InlineData("INI_ECAM_CLR_LIGHT", A300LightPower.Ac)]
     [InlineData("INI_PITCH_FEEL1_FAULT", A300LightPower.Dc)]
     [InlineData("INI_PITCH_FEEL2_FAULT", A300LightPower.Ac)]
-    [InlineData("INI_fire_handle_engine1_light", A300LightPower.None)]   // no power term: the aircraft lights it itself
     public void Each_light_takes_its_bus_light_power_from_the_aircrafts_code(string var, A300LightPower power) =>
         Assert.Equal(power, A300FaultLights.All.Single(l => l.Var == var).Power);
 
     [Fact]
-    public void Every_fault_light_but_the_fire_handles_has_a_bus() =>
-        Assert.Equal(new[] { "INI_fire_handle_apu_light", "INI_fire_handle_engine1_light", "INI_fire_handle_engine2_light" },
-            A300FaultLights.All.Where(l => l.Power == A300LightPower.None).Select(l => l.Var).OrderBy(v => v, StringComparer.Ordinal));
+    public void Every_fault_light_has_a_bus() =>
+        Assert.DoesNotContain(A300FaultLights.All, l => l.Power == A300LightPower.None);
 
     [Fact]
     public void A_light_whose_power_is_unread_sets_no_baseline_and_says_nothing()
@@ -86,14 +84,6 @@ public class A300LampBoardTests
         Feed(gen, 1);
         Feed(battery, 0);
         Assert.Equal(new[] { "Engine 1 generator fault light off" }, Feed(A300LampBoard.DcPowerKey, 0));
-    }
-
-    [Fact]
-    public void A_light_with_no_power_term_speaks_whatever_the_power()
-    {
-        string handle = KeyOf("INI_fire_handle_engine1_light");
-        Assert.Empty(Feed(handle, 0));   // its only input: a baseline at once
-        Assert.Equal(new[] { "Engine 1 fire handle light on" }, Feed(handle, 1));
     }
 
     [Fact]

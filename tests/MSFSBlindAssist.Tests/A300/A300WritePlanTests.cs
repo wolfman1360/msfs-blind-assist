@@ -135,16 +135,18 @@ public class A300WritePlanTests
     }
 
     [Theory]
-    [InlineData("AIRLINER_ENG1_FIRE_PUSH2", 5000)]   // engine 1 loop test
-    [InlineData("AIRLINER_ENG2_FIRE_PUSH2", 5000)]   // engine 2 loop test
+    [InlineData("AIRLINER_ENG1_FIRE_PUSH2", 7000)]   // engine 1 loop test
+    [InlineData("AIRLINER_ENG2_FIRE_PUSH2", 7000)]   // engine 2 loop test
     [InlineData("AIRLINER_APU_FIRE_PUSH2", 5000)]    // APU loop test
     [InlineData("AIRLINER_ENG1_FIRE_PUSH1", 3000)]   // engine 1 squib test
     [InlineData("AIRLINER_ENG2_FIRE_PUSH1", 3000)]   // engine 2 squib test
     [InlineData("AIRLINER_APU_FIRE_PUSH1", 3000)]    // APU squib test
-    public void A_fire_test_is_held_as_long_as_the_aircrafts_own_checklist_holds_it(string id, int ms)
+    public void A_fire_test_is_held_until_its_fire_warning_can_be_heard(string id, int ms)
     {
         // Airbus_A300_Checklist.xml holds each loop test 5.0 s and each squib test 3.0 s; 250 ms
-        // never finished the APU loop test, whose fire handle light comes at about 3 s (2026-10-04).
+        // never finished the APU loop test, whose fire handle light comes at about 3 s (2026-10-04). An
+        // engine loop test's fire warning comes at about 4.4 s and lasts while it is held (2026-10-09), so
+        // 5 s lit the handle about half a second, inside the lights' gather window: 7 s gives about 2.5 s.
         var c = Control(A300Kinds.Hold, "");
         c.Id = id;
         Assert.Collection(A300WritePlan.ForPress(c).Steps,

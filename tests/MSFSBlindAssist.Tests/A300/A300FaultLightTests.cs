@@ -49,7 +49,7 @@ public class A300FaultLightTests
     {
         var panels = _def.GetPanelStructure().Values.SelectMany(p => p).ToHashSet();
         var displays = _def.GetPanelDisplayVariables();
-        Assert.Equal(58, A300FaultLights.All.Count);
+        Assert.Equal(55, A300FaultLights.All.Count);
         Assert.Equal(A300FaultLights.All.Count, A300FaultLights.All.Select(l => l.Key).Distinct().Count());
         Assert.Equal(A300FaultLights.All.Count, A300FaultLights.All.Select(l => l.Var).Distinct(StringComparer.OrdinalIgnoreCase).Count());
         Assert.Equal(A300FaultLights.All.Count, A300FaultLights.All.Select(l => l.Name).Distinct().Count());
@@ -180,7 +180,6 @@ public class A300FaultLightTests
         Assert.Equal(new[] { Lamp("INI_elec_gen1_fault").Key, A300LampBoard.DcPowerKey }, vars[Lamp("INI_elec_gen1_fault").Key].StateVariables);
         Assert.Equal(new[] { Lamp("INI_PACK1_FAULT").Key, A300LampBoard.DcPowerKey }, vars[Lamp("INI_PACK1_FAULT").Key].StateVariables);
         Assert.Equal(new[] { Lamp("INI_ECAM_CLR_LIGHT").Key, A300LampBoard.AcPowerKey }, vars[Lamp("INI_ECAM_CLR_LIGHT").Key].StateVariables);
-        Assert.Null(vars[Lamp("INI_fire_handle_engine1_light").Key].StateVariables);
     }
 
     [Fact]

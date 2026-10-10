@@ -460,6 +460,11 @@ public static partial class A300PanelLayout
         ["COCKPIT_LOCK_SWITCH"] = "0=Lock;1=Normal;2=Unlock",
         ["COCKPIT_DOOR"] = "0=Closed;1=Open",
         ["IGNITION_KNOB"] = "0=Start B;1=Start A;2=Crank;3=Off;4=Continuous relight",
+        ["FIRE_1_AG1"] = "0=Off;1=Discharged",   // the agent's discharge flag, which lights its DISCH legend
+        ["FIRE_1_AG2"] = "0=Off;1=Discharged",
+        ["FIRE_2_AG1"] = "0=Off;1=Discharged",
+        ["FIRE_2_AG2"] = "0=Off;1=Discharged",
+        ["FIRE_APU_AG"] = "0=Off;1=Discharged",
         ["FIRE_HANDLE_ENG1"] = "0=In;1=Pulled",
         ["FIRE_HANDLE_ENG2"] = "0=In;1=Pulled",
         ["FIRE_HANDLE_APU"] = "0=In;1=Pulled",

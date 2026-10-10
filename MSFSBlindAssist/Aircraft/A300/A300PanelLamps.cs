@@ -77,6 +77,17 @@ public static class A300PanelLamps
         new("APU_START_SEQ2_LIGHT", "APU start on light", "APU"),
         new("APU_START_SEQ1_LIGHT", "APU starting light", "APU"),
         new("APU_FUELSHUT_SEQ1_LIGHT", "APU fuel shutoff valve open light", "APU"),
+
+        // Fire: each handle's light (its lamp reads INI_*_FIRE_TEST, which the fire test and the aircraft's
+        // fire logic set) and each agent button's SQUIB legend. The DISCH legend is the agent row's position.
+        new("FIRE_HANDLE_ENG1_LIGHT", "Engine 1 fire handle light", "Fire"),
+        new("FIRE_HANDLE_ENG2_LIGHT", "Engine 2 fire handle light", "Fire"),
+        new("FIRE_HANDLE_APU_LIGHT", "APU fire handle light", "Fire"),
+        new("FIRE_1_AG1_SEQ1_LIGHT", "Engine 1 agent 1 squib light", "Fire"),
+        new("FIRE_1_AG2_SEQ1_LIGHT", "Engine 1 agent 2 squib light", "Fire"),
+        new("FIRE_2_AG1_SEQ1_LIGHT", "Engine 2 agent 1 squib light", "Fire"),
+        new("FIRE_2_AG2_SEQ1_LIGHT", "Engine 2 agent 2 squib light", "Fire"),
+        new("FIRE_APU_AG_SEQ1_LIGHT", "APU agent squib light", "Fire"),
     };
 
     /// <summary>Each named lamp with its rule from the shipped map; a lamp the map lacks is left out, loudly

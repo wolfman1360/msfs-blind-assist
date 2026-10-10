@@ -51,9 +51,10 @@ public static class A300WritePlan
     /// The tests that need a long press. The fire tests are held as long as the aircraft's own
     /// checklist holds them (<c>Airbus_A300_Checklist.xml</c>, package 1.0.11: <c>WaitForDuration</c>
     /// 5.0 s on each loop test and 3.0 s on each squib test, written to the same L:vars these buttons'
-    /// Set events write). 250 ms never finished one: the APU loop test lights loop A at about 1.5 s and
-    /// the fire handle at about 3 s, and the engine loop tests their fire handle at about 4.9 s
-    /// (measured 2026-10-04). The takeoff config, landing gear warning and smoke tests have no duration
+    /// Set events write), except the engine loop tests. 250 ms never finished one: the APU loop test lights
+    /// loop A at about 1.5 s and the fire handle at about 3 s (measured 2026-10-04). An engine loop test's
+    /// fire warning comes at about 4.4 s and lasts while it is held (2026-10-09), so 5 s lit the handle about
+    /// half a second, netted away inside the lights' gather window ([A300-24]); 7 s gives about 2.5 s. The takeoff config, landing gear warning and smoke tests have no duration
     /// in the checklist and are held 5 s (owner decision, 2026-10-09): on the same ground probe a 250 ms
     /// takeoff config press reported nothing even in landing configuration while a 5 s hold warned at
     /// about 3.7 s, the gear warning test's master warning came at about 3.5 s and the smoke test's ECAM
@@ -63,8 +64,8 @@ public static class A300WritePlan
     public static readonly IReadOnlyDictionary<string, int> TestHoldMs =
         new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
         {
-            ["AIRLINER_ENG1_FIRE_PUSH2"] = 5000,   // engine 1 loop test: INI_ENGINE1_LOOP_TEST_SWITCH
-            ["AIRLINER_ENG2_FIRE_PUSH2"] = 5000,   // engine 2 loop test: INI_ENGINE2_LOOP_TEST_SWITCH
+            ["AIRLINER_ENG1_FIRE_PUSH2"] = 7000,   // engine 1 loop test: INI_ENGINE1_LOOP_TEST_SWITCH
+            ["AIRLINER_ENG2_FIRE_PUSH2"] = 7000,   // engine 2 loop test: INI_ENGINE2_LOOP_TEST_SWITCH
             ["AIRLINER_APU_FIRE_PUSH2"] = 5000,    // APU loop test: INI_APU_LOOP_TEST_SWITCH
             ["AIRLINER_ENG1_FIRE_PUSH1"] = 3000,   // engine 1 squib test: INI_ENG1_SQUIB_TEST
             ["AIRLINER_ENG2_FIRE_PUSH1"] = 3000,   // engine 2 squib test: INI_ENG2_SQUIB_TEST

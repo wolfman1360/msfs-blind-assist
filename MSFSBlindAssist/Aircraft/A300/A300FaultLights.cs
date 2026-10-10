@@ -12,24 +12,20 @@ namespace MSFSBlindAssist.Aircraft.A300;
 /// annunciator light test does not move these variables (measured), so it says nothing.
 ///
 /// Each light names the bus its lamp draws light power from in the aircraft's emissive code (A = AC,
-/// D = DC; the three fire handle lights have no power term), so it is spoken only as the cockpit shows
-/// it (<see cref="A300LampBoard"/>, [A300-23]).
+/// D = DC), so it is spoken only as the cockpit shows it (<see cref="A300LampBoard"/>, [A300-23]).
 ///
 /// Left out on purpose: the FCU lamps (already on the FCU buttons' labels); the servo OFF and
 /// override supply lights (switch positions the panel already shows); the gear unlock, reverser and
 /// altitude alert lights (frequent, and the gear lever and the FMA already speak); and lights the
-/// cockpit model draws nowhere (FADEC, IRS warn), except the three fire handle lights, which the
-/// aircraft lights itself.
+/// cockpit model draws nowhere (FADEC, IRS warn). The fire handle lights are read through the lamps the
+/// cockpit draws (<see cref="A300PanelLamps"/>).
 /// </summary>
 public static class A300FaultLights
 {
-    private const A300LightPower A = A300LightPower.Ac, D = A300LightPower.Dc, N = A300LightPower.None;
+    private const A300LightPower A = A300LightPower.Ac, D = A300LightPower.Dc;
 
     public static readonly IReadOnlyList<A300Lamp> All = new (string Var, string Name, string Panel, A300LightPower Power)[]
     {
-        ("INI_fire_handle_engine1_light", "Engine 1 fire handle light", "Fire", N),
-        ("INI_fire_handle_engine2_light", "Engine 2 fire handle light", "Fire", N),
-        ("INI_fire_handle_apu_light", "APU fire handle light", "Fire", N),
         ("INI_ENG1_LOOP_A_LIGHT", "Engine 1 loop A fault light", "Fire", D),
         ("INI_ENG1_LOOP_B_LIGHT", "Engine 1 loop B fault light", "Fire", D),
         ("INI_ENG2_LOOP_A_LIGHT", "Engine 2 loop A fault light", "Fire", D),
