@@ -302,7 +302,7 @@ public static partial class A300PanelLayout
             string name = NameFor(control);
             switch (control.Kind)
             {
-                case A300Kinds.Command when SelectButtons.Contains(Short(control.Id)):
+                case A300Kinds.Command or A300Kinds.Toggle when ButtonRows.Contains(Short(control.Id)):
                     rows.Add(new A300PlacedRow(control.Key, name, A300RowAction.Press, control, new Dictionary<double, string>()));
                     break;
                 case A300Kinds.Toggle:

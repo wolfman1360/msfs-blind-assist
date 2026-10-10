@@ -118,7 +118,7 @@ public static class A300PanelLamps
         new("GND_BLEED_VLVE_SEQ1_LIGHT", "Ground bleed valve light", "Bleed"),
 
         // Pressurization: the two system buttons pick one system or the other, so they are buttons
-        // (A300PanelLayout.SelectButtons) labelled by these lights; the lights speak a press and an automatic
+        // (A300PanelLayout.ButtonRows) labelled by these lights; the lights speak a press and an automatic
         // change. The regulator and outflow legends are positions; the fault lights are A300FaultLights.
         new("PRESS_SYS_1_SEQ1_LIGHT", "Pressurization system 1 light", "Pressurization"),
         new("PRESS_SYS_2_SEQ1_LIGHT", "Pressurization system 2 light", "Pressurization"),
@@ -145,13 +145,52 @@ public static class A300PanelLamps
         new("ENG_2_START_SEQ1_LIGHT", "Engine 2 start valve open light", "Engine Start"),
         new("ENG_1_START_SEQ2_LIGHT", "Engine 1 starter armed light", "Engine Start"),
         new("ENG_2_START_SEQ2_LIGHT", "Engine 2 starter armed light", "Engine Start"),
+
+        // EFIS: each side's map filter, FPA, decision height and ATC message buttons are lit while selected, so
+        // they label their buttons (ByButton); the stop rudder input light has its own variable, not the row's.
+        new("EFIS_CSTR_CPT_SEQ1_LIGHT", "Captain constraints light", "EFIS Captain"),
+        new("EFIS_WPT_CPT_SEQ1_LIGHT", "Captain waypoints light", "EFIS Captain"),
+        new("EFIS_VOR_CPT_SEQ1_LIGHT", "Captain VORs light", "EFIS Captain"),
+        new("EFIS_NDB_CPT_SEQ1_LIGHT", "Captain NDBs light", "EFIS Captain"),
+        new("EFIS_ARPT_CPT_SEQ1_LIGHT", "Captain airports light", "EFIS Captain"),
+        new("CPT_FPA_SEQ1_LIGHT", "Captain FPA light", "EFIS Captain"),
+        new("DH_CPT_SEQ1_LIGHT", "Captain decision height light", "EFIS Captain"),
+        new("ATC_CPT_SEQ1_LIGHT", "Captain ATC message light", "EFIS Captain"),
+        new("STOP_CAPT_SEQ1_LIGHT", "Captain stop rudder input light", "EFIS Captain"),
+        new("EFIS_FO_CSTR_SEQ1_LIGHT", "First officer constraints light", "EFIS First Officer"),
+        new("EFIS_FO_WPT_SEQ1_LIGHT", "First officer waypoints light", "EFIS First Officer"),
+        new("EFIS_FO_VOR_SEQ1_LIGHT", "First officer VORs light", "EFIS First Officer"),
+        new("EFIS_FO_NDB_SEQ1_LIGHT", "First officer NDBs light", "EFIS First Officer"),
+        new("EFIS_FO_ARPT_SEQ1_LIGHT", "First officer airports light", "EFIS First Officer"),
+        new("FO_FPA_SEQ1_LIGHT", "First officer FPA light", "EFIS First Officer"),
+        new("FO_DH_SEQ1_LIGHT", "First officer decision height light", "EFIS First Officer"),
+        new("ATC_FO_SEQ1_LIGHT", "First officer ATC message light", "EFIS First Officer"),
+        new("STOP_FO_SEQ1_LIGHT", "First officer stop rudder input light", "EFIS First Officer"),
     };
 
-    /// <summary>A select button's light, which labels it ("Pressurization system 1: On"): row key → lamp key.</summary>
+    /// <summary>A button's own light, which labels it ("Pressurization system 1: On"): row key → lamp key.</summary>
     public static readonly IReadOnlyDictionary<string, string> ByButton = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["A300_PRESS_SYS_1"] = "A300_LT_PRESS_SYS_1_SEQ1_LIGHT",
         ["A300_PRESS_SYS_2"] = "A300_LT_PRESS_SYS_2_SEQ1_LIGHT",
+        ["A300_EFIS_CSTR_CPT"] = "A300_LT_EFIS_CSTR_CPT_SEQ1_LIGHT",
+        ["A300_EFIS_WPT_CPT"] = "A300_LT_EFIS_WPT_CPT_SEQ1_LIGHT",
+        ["A300_EFIS_VOR_CPT"] = "A300_LT_EFIS_VOR_CPT_SEQ1_LIGHT",
+        ["A300_EFIS_NDB_CPT"] = "A300_LT_EFIS_NDB_CPT_SEQ1_LIGHT",
+        ["A300_EFIS_ARPT_CPT"] = "A300_LT_EFIS_ARPT_CPT_SEQ1_LIGHT",
+        ["A300_CPT_FPA"] = "A300_LT_CPT_FPA_SEQ1_LIGHT",
+        ["A300_DH_CPT"] = "A300_LT_DH_CPT_SEQ1_LIGHT",
+        ["A300_ATC_CPT"] = "A300_LT_ATC_CPT_SEQ1_LIGHT",
+        ["A300_EFIS_FO_CSTR"] = "A300_LT_EFIS_FO_CSTR_SEQ1_LIGHT",
+        ["A300_EFIS_FO_WPT"] = "A300_LT_EFIS_FO_WPT_SEQ1_LIGHT",
+        ["A300_EFIS_FO_VOR"] = "A300_LT_EFIS_FO_VOR_SEQ1_LIGHT",
+        ["A300_EFIS_FO_NDB"] = "A300_LT_EFIS_FO_NDB_SEQ1_LIGHT",
+        ["A300_EFIS_FO_ARPT"] = "A300_LT_EFIS_FO_ARPT_SEQ1_LIGHT",
+        ["A300_FO_FPA"] = "A300_LT_FO_FPA_SEQ1_LIGHT",
+        ["A300_FO_DH"] = "A300_LT_FO_DH_SEQ1_LIGHT",
+        ["A300_ATC_FO"] = "A300_LT_ATC_FO_SEQ1_LIGHT",
+        ["A300_STOP_CAPT"] = "A300_LT_STOP_CAPT_SEQ1_LIGHT",
+        ["A300_STOP_FO"] = "A300_LT_STOP_FO_SEQ1_LIGHT",
     };
 
     /// <summary>Each named lamp with its rule from the shipped map; a lamp the map lacks is left out, loudly

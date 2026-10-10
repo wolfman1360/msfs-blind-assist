@@ -214,6 +214,42 @@ public class A300PanelLampTests
         Assert.Equal(("On", "Off"), (lit, dark));
     }
 
+    [Theory]
+    // Each EFIS panel's map filter, FPA, decision height and ATC message buttons are lit while selected: as the
+    // pressurization system buttons, each is labelled by its own light, which also speaks a press.
+    [InlineData("EFIS_CSTR_CPT_SEQ1_LIGHT", "Captain constraints light", "EFIS Captain", "A300_EFIS_CSTR_CPT")]
+    [InlineData("EFIS_WPT_CPT_SEQ1_LIGHT", "Captain waypoints light", "EFIS Captain", "A300_EFIS_WPT_CPT")]
+    [InlineData("EFIS_VOR_CPT_SEQ1_LIGHT", "Captain VORs light", "EFIS Captain", "A300_EFIS_VOR_CPT")]
+    [InlineData("EFIS_NDB_CPT_SEQ1_LIGHT", "Captain NDBs light", "EFIS Captain", "A300_EFIS_NDB_CPT")]
+    [InlineData("EFIS_ARPT_CPT_SEQ1_LIGHT", "Captain airports light", "EFIS Captain", "A300_EFIS_ARPT_CPT")]
+    [InlineData("CPT_FPA_SEQ1_LIGHT", "Captain FPA light", "EFIS Captain", "A300_CPT_FPA")]
+    [InlineData("DH_CPT_SEQ1_LIGHT", "Captain decision height light", "EFIS Captain", "A300_DH_CPT")]
+    [InlineData("ATC_CPT_SEQ1_LIGHT", "Captain ATC message light", "EFIS Captain", "A300_ATC_CPT")]
+    [InlineData("EFIS_FO_CSTR_SEQ1_LIGHT", "First officer constraints light", "EFIS First Officer", "A300_EFIS_FO_CSTR")]
+    [InlineData("EFIS_FO_WPT_SEQ1_LIGHT", "First officer waypoints light", "EFIS First Officer", "A300_EFIS_FO_WPT")]
+    [InlineData("EFIS_FO_VOR_SEQ1_LIGHT", "First officer VORs light", "EFIS First Officer", "A300_EFIS_FO_VOR")]
+    [InlineData("EFIS_FO_NDB_SEQ1_LIGHT", "First officer NDBs light", "EFIS First Officer", "A300_EFIS_FO_NDB")]
+    [InlineData("EFIS_FO_ARPT_SEQ1_LIGHT", "First officer airports light", "EFIS First Officer", "A300_EFIS_FO_ARPT")]
+    [InlineData("FO_FPA_SEQ1_LIGHT", "First officer FPA light", "EFIS First Officer", "A300_FO_FPA")]
+    [InlineData("FO_DH_SEQ1_LIGHT", "First officer decision height light", "EFIS First Officer", "A300_FO_DH")]
+    [InlineData("ATC_FO_SEQ1_LIGHT", "First officer ATC message light", "EFIS First Officer", "A300_ATC_FO")]
+    public void An_efis_button_is_labelled_by_its_light(string node, string name, string panel, string button)
+    {
+        Assert.Equal((name, panel), (Lamp(node).Name, Lamp(node).Panel));
+        Assert.Equal(Lamp(node).Key, A300PanelLamps.ByButton[button]);
+        Assert.Equal(panel, Placement.RowsByPanel.Single(p => p.Value.Any(r => r.Key == button)).Key);
+    }
+
+    [Theory]
+    [InlineData("STOP_CAPT_SEQ1_LIGHT", "Captain stop rudder input light", "EFIS Captain")]
+    [InlineData("STOP_FO_SEQ1_LIGHT", "First officer stop rudder input light", "EFIS First Officer")]
+    public void The_stop_rudder_input_lights_are_read(string node, string name, string panel)
+    {
+        // Their own variable (INI_STOP_RUDDER_INPUT_BUTTON_LIGHT), not the test switch's row.
+        Assert.Equal((name, panel), (Lamp(node).Name, Lamp(node).Panel));
+        Assert.Equal("INI_STOP_RUDDER_INPUT_BUTTON_LIGHT", A300PanelLamps.Resolved.Single(l => l.Lamp.Node == node).Primary.Name);
+    }
+
     [Fact]
     public void The_fire_handle_lights_are_the_lamps_the_cockpit_draws()
     {

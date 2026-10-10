@@ -435,12 +435,13 @@ public static partial class A300PanelLayout
         ["MAIN_CARGO_DOOR_LIGHT_LOADER"] = "Loader tarmac light",
     };
 
-    /// <summary>Command buttons that pick one of a set, as the TRP buttons pick a mode: a press of the picked one
-    /// does nothing (measured 2026-10-10), so they are buttons, not On/Off rows, labelled by their light
-    /// (<see cref="A300PanelLamps.ByButton"/>).</summary>
-    public static readonly IReadOnlySet<string> SelectButtons = new HashSet<string>(StringComparer.Ordinal)
+    /// <summary>Controls the map reads as switches that are push buttons in the cockpit, so they are buttons, not
+    /// On/Off rows, labelled by their light (<see cref="A300PanelLamps.ByButton"/>): the pressurization system
+    /// buttons pick one system or the other (a press of the picked one does nothing), and the stop rudder input
+    /// test switches reset themselves about 6 s after a press (both measured 2026-10-10).</summary>
+    public static readonly IReadOnlySet<string> ButtonRows = new HashSet<string>(StringComparer.Ordinal)
     {
-        "PRESS_SYS_1", "PRESS_SYS_2",
+        "PRESS_SYS_1", "PRESS_SYS_2", "STOP_CAPT", "STOP_FO",
     };
 
     /// <summary>Position words where iniBuilds' own are abbreviations or codes ("TK/GS", "SYS2"), say

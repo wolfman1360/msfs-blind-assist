@@ -268,6 +268,19 @@ public class A300PanelLayoutTests
             A300WritePlan.ForPress(Row(key).Control!).Steps.Cast<A300CalcStep>().Select(s => s.Rpn));
     }
 
+    [Theory]
+    [InlineData("A300_STOP_CAPT", "EFIS Captain")]
+    [InlineData("A300_STOP_FO", "EFIS First Officer")]
+    public void A_stop_rudder_input_test_is_a_button_labelled_by_its_light(string key, string panel)
+    {
+        // Its switch resets itself about 6 s after a press (measured 2026-10-10): a push button in the cockpit.
+        Assert.Equal(("Stop rudder input", A300RowAction.Press), (Row(key).Name, Row(key).Action));
+        Assert.Contains(Row(key), Placement.RowsByPanel[panel]);
+        Assert.Equal(new[] { $"1 (>B:{Row(key).Control!.Event})" },
+            A300WritePlan.ForPress(Row(key).Control!).Steps.Cast<A300CalcStep>().Select(s => s.Rpn));
+        Assert.True(A300PanelLamps.ByButton.ContainsKey(key));
+    }
+
     [Fact]
     public void Position_words_are_spoken_forms()
     {

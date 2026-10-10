@@ -55,8 +55,9 @@ pilots' controls share a panel, each says its side first: "Captain chrono", "Fir
 test".
 
 A switch is a combo box with the aircraft's own position words. A push button is a button.
-Buttons that pick one of a set say which is picked, as their lights show it: "Pressurization
-system 1: On" (pressing system 2 picks it and puts system 1 off). A
+Buttons with a light say what it shows: "Pressurization system 1: On" (pressing system 2 picks
+it and puts system 1 off), and on the EFIS panels "Airports: On", "FPA: On", "Decision height
+push: On". The map filters pick one at a time. A
 dimmer or temperature knob is a slider. A knob that only turns, such as the FCU speed knob or a
 radio frequency knob, is a pair of buttons, "increase" and "decrease", each one click of the
 knob. The flaps lever, the speed brake lever and the ground spoiler arm are the Flaps and Speed

@@ -132,7 +132,10 @@ public static class A300WritePlan
     public static A300Plan ForPress(A300Control control) => control.Kind switch
     {
         A300Kinds.Button => Steps(Set(control, control.Press ?? 1)),
-        A300Kinds.Command => Steps(Set(control, 1)),   // a select button (A300PanelLayout.SelectButtons): its Set requests the press
+        // A switch the cockpit has as a push button (A300PanelLayout.ButtonRows): its Set requests the press, or
+        // flips a test switch that resets itself. Any other switch is not a press.
+        A300Kinds.Command or A300Kinds.Toggle when A300PanelLayout.ButtonRows.Contains(A300PanelLayout.Short(control.Id))
+            => Steps(Set(control, 1)),
         A300Kinds.Hold => Steps(Set(control, control.Press ?? 2), new A300DelayStep(HoldMsFor(control)), Set(control, 0)),
         _ => A300Plan.Refused(NotSettableRefusal),
     };
