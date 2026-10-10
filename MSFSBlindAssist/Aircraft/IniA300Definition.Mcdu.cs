@@ -48,6 +48,15 @@ public partial class IniA300Definition
         return true;
     }
 
+    /// <summary>The unit's lit annunciators, as the cockpit shows them: each light AND the AC light power
+    /// ([A300-23]); an unread light or power is dark.</summary>
+    public IReadOnlyList<string> McduAnnunciators(A300McduUnit unit)
+    {
+        if (_sim is not { } sim || Cached(sim, A300LampBoard.AcPowerKey) is not double power || power < 0.5)
+            return Array.Empty<string>();
+        return A300McduLights.For(unit).Where(l => Cached(sim, l.Key) is double v && v >= 0.5).Select(l => l.Label).ToArray();
+    }
+
     private async Task PumpMcduAsync(SimConnectManager sim)
     {
         _mcduPumping = true;

@@ -235,7 +235,13 @@ How the screen reads: # is an empty box the MCDU wants filled (dashes are option
 arrows beside a title mean there are more pages (Right Arrow or Alt+Right goes to the next one),
 and a degree sign is a degree sign. A screen that stays blank for a second says so: the MCDU is
 probably unpowered. The MCDU blanks for a moment on every page change; that is ignored, and the
-cursor stays where it was.
+cursor stays where it was. The status box at the top shows the MCDU's lit annunciators, MSG, FAIL,
+DSPY and OFST ("Captain MCDU: MSG"), and one coming on is announced while the window is open.
+
+Aligning the IRSs: with all three IRS selectors in Navigate and a FROM/TO on INIT A, INIT A offers
+ALIGN IRS on right line-select key 4 (Alt+4). The IRS panel's status display then counts each
+IRS down: "IRS 1 alignment: aligning, 2 minutes 27 seconds left", then "aligned". Before ALIGN
+IRS it says "waiting for ALIGN IRS on the MCDU".
 
   Ctrl+1 to Ctrl+6   Left line-select keys 1 to 6
   Alt+1 to Alt+6     Right line-select keys 1 to 6

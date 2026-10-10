@@ -343,6 +343,26 @@ public sealed class A300McduForm : Form
             Render(screen, silent: false);
         if (!screen.IsBlank && _scratchpad.OnPoll(screen.Scratchpad.Trim(), DateTime.UtcNow) is { } say)
             _announcer.Announce(say);
+        UpdateAnnunciators(silent: false);
+    }
+
+    /// <summary>Each unit's lit annunciators when last shown.</summary>
+    private readonly Dictionary<A300McduUnit, IReadOnlyList<string>> _lit = new();
+
+    /// <summary>
+    /// The unit's lit annunciators in the status box ("Captain MCDU: MSG"), and one coming on spoken, as the
+    /// MD-11's MCDU window does: MSG lighting is how the FMS says "read the scratchpad", with no text change
+    /// behind it. A unit switch or a re-show takes the lights as they are, silently.
+    /// </summary>
+    private void UpdateAnnunciators(bool silent)
+    {
+        var lit = _definition.McduAnnunciators(_unit);
+        bool seen = _lit.TryGetValue(_unit, out var before);
+        _lit[_unit] = lit;
+        if (_rendered is { IsBlank: false })
+            _statusBox.Text = A300McduLights.Status(UnitName, lit);
+        if (!silent && seen && A300McduLights.ComingOn(before!, lit) is { } on)
+            _announcer.Announce(on);
     }
 
     private string UnitName => _unit == A300McduUnit.Captain ? "Captain MCDU" : "First Officer MCDU";
@@ -357,7 +377,7 @@ public sealed class A300McduForm : Form
             _statusBox.Text = $"{UnitName}: blank";
             return;
         }
-        _statusBox.Text = $"{UnitName}: connected";
+        _statusBox.Text = A300McduLights.Status(UnitName, _definition.McduAnnunciators(_unit));
 
         var previous = CursorRow();
         var rows = A300McduRows.Build(screen);
@@ -401,6 +421,7 @@ public sealed class A300McduForm : Form
         else
             Render(screen, silent: true);
         _scratchpad.OnPoll(screen.Scratchpad.Trim(), DateTime.UtcNow);
+        UpdateAnnunciators(silent: true);
     }
 
     private void ShowWaiting()

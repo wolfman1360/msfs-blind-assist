@@ -218,6 +218,10 @@ public partial class IniA300Definition
                 return null;
             return line.Active ? line.Radio.Active(w1, w2, value) : line.Radio.Standby(w1, w2, value);
         }
+        if (A300IrsAlignment.All.FirstOrDefault(l => l.LineKey == key) is { } irs)
+            return _sim is { } irsSim && Cached(irsSim, irs.AligningKey) is double aligning && Cached(irsSim, irs.AlignedKey) is double aligned
+                ? A300IrsAlignment.Status(value, aligning, aligned)
+                : null;
         if (key == A300EwdMemos.LineKey)
             return _memoLine ?? "unavailable";
         if (key == A300CargoDoor.StatusKey)

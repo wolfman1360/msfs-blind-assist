@@ -126,6 +126,10 @@ public static class A300Readouts
         // The transponder code as its display shows it, read as BCO16 as the FBW A320 and A380 read it.
         new A300Readout(SquawkCodeKey, "Squawk code", "Transponder", "TRANSPONDER CODE:1", true, "BCO16", Squawk),
 
+        // Each IRS's alignment (A300IrsAlignment): its line is composed from its time remaining and flags.
+        .. A300IrsAlignment.All.Select(l => new A300Readout(l.LineKey, $"IRS {l.Irs} alignment", A300IrsAlignment.Panel,
+            l.TimeVar, false, "number", _ => "unavailable")),
+
         // The main cargo door (A300CargoDoor): its line is composed from its travel and flags.
         new A300Readout(A300CargoDoor.StatusKey, "Cargo door", A300CargoDoor.Panel, A300CargoDoor.TravelVar, false, "number", _ => "unavailable"),
 

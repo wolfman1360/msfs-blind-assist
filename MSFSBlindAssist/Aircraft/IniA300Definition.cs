@@ -308,6 +308,15 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
             vars[radio.Window2Key] = OwnSubscription(radio.Window2Var, radio.Window2Key);
             vars[radio.TransferKey] = OwnSubscription(radio.TransferVar, radio.TransferKey);
         }
+        // Each IRS's aligning and aligned flags, its alignment line is composed from (A300IrsAlignment).
+        foreach (var line in A300IrsAlignment.All)
+        {
+            vars[line.AligningKey] = OwnSubscription(line.AligningVar, line.AligningKey);
+            vars[line.AlignedKey] = OwnSubscription(line.AlignedVar, line.AlignedKey);
+        }
+        // The MCDUs' annunciators (A300McduLights): the MCDU window's status box and its "MSG" call-out.
+        foreach (var light in A300McduLights.All)
+            vars[light.Key] = OwnSubscription(light.Var, light.Key);
         // The E/WD memos' inputs (A300EwdMemos), and the memo line, which carries the "ECAM memos" Ctrl+M row.
         foreach (var input in A300EwdMemos.Inputs)
         {
