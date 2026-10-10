@@ -132,6 +132,7 @@ public static class A300WritePlan
     public static A300Plan ForPress(A300Control control) => control.Kind switch
     {
         A300Kinds.Button => Steps(Set(control, control.Press ?? 1)),
+        A300Kinds.Command => Steps(Set(control, 1)),   // a select button (A300PanelLayout.SelectButtons): its Set requests the press
         A300Kinds.Hold => Steps(Set(control, control.Press ?? 2), new A300DelayStep(HoldMsFor(control)), Set(control, 0)),
         _ => A300Plan.Refused(NotSettableRefusal),
     };

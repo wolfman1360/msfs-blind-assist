@@ -54,7 +54,9 @@ captain's buttons, Gear on the gear lever, and Flaps and Speed Brake on the flap
 pilots' controls share a panel, each says its side first: "Captain chrono", "First officer GPWS
 test".
 
-A switch is a combo box with the aircraft's own position words. A push button is a button. A
+A switch is a combo box with the aircraft's own position words. A push button is a button.
+Buttons that pick one of a set say which is picked, as their lights show it: "Pressurization
+system 1: On" (pressing system 2 picks it and puts system 1 off). A
 dimmer or temperature knob is a slider. A knob that only turns, such as the FCU speed knob or a
 radio frequency knob, is a pair of buttons, "increase" and "decrease", each one click of the
 knob. The flaps lever, the speed brake lever and the ground spoiler arm are the Flaps and Speed
@@ -159,7 +161,8 @@ panel's own status display also carries its ECAM page's numbers after its lights
 shows the AC and DC voltages, frequencies and currents; APU shows its speed, EGT, bleed pressure
 and generator; Hydraulics shows the blue, green and yellow pressures; Fuel shows each tank and
 the total, in the weight unit set on the tablet; Air Conditioning shows the compartment
-temperatures; Bleed shows the bleed and pack pressures and temperatures. Oxygen shows its six gauges: the crew and courier low pressure and the four crew
+temperatures; Bleed shows the bleed and pack pressures and temperatures; Pressurization shows
+the cabin altitude and differential pressure. Oxygen shows its six gauges: the crew and courier low pressure and the four crew
 oxygen high pressure gauges, in psi ("Crew oxygen high pressure 1: 1,500 psi").
 
 On the Oxygen panel, the crew oxygen supply button works the courier low pressure supply in this

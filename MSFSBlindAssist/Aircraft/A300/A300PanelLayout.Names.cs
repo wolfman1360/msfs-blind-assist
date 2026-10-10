@@ -435,6 +435,14 @@ public static partial class A300PanelLayout
         ["MAIN_CARGO_DOOR_LIGHT_LOADER"] = "Loader tarmac light",
     };
 
+    /// <summary>Command buttons that pick one of a set, as the TRP buttons pick a mode: a press of the picked one
+    /// does nothing (measured 2026-10-10), so they are buttons, not On/Off rows, labelled by their light
+    /// (<see cref="A300PanelLamps.ByButton"/>).</summary>
+    public static readonly IReadOnlySet<string> SelectButtons = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "PRESS_SYS_1", "PRESS_SYS_2",
+    };
+
     /// <summary>Position words where iniBuilds' own are abbreviations or codes ("TK/GS", "SYS2"), say
     /// nothing ("OFF"/"ON" on a guard) or are wrong. The number is the POSITION, as
     /// <see cref="ParsePositions"/> reads it. The two cargo smoke agent guards were read from the

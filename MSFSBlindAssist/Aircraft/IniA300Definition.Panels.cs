@@ -116,6 +116,11 @@ public partial class IniA300Definition
             stateText = trpLamp;
             return true;
         }
+        if (A300PanelLamps.ByButton.TryGetValue(varKey, out var buttonLamp) && LampStatus(buttonLamp) is string selected)
+        {
+            stateText = selected;
+            return true;
+        }
         return base.TryDescribeControlState(varKey, out stateText);
     }
 

@@ -218,6 +218,8 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
                 def.StateVariables = new[] { A300Autobrake.LevelKey, autobrake.DecelKey, A300LampBoard.AcPowerKey };
             else if (A300Trp.ModeByButton.ContainsKey(row.Key))
                 def.StateVariables = new[] { A300Trp.ModeKey };
+            else if (A300PanelLamps.ByButton.TryGetValue(row.Key, out var lampKey))
+                def.StateVariables = new[] { lampKey, A300LampBoard.AcPowerKey, A300LampBoard.DcPowerKey };
             if (A300Announcements.AnnouncedKeys.Contains(row.Key))
                 def.ExcludeFromMonitorManager = false;   // it speaks, so Ctrl+M can mute it
             // A row whose variable another row already carries on the batch (an IDC copy, the crew oxygen

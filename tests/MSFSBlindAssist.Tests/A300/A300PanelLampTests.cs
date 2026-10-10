@@ -149,6 +149,28 @@ public class A300PanelLampTests
         Assert.True(A300LampBoard.IsLit(A300LampBoard.ById[bar.Lamp.Key], k => k == bar.Lamp.Key ? 1 : 1));
     }
 
+    [Theory]
+    [InlineData("PRESS_SYS_1_SEQ1_LIGHT", "Pressurization system 1 light", "INI_cabin_sys1", "A300_PRESS_SYS_1")]
+    [InlineData("PRESS_SYS_2_SEQ1_LIGHT", "Pressurization system 2 light", "INI_cabin_sys2", "A300_PRESS_SYS_2")]
+    public void A_pressurization_system_button_is_labelled_by_its_light(string node, string name, string var, string button)
+    {
+        // The two buttons pick one system or the other (a press of the picked one does nothing), as the TRP
+        // buttons pick a mode: so they are buttons, and each one's light is spoken and labels it.
+        Assert.Equal((name, "Pressurization"), (Lamp(node).Name, Lamp(node).Panel));
+        var lamp = A300PanelLamps.Resolved.Single(l => l.Lamp.Node == node);
+        Assert.Equal((var, A300LightPower.Ac), (lamp.Primary.Name, lamp.Power));
+        Assert.Equal(lamp.Lamp.Key, A300PanelLamps.ByButton[button]);
+
+        var cache = new Dictionary<string, double> { [lamp.Lamp.Key] = 1, [A300LampBoard.AcPowerKey] = 1 };
+        var def = new IniA300Definition { Cached = (_, key) => cache.TryGetValue(key, out var v) ? v : null };
+        def.Attach(new SimConnectManager(IntPtr.Zero));
+        Assert.Contains(lamp.Lamp.Key, def.GetVariables()[button].StateVariables!);
+        Assert.True(def.TryDescribeControlState(button, out var lit));
+        cache[lamp.Lamp.Key] = 0;
+        Assert.True(def.TryDescribeControlState(button, out var dark));
+        Assert.Equal(("On", "Off"), (lit, dark));
+    }
+
     [Fact]
     public void The_fire_handle_lights_are_the_lamps_the_cockpit_draws()
     {

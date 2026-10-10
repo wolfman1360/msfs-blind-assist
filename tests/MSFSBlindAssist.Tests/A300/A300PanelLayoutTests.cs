@@ -258,6 +258,16 @@ public class A300PanelLayoutTests
         // Its state is the agent's discharge flag, which lights the button's DISCH legend (Fenix: "Agent 1 Discharge").
         Assert.Equal(new[] { "Off", "Discharged" }, Row(key).Positions.Values);
 
+    [Theory]
+    [InlineData("A300_PRESS_SYS_1", "Pressurization system 1")]
+    [InlineData("A300_PRESS_SYS_2", "Pressurization system 2")]
+    public void A_pressurization_system_is_a_button(string key, string name)
+    {
+        Assert.Equal((name, A300RowAction.Press), (Row(key).Name, Row(key).Action));
+        Assert.Equal(new[] { $"1 (>B:AIRLINER_{key.Substring(5)}_Set)" },
+            A300WritePlan.ForPress(Row(key).Control!).Steps.Cast<A300CalcStep>().Select(s => s.Rpn));
+    }
+
     [Fact]
     public void Position_words_are_spoken_forms()
     {

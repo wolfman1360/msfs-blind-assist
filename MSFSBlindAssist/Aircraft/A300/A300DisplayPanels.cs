@@ -72,5 +72,6 @@ public static class A300DisplayPanels
             ["Fuel"] = Lines["ECAM Fuel"],
             ["Air Conditioning"] = Lines["ECAM Air Conditioning"],
             ["Bleed"] = Lines["ECAM Bleed"],
+            ["Pressurization"] = Lines["ECAM Pressurization"],
         };
 }

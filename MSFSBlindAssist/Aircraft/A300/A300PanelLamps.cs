@@ -112,6 +112,19 @@ public static class A300PanelLamps
         new("PACK_1_VALVE_IND_003_LIGHT", "Pack 1 flow bar light", "Air Conditioning"),
         new("PACK_2_VALVE_IND_004_LIGHT", "Pack 2 flow bar light", "Air Conditioning"),
         new("RAM_AIR_SEQ1_LIGHT", "Ram air valve open light", "Air Conditioning"),
+
+        // Pressurization: the two system buttons pick one system or the other, so they are buttons
+        // (A300PanelLayout.SelectButtons) labelled by these lights; the lights speak a press and an automatic
+        // change. The regulator and outflow legends are positions; the fault lights are A300FaultLights.
+        new("PRESS_SYS_1_SEQ1_LIGHT", "Pressurization system 1 light", "Pressurization"),
+        new("PRESS_SYS_2_SEQ1_LIGHT", "Pressurization system 2 light", "Pressurization"),
+    };
+
+    /// <summary>A select button's light, which labels it ("Pressurization system 1: On"): row key → lamp key.</summary>
+    public static readonly IReadOnlyDictionary<string, string> ByButton = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["A300_PRESS_SYS_1"] = "A300_LT_PRESS_SYS_1_SEQ1_LIGHT",
+        ["A300_PRESS_SYS_2"] = "A300_LT_PRESS_SYS_2_SEQ1_LIGHT",
     };
 
     /// <summary>Each named lamp with its rule from the shipped map; a lamp the map lacks is left out, loudly
