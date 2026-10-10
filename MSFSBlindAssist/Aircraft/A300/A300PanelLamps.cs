@@ -122,6 +122,22 @@ public static class A300PanelLamps
         // change. The regulator and outflow legends are positions; the fault lights are A300FaultLights.
         new("PRESS_SYS_1_SEQ1_LIGHT", "Pressurization system 1 light", "Pressurization"),
         new("PRESS_SYS_2_SEQ1_LIGHT", "Pressurization system 2 light", "Pressurization"),
+
+        // Cockpit door: the status indicator's OPEN legend (its other legend is the cockpit door fault light).
+        // The door button's own two lamps are wired to the ground cooling control's variables: left out.
+        new("COCKPIT_DOOR_STATUS_SEQ1_LIGHT", "Cockpit door open light", "Cockpit Door"),
+
+        // Cargo smoke: the three main deck smoke lights and each detector's lit legend (in no file, so named
+        // from its button); the smoke test lights all nine while held.
+        new("DECK_MID1_SMOKE_LIGHT", "Main deck mid 1 smoke light", "Cargo Smoke"),
+        new("DECK_MID2_SMOKE_LIGHT", "Main deck mid 2 smoke light", "Cargo Smoke"),
+        new("DECK_AFT_SMOKE_LIGHT", "Main deck aft smoke light", "Cargo Smoke"),
+        new("SMOKE_MID1_1_SEQ1_LIGHT", "Main deck smoke detector mid 1 left light", "Cargo Smoke"),
+        new("SMOKE_MID1_2_SEQ1_LIGHT", "Main deck smoke detector mid 1 right light", "Cargo Smoke"),
+        new("SMOKE_MID2_1_SEQ1_LIGHT", "Main deck smoke detector mid 2 left light", "Cargo Smoke"),
+        new("SMOKE_MID2_2_SEQ1_LIGHT", "Main deck smoke detector mid 2 right light", "Cargo Smoke"),
+        new("SMOKE_AFT_1_SEQ1_LIGHT", "Main deck smoke detector aft left light", "Cargo Smoke"),
+        new("SMOKE_AFT_2_SEQ1_LIGHT", "Main deck smoke detector aft right light", "Cargo Smoke"),
     };
 
     /// <summary>A select button's light, which labels it ("Pressurization system 1: On"): row key → lamp key.</summary>

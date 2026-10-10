@@ -150,6 +150,26 @@ public class A300PanelLampTests
         Assert.Equal(("INI_GND_BLEED", A300LightPower.Ac), (lamp.Primary.Name, lamp.Power));
     }
 
+    [Theory]
+    [InlineData("COCKPIT_DOOR_STATUS_SEQ1_LIGHT", "Cockpit door open light", "Cockpit Door", "INI_COCKPIT_DOOR_OPEN")]
+    // The smoke test lights all nine while held (sampled 2026-10-10); a detector's legend is in no file, so it is
+    // named from its button.
+    [InlineData("DECK_MID1_SMOKE_LIGHT", "Main deck mid 1 smoke light", "Cargo Smoke", "INI_MAIN_MID1_SMOKE")]
+    [InlineData("DECK_MID2_SMOKE_LIGHT", "Main deck mid 2 smoke light", "Cargo Smoke", "INI_MAIN_MID2_SMOKE")]
+    [InlineData("DECK_AFT_SMOKE_LIGHT", "Main deck aft smoke light", "Cargo Smoke", "INI_MAIN_AFT_SMOKE")]
+    [InlineData("SMOKE_MID1_1_SEQ1_LIGHT", "Main deck smoke detector mid 1 left light", "Cargo Smoke", "INI_SMOKE_MID1_1_LOOP")]
+    [InlineData("SMOKE_MID1_2_SEQ1_LIGHT", "Main deck smoke detector mid 1 right light", "Cargo Smoke", "INI_SMOKE_MID1_2_LOOP")]
+    [InlineData("SMOKE_MID2_1_SEQ1_LIGHT", "Main deck smoke detector mid 2 left light", "Cargo Smoke", "INI_SMOKE_MID2_1_LOOP")]
+    [InlineData("SMOKE_MID2_2_SEQ1_LIGHT", "Main deck smoke detector mid 2 right light", "Cargo Smoke", "INI_SMOKE_MID2_2_LOOP")]
+    [InlineData("SMOKE_AFT_1_SEQ1_LIGHT", "Main deck smoke detector aft left light", "Cargo Smoke", "INI_SMOKE_AFT1_LOOP")]
+    [InlineData("SMOKE_AFT_2_SEQ1_LIGHT", "Main deck smoke detector aft right light", "Cargo Smoke", "INI_SMOKE_AFT2_LOOP")]
+    public void The_door_and_cargo_smoke_lights_are_on_the_dc_light_bus(string node, string name, string panel, string var)
+    {
+        Assert.Equal((name, panel), (Lamp(node).Name, Lamp(node).Panel));
+        var lamp = A300PanelLamps.Resolved.Single(l => l.Lamp.Node == node);
+        Assert.Equal((var, A300LightPower.Dc), (lamp.Primary.Name, lamp.Power));
+    }
+
     [Fact]
     public void A_pack_flow_bar_is_lit_from_half_open()
     {
