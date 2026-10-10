@@ -56,6 +56,8 @@ public partial class IniA300Definition
             _ = CheckMovedAsync(row, target, simConnect, announcer, ++_pickSeq);
         if (sent && row.Action == A300RowAction.Press && A300PanelLamps.ByButton.TryGetValue(row.Key, out var ownLamp))
             _pressedLampUntil[ownLamp] = Clock() + PressedLampMs;
+        if (sent && control.Kind == A300Kinds.Spring && row.Action == A300RowAction.Set)
+            _ = ReReadAfterSpringAsync(row, simConnect);
 
         // An FCU knob step is read back once it lands ("Heading 271"): a numeric confirmation, as a
         // typed value's is. The altitude window's own call-out is told it is an echo.
@@ -134,6 +136,26 @@ public partial class IniA300Definition
                 _pendingPicks.Remove(row.Key);
         }
     }
+
+    /// <summary>A spring switch's hold can fall between two 1 Hz deliveries, which then see no change, so its
+    /// combo kept the side picked after the switch had returned (the rudder trim, 2026-10-10): read it again
+    /// once the hold is over, so it goes back to its rest.</summary>
+    private async Task ReReadAfterSpringAsync(A300PlacedRow row, SimConnectManager sim)
+    {
+        try
+        {
+            await Delay(A300WritePlan.SpringHoldMs + SpringSettleMs);
+            if (!_disposed)
+                ReRead(row.Key, sim);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("A300", $"Re-read of {row.Key} failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>After a spring's hold, the time its return takes to land.</summary>
+    public const int SpringSettleMs = 500;
 
     /// <summary>The value to plan from: what MSFSBA just commanded while it is fresh, else the cache.</summary>
     private double? CurrentValue(string key, SimConnectManager sim) =>

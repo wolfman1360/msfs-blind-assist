@@ -86,7 +86,7 @@ public partial class IniA300Definition
             return true;
 
         // The clocks' digits and button states: the Clock box's time lines and the buttons' labels, never spoken.
-        if (A300Clock.SilentKeys.Contains(varName))
+        if (A300Clock.SilentKeys.Contains(varName) || A300Trim.RudderDigitKeys.Contains(varName))
             return true;
 
         // The two master lights, the four levers and the SAS levers (the fault lights went to the board

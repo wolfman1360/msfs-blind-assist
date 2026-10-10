@@ -295,6 +295,9 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
             vars[key] = OwnSubscription(var, key);
         foreach (var (button, state) in A300Clock.ButtonStates)
             vars[A300Clock.StateKey(button)] = OwnSubscription(state.Var, A300Clock.StateKey(button));
+        // The rudder trim display's direction and digits its line is composed from (A300Trim), the same way.
+        foreach (var (key, var) in A300Trim.RudderDigits)
+            vars[key] = OwnSubscription(var, key);
 
         foreach (var readout in _readouts.Values)
         {

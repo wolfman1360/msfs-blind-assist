@@ -196,6 +196,14 @@ public static class A300PanelLamps
         new("FO_SW_ADC_SEQ2_LIGHT", "First officer air data to system 2 light", "Source Switching"),
         new("FO_SW_FD_SEQ2_LIGHT", "First officer flight director to system 2 light", "Source Switching"),
         new("FO_SW_EFIS_SEQ2_LIGHT", "First officer EFIS to SGU 3 light", "Source Switching"),
+
+        // The reversers (owner decision 2026-10-09: spoken): each engine's REV and REV UNLK lights on the main
+        // panel; and the rudder trim reset button's light, lit while it resets (it labels the button).
+        new("INDICATOR_REVLK1_LIGHT", "Engine 1 reverser deployed light", "Thrust Levers"),
+        new("INDICATOR_REVLK2_LIGHT", "Engine 2 reverser deployed light", "Thrust Levers"),
+        new("INDICATOR_REV1_LIGHT", "Engine 1 reverser unlocked light", "Thrust Levers"),
+        new("INDICATOR_REV2_LIGHT", "Engine 2 reverser unlocked light", "Thrust Levers"),
+        new("TRIM_KORRY_SEQ2_LIGHT", "Rudder trim reset light", A300Trim.Panel),
     };
 
     /// <summary>A button's own light, which labels it ("Pressurization system 1: On"): row key → lamp key.</summary>
@@ -229,6 +237,7 @@ public static class A300PanelLamps
         ["A300_FO_SW_ADC"] = "A300_LT_FO_SW_ADC_SEQ2_LIGHT",
         ["A300_FO_SW_FD"] = "A300_LT_FO_SW_FD_SEQ2_LIGHT",
         ["A300_FO_SW_EFIS"] = "A300_LT_FO_SW_EFIS_SEQ2_LIGHT",
+        ["A300_TRIM_KORRY"] = "A300_LT_TRIM_KORRY_SEQ2_LIGHT",
     };
 
     /// <summary>Each named lamp with its rule from the shipped map; a lamp the map lacks is left out, loudly

@@ -105,6 +105,13 @@ public static class A300Readouts
         new A300Readout("A300_RO_BRAKE_LEFT", "Left brake pressure", "Autobrake", "INI_BRAKE_PRESSURE_LEFT", false, "number", ThousandsPsi),
         new A300Readout("A300_RO_BRAKE_RIGHT", "Right brake pressure", "Autobrake", "INI_BRAKE_PRESSURE_RIGHT", false, "number", ThousandsPsi),
 
+        // The flap and slat indicator: the surfaces' own angles, which it shows (slats 15, flaps 0 at the first
+        // detent, 2026-10-10); and the trims (A300Trim): the rudder trim line is composed from its display.
+        new A300Readout("A300_RO_SLATS", "Slats", "Flaps and Speed Brake", "LEADING EDGE FLAPS LEFT ANGLE", true, "degrees", v => $"{Whole(v)} degrees"),
+        new A300Readout("A300_RO_FLAPS", "Flaps", "Flaps and Speed Brake", "TRAILING EDGE FLAPS LEFT ANGLE", true, "degrees", v => $"{Whole(v)} degrees"),
+        new A300Readout("A300_RO_PITCH_TRIM", "Pitch trim", A300Trim.Panel, "ELEVATOR TRIM POSITION", true, "degrees", A300Trim.Pitch),
+        new A300Readout(A300Trim.RudderKey, "Rudder trim", A300Trim.Panel, "INI_RUDDER_TRIM_DISPLAY3", false, "number", _ => "unavailable"),
+
         // The two clocks (A300Clock): the time line is composed from the clock's GMT digits, so its own value
         // (the seconds) reads only when they are unknown.
         new A300Readout(A300Clock.CaptainTimeKey, "Captain clock", A300Clock.Panel, "INI_CLOCK_GMT_SECONDS", false, "number", _ => "unavailable"),

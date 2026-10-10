@@ -206,6 +206,11 @@ public partial class IniA300Definition
             var digits = digitKeys.Select(k => _sim is { } clockSim ? Cached(clockSim, k) : null).ToArray();
             return digits.All(d => d.HasValue) ? A300Clock.Time(digits[0]!.Value, digits[1]!.Value, digits[2]!.Value, digits[3]!.Value) : null;
         }
+        if (key == A300Trim.RudderKey)
+        {
+            var display = A300Trim.RudderDigitKeys.Select(k => _sim is { } trimSim ? Cached(trimSim, k) : null).ToArray();
+            return display.All(d => d.HasValue) ? A300Trim.Rudder(display[0]!.Value, display[1]!.Value, display[2]!.Value, value) : null;
+        }
         if (A300EcamPages.KilogramKeys.Contains(key))
             return A300EcamPages.Weight(value, IsMetric());
         if (A300EcamPages.PoundsPerHourKeys.Contains(key))

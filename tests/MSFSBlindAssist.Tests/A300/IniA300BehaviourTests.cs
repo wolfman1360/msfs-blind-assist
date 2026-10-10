@@ -161,6 +161,19 @@ public class IniA300BehaviourTests
         Assert.Empty(_reReads);
     }
 
+    [Fact]
+    public void A_spring_switch_is_read_again_after_it_returns()
+    {
+        // Its 1 s hold can fall between two 1 Hz deliveries, which then see no change: the rudder trim combo
+        // kept "Left" after the switch had returned (2026-10-10).
+        _cache["A300_NOSE_TRIM"] = 1;
+        Assert.True(Set("A300_NOSE_TRIM", 2));
+        Assert.Empty(_reReads);
+        while (_waits.FirstOrDefault(w => !w.Task.IsCompleted) is { } wait)
+            wait.SetResult();
+        Assert.Equal(new[] { "A300_NOSE_TRIM" }, _reReads);
+    }
+
     [Theory]
     [InlineData("A300_LANDING_ELEV_SET#INC")]
     [InlineData("A300_LANDING_ELEV_SET#DEC")]
