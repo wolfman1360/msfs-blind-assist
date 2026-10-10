@@ -76,10 +76,6 @@ The autobrake buttons on the Center panel say what their lights show: "Autobrake
 autobrake off, as in the aircraft. The aircraft arms it only with the gear lever down and
 hydraulic pressure; if a press does not arm it, you hear "Autobrake did not arm".
 
-With the tablet's IDC option on (Settings), the IDC sets the transponder mode and the aircraft
-puts the pedestal's mode knob back. So the Transponder and TCAS panel's mode combo then says
-"Transponder mode: set from the IDC" and returns to the mode the aircraft is in.
-
 Status Display (Ctrl+3): the FCU panel shows the four FCU windows; the Captain, First Officer
 and Center panels show the altimeter settings, the flex temperature and the landing elevation;
 the Center panel also has a TRP line with the thrust rating mode, the limit AUTO chose or the

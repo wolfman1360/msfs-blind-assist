@@ -220,10 +220,6 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
             };
         }
 
-        // The tablet's IDC option ([A300-19]): read before a transponder mode write, so it streams on its
-        // own once-a-second subscription, never the batch ([A300-9]), and is consumed silently.
-        vars[A300Idc.OptionKey] = OwnSubscription(A300Idc.OptionVar, "IDC option");
-
         // The autobrake buttons' lamps ([A300-20]): the armed level and each button's DECEL light, shown
         // on the buttons' labels only; their own subscriptions, never the batch ([A300-9]).
         vars[A300Autobrake.LevelKey] = OwnSubscription(A300Autobrake.LevelVar, "Autobrake level");

@@ -52,10 +52,6 @@ public partial class IniA300Definition
         if (A300Baro.ModeKeys.Contains(varName))
             return true;
 
-        // The tablet's IDC option: read before a transponder mode write ([A300-19]), never spoken.
-        if (varName == A300Idc.OptionKey)
-            return true;
-
         // The autobrake lamps: shown on the buttons' labels (TryDescribeControlState), never spoken.
         if (A300Autobrake.StateKeys.Contains(varName))
             return true;
