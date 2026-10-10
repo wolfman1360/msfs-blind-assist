@@ -258,6 +258,48 @@ public class A300PanelLampTests
     }
 
     [Theory]
+    // Each ECAM page button is lit while its page is the one the lower ECAM shows, picked or automatic
+    // (INI_ecam_active_page; ECAM_CURRENT_STATUS is 1 picked, 2 automatic, measured 2026-10-10): its light labels it.
+    [InlineData("ECAM_ENG_SEQ2_LIGHT", "Engine page light", "A300_ECAM_ENG", 1)]
+    [InlineData("ECAM_HYD_SEQ2_LIGHT", "Hydraulic page light", "A300_ECAM_HYD", 2)]
+    [InlineData("ECAM_AC_SEQ2_LIGHT", "AC electrical page light", "A300_ECAM_AC", 3)]
+    [InlineData("ECAM_DC_SEQ2_LIGHT", "DC electrical page light", "A300_ECAM_DC", 4)]
+    [InlineData("ECAM_BLEED_SEQ2_LIGHT", "Bleed page light", "A300_ECAM_BLEED", 5)]
+    [InlineData("ECAM_COND_SEQ2_LIGHT", "Air conditioning page light", "A300_ECAM_COND", 6)]
+    [InlineData("ECAM_PRESS_SEQ2_LIGHT", "Pressurization page light", "A300_ECAM_PRESS", 7)]
+    [InlineData("ECAM_FUEL_SEQ2_LIGHT", "Fuel page light", "A300_ECAM_FUEL", 8)]
+    [InlineData("ECAM_APU_SEQ2_LIGHT", "APU page light", "A300_ECAM_APU", 9)]
+    [InlineData("ECAM_FCTL_SEQ2_LIGHT", "Flight controls page light", "A300_ECAM_FCTL", 10)]
+    [InlineData("ECAM_DOOR_SEQ2_LIGHT", "Doors page light", "A300_ECAM_DOOR", 11)]
+    [InlineData("ECAM_WHEEL_SEQ2_LIGHT", "Wheels page light", "A300_ECAM_WHEEL", 12)]
+    public void An_ecam_page_button_is_labelled_by_its_page_light(string node, string name, string button, int page)
+    {
+        Assert.Equal((name, "ECAM Control Panel"), (Lamp(node).Name, Lamp(node).Panel));
+        Assert.Equal(Lamp(node).Key, A300PanelLamps.ByButton[button]);
+        Assert.Equal("ECAM Control Panel", Placement.RowsByPanel.Single(p => p.Value.Any(r => r.Key == button)).Key);
+
+        var lamp = A300PanelLamps.Resolved.Single(l => l.Lamp.Node == node);
+        bool Lit(double shown, double status) => A300LampBoard.IsLit(A300LampBoard.ById[lamp.Lamp.Key],
+            k => k == lamp.Lamp.Key ? shown : k.Contains("ECAM_CURRENT_STATUS") ? status : 1) == true;
+        Assert.Equal((true, true, false, false), (Lit(page, 1), Lit(page, 2), Lit(page, 0), Lit(page == 1 ? 2 : 1, 1)));
+    }
+
+    [Fact]
+    public void The_ecam_clear_button_is_labelled_by_its_light()
+    {
+        // The CLR button is lit while there is something to clear: the fault light INI_ECAM_CLR_LIGHT.
+        Assert.Equal("A300_LAMP_ECAM_CLR_LIGHT", A300PanelLamps.ByButton["A300_ECAM_CLR"]);
+        var cache = new Dictionary<string, double> { ["A300_LAMP_ECAM_CLR_LIGHT"] = 1, [A300LampBoard.AcPowerKey] = 1 };
+        var def = new IniA300Definition { Cached = (_, key) => cache.TryGetValue(key, out var v) ? v : null };
+        def.Attach(new SimConnectManager(IntPtr.Zero));
+        Assert.Contains("A300_LAMP_ECAM_CLR_LIGHT", def.GetVariables()["A300_ECAM_CLR"].StateVariables!);
+        Assert.True(def.TryDescribeControlState("A300_ECAM_CLR", out var lit));
+        cache["A300_LAMP_ECAM_CLR_LIGHT"] = 0;
+        Assert.True(def.TryDescribeControlState("A300_ECAM_CLR", out var dark));
+        Assert.Equal(("On", "Off"), (lit, dark));
+    }
+
+    [Theory]
     [InlineData("STOP_CAPT_SEQ1_LIGHT", "Captain stop rudder input light", "EFIS Captain")]
     [InlineData("STOP_FO_SEQ1_LIGHT", "First officer stop rudder input light", "EFIS First Officer")]
     public void The_stop_rudder_input_lights_are_read(string node, string name, string panel)

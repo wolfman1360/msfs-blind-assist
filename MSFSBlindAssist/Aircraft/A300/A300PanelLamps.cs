@@ -204,6 +204,21 @@ public static class A300PanelLamps
         new("INDICATOR_REV1_LIGHT", "Engine 1 reverser unlocked light", "Thrust Levers"),
         new("INDICATOR_REV2_LIGHT", "Engine 2 reverser unlocked light", "Thrust Levers"),
         new("TRIM_KORRY_SEQ2_LIGHT", "Rudder trim reset light", A300Trim.Panel),
+
+        // ECAM control panel: each page button is lit while its page is the one the lower ECAM shows, picked or
+        // automatic, so it labels its button; a press of the lit one goes back to the automatic page.
+        new("ECAM_ENG_SEQ2_LIGHT", "Engine page light", "ECAM Control Panel"),
+        new("ECAM_HYD_SEQ2_LIGHT", "Hydraulic page light", "ECAM Control Panel"),
+        new("ECAM_AC_SEQ2_LIGHT", "AC electrical page light", "ECAM Control Panel"),
+        new("ECAM_DC_SEQ2_LIGHT", "DC electrical page light", "ECAM Control Panel"),
+        new("ECAM_BLEED_SEQ2_LIGHT", "Bleed page light", "ECAM Control Panel"),
+        new("ECAM_COND_SEQ2_LIGHT", "Air conditioning page light", "ECAM Control Panel"),
+        new("ECAM_PRESS_SEQ2_LIGHT", "Pressurization page light", "ECAM Control Panel"),
+        new("ECAM_FUEL_SEQ2_LIGHT", "Fuel page light", "ECAM Control Panel"),
+        new("ECAM_APU_SEQ2_LIGHT", "APU page light", "ECAM Control Panel"),
+        new("ECAM_FCTL_SEQ2_LIGHT", "Flight controls page light", "ECAM Control Panel"),
+        new("ECAM_DOOR_SEQ2_LIGHT", "Doors page light", "ECAM Control Panel"),
+        new("ECAM_WHEEL_SEQ2_LIGHT", "Wheels page light", "ECAM Control Panel"),
     };
 
     /// <summary>A button's own light, which labels it ("Pressurization system 1: On"): row key → lamp key.</summary>
@@ -238,6 +253,19 @@ public static class A300PanelLamps
         ["A300_FO_SW_FD"] = "A300_LT_FO_SW_FD_SEQ2_LIGHT",
         ["A300_FO_SW_EFIS"] = "A300_LT_FO_SW_EFIS_SEQ2_LIGHT",
         ["A300_TRIM_KORRY"] = "A300_LT_TRIM_KORRY_SEQ2_LIGHT",
+        ["A300_ECAM_ENG"] = "A300_LT_ECAM_ENG_SEQ2_LIGHT",
+        ["A300_ECAM_HYD"] = "A300_LT_ECAM_HYD_SEQ2_LIGHT",
+        ["A300_ECAM_AC"] = "A300_LT_ECAM_AC_SEQ2_LIGHT",
+        ["A300_ECAM_DC"] = "A300_LT_ECAM_DC_SEQ2_LIGHT",
+        ["A300_ECAM_BLEED"] = "A300_LT_ECAM_BLEED_SEQ2_LIGHT",
+        ["A300_ECAM_COND"] = "A300_LT_ECAM_COND_SEQ2_LIGHT",
+        ["A300_ECAM_PRESS"] = "A300_LT_ECAM_PRESS_SEQ2_LIGHT",
+        ["A300_ECAM_FUEL"] = "A300_LT_ECAM_FUEL_SEQ2_LIGHT",
+        ["A300_ECAM_APU"] = "A300_LT_ECAM_APU_SEQ2_LIGHT",
+        ["A300_ECAM_FCTL"] = "A300_LT_ECAM_FCTL_SEQ2_LIGHT",
+        ["A300_ECAM_DOOR"] = "A300_LT_ECAM_DOOR_SEQ2_LIGHT",
+        ["A300_ECAM_WHEEL"] = "A300_LT_ECAM_WHEEL_SEQ2_LIGHT",
+        ["A300_ECAM_CLR"] = "A300_LAMP_ECAM_CLR_LIGHT",   // a fault light, lit while there is something to clear
     };
 
     /// <summary>Each named lamp with its rule from the shipped map; a lamp the map lacks is left out, loudly

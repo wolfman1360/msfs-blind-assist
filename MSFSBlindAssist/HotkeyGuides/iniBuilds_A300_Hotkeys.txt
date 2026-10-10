@@ -88,6 +88,11 @@ rudder trim reset light, which is also the reset button's label while the trim r
 The Flaps and Speed Brake panel's status display reads the slat and flap angles in degrees as they
 move. The Thrust Levers panel's reverser unlocked and deployed lights are announced as they change.
 
+The ECAM Control Panel's page buttons say whether their light is on. The lit one is the page the
+lower ECAM shows, the one you chose or the automatic one: "Fuel page: On". Pressing the lit one
+goes back to the automatic page, and the light of the page that replaces it is announced. The
+Clear button says whether its light is on.
+
 The fire tests on the Fire panel are held as a pilot holds them: 7 seconds for an engine loop
 test, 5 seconds for the APU loop test, 3 seconds for a squib test. The loop lights and the fire
 handle light a loop test brings on, and the squib lights a squib test brings on, are announced (see
