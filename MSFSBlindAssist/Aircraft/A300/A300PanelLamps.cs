@@ -56,6 +56,21 @@ public static class A300PanelLamps
         new("AC_EMER_ON_INV_LIGHT", "AC emergency bus on inverter light", "Electrical"),
         new("DC_NORM_BUS_LIGHT", "DC normal bus off light", "Electrical"),
         new("DC_ESS_ONBAT_LIGHT", "DC essential bus on battery light", "Electrical"),
+
+        // IRS: each mode panel's four lights. iniBuilds' second and third panel nodes read IRS 3 and IRS 2,
+        // in another order, so each is named from the IRS its rule reads.
+        new("IRS_1_009_LIGHT", "IRS 1 align light", "IRS"),
+        new("IRS_1_010_LIGHT", "IRS 1 on battery light", "IRS"),
+        new("IRS_1_011_LIGHT", "IRS 1 battery fault light", "IRS"),
+        new("IRS_1_012_LIGHT", "IRS 1 fault light", "IRS"),
+        new("IRS_3_012_LIGHT", "IRS 2 align light", "IRS"),
+        new("IRS_3_011_LIGHT", "IRS 2 on battery light", "IRS"),
+        new("IRS_3_010_LIGHT", "IRS 2 battery fault light", "IRS"),
+        new("IRS_3_009_LIGHT", "IRS 2 fault light", "IRS"),
+        new("IRS_2_009_LIGHT", "IRS 3 align light", "IRS"),
+        new("IRS_2_010_LIGHT", "IRS 3 on battery light", "IRS"),
+        new("IRS_2_011_LIGHT", "IRS 3 battery fault light", "IRS"),
+        new("IRS_2_012_LIGHT", "IRS 3 fault light", "IRS"),
     };
 
     /// <summary>Each named lamp with its rule from the shipped map; a lamp the map lacks is left out, loudly

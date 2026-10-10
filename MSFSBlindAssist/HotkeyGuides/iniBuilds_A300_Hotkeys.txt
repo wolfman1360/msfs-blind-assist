@@ -454,7 +454,8 @@ and isolation valves, cabin pressure, anti-ice, window heat, the APU, the engine
 and oil pressure, autoland, GPWS, below glide slope, the MCDU message light, ECAM clear and the
 cockpit door. The Electrical panel adds external power available, AC bus 1 and 2 off, AC
 essential bus off, AC emergency bus on inverter, DC normal bus off, DC essential bus on battery,
-IDG 1 and 2 disconnected, and override supply 1 and 2 flow. More panels are being added. A
+IDG 1 and 2 disconnected, and override supply 1 and 2 flow. The IRS panel adds each IRS's align,
+on battery, battery fault and fault lights. More panels are being added. A
 switch's own OFF or ON legend is not read as a light: the switch already says its position.
 Lights that change together are read as one sentence, about a second and a half later, so an
 engine start sounds like "3 lights off: Spoiler 7 fault, Spoiler 6 fault, Spoiler 5 fault". The

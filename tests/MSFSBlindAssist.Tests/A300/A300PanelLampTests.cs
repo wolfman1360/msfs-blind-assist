@@ -59,6 +59,27 @@ public class A300PanelLampTests
     }
 
     [Theory]
+    // The second and third mode panels' lamp nodes carry IRS 3 and IRS 2 in iniBuilds' numbering, in another
+    // order: each light is named from the IRS its rule reads.
+    [InlineData("IRS_1_009_LIGHT", "IRS 1 align light")]
+    [InlineData("IRS_1_010_LIGHT", "IRS 1 on battery light")]
+    [InlineData("IRS_1_011_LIGHT", "IRS 1 battery fault light")]
+    [InlineData("IRS_1_012_LIGHT", "IRS 1 fault light")]
+    [InlineData("IRS_2_009_LIGHT", "IRS 3 align light")]
+    [InlineData("IRS_2_012_LIGHT", "IRS 3 fault light")]
+    [InlineData("IRS_3_009_LIGHT", "IRS 2 fault light")]
+    [InlineData("IRS_3_010_LIGHT", "IRS 2 battery fault light")]
+    [InlineData("IRS_3_011_LIGHT", "IRS 2 on battery light")]
+    [InlineData("IRS_3_012_LIGHT", "IRS 2 align light")]
+    public void The_irs_lights_are_named_from_the_irs_they_read(string node, string name)
+    {
+        Assert.Equal(name, Lamp(node).Name);
+        Assert.Equal("IRS", Lamp(node).Panel);
+        int irs = name[4] - '0';
+        Assert.Contains($"INI_IRS{irs}_", A300PanelLamps.Resolved.Single(l => l.Lamp.Node == node).Primary.Name);
+    }
+
+    [Theory]
     [InlineData("INI_BAT1_light", "Battery 1 charge light")]
     [InlineData("INI_BAT3_light", "Battery 3 charge light")]
     public void The_battery_lights_are_charge_lights(string var, string name) =>
