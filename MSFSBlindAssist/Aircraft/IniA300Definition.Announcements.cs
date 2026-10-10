@@ -89,7 +89,8 @@ public partial class IniA300Definition
         // and read-backs are composed from them, never spoken.
         if (A300Clock.SilentKeys.Contains(varName) || A300Trim.RudderDigitKeys.Contains(varName) || A300Radios.SilentKeys.Contains(varName)
             || A300CargoDoor.SilentKeys.Contains(varName) || A300EwdMemos.IsInputOrLine(varName)
-            || varName.StartsWith("A300_MCDU_LT_", StringComparison.Ordinal) || A300IrsAlignment.FlagKeys.Contains(varName))
+            || varName.StartsWith("A300_MCDU_LT_", StringComparison.Ordinal) || A300IrsAlignment.FlagKeys.Contains(varName)
+            || A300IlsDeviation.InputKeys.Contains(varName))
             return true;
 
         // The two master lights, the four levers and the SAS levers (the fault lights went to the board

@@ -233,6 +233,14 @@ public partial class IniA300Definition
         }
         if (A300Radios.BearingLines.TryGetValue(key, out var bearing))
             return _sim is { } adfSim && Cached(adfSim, bearing.SignalKey) is double signal ? A300Radios.Bearing(signal, value) : null;
+        if (key == A300IlsDeviation.LocalizerKey)
+            return _sim is { } locSim
+                ? A300IlsDeviation.Localizer(Cached(locSim, A300IlsDeviation.NavSelectorKey), Cached(locSim, A300IlsDeviation.LocalizerValidKey), value)
+                : null;
+        if (key == A300IlsDeviation.GlideslopeKey)
+            return _sim is { } gsSim
+                ? A300IlsDeviation.Glideslope(Cached(gsSim, A300IlsDeviation.NavSelectorKey), Cached(gsSim, A300IlsDeviation.GlideslopeReceivedKey), value)
+                : null;
         if (key == A300Trim.RudderKey)
         {
             var display = A300Trim.RudderDigitKeys.Select(k => _sim is { } trimSim ? Cached(trimSim, k) : null).ToArray();

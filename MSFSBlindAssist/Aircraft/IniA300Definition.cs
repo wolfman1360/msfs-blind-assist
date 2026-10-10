@@ -343,6 +343,14 @@ public partial class IniA300Definition : BaseAircraftDefinition, IDisposable
             signal.Units = "number";
             vars[signalKey] = signal;
         }
+        // Whether the captain's PFD draws its ILS deviation pointers (A300IlsDeviation): the EFIS nav selector,
+        // the localizer's validity and the ILS receiver's glideslope, the same way.
+        vars[A300IlsDeviation.NavSelectorKey] = OwnSubscription(A300IlsDeviation.NavSelectorVar, A300IlsDeviation.NavSelectorKey);
+        vars[A300IlsDeviation.LocalizerValidKey] = OwnSubscription(A300IlsDeviation.LocalizerValidVar, A300IlsDeviation.LocalizerValidKey);
+        var glideslopeReceived = OwnSubscription(A300IlsDeviation.GlideslopeReceivedVar, A300IlsDeviation.GlideslopeReceivedKey);
+        glideslopeReceived.Type = SimVarType.SimVar;
+        glideslopeReceived.Units = "Bool";
+        vars[A300IlsDeviation.GlideslopeReceivedKey] = glideslopeReceived;
 
         foreach (var readout in _readouts.Values)
         {

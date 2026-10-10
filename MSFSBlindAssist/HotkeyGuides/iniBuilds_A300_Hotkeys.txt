@@ -197,9 +197,12 @@ The Displays section has a status box (Ctrl+3) for each screen:
 
   PFD                  The annunciator (thrust, pitch, roll, armed modes and the autopilot,
                        CMD 1, CMD 2 or Dual), the FCU windows, attitude, heading, airspeed,
-                       altitude, vertical speed, radio altitude, VLS, VMAX, green dot, S and F
-                       speeds, VS and minimums. Green dot, S and F say "not shown at this flap
-                       setting" where the speed tape does not draw them.
+                       altitude, vertical speed, radio altitude, localizer and glideslope
+                       deviation in dots ("1.2 dots left of localizer", "0.8 dots above
+                       glideslope"), VLS, VMAX, green dot, S and F speeds, VS and minimums. Green
+                       dot, S and F say "not shown at this flap setting" where the speed tape does
+                       not draw them; the deviation reads "not shown, EFIS not on ILS" unless the
+                       captain's EFIS nav selector is on ILS, as the PFD shows it.
   ND                   Mode and range, distance to the next waypoint, ground speed, true
                        airspeed, wind, VOR 1 and 2 with DME, the ILS with localizer and
                        glideslope reception, ADF 1 and 2.

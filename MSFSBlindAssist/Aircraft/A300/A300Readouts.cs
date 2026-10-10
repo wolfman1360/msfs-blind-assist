@@ -166,6 +166,9 @@ public static class A300Readouts
         new A300Readout(FSpeedKey, "F speed", "PFD", "FCPC_F_SPEED", false, "number", A300DisplayText.Speed),
         new A300Readout(VsSpeedKey, "VS", "PFD", "INI_VS_SPEED", false, "number", A300DisplayText.Speed),
         new A300Readout(MinimumsKey, "Minimums", "PFD", "INI_MINIMUMS_PILOT", false, "number", A300DisplayText.Minimums),
+        // The ILS deviation, in dots, composed with the inputs that decide whether the PFD draws it (A300IlsDeviation).
+        new A300Readout(A300IlsDeviation.LocalizerKey, "Localizer deviation", "PFD", A300IlsDeviation.LocalizerVar, false, "number", _ => "unavailable"),
+        new A300Readout(A300IlsDeviation.GlideslopeKey, "Glideslope deviation", "PFD", A300IlsDeviation.GlideslopeVar, false, "number", _ => "unavailable"),
 
         // The ND. The waypoint's name and bearing are not aircraft variables (the ND computes them
         // from its flight plan); the MCDU's F-PLN page reads them.

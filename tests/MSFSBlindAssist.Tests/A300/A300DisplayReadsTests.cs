@@ -71,6 +71,8 @@ public class A300DisplayReadsTests
         Assert.True(prompt.IndexOf("flight mode annunciator", StringComparison.OrdinalIgnoreCase)
                     < prompt.IndexOf("Airspeed", StringComparison.Ordinal));
         Assert.Contains("no altitude tape", prompt);
+        // PFD::drawAltitudeTape draws only the FCU's selected altitude (INI_Altitude_Dial, "FL{:03d}").
+        Assert.Contains("selected altitude", prompt);
     }
 
     [Fact]
