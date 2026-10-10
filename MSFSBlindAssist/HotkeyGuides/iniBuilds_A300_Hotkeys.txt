@@ -64,7 +64,9 @@ When you change a control, MSFS Blind Assist moves it exactly the way a click in
 would. Nothing is spoken back - your screen reader already says what you chose - unless the
 control could not be moved, when you hear why: "Battery 1 unavailable" (the simulator connection
 cannot carry the change), or "position unknown, try again in a moment" (a switch must be read
-before it may be moved; this clears within a second or two of connecting).
+before it may be moved; this clears within a second or two of connecting). If the aircraft does
+not move a switch you chose, you hear where it stayed and the control goes back: "Crossbleed
+stayed Open" (the crossbleed button works only with the crossbleed mode in Manual).
 
 A trim switch (aileron trim, rudder trim, the pitch trim switches on the yokes, the cabin
 manual vertical speed switch) springs back: choosing a side holds it there for one second and
@@ -156,7 +158,8 @@ are read on the Instrument section's Standby Instruments panel, with its knob an
 panel's own status display also carries its ECAM page's numbers after its lights: Electrical
 shows the AC and DC voltages, frequencies and currents; APU shows its speed, EGT, bleed pressure
 and generator; Hydraulics shows the blue, green and yellow pressures; Fuel shows each tank and
-the total, in the weight unit set on the tablet. Oxygen shows its six gauges: the crew and courier low pressure and the four crew
+the total, in the weight unit set on the tablet; Air Conditioning shows the compartment
+temperatures; Bleed shows the bleed and pack pressures and temperatures. Oxygen shows its six gauges: the crew and courier low pressure and the four crew
 oxygen high pressure gauges, in psi ("Crew oxygen high pressure 1: 1,500 psi").
 
 On the Oxygen panel, the crew oxygen supply button works the courier low pressure supply in this

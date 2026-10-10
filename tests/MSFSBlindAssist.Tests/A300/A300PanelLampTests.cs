@@ -128,6 +128,27 @@ public class A300PanelLampTests
         Assert.Equal((var, A300LightPower.Ac), (lamp.Primary.Name, lamp.Power));
     }
 
+    [Theory]
+    // The pack flow bars show the pack valve itself: with no bleed air they go out while the buttons stay On
+    // (measured 2026-10-10). The ram air light is the valve, which travels after its switch.
+    [InlineData("PACK_1_VALVE_IND_003_LIGHT", "Pack 1 flow bar light", "INI_bleed_pack1_percent")]
+    [InlineData("PACK_2_VALVE_IND_004_LIGHT", "Pack 2 flow bar light", "INI_bleed_pack2_percent")]
+    [InlineData("RAM_AIR_SEQ1_LIGHT", "Ram air valve open light", "INI_bleed_ram_air_open")]
+    public void The_air_conditioning_lights_are_named_from_their_buttons_on_the_dc_light_bus(string node, string name, string var)
+    {
+        Assert.Equal((name, "Air Conditioning"), (Lamp(node).Name, Lamp(node).Panel));
+        var lamp = A300PanelLamps.Resolved.Single(l => l.Lamp.Node == node);
+        Assert.Equal((var, A300LightPower.Dc), (lamp.Primary.Name, lamp.Power));
+    }
+
+    [Fact]
+    public void A_pack_flow_bar_is_lit_from_half_open()
+    {
+        var bar = A300PanelLamps.Resolved.Single(l => l.Lamp.Node == "PACK_1_VALVE_IND_003_LIGHT");
+        Assert.False(A300LampBoard.IsLit(A300LampBoard.ById[bar.Lamp.Key], k => k == bar.Lamp.Key ? 0.32 : 1));
+        Assert.True(A300LampBoard.IsLit(A300LampBoard.ById[bar.Lamp.Key], k => k == bar.Lamp.Key ? 1 : 1));
+    }
+
     [Fact]
     public void The_fire_handle_lights_are_the_lamps_the_cockpit_draws()
     {

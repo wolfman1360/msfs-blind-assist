@@ -119,11 +119,10 @@ public static class A300WritePlan
             }
             case A300Kinds.Knob:
             {
+                // Always sent: a knob's Set is absolute, and its row is read only when the panel opens, so
+                // the cache cannot say it is already there (a step back to the opening value sent nothing).
                 double scale = control.Scale is > 0 ? control.Scale.Value : 1.0;
-                double setValue = Math.Clamp(target / scale, 0, 100);
-                if (current is double now && Math.Abs(now - setValue * scale) < SameValueTolerance * scale)
-                    return A300Plan.AlreadyThere;
-                return Steps(Set(control, setValue));
+                return Steps(Set(control, Math.Clamp(target / scale, 0, 100)));
             }
             default:
                 return A300Plan.Refused(NotSettableRefusal);

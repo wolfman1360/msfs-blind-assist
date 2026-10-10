@@ -69,6 +69,8 @@ public class IniA300DisplayPanelTests
     [InlineData("APU", "ECAM APU", "A300_LT_APU_AVAIL_SEQ1_LIGHT")]
     [InlineData("Hydraulics", "ECAM Hydraulics", "A300_LAMP_HYD_BLUE_LIGHT")]
     [InlineData("Fuel", "ECAM Fuel", "A300_LT_OUT_TK_PMP_L1_SEQ1_LIGHT")]
+    [InlineData("Air Conditioning", "ECAM Air Conditioning", "A300_LT_PACK_1_VALVE_IND_003_LIGHT")]
+    [InlineData("Bleed", "ECAM Bleed", "A300_LAMP_ISOLATION_VALVE_LEFT_FAULT")]
     public void A_system_status_box_has_its_lights_then_its_ecam_page(string panel, string page, string light)
     {
         var box = _def.GetPanelDisplayVariables()[panel];

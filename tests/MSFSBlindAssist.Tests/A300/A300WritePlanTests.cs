@@ -112,9 +112,12 @@ public class A300WritePlanTests
     }
 
     [Fact]
-    public void A_knob_already_at_the_value_sends_nothing()
+    public void A_knob_always_sends_its_value()
     {
-        Assert.True(A300WritePlan.ForSet(Control(A300Kinds.Knob, "", scale: 0.1), 4.2, current: 4.2).IsEmpty);
+        // A knob row is read when its panel opens, so its cache goes stale after MSFSBA's own step: stepping back
+        // to the opening value read as "already there" and sent nothing (2026-10-10). A knob's Set is absolute.
+        Assert.Equal(new[] { "42 (>B:AIRLINER_Test_Set)" },
+            Rpns(A300WritePlan.ForSet(Control(A300Kinds.Knob, "", scale: 0.1), 4.2, current: 4.2)));
     }
 
     [Fact]

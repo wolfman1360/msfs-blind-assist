@@ -90,6 +90,66 @@ public class IniA300BehaviourTests
         Assert.Empty(rows.Where(v => v.UpdateFrequency != UpdateFrequency.Continuous).Select(v => $"{v.DisplayName} ({v.Name})"));
     }
 
+    private void ReadFreshReturns(string key, double value)
+    {
+        _def.TypedDelay = _ => Task.CompletedTask;
+        _def.ReadFresh = (_, k, _) => Task.FromResult<double?>(k == key ? value : null);
+    }
+
+    [Fact]
+    public void A_switch_the_aircraft_did_not_move_snaps_back_and_says_so()
+    {
+        // The crossbleed button acts only in manual mode: in auto the aircraft ignores it, and the combo kept
+        // the pilot's pick while the valve stayed open (2026-10-10).
+        _cache["A300_AIR_XFEED"] = 1;
+        ReadFreshReturns("A300_AIR_XFEED", 1);
+        Assert.True(Set("A300_AIR_XFEED", 0));
+        Assert.Equal(new[] { "0 (>B:AIRLINER_AIR_XFEED_Set)" }, _sent);
+        Assert.Equal(new[] { "Crossbleed stayed Open" }, _speech.All);
+        Assert.Equal(new[] { "A300_AIR_XFEED" }, _reReads);
+    }
+
+    [Fact]
+    public void A_switch_that_moved_says_nothing()
+    {
+        _cache["A300_BATT_1"] = 0;
+        ReadFreshReturns("A300_BATT_1", 1);
+        Assert.True(Set("A300_BATT_1", 1));
+        Assert.Empty(_speech.All);
+        Assert.Empty(_reReads);
+    }
+
+    [Fact]
+    public void A_switch_that_did_not_move_is_planned_from_where_it_is()
+    {
+        _cache["A300_AIR_XFEED"] = 1;
+        ReadFreshReturns("A300_AIR_XFEED", 1);
+        Set("A300_AIR_XFEED", 0);
+        Assert.True(Set("A300_AIR_XFEED", 0));   // without the read-back this planned from the stale pick: nothing sent
+        Assert.Equal(2, _sent.Count);
+    }
+
+    [Fact]
+    public void Only_the_latest_pick_of_a_switch_is_checked()
+    {
+        var release = new TaskCompletionSource();
+        _def.TypedDelay = _ => release.Task;
+        _def.ReadFresh = (_, _, _) => Task.FromResult<double?>(1);
+        _cache["A300_AIR_XFEED"] = 1;
+        Set("A300_AIR_XFEED", 0);
+        Set("A300_AIR_XFEED", 1);   // the pilot changed their mind before the first check
+        release.SetResult();
+        Assert.Empty(_speech.All);
+    }
+
+    [Fact]
+    public void The_crossbleed_reads_open_or_closed_and_its_mode_auto_or_manual()
+    {
+        var vars = _def.GetVariables();
+        Assert.Equal(new[] { "Closed", "Open" }, vars["A300_AIR_XFEED"].ValueDescriptions!.Values);
+        Assert.Equal(new[] { "Auto", "Manual" }, vars["A300_AIR_XFEED_AUTO"].ValueDescriptions!.Values);
+    }
+
     [Fact]
     public void A_switch_in_an_unknown_position_is_refused_aloud_and_snapped_back()
     {

@@ -105,6 +105,13 @@ public static class A300PanelLamps
         new("TRMTK_1_PMP_SEQ1_LIGHT", "Left trim tank pump low pressure light", "Fuel"),
         new("TRMTK_2_PMP_SEQ1_LIGHT", "Right trim tank pump low pressure light", "Fuel"),
         new("TRMTK_ISO_SEQ1_LIGHT", "Trim tank isolation valve flow bar light", "Fuel"),
+
+        // Air conditioning: the pack flow bars show the pack valves, which close with no bleed air while their
+        // buttons stay on; the ram air light is the valve, which travels after its switch. The other legends
+        // here are positions, or faults nothing in the aircraft writes.
+        new("PACK_1_VALVE_IND_003_LIGHT", "Pack 1 flow bar light", "Air Conditioning"),
+        new("PACK_2_VALVE_IND_004_LIGHT", "Pack 2 flow bar light", "Air Conditioning"),
+        new("RAM_AIR_SEQ1_LIGHT", "Ram air valve open light", "Air Conditioning"),
     };
 
     /// <summary>Each named lamp with its rule from the shipped map; a lamp the map lacks is left out, loudly

@@ -52,6 +52,8 @@ public partial class IniA300Definition
             : control.Kind == A300Kinds.Spring ? control.StateForPosition(control.Rest ?? 1)
             : value;
         bool sent = Execute(row, plan, simConnect, announcer, commanded);
+        if (sent && commanded is double target && control.Kind is A300Kinds.Toggle or A300Kinds.Command or A300Kinds.Selector)
+            _ = CheckMovedAsync(row, target, simConnect, announcer, ++_pickSeq);
 
         // An FCU knob step is read back once it lands ("Heading 271"): a numeric confirmation, as a
         // typed value's is. The altitude window's own call-out is told it is an echo.
@@ -66,6 +68,40 @@ public partial class IniA300Definition
         if (sent && row.Action is A300RowAction.Increase or A300RowAction.Decrease && control.Key == A300Trp.FlexKnobKey)
             _ = ReadBackAsync(simConnect, announcer, A300Readouts.FlexTemperatureKey, A300Trp.FlexPhrase);
         return true;
+    }
+
+    /// <summary>Each row's latest pick, so only that pick's check speaks.</summary>
+    private readonly Dictionary<string, int> _latestPick = new(StringComparer.Ordinal);
+    private int _pickSeq;
+
+    /// <summary>
+    /// Reads a picked switch back once it has had time to move. When the aircraft ignored the write (the
+    /// crossbleed button in auto mode), the combo would keep the pick while the switch stayed put, and the
+    /// next pick would be planned from it: so the row is read again, the stayed position is remembered, and
+    /// it is said once ("Crossbleed stayed Open"), what the screen reader cannot say ([CORE-7]).
+    /// </summary>
+    private async Task CheckMovedAsync(A300PlacedRow row, double target, SimConnectManager sim,
+        ScreenReaderAnnouncer announcer, int pick)
+    {
+        _latestPick[row.Key] = pick;
+        try
+        {
+            await TypedDelay(ToggleReadBackMs);
+            if (_disposed || _latestPick.GetValueOrDefault(row.Key) != pick)
+                return;
+            if (await ReadFresh(sim, row.Key, ReadoutTimeoutMs) is not double now
+                || _latestPick.GetValueOrDefault(row.Key) != pick
+                || Math.Abs(now - target) < A300WritePlan.SameValueTolerance)
+                return;
+            _commanded.Record(row.Key, now, Clock());
+            ReRead(row.Key, sim);
+            if (row.Positions.TryGetValue(Math.Round(now), out var word))
+                announcer.Announce($"{row.Name} stayed {word}");
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("A300", $"Read-back of {row.Key} failed: {ex.Message}");
+        }
     }
 
     /// <summary>The value to plan from: what MSFSBA just commanded while it is fresh, else the cache.</summary>
