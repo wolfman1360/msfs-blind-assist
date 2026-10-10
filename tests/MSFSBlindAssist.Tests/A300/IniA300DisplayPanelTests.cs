@@ -81,6 +81,16 @@ public class IniA300DisplayPanelTests
     }
 
     [Fact]
+    public void The_engine_start_box_has_its_lights_then_the_engine_instruments_and_the_ecam_engine_page()
+    {
+        // The manual's start: fuel lever on at 20 percent N2, monitor the ECAM ENG page, the blue OPEN light out.
+        var box = _def.GetPanelDisplayVariables()["Engine Start"];
+        var expected = A300EcamPages.EngineInstruments.Concat(A300DisplayPanels.Lines["ECAM Engine"]).ToList();
+        Assert.Equal(expected, box.Skip(box.Count - expected.Count));
+        Assert.Contains("A300_LT_ENG_2_START_SEQ1_LIGHT", box.Take(box.Count - expected.Count));
+    }
+
+    [Fact]
     public void The_fuel_box_reads_total_fuel_once_in_the_tablets_unit()
     {
         // The ECAM page's total follows the tablet's weight unit; the pounds readout (the fuel hotkey's)

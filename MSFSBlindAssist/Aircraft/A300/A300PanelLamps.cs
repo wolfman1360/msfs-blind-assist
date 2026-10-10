@@ -138,6 +138,13 @@ public static class A300PanelLamps
         new("SMOKE_MID2_2_SEQ1_LIGHT", "Main deck smoke detector mid 2 right light", "Cargo Smoke"),
         new("SMOKE_AFT_1_SEQ1_LIGHT", "Main deck smoke detector aft left light", "Cargo Smoke"),
         new("SMOKE_AFT_2_SEQ1_LIGHT", "Main deck smoke detector aft right light", "Cargo Smoke"),
+
+        // Engine start: each starter button's blue OPEN legend (the start valve, which closes by itself at about
+        // 49 percent N2) and its armed legend (an engine armed for start and not yet running).
+        new("ENG_1_START_SEQ1_LIGHT", "Engine 1 start valve open light", "Engine Start"),
+        new("ENG_2_START_SEQ1_LIGHT", "Engine 2 start valve open light", "Engine Start"),
+        new("ENG_1_START_SEQ2_LIGHT", "Engine 1 starter armed light", "Engine Start"),
+        new("ENG_2_START_SEQ2_LIGHT", "Engine 2 starter armed light", "Engine Start"),
     };
 
     /// <summary>A select button's light, which labels it ("Pressurization system 1: On"): row key → lamp key.</summary>

@@ -73,5 +73,7 @@ public static class A300DisplayPanels
             ["Air Conditioning"] = Lines["ECAM Air Conditioning"],
             ["Bleed"] = Lines["ECAM Bleed"],
             ["Pressurization"] = Lines["ECAM Pressurization"],
+            // A start is flown on N2 and the ECAM ENG page (the manual's engine start).
+            ["Engine Start"] = A300EcamPages.EngineInstruments.Concat(Lines["ECAM Engine"]).ToArray(),
         };
 }

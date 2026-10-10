@@ -170,6 +170,20 @@ public class A300PanelLampTests
         Assert.Equal((var, A300LightPower.Dc), (lamp.Primary.Name, lamp.Power));
     }
 
+    [Theory]
+    // The manual's "blue OPEN light" goes out when the start valve closes (about 49 percent N2, measured on the
+    // engine 2 start 2026-10-10); the armed legend is lit for an engine armed for start and not yet running.
+    [InlineData("ENG_1_START_SEQ1_LIGHT", "Engine 1 start valve open light", "INI_STARTER1_OPEN")]
+    [InlineData("ENG_2_START_SEQ1_LIGHT", "Engine 2 start valve open light", "INI_STARTER2_OPEN")]
+    [InlineData("ENG_1_START_SEQ2_LIGHT", "Engine 1 starter armed light", "INI_ENG1_STARTER_ARM")]
+    [InlineData("ENG_2_START_SEQ2_LIGHT", "Engine 2 starter armed light", "INI_ENG2_STARTER_ARM")]
+    public void The_engine_start_lights_are_on_the_ac_light_bus(string node, string name, string var)
+    {
+        Assert.Equal((name, "Engine Start"), (Lamp(node).Name, Lamp(node).Panel));
+        var lamp = A300PanelLamps.Resolved.Single(l => l.Lamp.Node == node);
+        Assert.Equal((var, A300LightPower.Ac), (lamp.Primary.Name, lamp.Power));
+    }
+
     [Fact]
     public void A_pack_flow_bar_is_lit_from_half_open()
     {
