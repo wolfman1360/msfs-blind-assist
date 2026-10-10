@@ -21,8 +21,8 @@ public static class A300Levers
     public const string SpoilersArmKey = "A300_SPOILERS_ARM";
     public const string SpeedBrakeKey = "A300_SPEEDBRAKE_LEVER";
 
-    /// <summary>The panel the three levers are placed on (after the generated throttle quadrant rows).</summary>
-    public const string Panel = "Throttle Quadrant";
+    /// <summary>The panel the three levers are placed on, the fleet's "flaps and speed brake" pedestal panel.</summary>
+    public const string Panel = "Flaps and Speed Brake";
 
     public static readonly IReadOnlySet<string> Keys = new HashSet<string>(StringComparer.Ordinal)
     {

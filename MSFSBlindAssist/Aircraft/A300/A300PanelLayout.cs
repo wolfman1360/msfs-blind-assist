@@ -22,12 +22,13 @@ public sealed class A300Placement
 
 /// <summary>
 /// The A300's panels: which section and panel a control belongs to comes from the component tree
-/// iniBuilds grouped the cockpit by (Overhead, Glareshield, Main panel, Pedestal, Cockpit, Cargo), so
-/// an iniBuilds update is picked up by regenerating the map. The ORDER of the panels, and the rows
-/// that open a few of them, come from <see cref="PanelOrder"/> and <see cref="LeadRows"/> (owner
-/// decision, 2026-10-04: Electrical first, like every other aircraft in the app); everything else
-/// keeps the cockpit file's order. The one hand-made split is the pedestal's radio and audio group
-/// (iniBuilds' "STD", 113 controls), divided by what each control is.
+/// iniBuilds grouped the cockpit by (Overhead, Glareshield, Instrument, Pedestal, Cockpit, Cargo), so
+/// an iniBuilds update is picked up by regenerating the map. Where iniBuilds groups by place and the
+/// fleet's Airbuses by system, <see cref="ControlPanels"/> sends each control to its system's panel
+/// (owner decision, 2026-10-09). The ORDER of the panels, and the rows that open a few of them, come
+/// from <see cref="PanelOrder"/> and <see cref="LeadRows"/>; everything else keeps the cockpit file's
+/// order. The pedestal's radio and audio group (iniBuilds' "STD", 113 controls) is divided by what each
+/// control is.
 ///
 /// Left out on purpose: guard covers (they only move the 3D model; the switch under them works with
 /// the cover shut, measured from the click code), the IDC's copies of the classic radio panel (the
@@ -48,59 +49,60 @@ public static partial class A300PanelLayout
 {
     public static readonly IReadOnlyList<string> SectionOrder = new[]
     {
-        "Overhead", "Glareshield", "Main Panel", "Pedestal", "Cockpit", "Cargo",
+        "Overhead", "Glareshield", "Instrument", "Pedestal", "Cockpit", "Cargo",
     };
 
     private static readonly Dictionary<string, string> AreaSections = new(StringComparer.Ordinal)
     {
         ["OVERHEAD"] = "Overhead",
         ["EFIS"] = "Glareshield",
-        ["MIP"] = "Main Panel",
+        ["MIP"] = "Instrument",
         ["PEDESTAL"] = "Pedestal",
         ["COCKPIT"] = "Cockpit",
         ["CABIN"] = "Cargo",
     };
 
-    /// <summary>iniBuilds' component name → the panel the pilot sees. Two names on one panel merge.</summary>
+    /// <summary>iniBuilds' component name → the panel the pilot sees. Two names on one panel merge. A control
+    /// listed in <see cref="ControlPanels"/> goes to its system's panel instead (a split iniBuilds panel).</summary>
     private static readonly Dictionary<string, string> PanelNames = new(StringComparer.Ordinal)
     {
-        ["CAB_PRESS"] = "Cabin Pressure",
+        ["CAB_PRESS"] = "Pressurization",
         ["IRS"] = "IRS",
         ["APU_BACK"] = "APU",
         ["ANTI_ICE"] = "Anti-Ice",
         ["OVERHEAD_WIPERS"] = "Wipers",
         ["WINDOW_HEAT"] = "Window and Probe Heat",
-        ["OVERHEAD_BLEED"] = "Air Bleed and Air Conditioning",
+        ["OVERHEAD_BLEED"] = "Air Conditioning",
         ["OVERHEAD_OXYGEN"] = "Oxygen",
         ["OVERHEAD_ELEC_GAUGES"] = "Electrical",
         ["OVERHEAD_ELEC"] = "Electrical",
         ["OVERHEAD_FCTL"] = "Flight Controls",
         ["OVERHEAD_VENT"] = "Ventilation",
         ["OVERHEAD_CDLC"] = "Cockpit Door",
-        ["OVERHEAD_FLTRCDR"] = "Recorders",
-        ["CVRD_PANEL"] = "Recorders",
+        ["OVERHEAD_FLTRCDR"] = "Recorder",
+        ["CVRD_PANEL"] = "Recorder",
         ["OVERHEAD_FUEL"] = "Fuel",
         ["OVERHEAD_HYD"] = "Hydraulics",
         ["OVERHEAD_ENGINE"] = "Engine Start",
         ["OVERHEAD_FIRE"] = "Fire",
-        ["OVERHEAD_LEVERS"] = "Autoflight Levers",
-        ["OVERHEAD_LIGHTS"] = "Lights",
-        ["STANDBY_COMPASS"] = "Lights",
+        ["OVERHEAD_LEVERS"] = "SAS Control",
+        ["OVERHEAD_LIGHTS"] = "Interior Lighting",
+        ["STANDBY_COMPASS"] = "Interior Lighting",
         ["FCU"] = "FCU",
-        ["EFIS_LEFT"] = "Captain EFIS",
-        ["EFIS_RIGHT"] = "First Officer EFIS",
-        ["MIP_LEFT"] = "Captain Panel",
-        ["MIP_CENTER"] = "Center Panel",
-        ["MIP_RIGHT"] = "First Officer Panel",
-        ["THROTTLE_QUADRENT"] = "Throttle Quadrant",
-        ["GPWS_FLAPS_CONFIG"] = "Throttle Quadrant",
+        ["EFIS_LEFT"] = "EFIS Captain",
+        ["EFIS_RIGHT"] = "EFIS First Officer",
+        ["MIP_LEFT"] = "Captain Side",
+        ["MIP_CENTER"] = "Standby Instruments",
+        ["MIP_RIGHT"] = "First Officer Side",
+        ["THROTTLE_QUADRENT"] = "Engines",
+        ["GPWS_FLAPS_CONFIG"] = "GPWS",
         ["FMGS"] = "MCDU Brightness",
         ["NAV_AIDS"] = "Navigation Radios",
         ["IDC"] = "IDC",
-        ["ECAM_BRT"] = "ECAM Control",
-        ["ECAM"] = "ECAM Control",
+        ["ECAM_BRT"] = "ECAM Control Panel",
+        ["ECAM"] = "ECAM Control Panel",
         ["TRIM"] = "Trim",
-        ["MAN_GEAR_HANDLE"] = "Gear Gravity Extension",
+        ["MAN_GEAR_HANDLE"] = "Gear",
         ["FCTL"] = "Yokes",
         ["RAT"] = "RAT",
         ["BACK_PANEL"] = "Cockpit",
@@ -123,10 +125,13 @@ public static partial class A300PanelLayout
         control.Kind is not (A300Kinds.Cover or A300Kinds.None) && !Excluded.IsMatch(control.Id);
 
     public static string SectionFor(A300Control control) =>
-        AreaSections.TryGetValue(control.Area, out var section) ? section : "Cockpit";
+        PanelSections.TryGetValue(PanelFor(control), out var moved) ? moved
+        : AreaSections.TryGetValue(control.Area, out var section) ? section : "Cockpit";
 
     public static string PanelFor(A300Control control)
     {
+        if (ControlPanels.TryGetValue(Short(control.Id), out var system))
+            return system;
         if (control.Panel == "STD")
             return PedestalPanelFor(Short(control.Id));
         return PanelNames.TryGetValue(control.Panel, out var panel) ? panel : SpokenWord(control.Panel.Replace('_', ' '));
@@ -140,15 +145,15 @@ public static partial class A300PanelLayout
         if (id is "PEDESTAL_LIGHT_KNOB" or "OVERHEAD_LIGHT_KNOB")
             return "Pedestal Lighting";
         if (id.StartsWith("TCAS_", StringComparison.Ordinal) || id == "XPDR_SWITCH")
-            return "Transponder and TCAS";
+            return "Transponder";
         if (Regex.IsMatch(id, @"ADF\d_(BIG|MED|SMALL|TFR|ANT|TONE)$", RegexOptions.CultureInvariant))
             return "ADF Radios";
         if (Regex.IsMatch(id, @"_VHF\d_(MHZ|KHZ)$|_VHF_(TFR|SQL)$", RegexOptions.CultureInvariant))
             return "VHF Radios";
         if (id.StartsWith("CPT_", StringComparison.Ordinal))
-            return "Captain Audio";
+            return "Audio Control Panel Captain";
         if (id.StartsWith("FO_", StringComparison.Ordinal))
-            return "First Officer Audio";
+            return "Audio Control Panel First Officer";
         return "Pedestal";
     }
 

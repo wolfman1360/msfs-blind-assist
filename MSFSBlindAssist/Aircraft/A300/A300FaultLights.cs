@@ -63,15 +63,15 @@ public static class A300FaultLights
         ("INI_SLATS_SYS1_FAULT", "Slat system 1 fault light", "Flight Controls", D),
         ("INI_SLATS_SYS2_FAULT", "Slat system 2 fault light", "Flight Controls", D),
 
-        ("INI_PACK1_FAULT", "Pack 1 fault light", "Air Bleed and Air Conditioning", D),
-        ("INI_PACK2_FAULT", "Pack 2 fault light", "Air Bleed and Air Conditioning", D),
-        ("INI_ISOLATION_VALVE_LEFT_FAULT", "Left isolation valve fault light", "Air Bleed and Air Conditioning", A),
-        ("INI_ISOLATION_VALVE_RIGHT_FAULT", "Right isolation valve fault light", "Air Bleed and Air Conditioning", A),
+        ("INI_PACK1_FAULT", "Pack 1 fault light", "Air Conditioning", D),
+        ("INI_PACK2_FAULT", "Pack 2 fault light", "Air Conditioning", D),
+        ("INI_ISOLATION_VALVE_LEFT_FAULT", "Left isolation valve fault light", "Bleed", A),
+        ("INI_ISOLATION_VALVE_RIGHT_FAULT", "Right isolation valve fault light", "Bleed", A),
 
-        ("INI_cabin_sys1_regulator_fault", "Cabin regulator 1 fault light", "Cabin Pressure", A),
-        ("INI_cabin_sys2_regulator_fault", "Cabin regulator 2 fault light", "Cabin Pressure", A),
-        ("INI_CABIN_RATE_LIGHT", "Excessive cabin rate light", "Cabin Pressure", A),
-        ("INI_CABIN_LO_DELTA_PSI_LIGHT", "Low cabin differential pressure light", "Cabin Pressure", A),
+        ("INI_cabin_sys1_regulator_fault", "Cabin regulator 1 fault light", "Pressurization", A),
+        ("INI_cabin_sys2_regulator_fault", "Cabin regulator 2 fault light", "Pressurization", A),
+        ("INI_CABIN_RATE_LIGHT", "Excessive cabin rate light", "Pressurization", A),
+        ("INI_CABIN_LO_DELTA_PSI_LIGHT", "Low cabin differential pressure light", "Pressurization", A),
 
         ("INI_ENG1_ANTI_ICE_FAULT", "Engine 1 anti-ice fault light", "Anti-Ice", A),
         ("INI_ENG2_ANTI_ICE_FAULT", "Engine 2 anti-ice fault light", "Anti-Ice", A),
@@ -83,20 +83,20 @@ public static class A300FaultLights
         ("INI_APU_FAULT", "APU fault light", "APU", D),
         ("INI_APU_LO_PR", "APU fuel low pressure light", "APU", D),
 
-        ("INI_ENG1_MASTER_SWITCH_LIGHT", "Engine 1 master switch fault light", "Throttle Quadrant", D),
-        ("INI_ENG2_MASTER_SWITCH_LIGHT", "Engine 2 master switch fault light", "Throttle Quadrant", D),
+        ("INI_ENG1_MASTER_SWITCH_LIGHT", "Engine 1 master switch fault light", "Engines", D),
+        ("INI_ENG2_MASTER_SWITCH_LIGHT", "Engine 2 master switch fault light", "Engines", D),
 
-        ("INI_engine1_oil_low_press_light", "Engine 1 oil low pressure light", "Center Panel", A),
-        ("INI_engine2_oil_low_press_light", "Engine 2 oil low pressure light", "Center Panel", A),
+        ("INI_engine1_oil_low_press_light", "Engine 1 oil low pressure light", "Engines", A),
+        ("INI_engine2_oil_low_press_light", "Engine 2 oil low pressure light", "Engines", A),
 
-        ("INI_AUTOLAND_LIGHT", "Autoland warning light", "Captain EFIS", D),
+        ("INI_AUTOLAND_LIGHT", "Autoland warning light", "EFIS Captain", D),
 
-        ("INI_GPWS_LIGHT", "GPWS warning light", "Captain Panel", A),
-        ("INI_GLIDESLOPE_LIGHT", "Below glide slope light", "Captain Panel", A),
-        ("INI_TERR_MODE_FAULT", "Terrain mode fault light", "Captain Panel", A),
-        ("INI_FMS1_message_light", "MCDU message light", "Captain Panel", A),
+        ("INI_GPWS_LIGHT", "GPWS warning light", "GPWS", A),
+        ("INI_GLIDESLOPE_LIGHT", "Below glide slope light", "GPWS", A),
+        ("INI_TERR_MODE_FAULT", "Terrain mode fault light", "GPWS", A),
+        ("INI_FMS1_message_light", "MCDU message light", "Captain Side", A),
 
-        ("INI_ECAM_CLR_LIGHT", "ECAM clear light", "ECAM Control", A),
+        ("INI_ECAM_CLR_LIGHT", "ECAM clear light", "ECAM Control Panel", A),
 
         ("INI_COCKPIT_DOOR_FAULT", "Cockpit door fault light", "Cockpit Door", D),
     }

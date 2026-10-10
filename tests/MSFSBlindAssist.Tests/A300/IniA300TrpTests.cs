@@ -131,9 +131,9 @@ public class IniA300TrpTests
     }
 
     [Fact]
-    public void The_center_panel_status_box_has_the_trp_line()
+    public void The_thrust_rating_panel_status_box_has_the_trp_line()
     {
-        Assert.Contains(A300Trp.ModeKey, _def.GetPanelDisplayVariables()["Center Panel"]);
+        Assert.Contains(A300Trp.ModeKey, _def.GetPanelDisplayVariables()["Thrust Rating Panel"]);
         var def = _def.GetVariables()[A300Trp.ModeKey];
         Assert.Equal("TRP", def.DisplayName);
         // Any of its parts changing repaints the box (the line's own key too: its deliveries are consumed).

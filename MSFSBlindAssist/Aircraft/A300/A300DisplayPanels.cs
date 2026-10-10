@@ -12,7 +12,7 @@ public static class A300DisplayPanels
     public const string Section = "Displays";
 
     /// <summary>The section comes right after this one.</summary>
-    public const string AfterSection = "Main Panel";
+    public const string AfterSection = "Instrument";
 
     private static readonly string[] Pfd =
     {

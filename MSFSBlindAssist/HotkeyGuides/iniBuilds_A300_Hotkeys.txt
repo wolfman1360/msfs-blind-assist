@@ -28,24 +28,37 @@ master caution call-outs. The AI display reads are not available on the A300.
 
 THE PANELS
 
-Sections (Ctrl+1): Overhead, Glareshield, Main Panel, Displays, Pedestal, Cockpit, Cargo. The panels
-(Ctrl+2) come in the order of the other aircraft in MSFS Blind Assist, power first: the Overhead
-starts with Electrical, IRS, APU, Fire, Hydraulics and Fuel, then air conditioning, pressurization,
-anti-ice, wipers, lights and oxygen, with flight controls, engine start, recorders and the cockpit
-door last. The Glareshield holds the FCU and both EFIS panels. The Pedestal starts with the
-throttle quadrant, trim and ECAM control panel, then the weather radar, transponder and radios.
-The Cargo section is the freighter's main deck cargo door panel.
+Sections (Ctrl+1): Overhead, Glareshield, Instrument, Displays, Pedestal, Cockpit, Cargo. The
+panels (Ctrl+2) are sorted by system and named the way the other Airbuses in MSFS Blind Assist
+name them. Where the A300 has its own panel, it keeps the A300 manual's name.
+
+Overhead: Electrical, IRS, APU, Oxygen, Fire, Hydraulics, Fuel, Air Conditioning, Bleed,
+Pressurization, Ventilation, Anti-Ice, Window and Probe Heat, Wipers, Signs, Interior Lighting,
+Exterior Lighting, Flight Controls (spoilers, pitch feel, rudder travel limiters), SAS Control
+(the pitch trim, yaw damper and autothrottle levers), Cockpit Door, Cargo Smoke, Recorder, Engine
+Start.
+Glareshield: FCU, EFIS Captain, EFIS First Officer.
+Instrument: Warnings (both pilots' master warning and master caution), Gear, Autobrake, Thrust
+Rating Panel, Landing Elevation, Standby Instruments, Source Switching, Clock, GPWS, Captain Side
+and First Officer Side (each altimeter, the oxygen tests and the panel lights).
+Pedestal: Engines (the fuel levers), Thrust Levers (TOGA and the autothrottle disconnect), Flaps
+and Speed Brake, Parking Brake, Trim, ECAM Control Panel (with the normal and emergency cancel
+buttons and the takeoff config test), Weather Radar, Transponder, VHF Radios, Navigation Radios,
+ADF Radios, Audio Control Panel Captain and First Officer, MCDU Brightness, IDC, Pedestal
+Lighting.
+Cockpit: Yokes, RAT, Circuit Breakers, Cockpit. Cargo: the freighter's main deck cargo door.
 
 A few panels open on what the checklist sets first: Electrical on the batteries and external
-power, Lights on the signs and then the exterior lights, the captain and first officer panels on
-master warning and master caution, the center panel on the gear lever, and the throttle quadrant
-on the fuel levers, flaps, speed brake, spoiler arm and parking brake.
+power, Signs and Exterior Lighting in the order the checklist sets them, Warnings on the
+captain's buttons, Gear on the gear lever, and Flaps and Speed Brake on the flaps lever. Where both
+pilots' controls share a panel, each says its side first: "Captain chrono", "First officer GPWS
+test".
 
 A switch is a combo box with the aircraft's own position words. A push button is a button. A
 dimmer or temperature knob is a slider. A knob that only turns, such as the FCU speed knob or a
 radio frequency knob, is a pair of buttons, "increase" and "decrease", each one click of the
-knob. The flaps lever, the ground spoiler arm and the speed brake lever are at the end of the
-Throttle Quadrant panel.
+knob. The flaps lever, the speed brake lever and the ground spoiler arm are the Flaps and Speed
+Brake panel.
 
 When you change a control, MSFS Blind Assist moves it exactly the way a click in the cockpit
 would. Nothing is spoken back - your screen reader already says what you chose - unless the
@@ -60,32 +73,33 @@ lets it return, the way a short press does in the cockpit. Choose the side again
 The fire tests on the Fire panel are held as long as the aircraft's own checklist holds them: 5
 seconds for an engine or APU loop test, 3 seconds for a squib test. The loop lights and the fire
 handle light a loop test brings on are announced (see Background Announcements). The takeoff
-config test, the landing gear warning test and the smoke test are held 5 seconds too: a short press
-never gave the takeoff config test time to warn. Other test buttons are a short press.
+config test (ECAM Control Panel), the landing gear warning test (Gear) and the smoke test (Cargo
+Smoke) are held 5 seconds too: a short press never gave the takeoff config test time to warn.
+Other test buttons are a short press.
 
-Each cargo smoke agent switch has its guard just before it. The switch only moves while its
-guard is open, exactly as in the aircraft.
+Each cargo smoke agent switch, on the Cargo Smoke panel, has its guard just before it. The switch
+only moves while its guard is open, exactly as in the aircraft.
 
-The thrust rating panel's buttons on the Center panel say whether their light is on: "TRP climb:
-On". In AUTO only the AUTO button is on; the aircraft picks the limit itself, and the Center
-panel's status display says which (see below). Pressing the flex temperature knob's increase or
-decrease button reads the new temperature back once it has moved ("Flex temperature 46 degrees").
+The Thrust Rating Panel's buttons say whether their light is on: "TRP climb: On". In AUTO only the
+AUTO button is on; the aircraft picks the limit itself, and the panel's status display says which
+(see below). Pressing the flex temperature knob's increase or decrease button reads the new
+temperature back once it has moved ("Flex temperature 46 degrees").
 
-The autobrake buttons on the Center panel say what their lights show: "Autobrake low: Armed",
+The buttons on the Autobrake panel say what their lights show: "Autobrake low: Armed",
 "Decel" while the autobrake is braking, or "Off". Pressing the armed level again turns the
 autobrake off, as in the aircraft. The aircraft arms it only with the gear lever down and
 hydraulic pressure. A press says nothing; the autobrake lights are announced as they change, like
 the other lights: "Autobrake max armed light on", "Autobrake low decel light on".
 
-Status Display (Ctrl+3): the FCU panel shows the four FCU windows; the Captain, First Officer
-and Center panels show the altimeter settings, the flex temperature and the landing elevation;
-the Center panel also has a TRP line with the thrust rating mode, the limit AUTO chose or the
-flex temperature, and the N1 limit ("TRP: AUTO, climb, N1 limit 95.3 percent"; no N1 limit with
-PW engines, whose panel shows EPR); the Navigation Radios panel shows the VOR and ILS courses.
-The Captain Panel also shows the master warning and master caution lights. Each panel with fault
-or warning lights shows them too ("Engine 1 generator fault light: On"): Fire, Electrical,
-Hydraulics, Flight Controls, Air Bleed and Air Conditioning, Cabin Pressure, Anti-Ice, Window and
-Probe Heat, APU, Throttle Quadrant, Center Panel, Captain EFIS, Captain Panel, ECAM Control and
+Status Display (Ctrl+3): the FCU panel shows the four FCU windows; Captain Side, First Officer
+Side and Standby Instruments show the altimeter settings; Landing Elevation shows the landing
+elevation; the Thrust Rating Panel shows the flex temperature and a TRP line with the thrust
+rating mode, the limit AUTO chose or the flex temperature, and the N1 limit ("TRP: AUTO, climb, N1
+limit 95.3 percent"; no N1 limit with PW engines, whose panel shows EPR); the Navigation Radios
+panel shows the VOR and ILS courses. Warnings shows the master warning and master caution lights.
+Each panel with fault or warning lights shows them too ("Engine 1 generator fault light: On"):
+Fire, Electrical, Hydraulics, Flight Controls, Air Conditioning, Bleed, Pressurization, Anti-Ice,
+Window and Probe Heat, APU, Engines, GPWS, Captain Side, EFIS Captain, ECAM Control Panel and
 Cockpit Door.
 
 
@@ -98,10 +112,10 @@ TYPED VALUES - type, then press Set or Enter
   frequency (108.10 to 111.95) and course setting.
   VHF Radios panel: VHF 1 and VHF 2 standby frequency (118.000 to 136.990); the transfer buttons
   swap them in.
-  Transponder and TCAS panel: Squawk, four digits each 0 to 7.
-  Captain, First Officer and Center panels: the altimeter settings, in inches (29.92) or
-  hectopascals (1013).
-  Captain EFIS panel: Decision height, 0 to 2,500 feet (0 clears it). It sets both pilots'
+  Transponder panel: Squawk, four digits each 0 to 7.
+  Captain Side, First Officer Side and Standby Instruments panels: the altimeter settings, in
+  inches (29.92) or hectopascals (1013).
+  EFIS Captain panel: Decision height, 0 to 2,500 feet (0 clears it). It sets both pilots'
   minimums, which the PFD box shows and the aircraft's "minimums" call-out uses. You hear
   "Decision height 200 feet".
 

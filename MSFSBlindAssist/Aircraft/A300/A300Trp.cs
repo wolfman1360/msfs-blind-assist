@@ -37,7 +37,7 @@ public static class A300Trp
     public const string PwEnginesVar = "INI_IS_PW";
 
     /// <summary>The panel whose status box carries the TRP line (the TRP's own panel).</summary>
-    public const string Panel = "Center Panel";
+    public const string Panel = "Thrust Rating Panel";
 
     /// <summary>The flex temperature knob (an encoder: its increase and decrease rows).</summary>
     public const string FlexKnobKey = "A300_FLEX_TEMP";

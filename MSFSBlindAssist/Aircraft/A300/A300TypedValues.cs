@@ -71,11 +71,11 @@ public static class A300TypedValues
         new A300TypedValue(IlsCourseKey, "ILS course setting", "Navigation Radios"),
         new A300TypedValue(Com1StandbyKey, "VHF 1 standby frequency", "VHF Radios"),
         new A300TypedValue(Com2StandbyKey, "VHF 2 standby frequency", "VHF Radios"),
-        new A300TypedValue(SquawkKey, "Squawk", "Transponder and TCAS"),
-        new A300TypedValue(BaroCaptainKey, "Altimeter setting", "Captain Panel"),
-        new A300TypedValue(BaroFirstOfficerKey, "Altimeter setting", "First Officer Panel"),
-        new A300TypedValue(BaroStandbyKey, "Standby altimeter setting", "Center Panel"),
-        new A300TypedValue(MinimumsKey, "Decision height", "Captain EFIS"),
+        new A300TypedValue(SquawkKey, "Squawk", "Transponder"),
+        new A300TypedValue(BaroCaptainKey, "Altimeter setting", "Captain Side"),
+        new A300TypedValue(BaroFirstOfficerKey, "Altimeter setting", "First Officer Side"),
+        new A300TypedValue(BaroStandbyKey, "Standby altimeter setting", "Standby Instruments"),
+        new A300TypedValue(MinimumsKey, "Decision height", "EFIS Captain"),
     };
 
     public static readonly IReadOnlySet<string> Keys = All.Select(t => t.Key).ToHashSet(StringComparer.Ordinal);

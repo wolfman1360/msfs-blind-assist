@@ -31,19 +31,162 @@ public class A300PanelLayoutTests
     }
 
     [Fact]
-    public void The_sections_keep_their_order()
+    public void The_sections_are_the_fleet_airbuses_sections()
     {
-        Assert.Equal(new[] { "Overhead", "Glareshield", "Main Panel", "Pedestal", "Cockpit", "Cargo" },
+        // Owner decision 2026-10-09: "Main Panel" is "Instrument", as on the FBW A320, A330 and A380.
+        Assert.Equal(new[] { "Overhead", "Glareshield", "Instrument", "Pedestal", "Cockpit", "Cargo" },
             Placement.Structure.Keys);
     }
 
     [Fact]
-    public void The_overhead_opens_like_every_other_aircraft()
+    public void Each_section_lists_its_panels_by_system_in_the_fleet_airbuses_order()
     {
-        Assert.Equal(new[] { "Electrical", "IRS", "APU", "Fire", "Hydraulics", "Fuel" },
-            Placement.Structure["Overhead"].Take(6));
-        Assert.Equal(new[] { "Throttle Quadrant", "Trim", "ECAM Control" }, Placement.Structure["Pedestal"].Take(3));
+        // Owner decisions 2026-10-09 (docs/a300.md, "Panels"): sorted by system like the FBW A320 where the A300
+        // has the same panel; A300-only panels keep the manual's name; window and probe heat and the landing
+        // elevation knob stay where the A300 has them.
+        Assert.Equal(new[]
+        {
+            "Electrical", "IRS", "APU", "Oxygen", "Fire", "Hydraulics", "Fuel", "Air Conditioning", "Bleed",
+            "Pressurization", "Ventilation", "Anti-Ice", "Window and Probe Heat", "Wipers", "Signs", "Interior Lighting",
+            "Exterior Lighting", "Flight Controls", "SAS Control", "Cockpit Door", "Cargo Smoke", "Recorder",
+            "Engine Start",
+        }, Placement.Structure["Overhead"]);
+        Assert.Equal(new[] { "FCU", "EFIS Captain", "EFIS First Officer" }, Placement.Structure["Glareshield"]);
+        Assert.Equal(new[]
+        {
+            "Warnings", "Gear", "Autobrake", "Thrust Rating Panel", "Landing Elevation", "Standby Instruments",
+            "Source Switching", "Clock", "GPWS", "Captain Side", "First Officer Side",
+        }, Placement.Structure["Instrument"]);
+        Assert.Equal(new[]
+        {
+            "Engines", "Thrust Levers", "Flaps and Speed Brake", "Parking Brake", "Trim", "ECAM Control Panel",
+            "Weather Radar", "Transponder", "VHF Radios", "Navigation Radios", "ADF Radios",
+            "Audio Control Panel Captain", "Audio Control Panel First Officer", "MCDU Brightness", "IDC",
+            "Pedestal Lighting",
+        }, Placement.Structure["Pedestal"]);
+        Assert.Equal(new[] { "Yokes", "RAT", "Circuit Breakers", "Cockpit" }, Placement.Structure["Cockpit"]);
+        Assert.Equal(new[] { "Cargo Door" }, Placement.Structure["Cargo"]);
     }
+
+    [Theory]
+    [InlineData("A300_SEATBELT", "Signs")]
+    [InlineData("A300_EMERGEXIT_SWITCH", "Signs")]
+    [InlineData("A300_NOSELIGHTSWITCH", "Exterior Lighting")]
+    [InlineData("A300_NAVLIGHT_SWITCH", "Exterior Lighting")]
+    [InlineData("A300_STORMLIGHT", "Interior Lighting")]
+    [InlineData("A300_ANN_LIGHTSWITCH", "Interior Lighting")]
+    [InlineData("A300_COMPASS_COVER", "Interior Lighting")]
+    [InlineData("A300_APU_BLEEDSWITCH", "Bleed")]
+    [InlineData("A300_AIR_XFEED", "Bleed")]
+    [InlineData("A300_ISO_VALVE_LEFT", "Bleed")]
+    [InlineData("A300_PACK1_MODE", "Air Conditioning")]
+    [InlineData("A300_TEMP_SELECT", "Air Conditioning")]
+    [InlineData("A300_SMOKE_TEST", "Cargo Smoke")]
+    [InlineData("A300_CARGO_AFT_SMOKE_TOGGLE", "Cargo Smoke")]
+    [InlineData("A300_FIRE_HANDLE_ENG1", "Fire")]
+    [InlineData("A300_AUTO_PRESS_1", "Pressurization")]
+    [InlineData("A300_FLTRCDR_GNDCTL", "Recorder")]
+    [InlineData("A300_CVR_TEST", "Recorder")]
+    [InlineData("A300_ATC_CPT", "EFIS Captain")]
+    [InlineData("A300_YAW_DAMPER_1", "SAS Control")]
+    [InlineData("A300_ATS_2", "SAS Control")]
+    [InlineData("A300_MASTER_WARNING_CPT", "Warnings")]
+    [InlineData("A300_MASTER_CAUTION_FO", "Warnings")]
+    [InlineData("A300_GEAR_LEVER", "Gear")]
+    [InlineData("A300_MAN_GEAR_HANDLE_EXT", "Gear")]
+    [InlineData("A300_LDG_TEST", "Gear")]
+    [InlineData("A300_AUTO_BRK_LO", "Autobrake")]
+    [InlineData("A300_ANTI_SKID", "Autobrake")]
+    [InlineData("A300_BRAKE_FAN", "Autobrake")]
+    [InlineData("A300_TRP_CL", "Thrust Rating Panel")]
+    [InlineData("A300_FLEX_TEMP#INC", "Thrust Rating Panel")]
+    [InlineData("A300_LANDING_ELEV_SET#INC", "Landing Elevation")]
+    [InlineData("A300_ADI_CAGE", "Standby Instruments")]
+    [InlineData("A300_FO_SW_FD", "Source Switching")]
+    [InlineData("A300_CPT_PFD_XFR", "Source Switching")]
+    [InlineData("A300_CPT_CLOCK_START", "Clock")]
+    [InlineData("A300_GPWS_FO", "GPWS")]
+    [InlineData("A300_GPWS_FLAPS_CONFIG", "GPWS")]
+    [InlineData("A300_CPT_ALTIMETER_KNOB#INC", "Captain Side")]
+    [InlineData("A300_FO_OXY_PUSH", "First Officer Side")]
+    [InlineData("A300_ENG1_CUTOFF", "Engines")]
+    [InlineData("A300_TOGA_SEL", "Thrust Levers")]
+    [InlineData("A300_AT_DISCO1", "Thrust Levers")]
+    [InlineData(A300Levers.FlapsKey, "Flaps and Speed Brake")]
+    [InlineData(A300Levers.SpeedBrakeKey, "Flaps and Speed Brake")]
+    [InlineData("A300_PARKINGBRAKE", "Parking Brake")]
+    [InlineData("A300_PARKBRAKE_PRESS_PUSH", "Parking Brake")]
+    [InlineData("A300_TO_CONFIG_TEST", "ECAM Control Panel")]
+    [InlineData("A300_EMER_CANCEL_BUTTON", "ECAM Control Panel")]
+    [InlineData("A300_ECAM_CLR", "ECAM Control Panel")]
+    [InlineData("A300_SGU_1", "ECAM Control Panel")]
+    [InlineData("A300_TCAS_MODE", "Transponder")]
+    [InlineData("A300_CPT_VHF1_VOL_BUTTON", "Audio Control Panel Captain")]
+    [InlineData("A300_FO_INT_VOL", "Audio Control Panel First Officer")]
+    public void Each_control_sits_on_its_systems_panel(string key, string panel) =>
+        Assert.Contains(Row(key), Placement.RowsByPanel[panel]);
+
+    [Theory]
+    [InlineData("INI_PACK1_FAULT", "Air Conditioning")]
+    [InlineData("INI_ISOLATION_VALVE_LEFT_FAULT", "Bleed")]
+    [InlineData("INI_cabin_sys1_regulator_fault", "Pressurization")]
+    [InlineData("INI_GPWS_LIGHT", "GPWS")]
+    [InlineData("INI_GLIDESLOPE_LIGHT", "GPWS")]
+    [InlineData("INI_TERR_MODE_FAULT", "GPWS")]
+    [InlineData("INI_FMS1_message_light", "Captain Side")]
+    [InlineData("INI_engine1_oil_low_press_light", "Engines")]
+    [InlineData("INI_ENG2_MASTER_SWITCH_LIGHT", "Engines")]
+    [InlineData("INI_AUTOLAND_LIGHT", "EFIS Captain")]
+    [InlineData("INI_ECAM_CLR_LIGHT", "ECAM Control Panel")]
+    [InlineData("INI_ENG1_LOOP_A_LIGHT", "Fire")]
+    public void Each_light_sits_on_its_systems_panel(string var, string panel) =>
+        Assert.Equal(panel, A300FaultLights.All.Single(l => l.Var == var).Panel);
+
+    [Fact]
+    public void The_master_lights_sit_on_warnings() =>
+        Assert.All(A300Announcements.Lamps.Where(l => !l.SpeaksOff), l => Assert.Equal("Warnings", l.Panel));
+
+    [Theory]
+    [InlineData(A300Readouts.FlexTemperatureKey, "Thrust Rating Panel")]
+    [InlineData("A300_RO_LANDING_ELEV", "Landing Elevation")]
+    [InlineData(A300Readouts.BaroStandbyKey, "Standby Instruments")]
+    [InlineData(A300Readouts.BaroCaptainKey, "Captain Side")]
+    [InlineData(A300Readouts.BaroFirstOfficerKey, "First Officer Side")]
+    public void Each_readout_sits_on_its_systems_panel(string key, string panel) =>
+        Assert.Equal(panel, A300Readouts.All.Single(r => r.Key == key).Panel);
+
+    [Fact]
+    public void Every_light_readout_and_typed_box_names_a_panel_that_exists()
+    {
+        var panels = Placement.Structure.Values.SelectMany(p => p).ToHashSet();
+        Assert.All(A300FaultLights.All, l => Assert.Contains(l.Panel, panels));
+        Assert.All(A300Announcements.Lamps, l => Assert.Contains(l.Panel, panels));
+        Assert.All(A300Readouts.All.Where(r => !A300DisplayPanels.IsDisplayPanel(r.Panel)), r => Assert.Contains(r.Panel, panels));
+        Assert.All(A300TypedValues.All, t => Assert.Contains(t.Panel, panels));
+        Assert.Contains(A300Trp.Panel, panels);
+    }
+
+    [Theory]
+    [InlineData(A300TypedValues.BaroCaptainKey, "Captain Side")]
+    [InlineData(A300TypedValues.BaroFirstOfficerKey, "First Officer Side")]
+    [InlineData(A300TypedValues.BaroStandbyKey, "Standby Instruments")]
+    [InlineData(A300TypedValues.MinimumsKey, "EFIS Captain")]
+    [InlineData(A300TypedValues.SquawkKey, "Transponder")]
+    public void Each_typed_box_sits_on_its_systems_panel(string key, string panel) =>
+        Assert.Contains(Row(key), Placement.RowsByPanel[panel]);
+
+    [Theory]
+    [InlineData("A300_MASTER_WARNING_CPT", "Captain master warning")]
+    [InlineData("A300_MASTER_CAUTION_FO", "First officer master caution")]
+    [InlineData("A300_CPT_CLOCK_START", "Captain chrono")]
+    [InlineData("A300_FO_CLOCK_RUN", "First officer elapsed time")]
+    [InlineData("A300_FO_SW_ATT", "First officer attitude and heading to IRS 3")]
+    [InlineData("A300_CPT_PFD_XFR", "Captain PFD and ND transfer")]
+    [InlineData("A300_GPWS_FO", "First officer GPWS test")]
+    [InlineData("A300_TERR_CPT", "Captain terrain on ND")]
+    [InlineData("A300_FO_TERR_MODE", "First officer terrain mode")]
+    public void A_row_in_a_panel_both_sides_share_names_its_side_first(string key, string name) =>
+        Assert.Equal(name, Row(key).Name);
 
     [Fact]
     public void Every_section_lists_exactly_the_panels_it_has()
@@ -83,14 +226,14 @@ public class A300PanelLayoutTests
     public void The_first_officers_altimeter_is_not_named_after_the_captains()
     {
         // iniBuilds titles both altimeter knobs "CPT BAROMETER".
-        Assert.Contains(Row("A300_FO_ALTIMETER_KNOB#INC"), Placement.RowsByPanel["First Officer Panel"]);
+        Assert.Contains(Row("A300_FO_ALTIMETER_KNOB#INC"), Placement.RowsByPanel["First Officer Side"]);
         Assert.DoesNotContain(AllRows, r => r.Name.Contains("CPT", StringComparison.Ordinal));
     }
 
     [Fact]
     public void A_cargo_smoke_guard_comes_just_before_its_switch_and_reads_closed_or_open()
     {
-        var fire = Placement.RowsByPanel["Fire"].Select(r => r.Key).ToList();
+        var fire = Placement.RowsByPanel["Cargo Smoke"].Select(r => r.Key).ToList();
         Assert.Equal(fire.IndexOf("A300_CARGO_FWD_SMOKE_TOGGLE_GUARD") + 1, fire.IndexOf("A300_CARGO_FWD_SMOKE_TOGGLE"));
         Assert.Equal(fire.IndexOf("A300_CARGO_AFT_SMOKE_TOGGLE_GUARD") + 1, fire.IndexOf("A300_CARGO_AFT_SMOKE_TOGGLE"));
         Assert.Equal(new[] { "Closed", "Open" }, Row("A300_CARGO_FWD_SMOKE_TOGGLE_GUARD").Positions.Values);
@@ -137,13 +280,17 @@ public class A300PanelLayoutTests
     }
 
     [Fact]
-    public void Electrical_opens_on_the_batteries_and_the_throttle_quadrant_on_its_levers()
+    public void Electrical_opens_on_the_batteries_and_the_levers_open_their_panels()
     {
         Assert.Equal(new[] { "A300_BATT_1", "A300_BATT_2", "A300_BATT_3", "A300_EXT_PWR" },
             Placement.RowsByPanel["Electrical"].Take(4).Select(r => r.Key));
-        Assert.Equal(new[] { "A300_ENG1_CUTOFF", "A300_ENG2_CUTOFF", A300Levers.FlapsKey, A300Levers.SpeedBrakeKey, A300Levers.SpoilersArmKey },
-            Placement.RowsByPanel[A300Levers.Panel].Take(5).Select(r => r.Key));
-        Assert.Contains(A300Levers.Panel, Placement.Structure["Pedestal"]);
+        Assert.Equal(new[] { "A300_ENG1_CUTOFF", "A300_ENG2_CUTOFF" }, Placement.RowsByPanel["Engines"].Select(r => r.Key));
+        Assert.Equal(new[] { A300Levers.FlapsKey, A300Levers.SpeedBrakeKey, A300Levers.SpoilersArmKey },
+            Placement.RowsByPanel[A300Levers.Panel].Select(r => r.Key));
+        Assert.Equal("Flaps and Speed Brake", A300Levers.Panel);
+        Assert.Equal(new[] { "A300_GEAR_LEVER" }, Placement.RowsByPanel["Gear"].Take(1).Select(r => r.Key));
+        Assert.Equal(new[] { "A300_MASTER_WARNING_CPT", "A300_MASTER_CAUTION_CPT", "A300_MASTER_WARNING_FO", "A300_MASTER_CAUTION_FO" },
+            Placement.RowsByPanel["Warnings"].Select(r => r.Key));
     }
 
     [Fact]

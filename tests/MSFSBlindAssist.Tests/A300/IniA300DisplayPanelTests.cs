@@ -46,10 +46,10 @@ public class IniA300DisplayPanelTests
     }
 
     [Fact]
-    public void The_displays_section_follows_the_main_panel()
+    public void The_displays_section_follows_the_instrument_panel()
     {
         var sections = _def.GetPanelStructure().Keys.ToList();
-        Assert.Equal(sections.IndexOf("Main Panel") + 1, sections.IndexOf("Displays"));
+        Assert.Equal(sections.IndexOf("Instrument") + 1, sections.IndexOf("Displays"));
         Assert.Equal("PFD", _def.GetPanelStructure()["Displays"][0]);
     }
 

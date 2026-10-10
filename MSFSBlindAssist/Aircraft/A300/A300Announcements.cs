@@ -27,8 +27,8 @@ public static class A300Announcements
 
     private static readonly A300Lamp[] Masters =
     {
-        new A300Lamp(MasterWarningKey, "INI_MASTER_WARNING_ACTIVE", "Master warning", "Captain Panel"),
-        new A300Lamp(MasterCautionKey, "INI_MASTER_CAUTION_ACTIVE", "Master caution", "Captain Panel"),
+        new A300Lamp(MasterWarningKey, "INI_MASTER_WARNING_ACTIVE", "Master warning", "Warnings"),
+        new A300Lamp(MasterCautionKey, "INI_MASTER_CAUTION_ACTIVE", "Master caution", "Warnings"),
     };
 
     /// <summary>Every light that speaks: the two master lights, then the fault and warning lights.</summary>
