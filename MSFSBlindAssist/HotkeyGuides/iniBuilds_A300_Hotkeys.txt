@@ -93,6 +93,11 @@ lower ECAM shows, the one you chose or the automatic one: "Fuel page: On". Press
 goes back to the automatic page, and the light of the page that replaces it is announced. The
 Clear button says whether its light is on.
 
+The Weather Radar panel's status display reads the antenna tilt in degrees ("Antenna tilt: 3
+degrees down"); the tilt slider runs from 15 degrees down at 0 to 15 degrees up at 100. The
+Transponder panel's status display reads the squawk code, and each step of a code knob says the
+new code: "Squawk 7100". The large knob changes the first two digits, the small knob the last two.
+
 The fire tests on the Fire panel are held as a pilot holds them: 7 seconds for an engine loop
 test, 5 seconds for the APU loop test, 3 seconds for a squib test. The loop lights and the fire
 handle light a loop test brings on, and the squib lights a squib test brings on, are announced (see

@@ -59,6 +59,7 @@ public static class A300Readouts
     // The standby instruments box.
     public const string StandbyAltitudeKey = "A300_RO_STBY_ALTITUDE";
     public const string StandbyCompassKey = "A300_RO_STBY_COMPASS";
+    public const string SquawkCodeKey = "A300_RO_SQUAWK";
 
     public static readonly IReadOnlyList<A300Readout> All = new[]
     {
@@ -111,6 +112,12 @@ public static class A300Readouts
         new A300Readout("A300_RO_FLAPS", "Flaps", "Flaps and Speed Brake", "TRAILING EDGE FLAPS LEFT ANGLE", true, "degrees", v => $"{Whole(v)} degrees"),
         new A300Readout("A300_RO_PITCH_TRIM", "Pitch trim", A300Trim.Panel, "ELEVATOR TRIM POSITION", true, "degrees", A300Trim.Pitch),
         new A300Readout(A300Trim.RudderKey, "Rudder trim", A300Trim.Panel, "INI_RUDDER_TRIM_DISPLAY3", false, "number", _ => "unavailable"),
+
+        // The weather radar antenna tilt the tilt knob sets (its slider runs 0 to 100, the tilt 15 down to 15 up).
+        new A300Readout("A300_RO_WXR_TILT", "Antenna tilt", "Weather Radar", "INI_WXR_TILT", false, "number", Tilt),
+
+        // The transponder code as its display shows it, read as BCO16 as the FBW A320 and A380 read it.
+        new A300Readout(SquawkCodeKey, "Squawk code", "Transponder", "TRANSPONDER CODE:1", true, "BCO16", Squawk),
 
         // The two clocks (A300Clock): the time line is composed from the clock's GMT digits, so its own value
         // (the seconds) reads only when they are unknown.
@@ -165,7 +172,16 @@ public static class A300Readouts
         new Dictionary<string, (string, Func<double, string>)>(StringComparer.Ordinal)
         {
             ["A300_LANDING_ELEV_SET"] = ("A300_RO_LANDING_ELEV", v => $"Landing elevation {Whole(v)} feet"),
+            ["A300_TCAS_BIG"] = (SquawkCodeKey, v => $"Squawk {Squawk(v)}"),
+            ["A300_TCAS_SMALL"] = (SquawkCodeKey, v => $"Squawk {Squawk(v)}"),
         };
+
+    /// <summary>"7000": each BCO16 nibble a digit.</summary>
+    private static string Squawk(double bcd)
+    {
+        int word = (int)Math.Round(bcd);
+        return $"{(word >> 12) & 0xF}{(word >> 8) & 0xF}{(word >> 4) & 0xF}{word & 0xF}";
+    }
 
     /// <summary>The three speeds the tape shows only at some flap settings.</summary>
     public static readonly IReadOnlyDictionary<string, A300PfdSpeed> FlapSpeeds = new Dictionary<string, A300PfdSpeed>(StringComparer.Ordinal)
@@ -187,6 +203,13 @@ public static class A300Readouts
     {
         string text = Math.Round(value).ToString("0", Inv);
         return text == "-0" ? "0" : text;
+    }
+
+    /// <summary>"3 degrees down", "15 degrees up", "0 degrees".</summary>
+    private static string Tilt(double degrees)
+    {
+        string whole = Whole(Math.Abs(degrees));
+        return whole == "0" ? "0 degrees" : $"{whole} degrees {(degrees > 0 ? "up" : "down")}";
     }
 
     /// <summary>"1,500 psi", as the ECAM pages write pressures.</summary>

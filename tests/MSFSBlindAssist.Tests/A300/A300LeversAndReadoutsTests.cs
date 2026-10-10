@@ -106,6 +106,43 @@ public class A300LeversAndReadoutsTests
     }
 
     [Theory]
+    // The tilt knob's slider runs 0 to 100; the antenna tilt it sets, INI_WXR_TILT, runs 15 down to 15 up
+    // (knob 40 is 3 down, measured 2026-10-10). Up is positive.
+    [InlineData(-3, "3 degrees down")]
+    [InlineData(15, "15 degrees up")]
+    [InlineData(0, "0 degrees")]
+    [InlineData(-0.4, "0 degrees")]
+    public void The_weather_radar_panel_reads_its_antenna_tilt(double tilt, string text)
+    {
+        var readout = A300Readouts.All.Single(r => r.Panel == "Weather Radar");
+        Assert.Equal(("Antenna tilt", "INI_WXR_TILT"), (readout.Name, readout.Var));
+        Assert.Equal(text, readout.Format(tilt));
+    }
+
+    [Theory]
+    // TRANSPONDER CODE:1 read as BCO16, one digit a nibble, as the FBW A320 and A380 read it.
+    [InlineData(0x7000, "7000")]
+    [InlineData(0x1200, "1200")]
+    [InlineData(0x0042, "0042")]
+    public void The_transponder_panel_reads_the_squawk_code(int bcd, string code)
+    {
+        var readout = A300Readouts.All.Single(r => r.Panel == "Transponder");
+        Assert.Equal(("Squawk code", "TRANSPONDER CODE:1", "BCO16"), (readout.Name, readout.Var, readout.Units));
+        Assert.Equal(code, readout.Format(bcd));
+    }
+
+    [Theory]
+    [InlineData("A300_TCAS_BIG")]
+    [InlineData("A300_TCAS_SMALL")]
+    public void A_transponder_code_knob_step_reads_the_code_back(string knob)
+    {
+        // A step changes two digits at a time (the large knob 7000 to 7100, the small 7000 to 7001, 2026-10-10).
+        var (readout, phrase) = A300Readouts.KnobReadBacks[knob];
+        Assert.Equal("Transponder", A300Readouts.All.Single(r => r.Key == readout).Panel);
+        Assert.Equal("Squawk 7100", phrase(0x7100));
+    }
+
+    [Theory]
     [InlineData("en-US")]
     [InlineData("de-DE")]
     [InlineData("sv-SE")]
