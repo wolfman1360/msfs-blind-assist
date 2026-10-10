@@ -67,5 +67,6 @@ public static class A300DisplayPanels
         {
             ["Standby Instruments"] = Standby,
             ["Electrical"] = Lines["ECAM Electrical AC"].Concat(Lines["ECAM Electrical DC"]).ToArray(),
+            ["APU"] = Lines["ECAM APU"],
         };
 }

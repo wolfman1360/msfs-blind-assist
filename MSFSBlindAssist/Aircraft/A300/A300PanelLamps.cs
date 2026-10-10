@@ -71,6 +71,12 @@ public static class A300PanelLamps
         new("IRS_2_010_LIGHT", "IRS 3 on battery light", "IRS"),
         new("IRS_2_011_LIGHT", "IRS 3 battery fault light", "IRS"),
         new("IRS_2_012_LIGHT", "IRS 3 fault light", "IRS"),
+
+        // APU: the available light, the start button's two legends and the fuel shutoff valve indicator.
+        new("APU_AVAIL_SEQ1_LIGHT", "APU available light", "APU"),
+        new("APU_START_SEQ2_LIGHT", "APU start on light", "APU"),
+        new("APU_START_SEQ1_LIGHT", "APU starting light", "APU"),
+        new("APU_FUELSHUT_SEQ1_LIGHT", "APU fuel shutoff valve open light", "APU"),
     };
 
     /// <summary>Each named lamp with its rule from the shipped map; a lamp the map lacks is left out, loudly

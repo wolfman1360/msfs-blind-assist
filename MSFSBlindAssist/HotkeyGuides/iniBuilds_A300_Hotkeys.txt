@@ -153,7 +153,8 @@ The Displays section has a status box (Ctrl+3) for each screen:
 The standby instruments (attitude, airspeed, the standby altimeter and its setting, the compass)
 are read on the Instrument section's Standby Instruments panel, with its knob and cage. A system
 panel's own status display also carries its ECAM page's numbers after its lights: Electrical
-shows the AC and DC voltages, frequencies and currents.
+shows the AC and DC voltages, frequencies and currents; APU shows its speed, EGT, bleed pressure
+and generator.
 
 
 THE MCDU WINDOW - Press left bracket, then Shift+M
@@ -455,7 +456,8 @@ and oil pressure, autoland, GPWS, below glide slope, the MCDU message light, ECA
 cockpit door. The Electrical panel adds external power available, AC bus 1 and 2 off, AC
 essential bus off, AC emergency bus on inverter, DC normal bus off, DC essential bus on battery,
 IDG 1 and 2 disconnected, and override supply 1 and 2 flow. The IRS panel adds each IRS's align,
-on battery, battery fault and fault lights. More panels are being added. A
+on battery, battery fault and fault lights. The APU panel adds APU available, APU start on, APU
+starting and APU fuel shutoff valve open. More panels are being added. A
 switch's own OFF or ON legend is not read as a light: the switch already says its position.
 Lights that change together are read as one sentence, about a second and a half later, so an
 engine start sounds like "3 lights off: Spoiler 7 fault, Spoiler 6 fault, Spoiler 5 fault". The

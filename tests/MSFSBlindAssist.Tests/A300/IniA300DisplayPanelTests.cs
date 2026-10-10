@@ -66,6 +66,15 @@ public class IniA300DisplayPanelTests
     }
 
     [Fact]
+    public void The_apu_status_box_has_its_lights_then_the_ecam_apu_values()
+    {
+        var apu = _def.GetPanelDisplayVariables()["APU"];
+        var ecam = A300DisplayPanels.Lines["ECAM APU"];
+        Assert.Equal(ecam, apu.Skip(apu.Count - ecam.Count));
+        Assert.Contains("A300_LT_APU_AVAIL_SEQ1_LIGHT", apu.Take(apu.Count - ecam.Count));
+    }
+
+    [Fact]
     public void The_displays_section_follows_the_instrument_panel()
     {
         var sections = _def.GetPanelStructure().Keys.ToList();

@@ -80,6 +80,17 @@ public class A300PanelLampTests
     }
 
     [Theory]
+    [InlineData("APU_AVAIL_SEQ1_LIGHT", "APU available light")]
+    [InlineData("APU_START_SEQ2_LIGHT", "APU start on light")]
+    [InlineData("APU_START_SEQ1_LIGHT", "APU starting light")]
+    [InlineData("APU_FUELSHUT_SEQ1_LIGHT", "APU fuel shutoff valve open light")]
+    public void The_apu_lights_are_named_from_their_buttons(string node, string name)
+    {
+        Assert.Equal(name, Lamp(node).Name);
+        Assert.Equal("APU", Lamp(node).Panel);
+    }
+
+    [Theory]
     [InlineData("INI_BAT1_light", "Battery 1 charge light")]
     [InlineData("INI_BAT3_light", "Battery 3 charge light")]
     public void The_battery_lights_are_charge_lights(string var, string name) =>
