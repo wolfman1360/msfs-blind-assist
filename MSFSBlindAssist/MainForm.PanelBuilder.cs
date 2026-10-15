@@ -389,8 +389,10 @@ public partial class MainForm
                 {
                     // Fallback for non-Fenix buttons that still use ValueDescriptions.
                     // Resting-state (value 0 = Off/Idle) suppression is OPT-IN via
-                    // SuppressRestingButtonState, set only by the FBW momentary-button helpers
-                    // — a momentary push-button has no meaningful resting value, so appending
+                    // SuppressRestingButtonState, set by the momentary-button defs of the FBW
+                    // A320/A380, the iFly 737 (Btn, McpModeStyleWarning) and the MD-11
+                    // (BuildControlVariable) — a momentary push-button has no meaningful
+                    // resting value, so appending
                     // it read as noise ("Chronometer Start / Stop: Idle, button"). By DEFAULT
                     // the value-0 label shows: PMDG 777 MCP buttons ("LNAV: Off") and the
                     // HS787 Baro STD ("QNH") use value-0 descriptions that ARE meaningful state.
@@ -783,8 +785,8 @@ public partial class MainForm
                                 // TOGGLE_EVENT=TAXI_LIGHTS_SET) so LIGHT TAXI:2/3, FBW presets, and
                                 // the EFB all stay in sync. The old ELECTRICAL_CIRCUIT_TOGGLE path
                                 // drove circuits 21/22 directly, which desynchronised LIGHT TAXI:2/3.
-                                // RPN form 2026-07: the FBW template-verbatim
-                                // "<value> <index> r (>K:2:TAXI_LIGHTS_SET)" — live-verified to set
+                                // RPN form 2026-07: verbatim the nose-light form in FBW's
+                                // A320_NEO_INTERIOR.xml, "<value> <index> r (>K:2:TAXI_LIGHTS_SET)" — live-verified to set
                                 // exactly the right index. (RPN "r" swaps the top two stack entries,
                                 // so this is stack-equivalent to "<index> <value>"; an earlier test
                                 // that read the index-first form as a no-op had some other confound
@@ -978,17 +980,13 @@ public partial class MainForm
                     // for a field that opted in (UnparseableTextAsNaN), where 0 is a real value
                     // (an A32NX FCU heading of 0 is north) and the handler refuses NaN. Every
                     // other field still receives the historical 0: their handlers were written
-                    // against it, and several would forward a NaN to the sim.
-                    if (!double.TryParse(
-                            textBox.Text.Replace(',', '.'),
-                            System.Globalization.NumberStyles.Float,
-                            System.Globalization.CultureInfo.InvariantCulture,
-                            out double parsedValue))
-                    {
-                        parsedValue = varDef.UnparseableTextAsNaN ? double.NaN : 0;
-                    }
+                    // against it, and several would forward a NaN to the sim. TryParseTyped takes
+                    // either decimal separator on any Windows culture and refuses a thousands group
+                    // ("1,500" must not become an FPA of 1.5); a COM frequency "118,275" still reads.
+                    bool parsed = Utils.NumberParsing.TryParseTyped(textBox.Text, out double value);
                     if (currentAircraft.HandleUIVariableSet(
-                            varKey, parsedValue, varDef, simConnectManager!, announcer))
+                            varKey, parsed ? value : varDef.UnparseableTextAsNaN ? double.NaN : 0,
+                            varDef, simConnectManager!, announcer))
                     {
                         return;
                     }
@@ -1016,14 +1014,9 @@ public partial class MainForm
                             announcer.Announce($"Squawk set to {squawkCode}");
                         }
                     }
-                    else if (double.TryParse(textBox.Text, out double value))
+                    // The aircraft declined the value above; the generic handling uses the same parse.
+                    else if (parsed)
                     {
-                        // Let aircraft handle special cases first (validation, conversion, multi-step logic)
-                        if (currentAircraft.HandleUIVariableSet(varKey, value, varDef, simConnectManager!, announcer))
-                        {
-                            return; // Aircraft handled it
-                        }
-
                         // Generic handling follows - COM frequencies, transponder, etc.
                         if (varKey.StartsWith("COM_") && varKey.Contains("FREQUENCY_SET"))
                         {
@@ -1110,6 +1103,11 @@ public partial class MainForm
                             simConnectManager?.SendEvent(varKey, (uint)value);
                             announcer.Announce($"{varDef.DisplayName} set to {value}");
                         }
+                    }
+                    else
+                    {
+                        // A validation error always speaks: "10,000" used to be sent as 10.
+                        announcer.Announce("Invalid number format");
                     }
                 };
                 

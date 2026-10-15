@@ -433,6 +433,8 @@ public partial class SimConnectManager
     private string currentAircraftFlightNumber = "";
     private string currentAircraftAtcModel = ""; // raw ATC MODEL simvar value
     private string currentAircraftTitle = "";    // TITLE simvar value (aircraft.cfg [FLTSIM.N] title)
+    /// <summary>The loaded aircraft's TITLE (e.g. "737-700 PAX BW SC"). Empty until aircraft detection completes.</summary>
+    public string CurrentAircraftTitle => currentAircraftTitle;
     /// <summary>Extracted ICAO type designator for the current aircraft (e.g. "B77W"). Empty if not yet known.</summary>
     public string CurrentAircraftIcaoType { get; private set; } = "";
 
@@ -605,7 +607,10 @@ public partial class SimConnectManager
     /// <summary>IDs for SimConnect SubscribeToSystemEvent notifications.</summary>
     private enum SYSTEM_EVENT_ID : uint
     {
-        AircraftLoaded = 9000
+        AircraftLoaded = 9000,
+        // "Frame": once per rendered frame, subscribed only while the Sim Performance window is open
+        // (SimConnectManager.FrameRate.cs).
+        Frame = 9001
     }
 
 
@@ -1340,6 +1345,7 @@ public partial class SimConnectManager
                 simConnect.OnRecvClientData -= SimConnect_OnRecvClientData;
                 simConnect.OnRecvException -= SimConnect_OnRecvException;
                 simConnect.OnRecvEventFilename -= SimConnect_OnRecvEventFilename;
+                simConnect.OnRecvEventFrame -= SimConnect_OnRecvEventFrame;
 
                 Log.Debug("SimConnect", "Event handlers unregistered, disposing SimConnect...");
             }
@@ -1373,6 +1379,8 @@ public partial class SimConnectManager
         for (int i = 0; i < batchVarArrays.Length; i++)
             batchVarArrays[i] = Array.Empty<(string key, int index, SimVarDefinition def)>();
         eventIds.Clear();
+        // The Frame subscription died with the handle; the consumer count survives so a reconnect re-arms it.
+        _frameEventSubscribed = false;
         lock (forceUpdateVariables) { forceUpdateVariables.Clear(); }
         _freshReads.FailAll();
         FailCameraViewRead();
