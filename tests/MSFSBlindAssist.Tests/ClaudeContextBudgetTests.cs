@@ -770,13 +770,14 @@ public class ClaudeContextBudgetTests
             "BRF-6 GetAssignedStatusAsync", "SI-30 ValidateDatabaseSimulatorMatch", "MD11-23 CalcPathVerdict.PilotWarning",
             "VAT-12 HotkeyAction.ToggleVatsimAnnouncements", "WX-10 HasOwnIcingAnnouncer",
             "DCK-19 UpdateHeadingErrorWithThresholds",
+            "L1011-1 ExecuteCalculatorCodeUnique", "L1011-1 CalcWriteCanLand", "L1011-5 Md11SeedGate",
         },
         ["named as what never to use: the rule guards the code that must avoid it"] = new[]
         {
             "DCK-17 CalculateCrossTrackError", "EXIT-1 LastKnownPosition", "EXIT-9 Runway.Length",
             "P777-14 RequestVariable", "STR-17 Runway.StartLat", "STR-17 StartLon", "SUR-4 GetNearbyAirportICAOs",
             "SUR-24 GetTaxiPaths", "SUR-1 TaxiGraph.Build", "SI-27 TaxiGraph", "BRF-1 TaxiGuidanceManager",
-            "TKO-3 TaxiGuidanceManager",
+            "TKO-3 TaxiGuidanceManager", "L1011-1 SetLVar",
         },
         ["named as the model the rule's code copies, or as a reader its change would break"] = new[]
         {
@@ -792,6 +793,7 @@ public class ClaudeContextBudgetTests
         {
             "A320-9 A32NXDisabledMonitorVariablesSet", "A320-37 A380DisabledMonitorVariablesSet",
             "MD11-18 Md11DisabledMonitorVariablesSet", "AI-4 UserSettings.GeminiModel", "MON-3 SettingsManager.Save",
+            "L1011-5 L1011DisabledMonitorVariablesSet",
         },
         ["a SimVarDefinition field the aircraft definitions set: the rule loads on the definitions"] = new[]
         {
@@ -806,7 +808,7 @@ public class ClaudeContextBudgetTests
         ["the same name, other code: the rule means a framework method, an enum value or a record parameter the "
             + "declaration index does not see"] = new[]
         {
-            "A380C-3 SendAsync", "TRF-3 IdentityKey", "HLD-11 HoldShort", "SUR-22 HoldShort",
+            "A380C-3 SendAsync", "TRF-3 IdentityKey", "HLD-11 HoldShort", "SUR-22 HoldShort", "GSX-5 AlreadyThere",
         },
     };
 
