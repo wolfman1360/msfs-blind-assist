@@ -62,6 +62,10 @@ public class PMDGAutopilotWindow : Form
     private Button _closeButton = null!;
     private IntPtr _previousWindow;
 
+    /// <summary>The modifier keys held during a key press; a test seam, the keyboard's own state otherwise.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal Func<Keys> ModifierKeysSource { get; set; } = () => ModifierKeys;
+
     public PMDGAutopilotWindow(
         string title,
         IReadOnlyList<ToggleButtonDef> buttons,
@@ -247,6 +251,15 @@ public class PMDGAutopilotWindow : Form
                 SetForegroundWindow(_previousWindow);
         };
     }
+
+    /// <summary>
+    /// The buttons' letters are Alt keys only. A WinForms dialog also fires a mnemonic on the PLAIN
+    /// letter while focus is on a button (the Win32 dialog convention), so a stray G pressed the
+    /// TriStar's TOGA button and a D its autopilot disconnect (seen live). A combo takes its own
+    /// letters before this runs, so typing in one is unchanged.
+    /// </summary>
+    protected override bool ProcessDialogChar(char charCode) =>
+        (ModifierKeysSource() & Keys.Alt) == Keys.Alt && base.ProcessDialogChar(charCode);
 
     /// <summary>Shared hide path for Escape and the Close button — mirrors what
     /// FormClosing does for CloseReason.UserClosing, but calls Hide() directly so
