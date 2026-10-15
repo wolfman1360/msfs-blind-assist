@@ -124,6 +124,19 @@ public class L1011AutoflightWindowsTests
         }, L1011AutopilotStatus.Lines(null, _ => null));
     }
 
+    [Theory]
+    [InlineData(0.0, 0.0, "Armed and captured: none")]            // a VOR received at the gate, VOR mode off
+    [InlineData(1.0, 0.0, "Armed and captured: VOR captured")]
+    [InlineData(0.0, 1.0, "Armed and captured: VOR captured")]    // the gauge writes it in back course too
+    public void Vor_captured_is_listed_only_while_vor_or_back_course_is_on(double vor, double backCourse, string expected)
+    {
+        var values = new Dictionary<string, double>
+        {
+            ["ANN_VOR_ACTIVE"] = 1, ["SWITCH_AFCS_VOR"] = vor, ["SWITCH_AFCS_BC"] = backCourse,
+        };
+        Assert.Contains(expected, L1011AutopilotStatus.Lines(null, k => values.TryGetValue(k, out var v) ? v : null));
+    }
+
     [Fact]
     public void An_armed_flare_is_not_read_as_flaring()
     {

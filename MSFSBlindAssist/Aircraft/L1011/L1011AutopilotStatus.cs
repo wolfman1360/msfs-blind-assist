@@ -28,6 +28,7 @@ public static class L1011AutopilotStatus
 
         lines.Add("Engaged modes: " + L1011AfcsModes.Engaged(read));
         var flags = L1011AfcsModes.Flags
+            .Where(f => L1011AfcsModes.FlagModeOn(f.Key, read))
             .Select(f => read(f.Key) is double v ? L1011AfcsModes.Words(f.Key, v) : null)
             .Where(w => w != null)
             .ToList();

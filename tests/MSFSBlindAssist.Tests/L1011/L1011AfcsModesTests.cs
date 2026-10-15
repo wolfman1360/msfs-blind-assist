@@ -51,10 +51,10 @@ public class L1011AfcsModesTests
     public void The_first_value_is_a_silent_baseline_and_a_change_speaks()
     {
         var a = new L1011AfcsAnnouncer();
-        Assert.Null(a.Observe("SWITCH_AFCS_HDG", 0));
-        Assert.Equal("Heading on", a.Observe("SWITCH_AFCS_HDG", 1));
-        Assert.Null(a.Observe("SWITCH_AFCS_HDG", 1));     // unchanged
-        Assert.Equal("Heading off", a.Observe("SWITCH_AFCS_HDG", 0));
+        Assert.Empty(a.Observe("SWITCH_AFCS_HDG", 0));
+        Assert.Equal(new[] { "Heading on" }, a.Observe("SWITCH_AFCS_HDG", 1));
+        Assert.Empty(a.Observe("SWITCH_AFCS_HDG", 1));     // unchanged
+        Assert.Equal(new[] { "Heading off" }, a.Observe("SWITCH_AFCS_HDG", 0));
     }
 
     [Fact]
@@ -62,9 +62,9 @@ public class L1011AfcsModesTests
     {
         var a = new L1011AfcsAnnouncer();
         a.Observe("SWITCH_AFCS_HDG", 0);
-        Assert.Null(a.Observe("SWITCH_AFCS_HDG", 1, ownCommand: true));
-        Assert.Null(a.Observe("SWITCH_AFCS_HDG", 1));        // already the baseline
-        Assert.Equal("Heading off", a.Observe("SWITCH_AFCS_HDG", 0));
+        Assert.Empty(a.Observe("SWITCH_AFCS_HDG", 1, ownCommand: true));
+        Assert.Empty(a.Observe("SWITCH_AFCS_HDG", 1));        // already the baseline
+        Assert.Equal(new[] { "Heading off" }, a.Observe("SWITCH_AFCS_HDG", 0));
     }
 
     [Fact]
@@ -72,9 +72,9 @@ public class L1011AfcsModesTests
     {
         var a = new L1011AfcsAnnouncer();
         a.Observe("ANN_LOC_ARM", 0);
-        Assert.Equal("Localizer armed", a.Observe("ANN_LOC_ARM", 1));
-        Assert.Null(a.Observe("ANN_LOC_ARM", 0));
-        Assert.Equal("Localizer armed", a.Observe("ANN_LOC_ARM", 1));
+        Assert.Equal(new[] { "Localizer armed" }, a.Observe("ANN_LOC_ARM", 1));
+        Assert.Empty(a.Observe("ANN_LOC_ARM", 0));
+        Assert.Equal(new[] { "Localizer armed" }, a.Observe("ANN_LOC_ARM", 1));
     }
 
     [Fact]
@@ -84,9 +84,56 @@ public class L1011AfcsModesTests
         Assert.True(a.Seed("SWITCH_AFCS_HDG", 1));
         Assert.False(a.Seed("SWITCH_AFCS_HDG", 0));
         Assert.False(a.Seed("SWITCH_AFCS_ALT_MODE", 1));
-        Assert.Null(a.Observe("SWITCH_AFCS_HDG", 1));
+        Assert.Empty(a.Observe("SWITCH_AFCS_HDG", 1));
         a.Reset();
-        Assert.Null(a.Observe("SWITCH_AFCS_HDG", 0));
+        Assert.Empty(a.Observe("SWITCH_AFCS_HDG", 0));
+    }
+
+    private static Func<string, double?> Reads(params (string Key, double Value)[] values) =>
+        k => values.Where(v => v.Key == k).Select(v => (double?)v.Value).FirstOrDefault();
+
+    [Fact]
+    public void Vor_captured_counts_only_while_vor_or_back_course_is_on()
+    {
+        // L1011_INS.js sets ANN_VOR_ACTIVE whenever a navaid is received and no localizer, ILS or
+        // back-course mode is on, with VOR mode off too (seen at the gate with NAV 1 tuned).
+        Assert.False(L1011AfcsModes.FlagModeOn("ANN_VOR_ACTIVE", Reads(("SWITCH_AFCS_VOR", 0), ("SWITCH_AFCS_BC", 0))));
+        Assert.False(L1011AfcsModes.FlagModeOn("ANN_VOR_ACTIVE", _ => null));   // a mode not known yet is off
+        Assert.True(L1011AfcsModes.FlagModeOn("ANN_VOR_ACTIVE", Reads(("SWITCH_AFCS_VOR", 1))));
+        Assert.True(L1011AfcsModes.FlagModeOn("ANN_VOR_ACTIVE", Reads(("SWITCH_AFCS_BC", 1))));
+        Assert.True(L1011AfcsModes.FlagModeOn("ANN_LOC_ARM", _ => null));        // no mode gate
+    }
+
+    [Fact]
+    public void A_received_vor_with_vor_mode_off_is_silent_and_speaks_once_the_mode_comes_on()
+    {
+        var a = new L1011AfcsAnnouncer();
+        a.Observe("SWITCH_AFCS_VOR", 0);
+        a.Observe("SWITCH_AFCS_BC", 0);
+        a.Observe("ANN_VOR_ACTIVE", 0);
+        Assert.Empty(a.Observe("ANN_VOR_ACTIVE", 1));
+        Assert.Equal(new[] { "VOR on", "VOR captured" }, a.Observe("SWITCH_AFCS_VOR", 1));
+        Assert.Equal(new[] { "VOR off" }, a.Observe("SWITCH_AFCS_VOR", 0));     // the capture going out is silent
+        Assert.Equal(new[] { "Back course on", "VOR captured" }, a.Observe("SWITCH_AFCS_BC", 1));
+    }
+
+    [Fact]
+    public void Msfsba_pressing_vor_over_a_received_vor_still_hears_the_capture()
+    {
+        var a = new L1011AfcsAnnouncer();
+        a.Observe("SWITCH_AFCS_VOR", 0);
+        a.Observe("SWITCH_AFCS_BC", 0);
+        a.Observe("ANN_VOR_ACTIVE", 1);
+        Assert.Equal(new[] { "VOR captured" }, a.Observe("SWITCH_AFCS_VOR", 1, ownCommand: true));
+    }
+
+    [Fact]
+    public void A_vor_capture_before_the_mode_baseline_is_a_silent_baseline()
+    {
+        var a = new L1011AfcsAnnouncer();
+        a.Observe("ANN_VOR_ACTIVE", 0);
+        Assert.Empty(a.Observe("ANN_VOR_ACTIVE", 1));                // the VOR and back-course switches not seen yet
+        Assert.Empty(a.Observe("SWITCH_AFCS_VOR", 1));               // the switch's own first value: a baseline
     }
 
     [Fact]

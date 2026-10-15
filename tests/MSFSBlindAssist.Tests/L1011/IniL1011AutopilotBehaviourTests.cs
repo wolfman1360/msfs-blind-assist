@@ -82,9 +82,33 @@ public class IniL1011AutopilotBehaviourTests
     [Fact]
     public void A_vor_capture_is_announced()
     {
+        Deliver("SWITCH_AFCS_VOR", 1);
+        Deliver("SWITCH_AFCS_BC", 0);
         Deliver("ANN_VOR_ACTIVE", 0);
         Deliver("ANN_VOR_ACTIVE", 1);
         Assert.Equal(new[] { "VOR captured" }, _speech.All);
+    }
+
+    [Fact]
+    public void A_vor_received_with_vor_mode_off_says_nothing()
+    {
+        // L1011_INS.js sets ANN_VOR_ACTIVE whenever a navaid is received and no localizer, ILS or
+        // back-course mode is on, VOR mode or not (seen at the gate with NAV 1 tuned).
+        Deliver("SWITCH_AFCS_VOR", 0);
+        Deliver("SWITCH_AFCS_BC", 0);
+        Deliver("ANN_VOR_ACTIVE", 0);
+        Deliver("ANN_VOR_ACTIVE", 1);
+        Assert.Empty(_speech.All);
+    }
+
+    [Fact]
+    public void Vor_mode_coming_on_over_a_received_vor_speaks_the_mode_then_the_capture()
+    {
+        Deliver("SWITCH_AFCS_VOR", 0);
+        Deliver("SWITCH_AFCS_BC", 0);
+        Deliver("ANN_VOR_ACTIVE", 1);
+        Deliver("SWITCH_AFCS_VOR", 1);
+        Assert.Equal(new[] { "VOR on", "VOR captured" }, _speech.All);
     }
 
     private void NoDirectorOrAutopilot()
