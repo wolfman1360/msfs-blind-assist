@@ -117,6 +117,12 @@ An entry holding a character the unit has no key for is not sent at all, and sta
 edit. The automatic waypoint loading button says its new state, "Automatic waypoint loading on" or
 "off", once the unit shows it, and says nothing if the state does not change.
 
+The keys you type go to the unit in one go, so a whole present position is in well under a second,
+and a selector you move in the window waits for keys that are still being sent. The window's own
+call-outs - "Leg 1 to 2", a PMS's new page title and "Entry closed" - each have a row in Ctrl+M
+("INS window leg changes", "INS window PMS page changes", "INS window entry closed"), all on until
+you untick them. What you type is always read back, and so is a value the unit refuses.
+
   Enter (input box)  Send the keys you typed: digits, and on an INS the letters N, S, E, W, L
                      and R (the INS has no letter keys: N is 2, S is 8, E is 6, W is 4, L is 7,
                      R is 9). A dot is left out, so "36 05.1" types 36051. On a PMS a space is
@@ -373,7 +379,8 @@ legs, and INS 1 feeds the captain's HSI and the autopilot; INS 3 when the instru
 switch selects it); "INS 1 navigating" when a unit starts navigating by itself because its mode
 selector was already at NAV while it aligned (its ready to navigate light flashes for about a
 second then, too short to be spoken); and "PMS climb", "PMS cruise" and "PMS descent" when the
-aircraft changes the PMS mode.
+aircraft changes the PMS mode. While the INS and PMS window is open it also says a new INS leg, a
+PMS's new page and "Entry closed", and each of those has its own row too.
 
 Ctrl+M opens the monitor manager: type in the search box to narrow the list, use the Show filter
 to see only the muted rows, and untick an item to stop it announcing. Your choices are
