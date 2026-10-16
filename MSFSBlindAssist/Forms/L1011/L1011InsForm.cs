@@ -52,6 +52,9 @@ public sealed class L1011InsForm : Form
     private readonly L1011InsWindowAnnouncer _changes = new();
     private readonly CduScratchpadAnnouncer _entry = new(L1011InsWindowCallouts.EntryClosedWords, stablePolls: 2);
 
+    /// <summary>The window was just shown: the first activation puts the cursor on the display.</summary>
+    private readonly L1011InsShowFocus _showFocus = new();
+
     /// <summary>The automatic waypoint loading press waiting for the reader to report its new state.</summary>
     private readonly L1011AutoBatchReadBack _autoBatchReadBack = new();
 
@@ -225,6 +228,13 @@ public sealed class L1011InsForm : Form
         _previousWindow = GetForegroundWindow();
         if (device is L1011InsDevice d && d != _device)
             SwitchTo(d);
+        // The display is chosen BEFORE the window is shown: Show activates it, and WinForms hands focus to the
+        // active control as it does, which would otherwise be the control that had focus when the window was
+        // hidden (the typing box, after Escape from it): the screen reader read the display and then the box
+        // (live, 2026-10-16). The first activation that follows is held to the display too (OnActivated), for
+        // an activation Windows delivers after this method has returned.
+        ActiveControl = _display;
+        _showFocus.Arm(Environment.TickCount64);
         Show();
         BringToFront();
         Activate();
@@ -235,6 +245,16 @@ public sealed class L1011InsForm : Form
         _shownOnce = true;
         ActiveControl = _display;
         _display.Focus();
+    }
+
+    protected override void OnActivated(EventArgs e)
+    {
+        base.OnActivated(e);
+        if (_showFocus.TakeOnActivation(Environment.TickCount64))
+        {
+            ActiveControl = _display;
+            _display.Focus();
+        }
     }
 
     protected override void OnVisibleChanged(EventArgs e)
@@ -251,6 +271,7 @@ public sealed class L1011InsForm : Form
         }
         else
         {
+            _showFocus.Cancel();
             _poll.Stop();
             _viewSwitch.Stop();
             StopReader();
@@ -599,6 +620,38 @@ public sealed class L1011InsForm : Form
         }
         base.Dispose(disposing);
     }
+}
+
+/// <summary>
+/// The INS window opens with the cursor on its display, every time it is shown. <see cref="Arm"/> is called
+/// as the window is shown; the first activation within <see cref="WindowMs"/> after it
+/// (<see cref="TakeOnActivation"/>) takes focus to the display, once. An activation with no show before it,
+/// or long after one (Shift+M on a window that is already active raises none; the next is the pilot coming
+/// back), leaves focus where the pilot put it. Pure.
+/// </summary>
+public sealed class L1011InsShowFocus
+{
+    /// <summary>How long after a show an activation still belongs to it.</summary>
+    public const int WindowMs = 1_000;
+
+    private bool _armed;
+    private long _armedAtMs;
+
+    public void Arm(long nowMs)
+    {
+        _armed = true;
+        _armedAtMs = nowMs;
+    }
+
+    public bool TakeOnActivation(long nowMs)
+    {
+        bool take = _armed && nowMs - _armedAtMs <= WindowMs;
+        _armed = false;
+        return take;
+    }
+
+    /// <summary>The window was hidden: a pending show is over.</summary>
+    public void Cancel() => _armed = false;
 }
 
 /// <summary>
