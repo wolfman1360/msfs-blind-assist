@@ -1,0 +1,141 @@
+<div id="iniEFB" class="efb">
+<div class="tod-pause-overlay" style="display: none; pointer-events: none;">
+<div>AUTO PAUSE TRIGGERED BY TOD</div>
+<div>CLICK UNPAUSE SIM button to continue</div>
+<button style="pointer-events: auto;">UNPAUSE SIM</button>
+</div>
+<div style="display: none; pointer-events: none;">
+<span>SIMULATION RATE: 1X</span>
+</div>
+<div class="efb__body" data-vis="1">
+<div class="navigation-bar" data-vis="1">
+<button id="testbasic-btn" class="menu-button" data-vis="1">
+</button>
+<button id="loadsheet-btn" class="menu-button" data-vis="1">
+</button>
+<button id="takeoff-btn" class="menu-button" data-vis="1">
+</button>
+<button id="landing-btn" class="menu-button" data-vis="1">
+</button>
+<button id="ofp-btn" class="menu-button" data-vis="1">
+</button>
+<button id="charts-btn" class="menu-button" data-vis="1">
+</button>
+<button id="enroute-btn" class="menu-button" data-vis="1">
+</button>
+<button id="mainmenu-btn" class="menu-button" data-vis="1">
+</button>
+</div>
+<div class="efb__content" data-vis="1">
+<div class="header-bar">
+<div class="powered-off-overlay">
+</div>
+<div class="efb-settings" data-active="false">
+<div class="row">
+<div class="col-sm-12">
+<h2>Screen Brightness</h2>
+<input type="range" class="ini-range" min="0" max="100" step="1">
+</div>
+</div>
+<div class="row mt-5">
+<div class="col-sm-12">
+<div class="d-grid gap-2 mt-5 mb-5">
+<button type="button" class="btn btn-primary mb-4 btn-lg btn-custom">Power Off EFB</button>
+</div>
+</div>
+</div>
+</div>
+<div class="spacer">
+</div>
+<div class="header-bar__body">
+<div class="header-bar-item wider">
+<div class="time" title="LOCAL TIME">
+<span class="time-small">LOCAL</span>
+<br>0205</div>
+</div>
+<div class="header-bar-item wider">
+<div class="time" title="ZULU TIME">
+<span class="time-small">ZULU</span>
+<br>0905</div>
+</div>
+<div class="header-bar-item">
+<img id="charge-state" src="battery-full.png">
+</div>
+<div class="header-bar-item">
+<button type="button" class="efb-settings-btn btn-no-style">
+</button>
+</div>
+</div>
+</div>
+<div class="page-renderer" data-vis="1">
+<div class="page page-landing" data-page="landing" data-vis="1">
+<div id="Mainframe" data-vis="1">
+<div id="BASE" data-vis="1">
+<img id="white_background" src="white_background.png" data-vis="1">
+<img id="LND_PAGE_BASE_IMAGE" src="LND_PAGE_BASE_IMAGE-09.png" data-vis="1">
+<img id="kg_unit_lnd" src="kg_unit.png" style="display: none;">
+<img id="lb_unit_lnd" src="lb_unit.png" style="display: block;" data-vis="1">
+</div>
+<div id="landing-calculator" data-vis="1">
+<div id="runway-conditions">
+<button id="runway-dry-btn" class="condition-btn active door-open" data-vis="1">
+</button>
+<button id="runway-wet-btn" class="condition-btn" data-vis="1">
+</button>
+</div>
+<div id="antiskid-conditions">
+<button id="antiskid-on-btn" class="condition-btn active door-open" data-vis="1">
+</button>
+<button id="antiskid-off-btn" class="condition-btn" data-vis="1">OFF</button>
+</div>
+<input id="landing-elevation-input" type="text" inputmode="numeric" data-keyboard="numeric" placeholder="e.g., 1500" data-vis="1">
+<input id="landing-weight-input" type="number" placeholder="e.g., 345" min="280" max="550" data-vis="1">
+<button id="sync-landing-btn" class="efb-button_lnd" data-vis="1">SYNC</button>
+<button id="speed-card-housing-toggle-landing-btn" class="efb-button_lnd" data-vis="1">HIDE</button>
+<button id="calculate-landing-btn" class="efb-button_lnd" data-vis="1">CALCULATE</button>
+<button id="set-landing-btn" class="efb-button_lnd" data-vis="1">SET</button>
+<div id="error-message-display">
+</div>
+<div id="adjusted-distance-display" data-vis="1">
+</div>
+<div id="velocity-reference-container">
+<div id="vapp-display" data-vis="1">-</div>
+<div id="vref-display" data-vis="1">-</div>
+<div id="vref20-display" data-vis="1">-</div>
+<div id="vref30-display" data-vis="1">-</div>
+<div id="vref40-display" data-vis="1">-</div>
+<div id="vref60-display" data-vis="1">-</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="virtual-keyboard">
+<div id="inputDisabled" style="display: none;">
+<div class="alert alert-danger text-center" role="alert">
+<h1>Aircraft control disabled when inputting text with physical keyboard.</h1>
+</div>
+</div>
+<div id="osk-num" style="display: none;">
+<div class="num-pad-grid">
+<div class="keyboard-delete keyboard-secondary">DEL</div>
+<div class="osk-hide-num keyboard-secondary">LOAD</div>
+</div>
+</div>
+<div id="osk" style="display: none;">
+<div class="keyrow numrow">
+<div class="double-wide keyboard-delete">
+</div>
+</div>
+<div class="keyrow row1">
+</div>
+<div class="keyrow row2">
+</div>
+<div class="keyrow row3">
+</div>
+<div class="osk-hide">ENTER</div>
+</div>
+</div>
+</div>

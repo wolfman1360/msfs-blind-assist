@@ -1,0 +1,272 @@
+<div id="iniEFB" class="efb">
+<div class="tod-pause-overlay" style="display: none; pointer-events: none;">
+<div>AUTO PAUSE TRIGGERED BY TOD</div>
+<div>CLICK UNPAUSE SIM button to continue</div>
+<button style="pointer-events: auto;">UNPAUSE SIM</button>
+</div>
+<div style="display: none; pointer-events: none;">
+<span>SIMULATION RATE: 1X</span>
+</div>
+<div class="efb__body" data-vis="1">
+<div class="navigation-bar" data-vis="1">
+<button id="testbasic-btn" class="menu-button" data-vis="1">
+</button>
+<button id="loadsheet-btn" class="menu-button" data-vis="1">
+</button>
+<button id="takeoff-btn" class="menu-button" data-vis="1">
+</button>
+<button id="landing-btn" class="menu-button" data-vis="1">
+</button>
+<button id="ofp-btn" class="menu-button" data-vis="1">
+</button>
+<button id="charts-btn" class="menu-button" data-vis="1">
+</button>
+<button id="enroute-btn" class="menu-button" data-vis="1">
+</button>
+<button id="mainmenu-btn" class="menu-button" data-vis="1">
+</button>
+</div>
+<div class="efb__content" data-vis="1">
+<div class="header-bar">
+<div class="powered-off-overlay">
+</div>
+<div class="efb-settings" data-active="false">
+<div class="row">
+<div class="col-sm-12">
+<h2>Screen Brightness</h2>
+<input type="range" class="ini-range" min="0" max="100" step="1">
+</div>
+</div>
+<div class="row mt-5">
+<div class="col-sm-12">
+<div class="d-grid gap-2 mt-5 mb-5">
+<button type="button" class="btn btn-primary mb-4 btn-lg btn-custom">Power Off EFB</button>
+</div>
+</div>
+</div>
+</div>
+<div class="spacer">
+</div>
+<div class="header-bar__body">
+<div class="header-bar-item wider">
+<div class="time" title="LOCAL TIME">
+<span class="time-small">LOCAL</span>
+<br>0206</div>
+</div>
+<div class="header-bar-item wider">
+<div class="time" title="ZULU TIME">
+<span class="time-small">ZULU</span>
+<br>0906</div>
+</div>
+<div class="header-bar-item">
+<img id="charge-state" src="battery-full.png">
+</div>
+<div class="header-bar-item">
+<button type="button" class="efb-settings-btn btn-no-style">
+</button>
+</div>
+</div>
+</div>
+<div class="page-renderer" data-vis="1">
+<div class="page page-options" data-streamer="false" data-vis="1">
+<img id="white_background" src="white_background.png" data-vis="1">
+<div class="page-options__sidebar" data-vis="1">
+<div class="sidebar-section-title" data-vis="1">FLIGHT ENGINEER</div>
+<button type="button" class="btn btn-autocomplete active" data-vis="1">Autocomplete</button>
+<button type="button" class="btn btn-panelstates" data-vis="1">Panel States</button>
+<button type="button" class="btn btn-helper" data-vis="1">HELPER</button>
+<div class="sidebar-section-title" data-vis="1">SETTINGS</div>
+<button type="button" class="btn btn-Aircraft" data-vis="1">Aircraft</button>
+<button type="button" class="btn btn-throttle-calib" data-vis="1">THROTTLE CALIB</button>
+<button type="button" class="btn btn-thirdparty" data-vis="1">ThirdParty</button>
+<button type="button" class="btn btn-audio" data-vis="1">Audio</button>
+<div class="options-emissive-slider-block" data-vis="1">
+<div class="options-emissive-slider-title" data-vis="1">PFB brightness</div>
+<div class="options-emissive-slider-container" data-vis="1">
+<div class="options-emissive-slider-track" data-vis="1">
+<div class="options-emissive-slider-thumb" data-vis="1">
+</div>
+</div>
+</div>
+</div>
+<div class="options-emissive-slider-block" data-vis="1">
+<div class="options-emissive-slider-title" data-vis="1">CABIN LIGHTING</div>
+<div class="options-emissive-slider-container" data-vis="1">
+<div class="options-emissive-slider-track" data-vis="1">
+<div class="options-cabin-lighting-slider-thumb" data-vis="1">
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="page-options__content" data-vis="1">
+<div class="options-Autocomplete" data-vis="1">
+<div class="page-options__content" data-vis="1">
+<div class="row settings-container autocomplete-settings-wrapper" data-vis="1">
+<h2 class="autocomplete-title" data-vis="1">FLIGHT ENGINEER AUTOCOMPLETE</h2>
+<div class="autocomplete-list" data-vis="1">
+<div class="autocomplete-item" data-vis="1">
+<div class="autocomplete-item-header" data-vis="1">
+<button class="toggle-button" data-key="Preflight preparation" data-vis="1">
+<img src="toggle_opened.png" class="toggle-icon" data-toggle-icon="Preflight preparation" data-vis="1">
+</button>
+<span class="autocomplete-item-title" data-vis="1">Preflight preparation</span>
+<button class="autocomplete-button" data-key="Preflight preparation" data-vis="1">AUTOCOMPLETE</button>
+</div>
+<div class="event-list expanded" data-event-list="Preflight preparation" data-vis="1">
+<div class="event-item" data-vis="1">
+<span class="event-checkbox is-unmatched" data-key="Preflight preparation" data-event-index="0" data-vis="1">
+</span>
+<span class="event-name" data-dynamic-after-start-flaps="undefined" data-vis="1">Master Switch ... ON</span>
+<button class="event-complete-button" data-key="Preflight preparation" data-event-index="0" data-vis="1">COMPLETE</button>
+</div>
+<div class="event-item" data-vis="1">
+<span class="event-checkbox is-unmatched" data-key="Preflight preparation" data-event-index="1" data-vis="1">
+</span>
+<span class="event-name" data-dynamic-after-start-flaps="undefined" data-vis="1">GPU ... ON</span>
+<button class="event-complete-button" data-key="Preflight preparation" data-event-index="1" data-vis="1">COMPLETE</button>
+</div>
+<div class="event-item" data-vis="1">
+<span class="event-checkbox is-unmatched" data-key="Preflight preparation" data-event-index="2" data-vis="1">
+</span>
+<span class="event-name" data-dynamic-after-start-flaps="undefined" data-vis="1">APU ... ON</span>
+<button class="event-complete-button" data-key="Preflight preparation" data-event-index="2" data-vis="1">COMPLETE</button>
+</div>
+<div class="event-item" data-vis="1">
+<span class="event-checkbox is-matched" data-key="Preflight preparation" data-event-index="3" data-vis="1">
+</span>
+<span class="event-name" data-dynamic-after-start-flaps="undefined" data-vis="1">HYDRAULIC PANEL ... SET</span>
+<button class="event-complete-button" data-key="Preflight preparation" data-event-index="3" data-vis="1">COMPLETE</button>
+</div>
+<div class="event-item" data-vis="1">
+<span class="event-checkbox is-unmatched" data-key="Preflight preparation" data-event-index="4" data-vis="1">
+</span>
+<span class="event-name" data-dynamic-after-start-flaps="undefined" data-vis="1">ELECTRICAL PANEL ... SET</span>
+<button class="event-complete-button" data-key="Preflight preparation" data-event-index="4" data-vis="1">COMPLETE</button>
+</div>
+<div class="event-item" data-vis="1">
+<span class="event-checkbox is-unmatched" data-key="Preflight preparation" data-event-index="5" data-vis="1">
+</span>
+<span class="event-name" data-dynamic-after-start-flaps="undefined" data-vis="1">Fuel PANEL ... SET</span>
+<button class="event-complete-button" data-key="Preflight preparation" data-event-index="5" data-vis="1">COMPLETE</button>
+</div>
+</div>
+</div>
+<div class="autocomplete-item" data-vis="1">
+<div class="autocomplete-item-header" data-vis="1">
+<button class="toggle-button" data-key="Engine start" data-vis="1">
+<img src="toggle_closed.png" class="toggle-icon" data-toggle-icon="Engine start" data-vis="1">
+</button>
+<span class="autocomplete-item-title" data-vis="1">Engine start</span>
+<button class="autocomplete-button" data-key="Engine start" data-vis="1">AUTOCOMPLETE</button>
+</div>
+<div class="event-list" data-event-list="Engine start" data-vis="1">
+<div class="event-item" data-vis="1">
+<span class="event-checkbox is-matched" data-key="Engine start" data-event-index="0" data-vis="1">
+</span>
+<span class="event-name" data-dynamic-after-start-flaps="undefined" data-vis="1">Door lights ... OUT</span>
+<button class="event-complete-button" data-key="Engine start" data-event-index="0" data-vis="1">COMPLETE</button>
+</div>
+<div class="event-item" data-vis="1">
+<span class="event-checkbox is-matched" data-key="Engine start" data-event-index="1" data-vis="1">
+</span>
+<span class="event-name" data-dynamic-after-start-flaps="undefined" data-vis="1">Galley power ... OFF</span>
+<button class="event-complete-button" data-key="Engine start" data-event-index="1" data-vis="1">COMPLETE</button>
+</div>
+<div class="event-item" data-vis="1">
+<span class="event-checkbox is-unmatched" data-key="Engine start" data-event-index="2" data-vis="1">
+</span>
+<span class="event-name" data-dynamic-after-start-flaps="undefined" data-vis="1">BLEED PANEL ... CONFIG</span>
+<button class="event-complete-button" data-key="Engine start" data-event-index="2" data-vis="1">COMPLETE</button>
+</div>
+</div>
+</div>
+<div class="autocomplete-item" data-vis="1">
+<div class="autocomplete-item-header" data-vis="1">
+<button class="toggle-button" data-key="After start" data-vis="1">
+<img src="toggle_closed.png" class="toggle-icon" data-toggle-icon="After start" data-vis="1">
+</button>
+<span class="autocomplete-item-title" data-vis="1">After start</span>
+<button class="autocomplete-button" data-key="After start" data-vis="1">AUTOCOMPLETE</button>
+</div>
+<div class="event-list" data-event-list="After start" data-vis="1">
+<div class="event-item" data-vis="1">
+<span class="event-checkbox is-unmatched" data-key="After start" data-event-index="0" data-vis="1">
+</span>
+<span class="event-name" data-dynamic-after-start-flaps="undefined" data-vis="1">BLEED PANEL ... CONFIG</span>
+<button class="event-complete-button" data-key="After start" data-event-index="0" data-vis="1">COMPLETE</button>
+</div>
+<div class="event-item" data-vis="1">
+<span class="event-checkbox is-matched" data-key="After start" data-event-index="1" data-vis="1">
+</span>
+<span class="event-name" data-dynamic-after-start-flaps="undefined" data-vis="1">HYDRAULIC PANEL ... SET</span>
+<button class="event-complete-button" data-key="After start" data-event-index="1" data-vis="1">COMPLETE</button>
+</div>
+<div class="event-item" data-vis="1">
+<span class="event-checkbox is-unmatched" data-key="After start" data-event-index="2" data-vis="1">
+</span>
+<span class="event-name" data-dynamic-after-start-flaps="undefined" data-vis="1">ELECTRICAL PANEL ... SET</span>
+<button class="event-complete-button" data-key="After start" data-event-index="2" data-vis="1">COMPLETE</button>
+</div>
+<div class="event-item" data-vis="1">
+<span class="event-checkbox is-unmatched" data-key="After start" data-event-index="3" data-vis="1">
+</span>
+<span class="event-name" data-dynamic-after-start-flaps="undefined" data-vis="1">Fuel PANEL ... SET</span>
+<button class="event-complete-button" data-key="After start" data-event-index="3" data-vis="1">COMPLETE</button>
+</div>
+<div class="event-item" data-vis="1">
+<span class="event-checkbox is-unmatched" data-key="After start" data-event-index="4" data-vis="1">
+</span>
+<span class="event-name" data-dynamic-after-start-flaps="true" data-vis="1">FLAPS ... 14°</span>
+<button class="event-complete-button" data-key="After start" data-event-index="4" data-vis="1">COMPLETE</button>
+</div>
+<div class="event-item" data-vis="1">
+<span class="event-checkbox is-matched" data-key="After start" data-event-index="5" data-vis="1">
+</span>
+<span class="event-name" data-dynamic-after-start-flaps="undefined" data-vis="1">APU ... OFF</span>
+<button class="event-complete-button" data-key="After start" data-event-index="5" data-vis="1">COMPLETE</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="autocomplete-scrollbar-container" data-vis="1">
+<div class="autocomplete-scrollbar-track" data-vis="1">
+<div class="autocomplete-scrollbar-thumb" data-vis="1">
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="virtual-keyboard">
+<div id="inputDisabled" style="display: none;">
+<div class="alert alert-danger text-center" role="alert">
+<h1>Aircraft control disabled when inputting text with physical keyboard.</h1>
+</div>
+</div>
+<div id="osk-num" style="display: none;">
+<div class="num-pad-grid">
+<div class="keyboard-delete keyboard-secondary">DEL</div>
+<div class="osk-hide-num keyboard-secondary">LOAD</div>
+</div>
+</div>
+<div id="osk" style="display: none;">
+<div class="keyrow numrow">
+<div class="double-wide keyboard-delete">
+</div>
+</div>
+<div class="keyrow row1">
+</div>
+<div class="keyrow row2">
+</div>
+<div class="keyrow row3">
+</div>
+<div class="osk-hide">ENTER</div>
+</div>
+</div>
+</div>

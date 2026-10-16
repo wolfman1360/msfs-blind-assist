@@ -1,0 +1,420 @@
+<div id="iniEFB" class="efb">
+<div class="tod-pause-overlay" style="display: none; pointer-events: none;">
+<div>AUTO PAUSE TRIGGERED BY TOD</div>
+<div>CLICK UNPAUSE SIM button to continue</div>
+<button style="pointer-events: auto;">UNPAUSE SIM</button>
+</div>
+<div style="display: none; pointer-events: none;">
+<span>SIMULATION RATE: 1X</span>
+</div>
+<div class="efb__body" data-vis="1">
+<div class="navigation-bar" data-vis="1">
+<button id="testbasic-btn" class="menu-button" data-vis="1">
+</button>
+<button id="loadsheet-btn" class="menu-button" data-vis="1">
+</button>
+<button id="takeoff-btn" class="menu-button" data-vis="1">
+</button>
+<button id="landing-btn" class="menu-button" data-vis="1">
+</button>
+<button id="ofp-btn" class="menu-button" data-vis="1">
+</button>
+<button id="charts-btn" class="menu-button" data-vis="1">
+</button>
+<button id="enroute-btn" class="menu-button" data-vis="1">
+</button>
+<button id="mainmenu-btn" class="menu-button" data-vis="1">
+</button>
+</div>
+<div class="efb__content" data-vis="1">
+<div class="header-bar">
+<div class="powered-off-overlay">
+</div>
+<div class="efb-settings" data-active="false">
+<div class="row">
+<div class="col-sm-12">
+<h2>Screen Brightness</h2>
+<input type="range" class="ini-range" min="0" max="100" step="1">
+</div>
+</div>
+<div class="row mt-5">
+<div class="col-sm-12">
+<div class="d-grid gap-2 mt-5 mb-5">
+<button type="button" class="btn btn-primary mb-4 btn-lg btn-custom">Power Off EFB</button>
+</div>
+</div>
+</div>
+</div>
+<div class="spacer">
+</div>
+<div class="header-bar__body">
+<div class="header-bar-item wider">
+<div class="time" title="LOCAL TIME">
+<span class="time-small">LOCAL</span>
+<br>0206</div>
+</div>
+<div class="header-bar-item wider">
+<div class="time" title="ZULU TIME">
+<span class="time-small">ZULU</span>
+<br>0906</div>
+</div>
+<div class="header-bar-item">
+<img id="charge-state" src="battery-full.png">
+</div>
+<div class="header-bar-item">
+<button type="button" class="efb-settings-btn btn-no-style">
+</button>
+</div>
+</div>
+</div>
+<div class="page-renderer" data-vis="1">
+<div class="page page-options" data-streamer="false" data-vis="1">
+<img id="white_background" src="white_background.png" data-vis="1">
+<div class="page-options__sidebar" data-vis="1">
+<div class="sidebar-section-title" data-vis="1">FLIGHT ENGINEER</div>
+<button type="button" class="btn btn-autocomplete" data-vis="1">Autocomplete</button>
+<button type="button" class="btn btn-panelstates" data-vis="1">Panel States</button>
+<button type="button" class="btn btn-helper" data-vis="1">HELPER</button>
+<div class="sidebar-section-title" data-vis="1">SETTINGS</div>
+<button type="button" class="btn btn-Aircraft active" data-vis="1">Aircraft</button>
+<button type="button" class="btn btn-throttle-calib" data-vis="1">THROTTLE CALIB</button>
+<button type="button" class="btn btn-thirdparty" data-vis="1">ThirdParty</button>
+<button type="button" class="btn btn-audio" data-vis="1">Audio</button>
+<div class="options-emissive-slider-block" data-vis="1">
+<div class="options-emissive-slider-title" data-vis="1">PFB brightness</div>
+<div class="options-emissive-slider-container" data-vis="1">
+<div class="options-emissive-slider-track" data-vis="1">
+<div class="options-emissive-slider-thumb" data-vis="1">
+</div>
+</div>
+</div>
+</div>
+<div class="options-emissive-slider-block" data-vis="1">
+<div class="options-emissive-slider-title" data-vis="1">CABIN LIGHTING</div>
+<div class="options-emissive-slider-container" data-vis="1">
+<div class="options-emissive-slider-track" data-vis="1">
+<div class="options-cabin-lighting-slider-thumb" data-vis="1">
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="page-options__content" data-vis="1">
+<div class="options-Aircraft" data-vis="1">
+<div class="aircraft-settings-page-wrapper" data-vis="1">
+<div class="row settings-container aircraft-settings-scroll-wrapper" data-vis="1">
+<h1 id="aircraft-settings-title" class="mb-2" data-vis="1">AIRCRAFT SETTINGS</h1>
+<div class="row" data-vis="1">
+<div class="col-sm-6 mb-2" data-vis="1">
+<h2 class="mt-1 text-info" data-vis="1">Weight Units</h2>
+<div class="d-grid gap-2 mb-1 p-3" data-vis="1">
+<div class="btn-group" role="group" data-vis="1">
+<input type="radio" class="btn-check" name="opt_wgt" id="opt_wgt1" data-vis="1">
+<label class="btn btn-outline-primary btn-lg" for="opt_wgt1" data-vis="1">METRIC - KGs</label>
+<input type="radio" class="btn-check" name="opt_wgt" id="opt_wgt2" data-vis="1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_wgt2" data-vis="1">IMPERIAL - LBs</label>
+</div>
+</div>
+</div>
+<div class="col-sm-6 mb-2 d-none">
+<h2 class="mt-1 text-info">Auto Tiller Disconnect</h2>
+<div class="d-grid gap-2 mb-1 p-3">
+<div class="btn-group" role="group">
+<input type="radio" class="btn-check" name="opt_til" id="opt_til1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_til1">YES</label>
+<input type="radio" class="btn-check" name="opt_til" id="opt_til2">
+<label class="btn btn-outline-primary btn-lg" for="opt_til2">NO</label>
+</div>
+</div>
+</div>
+<div class="col-sm-6 mb-2 d-none">
+<h2 class="mt-1 text-info">Link Instruments</h2>
+<div class="d-grid gap-2 mb-1 p-3">
+<div class="btn-group" role="group">
+<input type="radio" class="btn-check" name="opt_lnk" id="opt_lnk1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_lnk1">NONE</label>
+<input type="radio" class="btn-check" name="opt_lnk" id="opt_lnk2">
+<label class="btn btn-outline-primary btn-lg" for="opt_lnk2">CPT/FO</label>
+<input type="radio" class="btn-check" name="opt_lnk" id="opt_lnk3">
+<label class="btn btn-outline-primary btn-lg" for="opt_lnk3">ALL</label>
+</div>
+</div>
+</div>
+<div class="col-sm-6 mb-2" data-vis="1">
+<h2 class="mt-1 text-info" data-vis="1">Rudder Controls Tiller</h2>
+<div class="d-grid gap-2 mb-1 p-3" data-vis="1">
+<div class="btn-group" role="group" data-vis="1">
+<input type="radio" class="btn-check" name="opt_rudd" id="opt_rudd1" data-vis="1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_rudd1" data-vis="1">YES</label>
+<input type="radio" class="btn-check" name="opt_rudd" id="opt_rudd2" data-vis="1">
+<label class="btn btn-outline-primary btn-lg" for="opt_rudd2" data-vis="1">NO</label>
+</div>
+</div>
+</div>
+<div class="col-sm-6 mb-2 d-none">
+<h2 class="mt-1 text-info">Auto GPU Disconnect</h2>
+<div class="d-grid gap-2 mb-1 p-3">
+<div class="btn-group" role="group">
+<input type="radio" class="btn-check" name="opt_gpu" id="opt_gpu1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_gpu1">ENABLED</label>
+<input type="radio" class="btn-check" name="opt_gpu" id="opt_gpu2">
+<label class="btn btn-outline-primary btn-lg" for="opt_gpu2">DISABLED</label>
+</div>
+</div>
+</div>
+<div class="col-sm-6 mb-2 d-none">
+<h2 class="mt-1 text-info">Auto Import Step Climb</h2>
+<div class="d-grid gap-2 mb-1 p-3">
+<div class="btn-group" role="group">
+<input type="radio" class="btn-check" name="opt_stepimport" id="opt_stepimport1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_stepimport1">ENABLED</label>
+<input type="radio" class="btn-check" name="opt_stepimport" id="opt_stepimport2">
+<label class="btn btn-outline-primary btn-lg" for="opt_stepimport2">DISABLED</label>
+</div>
+</div>
+</div>
+<div class="col-sm-6 mb-2 d-none">
+<h2 class="mt-1 text-info">Auto Step Climb</h2>
+<div class="d-grid gap-2 mb-1 p-3">
+<div class="btn-group" role="group">
+<input type="radio" class="btn-check" name="opt_stepclimb" id="opt_stepclimb1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_stepclimb1">ENABLED</label>
+<input type="radio" class="btn-check" name="opt_stepclimb" id="opt_stepclimb2">
+<label class="btn btn-outline-primary btn-lg" for="opt_stepclimb2">DISABLED</label>
+</div>
+</div>
+</div>
+<div class="col-sm-6 mb-2 d-none">
+<h2 class="mt-1 text-info">Auto Remove Covers</h2>
+<div class="d-grid gap-2 mb-1 p-3">
+<div class="btn-group" role="group">
+<input type="radio" class="btn-check" name="opt_covers" id="opt_covers1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_covers1">ENABLED</label>
+<input type="radio" class="btn-check" name="opt_covers" id="opt_covers2">
+<label class="btn btn-outline-primary btn-lg" for="opt_covers2">DISABLED</label>
+</div>
+</div>
+</div>
+<div class="col-sm-6 mb-2 d-none">
+<h2 class="mt-1 text-info">Default THR/RED/ACC Alt [ft]</h2>
+<input type="number" class="form-control form-control-lg w-100 mt-4" placeholder="TRED Altitude">
+</div>
+<div class="col-sm-6 mb-2" data-vis="1">
+<h2 class="mt-1 text-info" data-vis="1">FX Performance Mode</h2>
+<div class="d-grid gap-2 mb-1 p-3" data-vis="1">
+<div class="btn-group" role="group" data-vis="1">
+<input type="radio" class="btn-check" name="opt_fxperfmode" id="opt_fxperfmode1" data-vis="1">
+<label class="btn btn-outline-primary btn-lg" for="opt_fxperfmode1" data-vis="1">ON</label>
+<input type="radio" class="btn-check" name="opt_fxperfmode" id="opt_fxperfmode2" data-vis="1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_fxperfmode2" data-vis="1">OFF</label>
+</div>
+</div>
+</div>
+<div class="col-sm-6 mb-2 d-none">
+<h2 class="mt-1 text-info">Realistic Door Arming</h2>
+<div class="d-grid gap-2 mb-1 p-3">
+<div class="btn-group" role="group">
+<input type="radio" class="btn-check" name="opt_doorarming" id="opt_doorarming1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_doorarming1">ENABLED</label>
+<input type="radio" class="btn-check" name="opt_doorarming" id="opt_doorarming2">
+<label class="btn btn-outline-primary btn-lg" for="opt_doorarming2">DISABLED</label>
+</div>
+</div>
+</div>
+<div class="col-sm-6 mb-2 d-none">
+<h2 class="mt-1 text-info">Pause at Top of Descent</h2>
+<div class="d-grid gap-2 mb-1 p-3">
+<div class="btn-group" role="group">
+<input type="radio" class="btn-check" name="opt_pausetod" id="opt_pausetod1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_pausetod1">ENABLED</label>
+<input type="radio" class="btn-check" name="opt_pausetod" id="opt_pausetod2">
+<label class="btn btn-outline-primary btn-lg" for="opt_pausetod2">DISABLED</label>
+</div>
+</div>
+</div>
+<div class="col-sm-6 mb-2 d-none">
+<h2 class="mt-1 text-info">Pause at ToD Distance [nm]</h2>
+<input type="number" class="form-control form-control-lg w-100 mt-4" placeholder="Pause at ToD Distance">
+</div>
+<div class="col-sm-6 mb-2" data-vis="1">
+<h2 class="mt-1 text-info" data-vis="1">Map Display screen</h2>
+<div class="d-grid gap-2 mb-1 p-3" data-vis="1">
+<div class="btn-group" role="group" data-vis="1">
+<input type="radio" class="btn-check" name="opt_mapDisplay_screen" id="opt_mapDisplay_screen1" data-vis="1">
+<label class="btn btn-outline-primary btn-lg" for="opt_mapDisplay_screen1" data-vis="1">ON</label>
+<input type="radio" class="btn-check" name="opt_mapDisplay_screen" id="opt_mapDisplay_screen2" data-vis="1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_mapDisplay_screen2" data-vis="1">OFF</label>
+</div>
+</div>
+</div>
+<div class="col-sm-6 mb-2 d-none">
+<h2 class="mt-1 text-info">GPS</h2>
+<div class="d-grid gap-2 mb-1 p-3">
+<div class="btn-group" role="group">
+<input type="radio" class="btn-check" name="opt_gps" id="opt_gps1">
+<label class="btn btn-outline-primary btn-lg" for="opt_gps1">ON</label>
+<input type="radio" class="btn-check" name="opt_gps" id="opt_gps2">
+<label class="btn btn-outline-primary btn-lg active" for="opt_gps2">OFF</label>
+</div>
+</div>
+</div>
+<div class="col-sm-6 mb-2" data-vis="1">
+<h2 class="mt-1 text-info" data-vis="1">Realistic Parking Brake</h2>
+<div class="d-grid gap-2 mb-1 p-3" data-vis="1">
+<div class="btn-group" role="group" data-vis="1">
+<input type="radio" class="btn-check" name="opt_realisticparkingbrake" id="opt_realisticparkingbrake1" data-vis="1">
+<label class="btn btn-outline-primary btn-lg" for="opt_realisticparkingbrake1" data-vis="1">ON</label>
+<input type="radio" class="btn-check" name="opt_realisticparkingbrake" id="opt_realisticparkingbrake2" data-vis="1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_realisticparkingbrake2" data-vis="1">OFF</label>
+</div>
+</div>
+</div>
+<div class="col-sm-6 mb-2" data-vis="1">
+<h2 class="mt-1 text-info" data-vis="1">Auto Set GA EPR Bugs</h2>
+<div class="d-grid gap-2 mb-1 p-3" data-vis="1">
+<div class="btn-group" role="group" data-vis="1">
+<input type="radio" class="btn-check" name="opt_autosetgaeprbugs" id="opt_autosetgaeprbugs1" data-vis="1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_autosetgaeprbugs1" data-vis="1">ON</label>
+<input type="radio" class="btn-check" name="opt_autosetgaeprbugs" id="opt_autosetgaeprbugs2" data-vis="1">
+<label class="btn btn-outline-primary btn-lg" for="opt_autosetgaeprbugs2" data-vis="1">OFF</label>
+</div>
+</div>
+</div>
+<div class="col-sm-6 mb-2" data-vis="1">
+<h2 class="mt-1 text-info" data-vis="1">Keyboard input lock</h2>
+<div class="d-grid gap-2 mb-1 p-3" data-vis="1">
+<div class="btn-group" role="group" data-vis="1">
+<input type="radio" class="btn-check" name="opt_keyboard_lock" id="opt_keyboard_lock1" data-vis="1">
+<label class="btn btn-outline-primary btn-lg" for="opt_keyboard_lock1" data-vis="1">ON</label>
+<input type="radio" class="btn-check" name="opt_keyboard_lock" id="opt_keyboard_lock2" data-vis="1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_keyboard_lock2" data-vis="1">OFF</label>
+</div>
+</div>
+</div>
+<div class="col-sm-6 mb-2" data-vis="1">
+<h2 class="mt-1 text-info" data-vis="1">Time compression</h2>
+<div class="d-grid gap-2 mb-1 p-3" data-vis="1">
+<div class="btn-group" role="group" data-vis="1">
+<input type="radio" class="btn-check" name="opt_simrate" id="opt_simrate1" data-vis="1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_simrate1" data-vis="1">DISABLED</label>
+<input type="radio" class="btn-check" name="opt_simrate" id="opt_simrate2" data-vis="1">
+<label class="btn btn-outline-primary btn-lg" for="opt_simrate2" data-vis="1">MAX 2X</label>
+<input type="radio" class="btn-check" name="opt_simrate" id="opt_simrate3" data-vis="1">
+<label class="btn btn-outline-primary btn-lg" for="opt_simrate3" data-vis="1">MAX 4X</label>
+</div>
+</div>
+</div>
+</div>
+<div data-vis="1">
+<h1 id="navigation-options-title" class="mb-2 mt-4" data-vis="1">NAVIGATION OPTIONS</h1>
+<div class="row" data-vis="1">
+<div class="col-sm-12 mb-2" data-vis="1">
+<div class="d-grid gap-2 mb-1 p-3" data-vis="1">
+<div class="btn-group" role="group" data-vis="1">
+<input type="radio" class="btn-check" name="opt_nav_units" id="opt_nav_units1" data-vis="1">
+<label class="btn btn-outline-primary btn-lg" for="opt_nav_units1" data-vis="1">RADNAV</label>
+<input type="radio" class="btn-check" name="opt_nav_units" id="opt_nav_units2" data-vis="1">
+<label class="btn btn-outline-primary btn-lg" for="opt_nav_units2" data-vis="1">INS</label>
+<input type="radio" class="btn-check" name="opt_nav_units" id="opt_nav_units3" data-vis="1">
+<label class="btn btn-outline-primary btn-lg" for="opt_nav_units3" data-vis="1">GPS</label>
+<input type="radio" class="btn-check" name="opt_nav_units" id="opt_nav_units4" data-vis="1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_nav_units4" data-vis="1">INS + GPS</label>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="row" data-vis="1">
+<div class="col-sm-6 mb-2" data-vis="1">
+<h2 id="ins-drift-title" class="mt-1 text-info" data-vis="1">INS DRIFT</h2>
+<div class="d-grid gap-2 mb-1 p-3" data-vis="1">
+<div class="btn-group" role="group" data-vis="1">
+<input type="radio" class="btn-check" name="opt_insdrift" id="opt_insdrift1" data-vis="1">
+<label class="btn btn-outline-primary btn-lg" for="opt_insdrift1" data-vis="1">ON</label>
+<input type="radio" class="btn-check" name="opt_insdrift" id="opt_insdrift2" data-vis="1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_insdrift2" data-vis="1">OFF</label>
+</div>
+</div>
+</div>
+<div class="col-sm-6 mb-2" data-vis="1">
+<h2 class="mt-1 text-info" data-vis="1">IMPORT SID/STAR WPTS</h2>
+<div class="d-grid gap-2 mb-1 p-3" data-vis="1">
+<div class="btn-group" role="group" data-vis="1">
+<input type="radio" class="btn-check" name="opt_sidstarimport" id="opt_sidstarimport1" data-vis="1">
+<label class="btn btn-outline-primary btn-lg" for="opt_sidstarimport1" data-vis="1">ON</label>
+<input type="radio" class="btn-check" name="opt_sidstarimport" id="opt_sidstarimport2" data-vis="1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_sidstarimport2" data-vis="1">OFF</label>
+</div>
+</div>
+</div>
+</div>
+<div class="row" data-vis="1">
+<div class="col-sm-12 mb-2" data-vis="1">
+<h2 class="mt-1 text-info" data-vis="1">ALT SYNC</h2>
+<div class="d-grid gap-2 mb-1 p-3" data-vis="1">
+<div class="btn-group" role="group" data-vis="1">
+<input type="radio" class="btn-check" name="opt_altsync" id="opt_altsync1" data-vis="1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_altsync1" data-vis="1">OFF</label>
+<input type="radio" class="btn-check" name="opt_altsync" id="opt_altsync2" data-vis="1">
+<label class="btn btn-outline-primary btn-lg" for="opt_altsync2" data-vis="1">CPT &amp; FO</label>
+<input type="radio" class="btn-check" name="opt_altsync" id="opt_altsync3" data-vis="1">
+<label class="btn btn-outline-primary btn-lg" for="opt_altsync3" data-vis="1">CPT, FO &amp; STBY</label>
+</div>
+</div>
+</div>
+<div class="col-sm-12 mb-2" data-vis="1">
+<h2 class="mt-1 text-info" data-vis="1">INS Alignment Time</h2>
+<div class="d-grid gap-2 mb-1 p-3" data-vis="1">
+<div class="btn-group w-100" role="group" data-vis="1">
+<input type="radio" class="btn-check" name="opt_ins_alignment" id="opt_ins_alignment1" data-vis="1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_ins_alignment1" data-vis="1">INSTANT</label>
+<input type="radio" class="btn-check" name="opt_ins_alignment" id="opt_ins_alignment2" data-vis="1">
+<label class="btn btn-outline-primary btn-lg" for="opt_ins_alignment2" data-vis="1">FAST</label>
+<input type="radio" class="btn-check" name="opt_ins_alignment" id="opt_ins_alignment3" data-vis="1">
+<label class="btn btn-outline-primary btn-lg" for="opt_ins_alignment3" data-vis="1">REALISTIC</label>
+</div>
+</div>
+</div>
+</div>
+<div class="aircraft-settings-version-label" data-vis="1">PFB v1.0.9</div>
+</div>
+<div class="aircraft-scrollbar-container" data-vis="1">
+<div class="aircraft-scrollbar-track" data-vis="1">
+<div class="aircraft-scrollbar-thumb" data-vis="1">
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="virtual-keyboard">
+<div id="inputDisabled" style="display: none;">
+<div class="alert alert-danger text-center" role="alert">
+<h1>Aircraft control disabled when inputting text with physical keyboard.</h1>
+</div>
+</div>
+<div id="osk-num" style="display: none;">
+<div class="num-pad-grid">
+<div class="keyboard-delete keyboard-secondary">DEL</div>
+<div class="osk-hide-num keyboard-secondary">LOAD</div>
+</div>
+</div>
+<div id="osk" style="display: none;">
+<div class="keyrow numrow">
+<div class="double-wide keyboard-delete">
+</div>
+</div>
+<div class="keyrow row1">
+</div>
+<div class="keyrow row2">
+</div>
+<div class="keyrow row3">
+</div>
+<div class="osk-hide">ENTER</div>
+</div>
+</div>
+</div>

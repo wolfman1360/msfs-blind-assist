@@ -1,0 +1,196 @@
+<div id="iniEFB" class="efb">
+<div class="tod-pause-overlay" style="display: none; pointer-events: none;">
+<div>AUTO PAUSE TRIGGERED BY TOD</div>
+<div>CLICK UNPAUSE SIM button to continue</div>
+<button style="pointer-events: auto;">UNPAUSE SIM</button>
+</div>
+<div style="display: none; pointer-events: none;">
+<span>SIMULATION RATE: 1X</span>
+</div>
+<div class="efb__body" data-vis="1">
+<div class="navigation-bar" data-vis="1">
+<button id="testbasic-btn" class="menu-button" data-vis="1">
+</button>
+<button id="loadsheet-btn" class="menu-button" data-vis="1">
+</button>
+<button id="takeoff-btn" class="menu-button" data-vis="1">
+</button>
+<button id="landing-btn" class="menu-button" data-vis="1">
+</button>
+<button id="ofp-btn" class="menu-button" data-vis="1">
+</button>
+<button id="charts-btn" class="menu-button" data-vis="1">
+</button>
+<button id="enroute-btn" class="menu-button" data-vis="1">
+</button>
+<button id="mainmenu-btn" class="menu-button" data-vis="1">
+</button>
+</div>
+<div class="efb__content" data-vis="1">
+<div class="header-bar">
+<div class="powered-off-overlay">
+</div>
+<div class="efb-settings" data-active="false">
+<div class="row">
+<div class="col-sm-12">
+<h2>Screen Brightness</h2>
+<input type="range" class="ini-range" min="0" max="100" step="1">
+</div>
+</div>
+<div class="row mt-5">
+<div class="col-sm-12">
+<div class="d-grid gap-2 mt-5 mb-5">
+<button type="button" class="btn btn-primary mb-4 btn-lg btn-custom">Power Off EFB</button>
+</div>
+</div>
+</div>
+</div>
+<div class="spacer">
+</div>
+<div class="header-bar__body">
+<div class="header-bar-item wider">
+<div class="time" title="LOCAL TIME">
+<span class="time-small">LOCAL</span>
+<br>0206</div>
+</div>
+<div class="header-bar-item wider">
+<div class="time" title="ZULU TIME">
+<span class="time-small">ZULU</span>
+<br>0906</div>
+</div>
+<div class="header-bar-item">
+<img id="charge-state" src="battery-full.png">
+</div>
+<div class="header-bar-item">
+<button type="button" class="efb-settings-btn btn-no-style">
+</button>
+</div>
+</div>
+</div>
+<div class="page-renderer" data-vis="1">
+<div class="page page-options" data-streamer="false" data-vis="1">
+<img id="white_background" src="white_background.png" data-vis="1">
+<div class="page-options__sidebar" data-vis="1">
+<div class="sidebar-section-title" data-vis="1">FLIGHT ENGINEER</div>
+<button type="button" class="btn btn-autocomplete" data-vis="1">Autocomplete</button>
+<button type="button" class="btn btn-panelstates" data-vis="1">Panel States</button>
+<button type="button" class="btn btn-helper" data-vis="1">HELPER</button>
+<div class="sidebar-section-title" data-vis="1">SETTINGS</div>
+<button type="button" class="btn btn-Aircraft" data-vis="1">Aircraft</button>
+<button type="button" class="btn btn-throttle-calib" data-vis="1">THROTTLE CALIB</button>
+<button type="button" class="btn btn-thirdparty active" data-vis="1">ThirdParty</button>
+<button type="button" class="btn btn-audio" data-vis="1">Audio</button>
+<div class="options-emissive-slider-block" data-vis="1">
+<div class="options-emissive-slider-title" data-vis="1">PFB brightness</div>
+<div class="options-emissive-slider-container" data-vis="1">
+<div class="options-emissive-slider-track" data-vis="1">
+<div class="options-emissive-slider-thumb" data-vis="1">
+</div>
+</div>
+</div>
+</div>
+<div class="options-emissive-slider-block" data-vis="1">
+<div class="options-emissive-slider-title" data-vis="1">CABIN LIGHTING</div>
+<div class="options-emissive-slider-container" data-vis="1">
+<div class="options-emissive-slider-track" data-vis="1">
+<div class="options-cabin-lighting-slider-thumb" data-vis="1">
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="page-options__content" data-vis="1">
+<div class="options-thirdparty" data-vis="1">
+<div class="card text-bg-dark option-card simbrief-input" data-vis="1">
+<div class="card-body" data-vis="1">
+<div class="row" data-vis="1">
+<div class="option-card__title col-sm-4" data-vis="1">
+<h4 class="title-font" data-vis="1">Simbrief</h4>
+</div>
+<div class="option-card__body col-sm-8" data-vis="1">
+<input type="text" class="form-control form-control-dark form-control-xl text-uppercase" placeholder="Simbrief Id" data-vis="1">
+<div class="switch-button form-check form-switch switch-button--lg ini-tooltip" data-tooltip="Hide the simbrief id and navigraph username" data-vis="1">
+<label class="form-check-label" for="switch-button-4ct2qjh3qsd" data-vis="1">Streamer Mode</label>
+<input class="form-check-input" type="checkbox" role="switch" id="switch-button-4ct2qjh3qsd" data-vis="1">
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="card text-bg-dark option-card navigraph-login-card" data-vis="1">
+<div class="card-body" data-vis="1">
+<div class="row" data-vis="1">
+<div class="option-card__title col-sm-4" data-vis="1">
+<h4 class="title-font" data-vis="1">Connect Navigraph</h4>
+</div>
+<div class="option-card__body col-sm-8" data-vis="1">
+<div class="navigraph-login" data-vis="1">
+<div style="display: none;">
+<h1>DEBUG ON</h1>
+</div>
+<div class="navigraph-login__no-auth" data-vis="1">
+<div class="row align-items-center" data-vis="1">
+<div class="col-6" data-vis="1">
+<div class="navigraph-login__qr" data-vis="1">
+<div class="loader-spinner" data-active="true" data-vis="1">
+<div class="loader-spinner__body" data-vis="1">
+</div>
+</div>
+</div>
+</div>
+<div class="col-6 d-flex flex-column" data-vis="1">
+<div class="navigraph-login__usercode mb-4" data-vis="1">
+<p class="mt-2 text-white fs-3" data-vis="1">Navigate to https://navigraph.com/code and enter the above code to connect.</p>
+</div>
+<div class="navigraph-login__buttons d-flex flex-column" data-vis="1">
+<button type="button" class="option-button mb-3" data-vis="1">OPEN IN BROWSER</button>
+<button type="button" class="option-button" data-vis="1">REFRESH CODE</button>
+</div>
+</div>
+</div>
+</div>
+<div class="navigraph-login__auth">
+<span class="d-bloc mb-3">YOU ARE LOGGED IN AS <b>" "</b>
+</span>
+<div class="navigraph-login__buttons">
+<button type="button" class="option-button">SIGN OUT</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="virtual-keyboard">
+<div id="inputDisabled" style="display: none;">
+<div class="alert alert-danger text-center" role="alert">
+<h1>Aircraft control disabled when inputting text with physical keyboard.</h1>
+</div>
+</div>
+<div id="osk-num" style="display: none;">
+<div class="num-pad-grid">
+<div class="keyboard-delete keyboard-secondary">DEL</div>
+<div class="osk-hide-num keyboard-secondary">LOAD</div>
+</div>
+</div>
+<div id="osk" style="display: none;">
+<div class="keyrow numrow">
+<div class="double-wide keyboard-delete">
+</div>
+</div>
+<div class="keyrow row1">
+</div>
+<div class="keyrow row2">
+</div>
+<div class="keyrow row3">
+</div>
+<div class="osk-hide">ENTER</div>
+</div>
+</div>
+</div>

@@ -1,0 +1,136 @@
+<div id="iniEFB" class="efb">
+<div class="tod-pause-overlay" style="display: none; pointer-events: none;">
+<div>AUTO PAUSE TRIGGERED BY TOD</div>
+<div>CLICK UNPAUSE SIM button to continue</div>
+<button style="pointer-events: auto;">UNPAUSE SIM</button>
+</div>
+<div style="display: none; pointer-events: none;">
+<span>SIMULATION RATE: 1X</span>
+</div>
+<div class="efb__body" data-vis="1">
+<div class="navigation-bar" data-vis="1">
+<button id="testbasic-btn" class="menu-button" data-vis="1">
+</button>
+<button id="loadsheet-btn" class="menu-button" data-vis="1">
+</button>
+<button id="takeoff-btn" class="menu-button" data-vis="1">
+</button>
+<button id="landing-btn" class="menu-button" data-vis="1">
+</button>
+<button id="ofp-btn" class="menu-button" data-vis="1">
+</button>
+<button id="charts-btn" class="menu-button" data-vis="1">
+</button>
+<button id="enroute-btn" class="menu-button" data-vis="1">
+</button>
+<button id="mainmenu-btn" class="menu-button" data-vis="1">
+</button>
+</div>
+<div class="efb__content" data-vis="1">
+<div class="header-bar">
+<div class="powered-off-overlay">
+</div>
+<div class="efb-settings" data-active="false">
+<div class="row">
+<div class="col-sm-12">
+<h2>Screen Brightness</h2>
+<input type="range" class="ini-range" min="0" max="100" step="1">
+</div>
+</div>
+<div class="row mt-5">
+<div class="col-sm-12">
+<div class="d-grid gap-2 mt-5 mb-5">
+<button type="button" class="btn btn-primary mb-4 btn-lg btn-custom">Power Off EFB</button>
+</div>
+</div>
+</div>
+</div>
+<div class="spacer">
+</div>
+<div class="header-bar__body">
+<div class="header-bar-item wider">
+<div class="time" title="LOCAL TIME">
+<span class="time-small">LOCAL</span>
+<br>0206</div>
+</div>
+<div class="header-bar-item wider">
+<div class="time" title="ZULU TIME">
+<span class="time-small">ZULU</span>
+<br>0906</div>
+</div>
+<div class="header-bar-item">
+<img id="charge-state" src="battery-full.png">
+</div>
+<div class="header-bar-item">
+<button type="button" class="efb-settings-btn btn-no-style">
+</button>
+</div>
+</div>
+</div>
+<div class="page-renderer" data-vis="1">
+<div class="page page-ofp" data-page="ofp" data-vis="1">
+<div id="Mainframe" data-vis="1">
+<div id="BASE" data-vis="1">
+<img id="white_background" src="white_background.png" data-vis="1">
+<div class="trim-line trim-left" data-vis="1">
+</div>
+<div class="trim-line trim-left" data-vis="1">
+</div>
+<div class="trim-line trim-right" data-vis="1">
+</div>
+<div class="trim-line trim-right" data-vis="1">
+</div>
+<button type="button" class="control-button reload-button" data-vis="1">R E L O A D</button>
+<button type="button" class="control-button send-to-ins-button" data-active="true" data-vis="1">SEND TO INS</button>
+<div class="simbrief-viewer" data-active="true" data-light="false" data-vis="1">
+<div class="simbrief-viewer__body" data-vis="1">
+<div class="loader-spinner" data-active="false">
+<div class="loader-spinner__body">
+</div>
+</div>
+<div class="simbrief-viewer__plan" data-vis="1">
+<div data-vis="1">
+<pre data-vis="1">SYNTHETIC OFP LINE 1
+SYNTHETIC OFP LINE 2</pre>
+</div>
+</div>
+</div>
+<div class="simbrief-viewer__buttons" data-vis="1">
+<button type="button" class="control-button close-btn btn btn-lg btn-danger title-font" data-vis="1">X</button>
+<button type="button" class="control-button text-icon" data-vis="1">+</button>
+<button type="button" class="control-button text-icon" data-vis="1">-</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="virtual-keyboard">
+<div id="inputDisabled" style="display: none;">
+<div class="alert alert-danger text-center" role="alert">
+<h1>Aircraft control disabled when inputting text with physical keyboard.</h1>
+</div>
+</div>
+<div id="osk-num" style="display: none;">
+<div class="num-pad-grid">
+<div class="keyboard-delete keyboard-secondary">DEL</div>
+<div class="osk-hide-num keyboard-secondary">LOAD</div>
+</div>
+</div>
+<div id="osk" style="display: none;">
+<div class="keyrow numrow">
+<div class="double-wide keyboard-delete">
+</div>
+</div>
+<div class="keyrow row1">
+</div>
+<div class="keyrow row2">
+</div>
+<div class="keyrow row3">
+</div>
+<div class="osk-hide">ENTER</div>
+</div>
+</div>
+</div>

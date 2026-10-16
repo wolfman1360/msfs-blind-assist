@@ -1,0 +1,221 @@
+<div id="iniEFB" class="efb">
+<div class="tod-pause-overlay" style="display: none; pointer-events: none;">
+<div>AUTO PAUSE TRIGGERED BY TOD</div>
+<div>CLICK UNPAUSE SIM button to continue</div>
+<button style="pointer-events: auto;">UNPAUSE SIM</button>
+</div>
+<div style="display: none; pointer-events: none;">
+<span>SIMULATION RATE: 1X</span>
+</div>
+<div class="efb__body" data-vis="1">
+<div class="navigation-bar" data-vis="1">
+<button id="testbasic-btn" class="menu-button" data-vis="1">
+</button>
+<button id="loadsheet-btn" class="menu-button" data-vis="1">
+</button>
+<button id="takeoff-btn" class="menu-button" data-vis="1">
+</button>
+<button id="landing-btn" class="menu-button" data-vis="1">
+</button>
+<button id="ofp-btn" class="menu-button" data-vis="1">
+</button>
+<button id="charts-btn" class="menu-button" data-vis="1">
+</button>
+<button id="enroute-btn" class="menu-button" data-vis="1">
+</button>
+<button id="mainmenu-btn" class="menu-button" data-vis="1">
+</button>
+</div>
+<div class="efb__content" data-vis="1">
+<div class="header-bar">
+<div class="powered-off-overlay">
+</div>
+<div class="efb-settings" data-active="false">
+<div class="row">
+<div class="col-sm-12">
+<h2>Screen Brightness</h2>
+<input type="range" class="ini-range" min="0" max="100" step="1">
+</div>
+</div>
+<div class="row mt-5">
+<div class="col-sm-12">
+<div class="d-grid gap-2 mt-5 mb-5">
+<button type="button" class="btn btn-primary mb-4 btn-lg btn-custom">Power Off EFB</button>
+</div>
+</div>
+</div>
+</div>
+<div class="spacer">
+</div>
+<div class="header-bar__body">
+<div class="header-bar-item wider">
+<div class="time" title="LOCAL TIME">
+<span class="time-small">LOCAL</span>
+<br>0205</div>
+</div>
+<div class="header-bar-item wider">
+<div class="time" title="ZULU TIME">
+<span class="time-small">ZULU</span>
+<br>0905</div>
+</div>
+<div class="header-bar-item">
+<img id="charge-state" src="battery-full.png">
+</div>
+<div class="header-bar-item">
+<button type="button" class="efb-settings-btn btn-no-style">
+</button>
+</div>
+</div>
+</div>
+<div class="page-renderer" data-vis="1">
+<div class="page page-charts fs-1" data-charttype="0" data-vis="1">
+<img id="white_background_charts" src="white_background.png" data-vis="1">
+<div class="page-charts__body" data-vis="1">
+<div class="charts-chart-viewer" data-vis="1">
+<div class="loader-spinner" data-active="false">
+<div class="loader-spinner__body">
+</div>
+</div>
+<div class="charts-chart-viewer__controls" data-active="false">
+<div class="charts-chart-pan-controls control-layout-cross">
+<button type="button" class="control-button">
+</button>
+<button type="button" class="control-button">
+</button>
+<button type="button" class="control-button">
+</button>
+<button type="button" class="control-button">
+</button>
+</div>
+<div class="charts-chart-controls">
+<div class="page-controls" data-active="false">
+<button type="button" class="control-button page-nav" data-enabled="false">&lt;</button>
+<div class="page-label">
+</div>
+<button type="button" class="control-button page-nav" data-enabled="false">&gt;</button>
+</div>
+<button type="button" class="control-button clear-btn">X</button>
+<button type="button" class="control-button text-icon">+</button>
+<button type="button" class="control-button text-icon">-</button>
+<button type="button" class="control-button">
+</button>
+<button type="button" class="control-button">
+</button>
+<button type="button" class="control-button plane-marker hide" data-active="true">
+</button>
+<button type="button" class="control-button theme-toggle" data-active="false">
+</button>
+</div>
+</div>
+<div class="charts-chart-viewer__image" data-vis="1">
+<div class="pan-container">
+<div class="img-wrapper">
+<div class="plane-marker hide">
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="charts-sidebar" data-collapsed="false" data-vis="1">
+<div class="charts-sidebar__collapse" data-vis="1">
+</div>
+<div class="charts-sidebar__header" data-vis="1">
+<div class="d-flex flex-row" data-vis="1">
+<h6 class="fs-1 flex-fill" data-vis="1">Charts:</h6>
+<div class="pin-btn" data-vis="1">
+</div>
+</div>
+<div class="charts-search-input input-group" data-vis="1">
+<input type="text" class="form-control" placeholder="ICAO" data-vis="1">
+<button type="button" class="btn btn-outline-secondary" data-vis="1">
+</button>
+</div>
+<div class="charts-icao-populate" data-vis="1">
+<div class="btn-group d-flex" role="group" data-vis="1">
+<button class="btn btn-outline-primary flex-fill" type="button" data-vis="1">----</button>
+<button class="btn btn-outline-primary flex-fill" type="button" data-vis="1">----</button>
+</div>
+</div>
+</div>
+<div class="charts-sidebar__filters" data-vis="1">
+<ul>
+<li class="chart-filter active hide" data-category="sid">SID</li>
+<li class="chart-filter hide" data-category="sidpt">SIDPT</li>
+<li class="chart-filter hide" data-category="star">STAR</li>
+<li class="chart-filter hide" data-category="mrc">MRC</li>
+<li class="chart-filter hide" data-category="afc">AFC</li>
+<li class="chart-filter hide" data-category="apc">APC</li>
+<li class="chart-filter hide" data-category="agc">AGC</li>
+<li class="chart-filter hide" data-category="lvc">LVC</li>
+<li class="chart-filter hide" data-category="aoi">AOI</li>
+<li class="chart-filter hide" data-category="iac">IAC</li>
+</ul>
+</div>
+<div class="charts-sidebar__airport" data-airport="">
+</div>
+<div class="charts-sidebar__charts" data-vis="1">
+<div class="loader-spinner" data-active="false">
+<div class="loader-spinner__body">
+</div>
+</div>
+<div class="charts-sidebar__charts-body" data-vis="1">
+</div>
+</div>
+</div>
+<div class="charts-toggle">
+<div class="switch-button form-check form-switch">
+<label class="form-check-label" for="switch-button-ktxok7ipvmc">Navigraph Charts</label>
+<input class="form-check-input" type="checkbox" role="switch" id="switch-button-ktxok7ipvmc">
+</div>
+</div>
+<div class="charts-metar-drawer" data-open="false" data-vis="1">
+<button type="button" class="charts-metar-tab btn btn-dark title-font" data-vis="1">METAR</button>
+<div class="charts-metar-panel" data-vis="1">
+<div class="metar-search card wx px-4 py-4" data-vis="1">
+<div class="card-body" data-vis="1">
+<h5 class="card-title text-center title-font section-title" data-vis="1">METAR Search</h5>
+<p class="card-text mt-3 mb-2" data-vis="1">
+<div class="input-group mb-3" data-vis="1">
+<input type="text" class="form-control form-control-lg wx-input-custom wx-lookup" placeholder="ICAO" data-vis="1">
+<div class="input-group-append" data-vis="1">
+<button type="button" class="btn btn-lg wx-lookup wx-btn-custom title-font px-4" data-vis="1">Search</button>
+</div>
+</div>
+</p>
+<p class="card-text wx-flight-value mt-3" data-vis="1">----</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="virtual-keyboard">
+<div id="inputDisabled" style="display: none;">
+<div class="alert alert-danger text-center" role="alert">
+<h1>Aircraft control disabled when inputting text with physical keyboard.</h1>
+</div>
+</div>
+<div id="osk-num" style="display: none;">
+<div class="num-pad-grid">
+<div class="keyboard-delete keyboard-secondary">DEL</div>
+<div class="osk-hide-num keyboard-secondary">LOAD</div>
+</div>
+</div>
+<div id="osk" style="display: none;">
+<div class="keyrow numrow">
+<div class="double-wide keyboard-delete">
+</div>
+</div>
+<div class="keyrow row1">
+</div>
+<div class="keyrow row2">
+</div>
+<div class="keyrow row3">
+</div>
+<div class="osk-hide">ENTER</div>
+</div>
+</div>
+</div>

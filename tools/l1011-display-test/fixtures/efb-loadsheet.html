@@ -1,0 +1,358 @@
+<div id="iniEFB" class="efb">
+<div class="tod-pause-overlay" style="display: none; pointer-events: none;">
+<div>AUTO PAUSE TRIGGERED BY TOD</div>
+<div>CLICK UNPAUSE SIM button to continue</div>
+<button style="pointer-events: auto;">UNPAUSE SIM</button>
+</div>
+<div style="display: none; pointer-events: none;">
+<span>SIMULATION RATE: 1X</span>
+</div>
+<div class="efb__body" data-vis="1">
+<div class="navigation-bar" data-vis="1">
+<button id="testbasic-btn" class="menu-button" data-vis="1">
+</button>
+<button id="loadsheet-btn" class="menu-button" data-vis="1">
+</button>
+<button id="takeoff-btn" class="menu-button" data-vis="1">
+</button>
+<button id="landing-btn" class="menu-button" data-vis="1">
+</button>
+<button id="ofp-btn" class="menu-button" data-vis="1">
+</button>
+<button id="charts-btn" class="menu-button" data-vis="1">
+</button>
+<button id="enroute-btn" class="menu-button" data-vis="1">
+</button>
+<button id="mainmenu-btn" class="menu-button" data-vis="1">
+</button>
+</div>
+<div class="efb__content" data-vis="1">
+<div class="header-bar">
+<div class="powered-off-overlay">
+</div>
+<div class="efb-settings" data-active="false">
+<div class="row">
+<div class="col-sm-12">
+<h2>Screen Brightness</h2>
+<input type="range" class="ini-range" min="0" max="100" step="1">
+</div>
+</div>
+<div class="row mt-5">
+<div class="col-sm-12">
+<div class="d-grid gap-2 mt-5 mb-5">
+<button type="button" class="btn btn-primary mb-4 btn-lg btn-custom">Power Off EFB</button>
+</div>
+</div>
+</div>
+</div>
+<div class="spacer">
+</div>
+<div class="header-bar__body">
+<div class="header-bar-item wider">
+<div class="time" title="LOCAL TIME">
+<span class="time-small">LOCAL</span>
+<br>0205</div>
+</div>
+<div class="header-bar-item wider">
+<div class="time" title="ZULU TIME">
+<span class="time-small">ZULU</span>
+<br>0905</div>
+</div>
+<div class="header-bar-item">
+<img id="charge-state" src="battery-full.png">
+</div>
+<div class="header-bar-item">
+<button type="button" class="efb-settings-btn btn-no-style">
+</button>
+</div>
+</div>
+</div>
+<div class="page-renderer" data-vis="1">
+<div class="page page-load-sheet" data-page="loadsheet" data-vis="1">
+<div id="BASE" data-vis="1">
+<div class="ferry-pod-warning" style="display: none;">RIGHT POD INSTALLED</div>
+<div id="ls-status-banner" style="display:none; pointer-events:none;">LOADING</div>
+<img id="white_background" src="white_background.png" data-vis="1">
+<img id="LOAD_SHEET_BASE_IMAGE" src="LOAD_SHEET_BASE_IMAGE-06.png" data-vis="1">
+<img id="actual_load" src="actual_load.png" style="display: none;">
+<img id="planned_load" src="planned_load.png" style="display:none;">
+<div id="load-view-toggle" style="display: none;">
+<div id="btn-active-load" class="">
+</div>
+<div id="btn-planned-load" class="">
+</div>
+</div>
+<img id="load_sheet_kg" src="load_sheet_kg.png" style="display: none;">
+<img id="load_sheet_lb" src="load_sheet_lb.png" style="display: block;" data-vis="1">
+<img id="tank_2l_out_image" src="2L_OUT.png" style="opacity: 0.6906855658030137;" data-vis="1">
+<img id="tank_2l_in_image" src="2L_IN.png" style="opacity: 0.6906767122443411;" data-vis="1">
+<img id="tank_1_image" src="TANK_1.png" style="opacity: 0.6564392066319606;" data-vis="1">
+<img id="tank_1a_image" src="TANK_1A.png" style="opacity: 0;" data-vis="1">
+<img id="tank_3a_image" src="TANK_3A.png" style="opacity: 0;" data-vis="1">
+<img id="tank_3_image" src="TANK_3.png" style="opacity: 0.6564433973390311;" data-vis="1">
+<img id="tank_2r_in_image" src="TANK_2R_IN.png" style="opacity: 0.6906764823495418;" data-vis="1">
+<img id="tank_2r_out_image" src="TANK_2R_OUT.png" style="opacity: 0.6906853670719841;" data-vis="1">
+<div class="units-indicator" data-vis="1">UNITS LBS / K LBS</div>
+<div class="input-with-unit">
+<input type="text" id="TANK3_INPUT" class="loadsheet-form-control" inputmode="decimal" data-keyboard="numeric" placeholder="TANK 3" data-vis="1">
+</div>
+<div class="input-with-unit">
+<input type="text" id="TANK3A_INPUT" class="loadsheet-form-control" inputmode="decimal" data-keyboard="numeric" placeholder="TANK 3A" data-vis="1">
+</div>
+<div class="input-with-unit">
+<input type="text" id="TANK2R_INPUT" class="loadsheet-form-control" inputmode="decimal" data-keyboard="numeric" placeholder="TANK 2R" data-vis="1">
+</div>
+<div class="input-with-unit">
+<input type="text" id="TANK1A_INPUT" class="loadsheet-form-control" inputmode="decimal" data-keyboard="numeric" placeholder="TANK 1A" data-vis="1">
+</div>
+<div class="input-with-unit">
+<input type="text" id="TANK2L_INPUT" class="loadsheet-form-control" inputmode="decimal" data-keyboard="numeric" placeholder="TANK 2L" data-vis="1">
+</div>
+<div class="input-with-unit">
+<input type="text" id="TANK1_INPUT" class="loadsheet-form-control" inputmode="decimal" data-keyboard="numeric" placeholder="TANK 1" data-vis="1">
+</div>
+<div class="input-with-unit">
+<input type="text" id="TANK2L_OUT_INPUT" class="loadsheet-form-control" inputmode="decimal" data-keyboard="numeric" placeholder="TANK 2L OUT" data-vis="1">
+</div>
+<div class="input-with-unit">
+<input type="text" id="TANK2R_OUT_INPUT" class="loadsheet-form-control" inputmode="decimal" data-keyboard="numeric" placeholder="TANK 2R OUT" data-vis="1">
+</div>
+<div class="input-with-unit">
+<input type="text" id="TOTAL_FUEL_INPUT" class="loadsheet-form-control" inputmode="decimal" data-keyboard="numeric" placeholder="TOTAL FUEL" style="opacity: 1;" data-vis="1">
+</div>
+<div class="input-with-unit">
+<input type="text" id="FWD_CARGO_INPUT" class="loadsheet-form-control" inputmode="decimal" data-keyboard="numeric" placeholder="FWD CARGO" data-vis="1">
+</div>
+<div class="input-with-unit">
+<input type="text" id="AFT_CARGO_INPUT" class="loadsheet-form-control" inputmode="decimal" data-keyboard="numeric" placeholder="AFT CARGO" data-vis="1">
+</div>
+<div class="input-with-unit">
+<input type="text" id="BULK_CARGO_INPUT" class="loadsheet-form-control" inputmode="decimal" data-keyboard="numeric" placeholder="BULK CARGO" data-vis="1">
+</div>
+<div class="input-with-unit">
+<input type="text" id="TOTAL_CARGO_INPUT" class="loadsheet-form-control" inputmode="decimal" data-keyboard="numeric" placeholder="TOTAL CARGO" style="opacity: 1;" data-vis="1">
+</div>
+<div class="input-with-unit">
+<input type="text" id="FIRST_PAX_INPUT" class="loadsheet-form-control" inputmode="numeric" data-keyboard="numeric" placeholder="FIRST" data-vis="1">
+</div>
+<div class="input-with-unit">
+<input type="text" id="BUSINESS_PAX_INPUT" class="loadsheet-form-control" inputmode="numeric" data-keyboard="numeric" placeholder="BUSINESS" data-vis="1">
+</div>
+<div class="input-with-unit">
+<input type="text" id="ECONOMY_PAX_INPUT" class="loadsheet-form-control" inputmode="numeric" data-keyboard="numeric" placeholder="ECONOMY" data-vis="1">
+</div>
+<div class="input-with-unit">
+<input type="text" id="TOTAL_PAX_INPUT" class="loadsheet-form-control" inputmode="numeric" data-keyboard="numeric" placeholder="TOTAL PAX" data-vis="1">
+</div>
+<div class="input-with-unit">
+<input type="text" id="TOTAL_PAX_WEIGHT_INPUT" class="loadsheet-form-control" inputmode="decimal" data-keyboard="numeric" placeholder="TOTAL PAX WEIGHT" style="opacity: 1;" data-vis="1">
+</div>
+<div class="input-with-unit">
+<input type="text" id="TOTAL_WEIGHT_INPUT" class="loadsheet-form-control" placeholder="TOTAL WEIGHT" disabled="true" style="opacity: 1;" data-vis="1">
+</div>
+<img id="GW_CG" src="GW_CG.svg" data-vis="1">
+<div class="simbrief-import-button" data-vis="1">SIMBRIEF IMPORT</div>
+<div class="load-settings-button" data-vis="1">LOAD SETTINGS</div>
+<div id="ls-safety-msg" style="display:none;">
+</div>
+<div id="load-settings-popup" class="load-settings-popup visible" data-vis="1">
+<div class="load-settings-popup-header" data-vis="1">
+<h2 class="load-settings-popup-title" data-vis="1">LOAD SETTINGS</h2>
+<button id="load-settings-close-btn" class="load-settings-popup-close-btn" data-vis="1">BACK</button>
+</div>
+<div class="ls-section-title" data-vis="1">LOAD UNLOAD TIME</div>
+<div class="ls-mode-selector" data-vis="1">
+<div id="ls-mode-instant" class="ls-mode-btn active" data-vis="1">INSTANT</div>
+<div id="ls-mode-timed" class="ls-mode-btn" data-vis="1">TIMED</div>
+<div id="ls-mode-realistic" class="ls-mode-btn" data-vis="1">REALISTIC</div>
+</div>
+<div id="ls-instant-section" style="display:flex;" data-vis="1">
+<div data-vis="1">Use the sliders, SimBrief import button or directly change each value individually to instantly change the loading values of the Tristar.</div>
+</div>
+<div id="ls-timed-section" class="ls-timed-section" style="display: none;">
+<div id="ls-timed-warning" style="display:none;">
+</div>
+<div id="ls-timed-controls" style="display:flex;">
+<div id="ls-step1-label" style="display: none;">STEP 1: SET INITIAL LOAD STATE</div>
+<div id="ls-step1-btn" style="display: none;">SET INITIAL LOAD STATE</div>
+<div id="ls-step1-info" style="display:none;">Select BACK then set initial load state on the main page (e.g. sliders to 0) then return here and click STOP CAPTURE.</div>
+<div id="ls-step2-label" style="display: none;">STEP 2: SELECT FINAL LOAD STATE</div>
+<div id="ls-step2-btn" style="display: none; opacity: 0.35; pointer-events: none;">SELECT FINAL LOAD STATE</div>
+<div id="ls-step2-info" style="display:none;">Select BACK then set the FINAL desired load (SimBrief import or manual sliders) then return here and click SAVE FINAL STATE.</div>
+<div id="ls-step3-label">SET LOAD TIME</div>
+<div id="ls-slider-section" style="display: none;">
+<div class="ls-timer-slider-container">
+<div class="ls-timer-slider-track">
+<div id="ls-timer-slider-thumb" class="ls-timer-slider-thumb">
+</div>
+</div>
+<div class="ls-timer-tick-marks">
+<div class="ls-timer-tick">
+<div class="ls-timer-tick-line">
+</div>
+<span class="ls-timer-tick-label">5M</span>
+</div>
+<div class="ls-timer-tick">
+<div class="ls-timer-tick-line">
+</div>
+<span class="ls-timer-tick-label">10M</span>
+</div>
+<div class="ls-timer-tick">
+<div class="ls-timer-tick-line">
+</div>
+<span class="ls-timer-tick-label">30M</span>
+</div>
+<div class="ls-timer-tick">
+<div class="ls-timer-tick-line">
+</div>
+<span class="ls-timer-tick-label">45M</span>
+</div>
+<div class="ls-timer-tick">
+<div class="ls-timer-tick-line">
+</div>
+<span class="ls-timer-tick-label">1HR</span>
+</div>
+</div>
+</div>
+</div>
+<div id="ls-realistic-duration" style="display:none;">
+<div id="ls-realistic-duration-breakdown">Set initial and final states to calculate duration.</div>
+</div>
+<div id="ls-timed-actions" style="display: none;">
+<div id="ls-start-load-btn" style="display:flex;">LOAD</div>
+<div id="ls-start-unload-btn" style="display:flex;">UNLOAD</div>
+</div>
+<div id="ls-timed-stop-btn" style="display: none; opacity: 0.35; pointer-events: none;">STOP</div>
+<div id="ls-start-btn" style="display:flex; opacity:0.35; pointer-events:none;">START LOAD/UNLOAD</div>
+<div id="ls-time-remaining" class="ls-time-remaining">30:00</div>
+</div>
+</div>
+</div>
+<div class="passenger-slider-container" data-vis="1">
+<div class="passenger-slider-title" data-vis="1">PAX</div>
+<div class="passenger-slider-track" data-vis="1">
+<div class="passenger-slider-thumb" style="pointer-events: auto;" data-vis="1">
+</div>
+<div class="passenger-slider-guides" data-vis="1">
+<div class="passenger-slider-guide guide-0" data-vis="1">
+</div>
+<div class="passenger-slider-guide guide-12-5" data-vis="1">
+</div>
+<div class="passenger-slider-guide guide-25" data-vis="1">
+</div>
+<div class="passenger-slider-guide guide-37-5" data-vis="1">
+</div>
+<div class="passenger-slider-guide guide-50" data-vis="1">
+</div>
+<div class="passenger-slider-guide guide-62-5" data-vis="1">
+</div>
+<div class="passenger-slider-guide guide-75" data-vis="1">
+</div>
+<div class="passenger-slider-guide guide-87-5" data-vis="1">
+</div>
+<div class="passenger-slider-guide guide-100" data-vis="1">
+</div>
+</div>
+</div>
+<div class="passenger-slider-labels" data-vis="1">
+<span data-vis="1">0%</span>
+<span data-vis="1">50%</span>
+<span data-vis="1">100%</span>
+</div>
+</div>
+<div class="cargo-slider-container" data-vis="1">
+<div class="cargo-slider-title" data-vis="1">CARGO</div>
+<div class="cargo-slider-track" data-vis="1">
+<div class="cargo-slider-thumb" style="pointer-events: auto;" data-vis="1">
+</div>
+<div class="cargo-slider-guides" data-vis="1">
+<div class="cargo-slider-guide guide-0" data-vis="1">
+</div>
+<div class="cargo-slider-guide guide-12-5" data-vis="1">
+</div>
+<div class="cargo-slider-guide guide-25" data-vis="1">
+</div>
+<div class="cargo-slider-guide guide-37-5" data-vis="1">
+</div>
+<div class="cargo-slider-guide guide-50" data-vis="1">
+</div>
+<div class="cargo-slider-guide guide-62-5" data-vis="1">
+</div>
+<div class="cargo-slider-guide guide-75" data-vis="1">
+</div>
+<div class="cargo-slider-guide guide-87-5" data-vis="1">
+</div>
+<div class="cargo-slider-guide guide-100" data-vis="1">
+</div>
+</div>
+</div>
+<div class="cargo-slider-labels" data-vis="1">
+<span data-vis="1">0%</span>
+<span data-vis="1">50%</span>
+<span data-vis="1">100%</span>
+</div>
+</div>
+<div class="fuel-slider-container" data-vis="1">
+<div class="fuel-slider-title" data-vis="1">FUEL</div>
+<div class="fuel-slider-track" data-vis="1">
+<div class="fuel-slider-thumb" style="pointer-events: auto;" data-vis="1">
+</div>
+<div class="fuel-slider-guides" data-vis="1">
+<div class="fuel-slider-guide guide-0" data-vis="1">
+</div>
+<div class="fuel-slider-guide guide-12-5" data-vis="1">
+</div>
+<div class="fuel-slider-guide guide-25" data-vis="1">
+</div>
+<div class="fuel-slider-guide guide-37-5" data-vis="1">
+</div>
+<div class="fuel-slider-guide guide-50" data-vis="1">
+</div>
+<div class="fuel-slider-guide guide-62-5" data-vis="1">
+</div>
+<div class="fuel-slider-guide guide-75" data-vis="1">
+</div>
+<div class="fuel-slider-guide guide-87-5" data-vis="1">
+</div>
+<div class="fuel-slider-guide guide-100" data-vis="1">
+</div>
+</div>
+</div>
+<div class="fuel-slider-labels" data-vis="1">
+<span data-vis="1">0%</span>
+<span data-vis="1">50%</span>
+<span data-vis="1">100%</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="virtual-keyboard">
+<div id="inputDisabled" style="display: none;">
+<div class="alert alert-danger text-center" role="alert">
+<h1>Aircraft control disabled when inputting text with physical keyboard.</h1>
+</div>
+</div>
+<div id="osk-num" style="display: none;">
+<div class="num-pad-grid">
+<div class="keyboard-delete keyboard-secondary">DEL</div>
+<div class="osk-hide-num keyboard-secondary">LOAD</div>
+</div>
+</div>
+<div id="osk" style="display: none;">
+<div class="keyrow numrow">
+<div class="double-wide keyboard-delete">
+</div>
+</div>
+<div class="keyrow row1">
+</div>
+<div class="keyrow row2">
+</div>
+<div class="keyrow row3">
+</div>
+<div class="osk-hide">ENTER</div>
+</div>
+</div>
+</div>

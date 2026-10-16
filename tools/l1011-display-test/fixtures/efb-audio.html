@@ -1,0 +1,223 @@
+<div id="iniEFB" class="efb">
+<div class="tod-pause-overlay" style="display: none; pointer-events: none;">
+<div>AUTO PAUSE TRIGGERED BY TOD</div>
+<div>CLICK UNPAUSE SIM button to continue</div>
+<button style="pointer-events: auto;">UNPAUSE SIM</button>
+</div>
+<div style="display: none; pointer-events: none;">
+<span>SIMULATION RATE: 1X</span>
+</div>
+<div class="efb__body" data-vis="1">
+<div class="navigation-bar" data-vis="1">
+<button id="testbasic-btn" class="menu-button" data-vis="1">
+</button>
+<button id="loadsheet-btn" class="menu-button" data-vis="1">
+</button>
+<button id="takeoff-btn" class="menu-button" data-vis="1">
+</button>
+<button id="landing-btn" class="menu-button" data-vis="1">
+</button>
+<button id="ofp-btn" class="menu-button" data-vis="1">
+</button>
+<button id="charts-btn" class="menu-button" data-vis="1">
+</button>
+<button id="enroute-btn" class="menu-button" data-vis="1">
+</button>
+<button id="mainmenu-btn" class="menu-button" data-vis="1">
+</button>
+</div>
+<div class="efb__content" data-vis="1">
+<div class="header-bar">
+<div class="powered-off-overlay">
+</div>
+<div class="efb-settings" data-active="false">
+<div class="row">
+<div class="col-sm-12">
+<h2>Screen Brightness</h2>
+<input type="range" class="ini-range" min="0" max="100" step="1">
+</div>
+</div>
+<div class="row mt-5">
+<div class="col-sm-12">
+<div class="d-grid gap-2 mt-5 mb-5">
+<button type="button" class="btn btn-primary mb-4 btn-lg btn-custom">Power Off EFB</button>
+</div>
+</div>
+</div>
+</div>
+<div class="spacer">
+</div>
+<div class="header-bar__body">
+<div class="header-bar-item wider">
+<div class="time" title="LOCAL TIME">
+<span class="time-small">LOCAL</span>
+<br>0206</div>
+</div>
+<div class="header-bar-item wider">
+<div class="time" title="ZULU TIME">
+<span class="time-small">ZULU</span>
+<br>0906</div>
+</div>
+<div class="header-bar-item">
+<img id="charge-state" src="battery-full.png">
+</div>
+<div class="header-bar-item">
+<button type="button" class="efb-settings-btn btn-no-style">
+</button>
+</div>
+</div>
+</div>
+<div class="page-renderer" data-vis="1">
+<div class="page page-options" data-streamer="false" data-vis="1">
+<img id="white_background" src="white_background.png" data-vis="1">
+<div class="page-options__sidebar" data-vis="1">
+<div class="sidebar-section-title" data-vis="1">FLIGHT ENGINEER</div>
+<button type="button" class="btn btn-autocomplete" data-vis="1">Autocomplete</button>
+<button type="button" class="btn btn-panelstates" data-vis="1">Panel States</button>
+<button type="button" class="btn btn-helper" data-vis="1">HELPER</button>
+<div class="sidebar-section-title" data-vis="1">SETTINGS</div>
+<button type="button" class="btn btn-Aircraft" data-vis="1">Aircraft</button>
+<button type="button" class="btn btn-throttle-calib" data-vis="1">THROTTLE CALIB</button>
+<button type="button" class="btn btn-thirdparty" data-vis="1">ThirdParty</button>
+<button type="button" class="btn btn-audio active" data-vis="1">Audio</button>
+<div class="options-emissive-slider-block" data-vis="1">
+<div class="options-emissive-slider-title" data-vis="1">PFB brightness</div>
+<div class="options-emissive-slider-container" data-vis="1">
+<div class="options-emissive-slider-track" data-vis="1">
+<div class="options-emissive-slider-thumb" data-vis="1">
+</div>
+</div>
+</div>
+</div>
+<div class="options-emissive-slider-block" data-vis="1">
+<div class="options-emissive-slider-title" data-vis="1">CABIN LIGHTING</div>
+<div class="options-emissive-slider-container" data-vis="1">
+<div class="options-emissive-slider-track" data-vis="1">
+<div class="options-cabin-lighting-slider-thumb" data-vis="1">
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="page-options__content" data-vis="1">
+<div class="options-Audio" data-vis="1">
+<div class="row settings-container" data-vis="1">
+<h1 id="audio-settings-title" class="mb-2" data-vis="1">AUDIO SETTINGS</h1>
+<div class="row" data-vis="1">
+<div class="col-sm-6 mb-2" data-vis="1">
+<h2 class="mt-1 text-info" data-vis="1">ENGINES</h2>
+<div class="d-flex align-items-center p-3" data-vis="1">
+<input type="range" class="ini-range-audio flex-grow-1 me-3" min="0" max="100" step="1" data-vis="1">
+<div class="audio-volume-value-editor badge bg-primary" data-vis="1">
+<input type="number" class="audio-volume-value-input" min="0" max="100" step="1" aria-label="ENGINES volume percentage" data-vis="1">
+<span class="audio-volume-value-suffix" data-vis="1">%</span>
+</div>
+</div>
+</div>
+<div class="col-sm-6 mb-2" data-vis="1">
+<h2 class="mt-1 text-info" data-vis="1">ENVIROMENT</h2>
+<div class="d-flex align-items-center p-3" data-vis="1">
+<input type="range" class="ini-range-audio flex-grow-1 me-3" min="0" max="100" step="1" data-vis="1">
+<div class="audio-volume-value-editor badge bg-primary" data-vis="1">
+<input type="number" class="audio-volume-value-input" min="0" max="100" step="1" aria-label="ENVIROMENT volume percentage" data-vis="1">
+<span class="audio-volume-value-suffix" data-vis="1">%</span>
+</div>
+</div>
+</div>
+<div class="col-sm-6 mb-2" data-vis="1">
+<h2 class="mt-1 text-info" data-vis="1">RATTLES</h2>
+<div class="d-flex align-items-center p-3" data-vis="1">
+<input type="range" class="ini-range-audio flex-grow-1 me-3" min="0" max="100" step="1" data-vis="1">
+<div class="audio-volume-value-editor badge bg-primary" data-vis="1">
+<input type="number" class="audio-volume-value-input" min="0" max="100" step="1" aria-label="RATTLES volume percentage" data-vis="1">
+<span class="audio-volume-value-suffix" data-vis="1">%</span>
+</div>
+</div>
+</div>
+</div>
+<h1 id="voice-commands-title" class="mb-2 mt-4" data-vis="1">FLIGHT ENGINEER VOICE</h1>
+<div class="row" data-vis="1">
+<div class="col-sm-6 mb-2" data-vis="1">
+<div class="d-grid gap-2 mb-1 p-3" data-vis="1">
+<div class="btn-group" role="group" data-vis="1">
+<input type="radio" class="btn-check" name="opt_voicecom" id="opt_voicecom1" data-vis="1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_voicecom1" data-vis="1">ON</label>
+<input type="radio" class="btn-check" name="opt_voicecom" id="opt_voicecom2" data-vis="1">
+<label class="btn btn-outline-primary btn-lg" for="opt_voicecom2" data-vis="1">OFF</label>
+</div>
+</div>
+</div>
+</div>
+<h1 id="noise-cancellation-title" class="mb-2 mt-4" data-vis="1">NOISE CANCELLATION</h1>
+<div class="row" data-vis="1">
+<div class="col-sm-6 mb-2" data-vis="1">
+<div class="d-grid gap-2 mb-1 p-3" data-vis="1">
+<div class="btn-group" role="group" data-vis="1">
+<input type="radio" class="btn-check" name="opt_noisecancel" id="opt_noisecancel1" data-vis="1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_noisecancel1" data-vis="1">ON</label>
+<input type="radio" class="btn-check" name="opt_noisecancel" id="opt_noisecancel2" data-vis="1">
+<label class="btn btn-outline-primary btn-lg" for="opt_noisecancel2" data-vis="1">OFF</label>
+</div>
+</div>
+</div>
+</div>
+<h1 id="fo-voice-title" class="mb-2 mt-4" data-vis="1">FIRST OFFICER VOICE</h1>
+<div class="row" data-vis="1">
+<div class="col-sm-6 mb-2" data-vis="1">
+<div class="d-grid gap-2 mb-1 p-3" data-vis="1">
+<div class="btn-group" role="group" data-vis="1">
+<input type="radio" class="btn-check" name="opt_fovoice" id="opt_fovoice1" data-vis="1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_fovoice1" data-vis="1">ON</label>
+<input type="radio" class="btn-check" name="opt_fovoice" id="opt_fovoice2" data-vis="1">
+<label class="btn btn-outline-primary btn-lg" for="opt_fovoice2" data-vis="1">OFF</label>
+</div>
+</div>
+</div>
+</div>
+<h1 id="flight-att-voice-title" class="mb-2 mt-4" data-vis="1">FLIGHT ATTENDANT VOICE</h1>
+<div class="row" data-vis="1">
+<div class="col-sm-6 mb-2" data-vis="1">
+<div class="d-grid gap-2 mb-1 p-3" data-vis="1">
+<div class="btn-group" role="group" data-vis="1">
+<input type="radio" class="btn-check" name="opt_flightattvoice" id="opt_flightattvoice1" data-vis="1">
+<label class="btn btn-outline-primary btn-lg active" for="opt_flightattvoice1" data-vis="1">ON</label>
+<input type="radio" class="btn-check" name="opt_flightattvoice" id="opt_flightattvoice2" data-vis="1">
+<label class="btn btn-outline-primary btn-lg" for="opt_flightattvoice2" data-vis="1">OFF</label>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="virtual-keyboard">
+<div id="inputDisabled" style="display: none;">
+<div class="alert alert-danger text-center" role="alert">
+<h1>Aircraft control disabled when inputting text with physical keyboard.</h1>
+</div>
+</div>
+<div id="osk-num" style="display: none;">
+<div class="num-pad-grid">
+<div class="keyboard-delete keyboard-secondary">DEL</div>
+<div class="osk-hide-num keyboard-secondary">LOAD</div>
+</div>
+</div>
+<div id="osk" style="display: none;">
+<div class="keyrow numrow">
+<div class="double-wide keyboard-delete">
+</div>
+</div>
+<div class="keyrow row1">
+</div>
+<div class="keyrow row2">
+</div>
+<div class="keyrow row3">
+</div>
+<div class="osk-hide">ENTER</div>
+</div>
+</div>
+</div>

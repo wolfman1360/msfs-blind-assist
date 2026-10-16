@@ -1,0 +1,150 @@
+<div id="iniEFB" class="efb">
+<div class="tod-pause-overlay" style="display: none; pointer-events: none;">
+<div>AUTO PAUSE TRIGGERED BY TOD</div>
+<div>CLICK UNPAUSE SIM button to continue</div>
+<button style="pointer-events: auto;">UNPAUSE SIM</button>
+</div>
+<div style="display: none; pointer-events: none;">
+<span>SIMULATION RATE: 1X</span>
+</div>
+<div class="efb__body" data-vis="1">
+<div class="navigation-bar" data-vis="1">
+<button id="testbasic-btn" class="menu-button" data-vis="1">
+</button>
+<button id="loadsheet-btn" class="menu-button" data-vis="1">
+</button>
+<button id="takeoff-btn" class="menu-button" data-vis="1">
+</button>
+<button id="landing-btn" class="menu-button" data-vis="1">
+</button>
+<button id="ofp-btn" class="menu-button" data-vis="1">
+</button>
+<button id="charts-btn" class="menu-button" data-vis="1">
+</button>
+<button id="enroute-btn" class="menu-button" data-vis="1">
+</button>
+<button id="mainmenu-btn" class="menu-button" data-vis="1">
+</button>
+</div>
+<div class="efb__content" data-vis="1">
+<div class="header-bar">
+<div class="powered-off-overlay">
+</div>
+<div class="efb-settings" data-active="false">
+<div class="row">
+<div class="col-sm-12">
+<h2>Screen Brightness</h2>
+<input type="range" class="ini-range" min="0" max="100" step="1">
+</div>
+</div>
+<div class="row mt-5">
+<div class="col-sm-12">
+<div class="d-grid gap-2 mt-5 mb-5">
+<button type="button" class="btn btn-primary mb-4 btn-lg btn-custom">Power Off EFB</button>
+</div>
+</div>
+</div>
+</div>
+<div class="spacer">
+</div>
+<div class="header-bar__body">
+<div class="header-bar-item wider">
+<div class="time" title="LOCAL TIME">
+<span class="time-small">LOCAL</span>
+<br>0205</div>
+</div>
+<div class="header-bar-item wider">
+<div class="time" title="ZULU TIME">
+<span class="time-small">ZULU</span>
+<br>0905</div>
+</div>
+<div class="header-bar-item">
+<img id="charge-state" src="battery-full.png">
+</div>
+<div class="header-bar-item">
+<button type="button" class="efb-settings-btn btn-no-style">
+</button>
+</div>
+</div>
+</div>
+<div class="page-renderer" data-vis="1">
+<div class="page page-takeoff" data-page="takeoff" data-vis="1">
+<div id="Mainframe" data-vis="1">
+<div id="BASE" data-vis="1">
+<div class="takeoff-ferry-pod-warning" style="display: none;">RIGHT POD INSTALLED</div>
+<img id="white_background" src="white_background.png" data-vis="1">
+<img id="TO_PAGE_BASE_IMAGE" src="TO_PAGE_BASE_IMAGE-08.png" data-vis="1">
+<img id="kg_unit" src="kg_unit.png" style="display: none;">
+<img id="lb_unit" src="lb_unit.png" style="display: block;" data-vis="1">
+<div class="to_input">
+<input type="text" id="to_weight_input" class="loadsheet-form-control_to" inputmode="decimal" data-keyboard="numeric" placeholder="TO WEIGHT" data-vis="1">
+</div>
+<div class="press_alt_input">
+<input type="text" id="press_alt_input" class="loadsheet-form-control_to" inputmode="numeric" data-keyboard="numeric" placeholder="PRESS ALT" data-vis="1">
+</div>
+<div class="ambient_temp_input">
+<input type="text" id="ambient_temp_input" class="loadsheet-form-control_to" inputmode="numeric" data-keyboard="numeric" placeholder="AMB TEMP" data-vis="1">
+</div>
+<button id="sync" class="efb-button_to" data-vis="1">SYNC</button>
+<button id="speed-card-housing-toggle" class="efb-button_to" data-vis="1">HIDE</button>
+<button id="calculate" class="efb-button_to" data-vis="1">CALCULATE</button>
+<button id="send-airspeed" class="efb-button_to" data-vis="1">SET BUGS &amp; EPR</button>
+<button id="debug-mode" class="efb-button_to door-closed" style="display: none;">DEBUG: OFF</button>
+<button id="flaps_10" class="efb-button_flaps door-open" data-vis="1">
+</button>
+<button id="flaps_14" class="efb-button_flaps door-closed" data-vis="1">
+</button>
+<button id="flaps_18" class="efb-button_flaps door-closed" data-vis="1">
+</button>
+<button id="flaps_22" class="efb-button_flaps door-closed" data-vis="1">
+</button>
+<div id="v1_display" class="v_speed_display" data-vis="1">-</div>
+<div id="vr_display" class="v_speed_display" data-vis="1">-</div>
+<div id="v2_display" class="v_speed_display" data-vis="1">-</div>
+<div id="f10_display" class="flap_setting_display" data-vis="1">-</div>
+<div id="f4_display" class="flap_setting_display" data-vis="1">-</div>
+<div id="fup_display" class="flap_setting_display" data-vis="1">-</div>
+<div id="f0_display" class="flap_setting_display" data-vis="1">-</div>
+<div id="takeoff_n1_display" class="power_setting_display" data-vis="1">-</div>
+<div id="go_around_n1_display" class="power_setting_display" data-vis="1">-</div>
+<div id="max_cont_n1_display" class="power_setting_display" data-vis="1">-</div>
+<div id="climb_n1_display" class="power_setting_display" data-vis="1">-</div>
+<div id="max_n1_display" class="power_setting_display" data-vis="1">-</div>
+<div id="oat_display" class="power_setting_display" data-vis="1">-</div>
+<div id="selected_flaps_display" class="power_setting_display" data-vis="1">-</div>
+<div id="stabilizer_trim_display" class="power_setting_display" data-vis="1">-</div>
+<div id="calc_error_alert" class="calc-error-alert">
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="virtual-keyboard">
+<div id="inputDisabled" style="display: none;">
+<div class="alert alert-danger text-center" role="alert">
+<h1>Aircraft control disabled when inputting text with physical keyboard.</h1>
+</div>
+</div>
+<div id="osk-num" style="display: none;">
+<div class="num-pad-grid">
+<div class="keyboard-delete keyboard-secondary">DEL</div>
+<div class="osk-hide-num keyboard-secondary">LOAD</div>
+</div>
+</div>
+<div id="osk" style="display: none;">
+<div class="keyrow numrow">
+<div class="double-wide keyboard-delete">
+</div>
+</div>
+<div class="keyrow row1">
+</div>
+<div class="keyrow row2">
+</div>
+<div class="keyrow row3">
+</div>
+<div class="osk-hide">ENTER</div>
+</div>
+</div>
+</div>
