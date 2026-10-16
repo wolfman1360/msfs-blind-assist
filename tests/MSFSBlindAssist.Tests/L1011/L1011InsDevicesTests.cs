@@ -85,6 +85,46 @@ public class L1011InsDevicesTests
         Assert.Null(L1011InsDevices.Lines(L1011InsDevice.CaptainPms, redrawing));   // keep the page shown
     }
 
+    [Fact]
+    public void An_ins_leg_line_names_the_waypoint_it_flies_to()
+    {
+        var ins = new L1011InsScreen(1, true, 5, 0, "  0018", "  0032 ", "23", new HashSet<int> { 6 }, 1, "", Array.Empty<string>());
+        var slots = new L1011InsWaypoint?[] { new("KENNO", 43.1, -79.1), new("DUNKA", 44.2, -70.2), new("TANGI", 46.3, -60.3), new("USER4", 49.4, -50.4) };
+        var scrape = new L1011InsScrapeResult(ins, null, slots, 1, 1, null);
+        Assert.Contains("Leg: 2 to 3, TANGI", L1011InsDevices.Lines(L1011InsDevice.Ins1, scrape)!);
+        var typed = scrape with { Ins = ins with { FromTo = "34" } };
+        Assert.Contains("Leg: 3 to 4", L1011InsDevices.Lines(L1011InsDevice.Ins1, typed)!);   // a typed slot has no name
+    }
+
+    [Fact]
+    public void A_pms_insert_reads_back_the_stored_line_and_any_line_it_changed()
+    {
+        string[] before = { "Captain PMS, page: TAKEOFF", "1: GMT 0755Z", "2: EPR blank", "3: PR ALT 1969", "4: GW, entering: 418", "5: FUEL 122.6", "6: SAT 19", "Lights: insert" };
+        string[] after = { "Captain PMS, page: TAKEOFF", "1: GMT 0755Z", "2: EPR 1.642", "3: PR ALT 1969", "4: GW 418", "5: FUEL 122.6", "6: SAT 19", "Lights: none" };
+        Assert.Equal("4: GW 418. 2: EPR 1.642", L1011InsDevices.InsertReadback(before, 4, after));
+    }
+
+    [Fact]
+    public void A_line_that_moves_by_itself_is_not_read_back_as_changed_by_the_insert()
+    {
+        // Live: the clock ticked while FUEL was typed and the read-back said "5: FUEL 122.6. 1: GMT 2030Z".
+        string[] before = { "Captain PMS, page: TAKEOFF", "1: GMT 2029Z", "2: EPR 1.000", "3: PR ALT -482", "4: GW 418", "5: FUEL, entering: 122.6", "6: SAT 0", "Lights: insert" };
+        string[] after = { "Captain PMS, page: TAKEOFF", "1: GMT 2030Z", "2: EPR 1.000", "3: PR ALT -470", "4: GW 418", "5: FUEL 122.6", "6: SAT 0", "Lights: none" };
+        Assert.Equal("5: FUEL 122.6", L1011InsDevices.InsertReadback(before, 5, after));
+        string[] climbBefore = { "Captain PMS, page: CLB OPTIMUM", "1: CLB 250/320/820", "2: EPR 1.586/1.645", "3: ALT 430 OPT 350, entering", "4: TOC --- NM ----Z", "5: CLB MANUAL ?", "6: SAT 019 TAS 006", "Lights: insert" };
+        string[] climbAfter = { "Captain PMS, page: CLB OPTIMUM", "1: CLB 250/320/820", "2: EPR 1.586/1.645", "3: ALT 430 OPT 350", "4: TOC 059NM 1632Z", "5: CLB MANUAL ?", "6: SAT 018 TAS 007", "Lights: none" };
+        Assert.Equal("3: ALT 430 OPT 350. 4: TOC 059NM 1632Z", L1011InsDevices.InsertReadback(climbBefore, 3, climbAfter));
+    }
+
+    [Fact]
+    public void An_entry_left_by_changing_page_has_no_insert_read_back()
+    {
+        string[] before = { "Captain PMS, page: TAKEOFF", "1: GMT, entering: 12Z", "2: EPR blank", "3: PR ALT 1969", "4: GW blank", "5: FUEL blank", "6: SAT blank", "Lights: insert" };
+        string[] after = { "Captain PMS, page: FLIGHT SETUP", "1: CLB OPTIMUM/250", "2: 3 ENG CRZ STD", "3: DES OPTIMUM/250", "4: BOD DIS 0", "5: BOD ALT 0", "6: blank", "Lights: none" };
+        Assert.Null(L1011InsDevices.InsertReadback(before, 1, after));
+        Assert.Null(L1011InsDevices.InsertReadback(before, 0, before));   // no line was open
+    }
+
     // The window's read-back of what was typed (the fleet's scratchpad read-back): the line an open entry
     // shows, "" when none is open, null when it cannot be judged (nothing read, a dark unit, a PMS redrawing).
     private static L1011InsScrapeResult Read(string entry = "", bool pmsEntry = false, int pmsLine = 0,

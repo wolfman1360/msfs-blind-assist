@@ -59,6 +59,10 @@ public sealed class L1011InsForm : Form
     /// second: <see cref="L1011InsDevices.EntryReadsAtOnce"/>); null while no such line shows, so the next one
     /// is spoken again, and never fed to <see cref="_entry"/>, so it is never said twice.</summary>
     private string? _atOnceSpoken;
+
+    /// <summary>A PMS page as it read while an entry was open, and the entry's line, so the entry closing
+    /// reads back what was stored (<see cref="L1011InsDevices.InsertReadback"/>); null while none is open.</summary>
+    private (IReadOnlyList<string> Lines, int Line)? _openEntry;
     private IntPtr _previousWindow = IntPtr.Zero;
 
     private DisplayListBox _display = null!;
@@ -262,6 +266,7 @@ public sealed class L1011InsForm : Form
             _changes.Reset();
             _entry.Reset();
             _atOnceSpoken = null;
+            _openEntry = null;
             StartReader();
             _poll.Start();
             Repaint();
@@ -307,6 +312,7 @@ public sealed class L1011InsForm : Form
         _changes.Reset();
         _entry.Reset();
         _atOnceSpoken = null;
+        _openEntry = null;
         _shown = null;
 
         if (L1011InsDevices.ViewNeedle(device) != before)
@@ -418,7 +424,24 @@ public sealed class L1011InsForm : Form
             return;
         }
         _atOnceSpoken = null;
-        if (_entry.OnPoll(entry, DateTime.UtcNow) is string say && _def.InsWindowEntry(say) is string spoken)
+        var lines = L1011InsDevices.Lines(_device, _scrape);
+        var before = _openEntry;
+        if (entry.Length > 0 && lines != null && _scrape?.Pms is L1011PmsScreen open && L1011InsDevices.IsPms(_device))
+            _openEntry = (lines, open.ActiveLine);
+        if (_entry.OnPoll(entry, DateTime.UtcNow) is not string say)
+            return;
+        if (say == L1011InsWindowCallouts.EntryClosedWords)
+        {
+            _openEntry = null;
+            // A PMS INSERT reads back what it stored ("4: GW 418. 2: EPR 1.642"), a typed-value confirmation
+            // that always speaks ([CORE-7]); a page change that abandoned the entry has none.
+            if (before is { } b && lines != null && L1011InsDevices.InsertReadback(b.Lines, b.Line, lines) is string stored)
+            {
+                _announcer.Announce(stored);
+                return;
+            }
+        }
+        if (_def.InsWindowEntry(say) is string spoken)
             _announcer.Announce(spoken);   // "Entry closed" can be muted in Ctrl+M; what was typed always speaks
     }
 

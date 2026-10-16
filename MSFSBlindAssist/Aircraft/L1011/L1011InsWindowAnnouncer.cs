@@ -27,23 +27,9 @@ public sealed class L1011InsWindowAnnouncer
             return null;
         bool baseline = _last == null;
         _last = now;
-        return baseline ? null : now + ToName(device, scrape);
-    }
-
-    /// <summary>", UDMUG": the waypoint the unit now flies to, named only for an imported fix (a typed one is
-    /// USER&lt;k&gt;, an empty slot has no name). Added to the words, never to what is compared, so a batch
-    /// reload that renames the slot is not a leg change.</summary>
-    private static string ToName(L1011InsDevice device, L1011InsScrapeResult scrape)
-    {
-        if (L1011InsDevices.IsPms(device))
-            return string.Empty;
-        string fromTo = new string(scrape.Ins.FromTo.Where(char.IsAsciiDigit).ToArray());
-        int slot = fromTo.Length == 2 ? fromTo[1] - '0' : 0;
-        if (slot < 1 || slot > scrape.Waypoints.Count || scrape.Waypoints[slot - 1] is not { } wp)
-            return string.Empty;
-        string ident = wp.Ident.Trim();
-        bool empty = wp.Latitude == 0 && wp.Longitude == 0;
-        return empty || ident.Length == 0 || L1011InsWaypoints.IsTyped(ident) ? string.Empty : ", " + ident;
+        // The TO waypoint's name is added to the words, never to what is compared, so a batch reload that
+        // renames the slot is not a leg change.
+        return baseline ? null : now + (L1011InsDevices.IsPms(device) ? string.Empty : L1011InsDevices.ToWaypointName(scrape));
     }
 
     public void Reset()

@@ -113,10 +113,57 @@ public static class L1011InsDevices
             };
         }
         if (!IsPms(device))
-            return L1011InsDisplay.Lines(scrape.Ins);
+        {
+            var lines = L1011InsDisplay.Lines(scrape.Ins).ToList();
+            string name = ToWaypointName(scrape);
+            int leg = lines.FindIndex(l => l.StartsWith("Leg: ", StringComparison.Ordinal) && l != "Leg: test pattern");
+            if (leg >= 0 && name.Length > 0)
+                lines[leg] += name;
+            return lines;
+        }
         if (!scrape.Ins.Powered)
             return new[] { Name(device) + ": off" };
         return scrape.Pms == null ? new[] { Name(device) + ": not shown" } : L1011PmsDisplay.Lines(scrape.Pms);
+    }
+
+    /// <summary>
+    /// What a PMS INSERT stored, read back in place of "Entry closed": the line that was open as it now
+    /// reads ("4: GW 418"), then every other line the unit recomputed from it ("2: EPR 1.642", which the
+    /// takeoff page fills from the SAT). Null when no line was open, or the page changed (a page change
+    /// abandons an entry, and the new page is said already).
+    /// </summary>
+    public static string? InsertReadback(IReadOnlyList<string> before, int activeLine, IReadOnlyList<string> after)
+    {
+        if (activeLine < 1 || activeLine > 6 || before.Count < 7 || after.Count < 7 || before[0] != after[0])
+            return null;
+        var words = new List<string> { after[activeLine] };
+        for (int i = 1; i <= 6; i++)
+            if (i != activeLine && before[i] != after[i] && !MovesByItself(after[i]))
+                words.Add(after[i]);
+        return string.Join(". ", words);
+    }
+
+    /// <summary>A PMS line the unit keeps live (the clock, the pressure altitude, the climb page's SAT and
+    /// TAS), which changes whether or not anything was inserted.</summary>
+    private static bool MovesByItself(string line)
+    {
+        int colon = line.IndexOf(": ", StringComparison.Ordinal);
+        string text = colon >= 0 ? line[(colon + 2)..] : line;
+        return text.StartsWith("GMT", StringComparison.Ordinal) || text.StartsWith("PR ALT", StringComparison.Ordinal)
+            || text.Contains(" TAS ", StringComparison.Ordinal);
+    }
+
+    /// <summary>", TANGI": the waypoint an INS flies to, when it is an imported fix (a typed one is USER&lt;k&gt;
+    /// and an empty slot has no name); "" otherwise.</summary>
+    public static string ToWaypointName(L1011InsScrapeResult scrape)
+    {
+        string fromTo = new string(scrape.Ins.FromTo.Where(char.IsAsciiDigit).ToArray());
+        int slot = fromTo.Length == 2 ? fromTo[1] - '0' : 0;
+        if (slot < 1 || slot > scrape.Waypoints.Count || scrape.Waypoints[slot - 1] is not { } wp)
+            return string.Empty;
+        string ident = wp.Ident.Trim();
+        bool empty = wp.Latitude == 0 && wp.Longitude == 0;
+        return empty || ident.Length == 0 || L1011InsWaypoints.IsTyped(ident) ? string.Empty : ", " + ident;
     }
 
     /// <summary>
