@@ -34,7 +34,7 @@ public static class L1011Levers
     public static IReadOnlySet<string> Keys { get; } = new HashSet<string>(new[]
     {
         BreakerListKey, FlapHandleKey, GearLeverKey, SpeedBrakeKey, GroundSpoilersKey, ParkingBrakeKey,
-        CaptainAltimeterKey, FirstOfficerAltimeterKey, StandbyAltimeterKey, SquawkKey,
+        CaptainAltimeterKey, FirstOfficerAltimeterKey, StandbyAltimeterKey, SquawkKey, StabTrimKey,
         ComActiveKey(1), ComActiveKey(2), ComActiveKey(3),
         ComStandbyKey(1), ComStandbyKey(2), ComStandbyKey(3),
         NavFrequencyKey(1), NavFrequencyKey(2),
@@ -210,6 +210,29 @@ public static class L1011Levers
     public static string SquawkConfirmation(uint bcd) => $"Squawk {L1011Readouts.DecodeSquawk(bcd)}";
 
     public const string SquawkError = "enter four digits, each 0 to 7";
+
+    // ---- Stabilizer trim -------------------------------------------------------------------
+
+    public const string StabTrimKey = "L1011_STAB_TRIM_SET";
+
+    /// <summary>The trim's travel, degrees nose up (flight_model.cfg elevator_trim_down_limit 0, up_limit 10).</summary>
+    public const double MaxStabTrimDegrees = 10;
+
+    /// <summary>A typed trim in the tablet's units, the 0 to 10 degree scale ELEVATOR TRIM POSITION reads,
+    /// or null outside the travel (an error the pilot hears).</summary>
+    public static double? StabTrimDegrees(double typed) =>
+        typed >= 0 && typed <= MaxStabTrimDegrees ? typed : null;
+
+    /// <summary>The stock trim event the tablet's own Autocomplete sends (4000 read 2.44 degrees): 16383 is
+    /// full nose up, so a degree is a tenth of that.</summary>
+    public static string StabTrimRpn(double degrees) =>
+        $"{L1011Effect.FormatNumber(Math.Round(degrees / MaxStabTrimDegrees * 16383))} (>K:ELEVATOR_TRIM_SET)";
+
+    /// <summary>"Stabilizer trim 2.38": the figure as the tablet's takeoff page gives it.</summary>
+    public static string StabTrimConfirmation(double degrees) =>
+        $"Stabilizer trim {degrees.ToString("0.00", CultureInfo.InvariantCulture)}";
+
+    public const string StabTrimRangeError = "enter 0 to 10 degrees";
 
 
     // ---- Input mode: Ctrl+B sets all three altimeters, Ctrl+N both NAV radios --------------

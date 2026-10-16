@@ -155,6 +155,13 @@ public class IniL1011BehaviourTests
     }
 
     [Fact]
+    public void A_stabilizer_trim_beyond_its_travel_is_an_error()
+    {
+        Assert.True(Set(L1011Levers.StabTrimKey, 11));
+        Assert.Equal(new[] { "Stabilizer trim: enter 0 to 10 degrees" }, _speech.All);
+    }
+
+    [Fact]
     public void A_typed_value_that_is_not_a_number_is_an_error_and_confirms_nothing()
     {
         _def.CanLand = _ => true;   // the refusal must come from the value, not the calculator path
@@ -167,6 +174,7 @@ public class IniL1011BehaviourTests
             string error = key == L1011Levers.SquawkKey ? L1011Levers.SquawkError
                 : L1011Levers.AltimeterIndex(key) != null ? L1011Levers.AltimeterRangeError
                 : L1011Levers.NavEntry(key) != null ? L1011Levers.NavRangeError
+                : key == L1011Levers.StabTrimKey ? L1011Levers.StabTrimRangeError
                 : L1011Levers.ComRangeError;
             expected.Add($"{name}: {error}");
         }

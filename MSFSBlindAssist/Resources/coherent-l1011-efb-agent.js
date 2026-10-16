@@ -557,6 +557,10 @@
         ctx.fieldLabel = '';
         continue;
       }
+      if (cls(c, 'helper-timer-slider-wrap')) {   // the TOD timer's auto pause: a drag slider, typed as a time
+        if (shown(c)) out.push(item('', 'Timer auto pause', { type: 'text', value: timerShown(c), act: { timer: c } }));
+        continue;
+      }
       if (cls(c, 'helper-input-title') || cls(c, 'audio-volume-value-editor')) continue;   // a label, a duplicate of the slider
       if (cls(c, 'navigraph-login__usercode')) {   // the sign-in code, then how to use it
         var code = text(c.querySelector('span'));
@@ -703,6 +707,57 @@
     return true;
   }
 
+  // The TOD timer's auto pause is a thumb dragged along a track, with nothing behind it to set: a
+  // mousedown on the thumb and a mousemove and mouseup on the document move it (live), and its display
+  // says the time ("06m", "1h 13m", "No timer - ..." at the left end) on an uneven scale. So a typed
+  // time is found by dragging and reading the display back. The one drag the reader makes ([L1011-17]).
+  function timerDisplay(wrap) { return wrap.parentElement ? wrap.parentElement.querySelector('.helper-timer-display') : null; }
+
+  function timerShown(wrap) {
+    var d = timerDisplay(wrap), t = d ? text(d) : '';
+    return shownMinutes(t) === null ? '' : t;
+  }
+
+  // "45m", "1h 13m" or "10h 00m" as minutes; "No timer" (or anything else) as null.
+  function shownMinutes(t) {
+    var m = /^(?:(\d+)h\s*)?(\d+)m$/.exec(String(t).trim());
+    return m ? (m[1] ? +m[1] * 60 : 0) + +m[2] : null;
+  }
+
+  // What the pilot typed as minutes, 0 (no timer) to 600: "45", "2:30", "2h 30m", "2h", "45m".
+  function typedMinutes(v) {
+    var s = String(v).trim().toLowerCase(), m, n = null;
+    if ((m = /^(\d+)$/.exec(s))) n = +m[1];
+    else if ((m = /^(\d+):([0-5]\d)$/.exec(s))) n = +m[1] * 60 + +m[2];
+    else if ((m = /^(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?$/.exec(s)) && (m[1] || m[2]) && !(m[2] && +m[2] > 59 && m[1])) n = (m[1] ? +m[1] * 60 : 0) + (m[2] ? +m[2] : 0);
+    return n !== null && n >= 0 && n <= 600 ? n : null;
+  }
+
+  function dragTimer(wrap, f) {
+    var track = wrap.querySelector('.helper-timer-slider-track'), thumb = wrap.querySelector('.helper-timer-slider-thumb');
+    var r = track.getBoundingClientRect(), q = thumb.getBoundingClientRect(), y = q.top + q.height / 2, x = r.left + r.width * f;
+    var mouse = function (type, target, cx) {
+      target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, clientX: cx, clientY: y, button: 0, buttons: type === 'mouseup' ? 0 : 1, view: window }));
+    };
+    mouse('mousedown', thumb, q.left + q.width / 2);
+    mouse('mousemove', document, x);
+    mouse('mouseup', document, x);
+    var shown = shownMinutes(text(timerDisplay(wrap)));
+    return shown === null ? 0 : shown;
+  }
+
+  function setTimer(wrap, v) {
+    var want = typedMinutes(v);
+    if (want === null || !attached(wrap) || !shown(wrap) || !timerDisplay(wrap)) return false;
+    if (want === 0) { dragTimer(wrap, 0); return true; }
+    var lo = 0, hi = 1;
+    for (var i = 0; i < 30 && hi - lo > 1e-6; i++) {
+      var mid = (lo + hi) / 2;
+      if (dragTimer(wrap, mid) < want) lo = mid; else hi = mid;
+    }
+    return Math.abs(dragTimer(wrap, hi) - want) <= 1;
+  }
+
   function clickElement(idx) {
     var a = acts[idx];
     if (!a || !a.press || !attached(a.press) || inert(a.press)) return false;
@@ -715,6 +770,7 @@
     var v = value === undefined || value === null ? '' : String(value);
     if (!a) return false;
     if (a.field) return typeInto(a.field, v);
+    if (a.timer) return setTimer(a.timer, v);
     if (a.pick) {
       for (var i = 0; i < a.pick.length; i++) {
         var m = a.pick[i];

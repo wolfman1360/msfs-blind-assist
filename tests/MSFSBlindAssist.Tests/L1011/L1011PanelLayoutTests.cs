@@ -93,6 +93,13 @@ public class L1011PanelLayoutTests
     }
 
     [Fact]
+    public void The_stabilizer_trim_is_typed_beside_the_flap_handle()
+    {
+        var rows = Placement.RowsByPanel["Speed Brake and Flaps"].Select(r => r.Key).ToList();
+        Assert.Equal(rows.IndexOf(L1011Levers.FlapHandleKey) + 1, rows.IndexOf(L1011Levers.StabTrimKey));
+    }
+
+    [Fact]
     public void The_pressurization_mode_selector_uses_the_manuals_words()
     {
         // The manual's selector is GRD CHK, NORM and STBY; there is no manual mode (the outflow valves

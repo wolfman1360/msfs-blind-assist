@@ -10,7 +10,11 @@ namespace MSFSBlindAssist.Aircraft.L1011;
 /// <param name="Format">A .NET numeric format applied with the invariant culture.</param>
 /// <param name="Suffix">Words after the number ("pounds"); empty for none.</param>
 /// <param name="Panel">The layout panel whose status display lists it.</param>
-public sealed record L1011Readout(string Key, string Name, string SimVar, string Units, string Format, string Suffix, string Panel);
+/// <param name="Words">Words for a state the gauge shows as a light or flag ("closed"), in place of a number.</param>
+/// <param name="Scale">What the delivered value is multiplied by before it is formatted: an L:var arrives in
+/// its stored unit (every L:var is registered as "number"), so a length written in feet arrives in metres.</param>
+public sealed record L1011Readout(string Key, string Name, string SimVar, string Units, string Format, string Suffix, string Panel,
+    IReadOnlyDictionary<double, string>? Words = null, double Scale = 1);
 
 /// <summary>
 /// The TriStar's gauges as text. Stock simulator variables are used wherever the investigation
@@ -24,6 +28,9 @@ public sealed record L1011Readout(string Key, string Name, string SimVar, string
 public static class L1011Readouts
 {
     private const string SquawkUnits = "BCO16";
+
+    // Before All: static fields initialise in order, and Build reads this one.
+    private static readonly IReadOnlyDictionary<double, string> ClosedOpen = new Dictionary<double, string> { [0] = "open", [1] = "closed" };
 
     public static IReadOnlyList<L1011Readout> All { get; } = Build();
 
@@ -39,16 +46,37 @@ public static class L1011Readouts
             new("L1011_RO_AC_BUS_3_VOLTS", "AC bus 3 voltage", "ELECTRICAL BUS VOLTAGE:13", "Volts", "0", "volts", "Electrical"),
             new("L1011_RO_AC_ESS_VOLTS", "AC essential bus voltage", "ELECTRICAL BUS VOLTAGE:23", "Volts", "0", "volts", "Electrical"),
             new("L1011_RO_DC_ESS_VOLTS", "DC essential bus voltage", "ELECTRICAL BUS VOLTAGE:21", "Volts", "0.0", "volts", "Electrical"),
+            // The generator field, generator breaker and AC tie breaker CLOSE and TRIP buttons are latches
+            // the aircraft resets; the state is the relay L1011_ENGINEER_PANEL.js switches (systems.cfg relays).
+            Relay("L1011_RO_GEN_1_FIELD", "Generator 1 field", 1),
+            Relay("L1011_RO_GEN_1_BREAKER", "Generator 1 breaker", 5),
+            Relay("L1011_RO_GEN_2_FIELD", "Generator 2 field", 2),
+            Relay("L1011_RO_GEN_2_BREAKER", "Generator 2 breaker", 8),
+            Relay("L1011_RO_GEN_3_FIELD", "Generator 3 field", 3),
+            Relay("L1011_RO_GEN_3_BREAKER", "Generator 3 breaker", 10),
+            Relay("L1011_RO_APU_GEN_FIELD", "APU generator field", 4),
+            Relay("L1011_RO_APU_GEN_BREAKER", "APU generator breaker", 12),
+            Relay("L1011_RO_EXT_PWR_BREAKER", "External power breaker", 13),
+            Relay("L1011_RO_AC_TIE_1", "AC tie breaker 1", 7),
+            Relay("L1011_RO_AC_TIE_2", "AC tie breaker 2", 9),
+            Relay("L1011_RO_AC_TIE_3", "AC tie breaker 3", 11),
             new("L1011_RO_APU_RPM", "APU speed", "APU PCT RPM", "Percent", "0", "percent", "APU"),
             new("L1011_RO_FUEL_TOTAL", "Total fuel", "FUEL TOTAL QUANTITY WEIGHT", "Pounds", "#,##0", "pounds", "Fuel"),
             new("L1011_RO_CABIN_ALT", "Cabin altitude", "PRESSURIZATION CABIN ALTITUDE", "Feet", "#,##0", "feet", "Pressurization"),
             new("L1011_RO_CABIN_RATE", "Cabin rate", "PRESSURIZATION CABIN ALTITUDE RATE", "Feet per minute", "#,##0", "feet per minute", "Pressurization"),
             new("L1011_RO_CABIN_DIFF", "Cabin differential pressure", "PRESSURIZATION PRESSURE DIFFERENTIAL", "Psi", "0.0", "psi", "Pressurization"),
+            // The ALT SEL knob's cabin altitude (L1011_ENGINEER_PANEL.js maps its step, L:FLT_CAB, to the
+            // altitude L1011_PRESSURIZATION.js flies) and the BARO SET knob (Kohlsman setting 4).
+            new("L1011_RO_CABIN_ALT_SELECTED", "Selected cabin altitude", "L:TARGET_CABIN_ALTITUDE", "number", "#,##0", "feet", "Pressurization",
+                Scale: 1 / 0.3048),   // written in feet, stored and delivered in metres (live: 2,220 for 7,284 feet)
+            new("L1011_RO_CABIN_BARO", "Barometric pressure setting", "KOHLSMAN SETTING MB:4", "Millibars", "0", "hectopascals", "Pressurization"),
             new("L1011_RO_GEAR_LEFT", "Left gear", "GEAR LEFT POSITION", "Percent", "0", "percent down", "Landing Gear and Brakes"),
             new("L1011_RO_GEAR_NOSE", "Nose gear", "GEAR CENTER POSITION", "Percent", "0", "percent down", "Landing Gear and Brakes"),
             new("L1011_RO_GEAR_RIGHT", "Right gear", "GEAR RIGHT POSITION", "Percent", "0", "percent down", "Landing Gear and Brakes"),
             new("L1011_RO_FLAPS_ANGLE", "Flaps", "TRAILING EDGE FLAPS LEFT ANGLE", "Degrees", "0", "degrees", "Speed Brake and Flaps"),
-            new("L1011_RO_ELEVATOR_TRIM", "Stabilizer trim", "ELEVATOR TRIM POSITION", "Degrees", "0.0", "degrees", "Speed Brake and Flaps"),
+            // The tablet's takeoff "STAB TRIM 2.38" is this 0 to 10 degree scale, so to the hundredth.
+            new("L1011_RO_ELEVATOR_TRIM", "Stabilizer trim", "ELEVATOR TRIM POSITION", "Degrees", "0.00", "degrees", "Speed Brake and Flaps"),
+            new("L1011_RO_STRUCTURAL_ICE", "Structural ice", "STRUCTURAL ICE PCT", "Percent", "0", "percent", "Anti-Ice"),
             new("L1011_RO_AILERON_TRIM", "Aileron trim", "AILERON TRIM PCT", "Percent", "0", "percent", "Speed Brake and Flaps"),
             new("L1011_RO_RUDDER_TRIM", "Rudder trim", "RUDDER TRIM PCT", "Percent", "0", "percent", "Speed Brake and Flaps"),
             new("L1011_RO_SQUAWK", "Squawk", "TRANSPONDER CODE:1", SquawkUnits, "squawk", string.Empty, "Transponder"),
@@ -101,11 +129,18 @@ public static class L1011Readouts
         return list;
     }
 
-    /// <summary>The value as the status display shows it, e.g. "12,400 pounds" or "1.42".</summary>
+    /// <summary>An electrical relay as the engineer's panel shows it: closed or open.</summary>
+    private static L1011Readout Relay(string key, string name, int relay) =>
+        new(key, name, $"ELECTRICAL RELAY CONNECTION ON:{relay}", "Bool", "0", string.Empty, "Electrical", ClosedOpen);
+
+    /// <summary>The value as the status display shows it, e.g. "12,400 pounds", "1.42" or "closed".</summary>
     public static string FormatValue(L1011Readout readout, double value)
     {
         if (readout.Units == SquawkUnits)
             return DecodeSquawk(value);
+        if (readout.Words != null && readout.Words.TryGetValue(Math.Round(value), out var words))
+            return words;
+        value *= readout.Scale;
         string number = WithoutNegativeZero(value.ToString(readout.Format, CultureInfo.InvariantCulture));
         return readout.Suffix.Length == 0 ? number : $"{number} {readout.Suffix}";
     }

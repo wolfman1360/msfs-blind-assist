@@ -458,6 +458,62 @@ test('the countdowns are kept in place but never spoken by themselves', () => {
   }
 });
 
+// The TOD timer's auto pause is a drag slider (a thumb on a track) with no input behind it. Live, a
+// mousedown on the thumb and a mousemove and mouseup on the document set it, and the display read
+// "06m" at a tenth of the track, "1h 13m" at three tenths and "10h 00m" at the end: an uneven scale.
+// This stand-in has the same wording and an uneven scale of its own.
+function timerSlider(window, document) {
+  const view = document.querySelector('.helper-timer-columns').parentElement;
+  reveal(view);
+  const thumb = document.querySelector('.helper-timer-slider-thumb');
+  const display = document.querySelector('.helper-timer-display');
+  const show = (minutes) => {
+    const mm = String(minutes % 60).padStart(2, '0');
+    display.textContent = minutes === 0 && thumb.dataset.f < 0.04 ? 'No timer - set slide right to set'
+      : minutes < 60 ? mm + 'm' : Math.floor(minutes / 60) + 'h ' + mm + 'm';
+  };
+  let dragging = false;
+  thumb.addEventListener('mousedown', () => { dragging = true; });
+  document.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const f = Math.max(0, Math.min(1, e.clientX / 100));   // the stub track: left 0, width 100
+    thumb.dataset.f = f;
+    show(Math.round(600 * Math.pow(Math.max(0, (f - 0.04) / 0.96), 1.7)));
+  });
+  document.addEventListener('mouseup', () => { dragging = false; });
+  return display;
+}
+
+test('the TOD timer auto pause reads as a field holding the time it is set to', () => {
+  const { window, document, A } = load('helper');
+  const display = timerSlider(window, document);
+  assert.ok(lines(A).includes('text|Timer auto pause = '), 'no timer yet');
+  display.textContent = '2h 06m';
+  assert.ok(lines(A).includes('text|Timer auto pause = 2h 06m'));
+  assert.ok(!lines(A).some((l) => l === 'static|30m' || l === 'static|2.5h'), 'the scale marks are not read');
+});
+
+test('a typed time drags the timer slider until the display reads it', () => {
+  const { window, document, A } = load('helper');
+  const display = timerSlider(window, document);
+  const idx = idxOf(A, 'Timer auto pause');
+  for (const [typed, shown] of [['2:30', '2h 30m'], ['45', '45m'], ['2h 5m', '2h 05m'], ['10:00', '10h 00m'], ['0', 'No timer - set slide right to set']]) {
+    assert.strictEqual(A.setValue(idx, typed), true, typed);
+    assert.strictEqual(display.textContent, shown, typed);
+  }
+});
+
+test('a time the timer cannot hold is refused and the slider is left alone', () => {
+  const { window, document, A } = load('helper');
+  const display = timerSlider(window, document);
+  const idx = idxOf(A, 'Timer auto pause');
+  assert.strictEqual(A.setValue(idx, '2:30'), true);
+  for (const typed of ['10:30', 'soon', '-5', '1:75']) {
+    assert.strictEqual(A.setValue(idx, typed), false, typed);
+    assert.strictEqual(display.textContent, '2h 30m', typed);
+  }
+});
+
 test('third party: the SimBrief Id, the streamer switch and the Navigraph sign-in code', () => {
   const { window, document, A } = load('thirdparty');
   const code = document.createElement('span');

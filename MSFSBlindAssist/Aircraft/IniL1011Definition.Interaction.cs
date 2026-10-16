@@ -214,6 +214,12 @@ public partial class IniL1011Definition
                 else
                     announcer.Announce($"{row.Name}: {L1011Levers.SquawkError}");
                 return;
+            case L1011Levers.StabTrimKey:
+                if (L1011Levers.StabTrimDegrees(value) is double degrees)
+                    SendCustom(row.Key, row.Name, L1011Levers.StabTrimRpn(degrees), sim, announcer, L1011Levers.StabTrimConfirmation(degrees));
+                else
+                    announcer.Announce($"{row.Name}: {L1011Levers.StabTrimRangeError}");
+                return;
         }
 
         if (L1011Afcs.ValueFor(row.Key) != null)

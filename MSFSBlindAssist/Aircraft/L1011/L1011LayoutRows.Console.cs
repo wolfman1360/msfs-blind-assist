@@ -37,7 +37,8 @@ public static partial class L1011PanelLayout
             R(L1011Levers.SpeedBrakeKey, "Speed brake lever"),
             R(L1011Levers.GroundSpoilersKey, "Ground spoilers"),
             R("SWITCH_SPOILER_DISABLE", "Auto spoiler disable", "0=Normal;1=Disabled"),
-            R(L1011Levers.FlapHandleKey, "Flap handle")),
+            R(L1011Levers.FlapHandleKey, "Flap handle"),
+            R(L1011Levers.StabTrimKey, "Stabilizer trim")),
 
         P("VHF Radios",
             R(L1011Levers.ComActiveKey(1), "COM 1 active frequency"),

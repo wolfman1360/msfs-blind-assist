@@ -114,6 +114,29 @@ public class L1011LeversTests
     }
 
     [Theory]
+    [InlineData(2.38, "3899 (>K:ELEVATOR_TRIM_SET)", "Stabilizer trim 2.38")]
+    [InlineData(0, "0 (>K:ELEVATOR_TRIM_SET)", "Stabilizer trim 0.00")]
+    [InlineData(10, "16383 (>K:ELEVATOR_TRIM_SET)", "Stabilizer trim 10.00")]
+    public void A_typed_stabilizer_trim_is_set_in_the_tablets_units(double degrees, string rpn, string confirmation)
+    {
+        // flight_model.cfg: trim 0 to 10 degrees nose up. The tablet's own Autocomplete trims with
+        // ELEVATOR_TRIM_SET 4000, which read 2.44 degrees: 16383 is full nose up. The tablet's
+        // takeoff "STAB TRIM 2.38" is that scale.
+        Assert.Equal(degrees, L1011Levers.StabTrimDegrees(degrees));
+        Assert.Equal(rpn, L1011Levers.StabTrimRpn(degrees));
+        Assert.Equal(confirmation, L1011Levers.StabTrimConfirmation(degrees));
+    }
+
+    [Theory]
+    [InlineData(-0.1)]
+    [InlineData(10.5)]
+    [InlineData(double.NaN)]
+    public void A_stabilizer_trim_outside_its_travel_is_refused(double degrees)
+    {
+        Assert.Null(L1011Levers.StabTrimDegrees(degrees));
+    }
+
+    [Theory]
     [InlineData(1280)]
     [InlineData(-1)]
     [InlineData(10000)]

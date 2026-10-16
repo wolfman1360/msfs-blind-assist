@@ -121,6 +121,59 @@ public class L1011ReadoutsTests
         Assert.DoesNotContain(L1011Readouts.All, r => r.SimVar == "ELECTRICAL MAIN BUS VOLTAGE");
     }
 
+    [Theory]
+    [InlineData("Generator 1 field", 1)]
+    [InlineData("Generator 2 field", 2)]
+    [InlineData("Generator 3 field", 3)]
+    [InlineData("APU generator field", 4)]
+    [InlineData("Generator 1 breaker", 5)]
+    [InlineData("Generator 2 breaker", 8)]
+    [InlineData("Generator 3 breaker", 10)]
+    [InlineData("APU generator breaker", 12)]
+    [InlineData("External power breaker", 13)]
+    [InlineData("AC tie breaker 1", 7)]
+    [InlineData("AC tie breaker 2", 9)]
+    [InlineData("AC tie breaker 3", 11)]
+    public void The_generator_and_tie_breakers_read_their_relays(string name, int relay)
+    {
+        // Their CLOSE and TRIP buttons are latches the aircraft resets, so the state is the relay
+        // L1011_ENGINEER_PANEL.js switches (systems.cfg relay.1 FR_1_RELAY ... relay.13 EXT_PWR_RELAY).
+        var readout = L1011Readouts.All.Single(r => r.Name == name);
+        Assert.Equal($"ELECTRICAL RELAY CONNECTION ON:{relay}", readout.SimVar);
+        Assert.Equal("Electrical", readout.Panel);
+        Assert.Equal("closed", L1011Readouts.FormatValue(readout, 1));
+        Assert.Equal("open", L1011Readouts.FormatValue(readout, 0));
+    }
+
+    [Fact]
+    public void The_pressurization_panel_reads_its_selectors()
+    {
+        // L1011_ENGINEER_PANEL.js maps the ALT SEL knob's step (L:FLT_CAB) to L:TARGET_CABIN_ALTITUDE, the
+        // cabin altitude L1011_PRESSURIZATION.js flies; the BARO SET knob steps Kohlsman setting 4.
+        var cabin = Readout("L1011_RO_CABIN_ALT_SELECTED");
+        Assert.Equal(("Selected cabin altitude", "L:TARGET_CABIN_ALTITUDE", "Pressurization"), (cabin.Name, cabin.SimVar, cabin.Panel));
+        // An L:var reaches MSFSBA in its stored unit (every L:var is registered as "number"): the gauge
+        // writes this one in feet, so it arrives in metres. Live: 2,220 here for 7,284 feet.
+        Assert.Equal("7,284 feet", L1011Readouts.FormatValue(cabin, 2220.2));
+        var baro = Readout("L1011_RO_CABIN_BARO");
+        Assert.Equal(("Barometric pressure setting", "KOHLSMAN SETTING MB:4", "Pressurization"), (baro.Name, baro.SimVar, baro.Panel));
+        Assert.Equal("1013 hectopascals", L1011Readouts.FormatValue(baro, 1013.25));
+    }
+
+    [Fact]
+    public void The_stabilizer_trim_reads_to_the_hundredth_as_the_tablet_gives_it()
+    {
+        Assert.Equal("2.44 degrees", L1011Readouts.FormatValue(Readout("L1011_RO_ELEVATOR_TRIM"), 2.4416));
+    }
+
+    [Fact]
+    public void The_anti_ice_panel_reads_the_ice_on_the_airframe()
+    {
+        var ice = Readout("L1011_RO_STRUCTURAL_ICE");
+        Assert.Equal(("Structural ice", "STRUCTURAL ICE PCT", "Anti-Ice"), (ice.Name, ice.SimVar, ice.Panel));
+        Assert.Equal("12 percent", L1011Readouts.FormatValue(ice, 12.3));
+    }
+
     [Fact]
     public void The_squawk_is_decoded_from_bcd()
     {
