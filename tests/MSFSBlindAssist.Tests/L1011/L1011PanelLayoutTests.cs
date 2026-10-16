@@ -109,6 +109,29 @@ public class L1011PanelLayoutTests
         Assert.Equal(new[] { "Ground check", "Normal", "Standby" }, mode.Positions.OrderBy(p => p.Key).Select(p => p.Value));
     }
 
+    [Fact]
+    public void The_zone_temperature_display_names_the_zone_each_position_reads()
+    {
+        // L1011_ENGINEER_PANEL.js reads the zone and duct temperatures of Area_1 to Area_5 for values 0 to 4;
+        // systems.cfg names those areas cockpit, forward cabin, mid cabin, rear cabin and galley, and the
+        // checklist's normal position, MID CAB, is value 2.
+        var zone = Placement.RowsByPanel["Air Conditioning"].Single(r => r.Key == "ROTARY_PACK_AREA");
+        Assert.Equal(new[] { "Flight station", "Forward cabin", "Mid cabin", "Aft cabin", "Galley" },
+            zone.Positions.OrderBy(p => p.Key).Select(p => p.Value));
+    }
+
+    [Theory]
+    [InlineData("ROTARY_NAV_1_MODE")]
+    [InlineData("ROTARY_NAV_2_MODE")]
+    public void The_dme_mode_names_only_the_position_the_aircraft_names(string key)
+    {
+        // The tablet's "DME Mode Selectors NORM" step sets both selectors to 1, the manual's NORM. Nothing
+        // names 0 (it raises the RMI's DME failure flags), 2 or the spring-loaded 3, so they stay generic.
+        var dme = Placement.RowsByPanel["Navigation Radios"].Single(r => r.Key == key);
+        Assert.Equal(new[] { "Position 1", "Normal", "Position 3", "Position 4" },
+            dme.Positions.OrderBy(p => p.Key).Select(p => p.Value));
+    }
+
     [Theory]
     [InlineData("OFF", "Off")]
     [InlineData("ALTITUDE MODE ON", "Altitude mode on")]

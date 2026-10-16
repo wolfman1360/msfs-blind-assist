@@ -97,9 +97,10 @@ public static partial class L1011PanelLayout
 
         P("Navigation Radios",
             R(L1011Levers.NavFrequencyKey(1), "NAV 1 frequency"),
-            R("ROTARY_NAV_1_MODE", "DME 1 mode", "0=Position 1;1=Position 2;2=Position 3;3=Position 4"),
+            // 1 is NORM, the tablet's "DME Mode Selectors NORM"; nothing names 0, 2 or the spring-loaded 3.
+            R("ROTARY_NAV_1_MODE", "DME 1 mode", "0=Position 1;1=Normal;2=Position 3;3=Position 4"),
             R(L1011Levers.NavFrequencyKey(2), "NAV 2 frequency"),
-            R("ROTARY_NAV_2_MODE", "DME 2 mode", "0=Position 1;1=Position 2;2=Position 3;3=Position 4")),
+            R("ROTARY_NAV_2_MODE", "DME 2 mode", "0=Position 1;1=Normal;2=Position 3;3=Position 4")),
 
         P("ADF",
             R("ROTARY_ADF_1_MODE_BIG", "ADF 1 mode", "0=Off;1=Antenna;2=ADF"),

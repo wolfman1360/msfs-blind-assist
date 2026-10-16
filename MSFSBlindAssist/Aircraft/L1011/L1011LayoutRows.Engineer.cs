@@ -263,8 +263,10 @@ public static partial class L1011PanelLayout
             R("ROTARY_PACK_SELECT", "Pack temperature display", "0=Pack 1;1=Pack 2;2=Pack 3"),
             R("ROTARY_PACK_MODE", "ECS temperature selector",
                 "0=Position 1;1=Position 2;2=Position 3;3=Position 4;4=Position 5"),
+            // The zone each value reads (L1011_ENGINEER_PANEL.js: Area_1 to Area_5, which systems.cfg names
+            // cockpit, forward cabin, mid cabin, rear cabin, galley); the checklist's MID CAB is 2.
             R("ROTARY_PACK_AREA", "Zone temperature display",
-                "0=Position 1;1=Position 2;2=Position 3;3=Position 4;4=Position 5"),
+                "0=Flight station;1=Forward cabin;2=Mid cabin;3=Aft cabin;4=Galley"),
             R("SWITCH_TEMP_SELECT", "Zone or duct temperature"),
             R("SWITCH_COOL_AIR_OVBD", "Overboard cooling"),
             R("SWITCH_CARGO_HEAT_FWD", "Forward cargo heat"),
