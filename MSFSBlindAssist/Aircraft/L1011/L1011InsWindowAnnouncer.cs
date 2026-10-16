@@ -3,8 +3,9 @@ namespace MSFSBlindAssist.Aircraft.L1011;
 /// <summary>
 /// What the INS window says on its own while it is open. For a PMS, the new page title when the page
 /// changes, so a FWD or BACK press (or the aircraft's own PERF MGT press on a phase change) is heard
-/// without hunting for the first line. For an INS, "Leg 1 to 2" when the FROM/TO window moves on: the
-/// unit sequencing to its next waypoint, or a leg the pilot has just inserted. A leg being typed, the
+/// without hunting for the first line. For an INS, "Leg 1 to 2, KENNO" when the FROM/TO window moves on:
+/// the unit sequencing to its next waypoint, or a leg the pilot has just inserted, with the TO waypoint's
+/// name when it is an imported fix. A leg being typed, the
 /// TEST pattern "88", a dark unit and a page being redrawn are not changes. The first read of a unit is
 /// a baseline, and so is every switch to another unit. Pure.
 /// </summary>
@@ -26,7 +27,23 @@ public sealed class L1011InsWindowAnnouncer
             return null;
         bool baseline = _last == null;
         _last = now;
-        return baseline ? null : now;
+        return baseline ? null : now + ToName(device, scrape);
+    }
+
+    /// <summary>", UDMUG": the waypoint the unit now flies to, named only for an imported fix (a typed one is
+    /// USER&lt;k&gt;, an empty slot has no name). Added to the words, never to what is compared, so a batch
+    /// reload that renames the slot is not a leg change.</summary>
+    private static string ToName(L1011InsDevice device, L1011InsScrapeResult scrape)
+    {
+        if (L1011InsDevices.IsPms(device))
+            return string.Empty;
+        string fromTo = new string(scrape.Ins.FromTo.Where(char.IsAsciiDigit).ToArray());
+        int slot = fromTo.Length == 2 ? fromTo[1] - '0' : 0;
+        if (slot < 1 || slot > scrape.Waypoints.Count || scrape.Waypoints[slot - 1] is not { } wp)
+            return string.Empty;
+        string ident = wp.Ident.Trim();
+        bool empty = wp.Latitude == 0 && wp.Longitude == 0;
+        return empty || ident.Length == 0 || L1011InsWaypoints.IsTyped(ident) ? string.Empty : ", " + ident;
     }
 
     public void Reset()

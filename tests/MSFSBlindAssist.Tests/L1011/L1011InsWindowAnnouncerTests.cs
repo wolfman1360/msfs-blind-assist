@@ -9,11 +9,45 @@ public class L1011InsWindowAnnouncerTests
 {
     private static readonly string[] Blank = { "", "", "", "", "", "" };
 
-    private static L1011InsScrapeResult Read(string title = "TAKEOFF", string fromTo = "01", bool powered = true, string entry = "")
+    private static L1011InsScrapeResult Read(string title = "TAKEOFF", string fromTo = "01", bool powered = true, string entry = "",
+        IReadOnlyList<L1011InsWaypoint?>? waypoints = null)
     {
         var ins = new L1011InsScreen(1, powered, 3, 0, "36051N", "115080W", fromTo, new HashSet<int>(), 1, entry, Array.Empty<string>());
         var pms = new L1011PmsScreen("Captain", title, Blank, Blank, false, 0);
-        return new L1011InsScrapeResult(ins, pms, Array.Empty<L1011InsWaypoint?>(), 0, 0, null);
+        return new L1011InsScrapeResult(ins, pms, waypoints ?? Array.Empty<L1011InsWaypoint?>(), 0, 0, null);
+    }
+
+    // Slots 1 to 9 as the gauge holds them: slot 3 TANGI, slot 4 UDMUG, slot 5 typed in, slot 6 empty.
+    private static L1011InsWaypoint?[] Route(string four = "UDMUG") => new L1011InsWaypoint?[]
+    {
+        new("KENNO", 43.1, -79.1), new("DUNKA", 44.2, -70.2), new("TANGI", 46.3, -60.3), new(four, 49.4, -50.4),
+        new("USER5", 51.5, -40.5), new("", 0, 0), null, null, null,
+    };
+
+    [Fact]
+    public void A_leg_change_names_the_waypoint_the_unit_now_flies_to()
+    {
+        var a = new L1011InsWindowAnnouncer();
+        a.Observe(L1011InsDevice.Ins1, Read(fromTo: "23", waypoints: Route()));
+        Assert.Equal("Leg 3 to 4, UDMUG", a.Observe(L1011InsDevice.Ins1, Read(fromTo: "34", waypoints: Route())));
+    }
+
+    [Fact]
+    public void A_typed_or_empty_to_waypoint_is_not_named()
+    {
+        var a = new L1011InsWindowAnnouncer();
+        a.Observe(L1011InsDevice.Ins1, Read(fromTo: "34", waypoints: Route()));
+        Assert.Equal("Leg 4 to 5", a.Observe(L1011InsDevice.Ins1, Read(fromTo: "45", waypoints: Route())));
+        Assert.Equal("Leg 5 to 6", a.Observe(L1011InsDevice.Ins1, Read(fromTo: "56", waypoints: Route())));
+    }
+
+    [Fact]
+    public void A_batch_reload_that_renames_the_to_slot_is_not_a_leg_change()
+    {
+        // The batch feature refills slots as the route moves on; the leg the unit flies is unchanged.
+        var a = new L1011InsWindowAnnouncer();
+        a.Observe(L1011InsDevice.Ins1, Read(fromTo: "34", waypoints: Route()));
+        Assert.Null(a.Observe(L1011InsDevice.Ins1, Read(fromTo: "34", waypoints: Route("56N30"))));
     }
 
     [Fact]
