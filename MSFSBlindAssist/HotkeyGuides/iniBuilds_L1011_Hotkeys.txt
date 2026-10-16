@@ -12,16 +12,17 @@ READ THIS FIRST - WHAT THIS VERSION COVERS
 
 Choose iniBuilds L-1011 TriStar from the Aircraft menu. This version covers the TriStar's
 switch panels: the flight engineer's station, the overhead, the main instrument panel and the
-center console, in the order the TriStar's own preflight flows call for them, and the glareshield
-autopilot. Not included yet: the three INS units and the two PMS units, and the Paper Flight
-Bag tablet. Until they arrive, operate those in the simulator.
+center console, in the order the TriStar's own preflight flows call for them, the glareshield
+autopilot, and the three INS units and two PMS units (Shift+M). Not included yet: the Paper
+Flight Bag tablet. Until it arrives, operate it in the simulator.
 
 
 THE PANELS
 
 Sections (Ctrl+1): Engineer Station, Overhead, Main Panel, Center Console. The panels (Ctrl+2)
 follow the preflight flows: the Engineer Station starts with Circuit Breakers, lights, passenger
-oxygen and Electrical; the Overhead with the INS mode selectors and the engine fire handles.
+oxygen and Electrical; the Overhead with the INS mode selectors and the engine fire handles; the
+Center Console with INS 1, INS 2, INS 3, Captain PMS and First Officer PMS.
 
 A switch is a combo box with the aircraft's own position words. A push button is a button. A
 dimmer or temperature knob is a slider. A knob that only turns, such as a pressurization rate
@@ -96,6 +97,54 @@ the captain's autothrottle disconnect and the takeoff go-around button; then the
 B combo boxes (Command, CWS, Off). Nothing is spoken when you press a button: a switch's label
 changes once the aircraft has moved it, and a disconnect is heard as "Autopilot A off" when the
 aircraft moves the engage switch. Escape closes the window.
+
+
+THE INS AND PMS WINDOW - Press left bracket, then Shift+M
+
+The three INS units and both PMS units read as text, live, one unit at a time: choose INS 1, INS 2,
+INS 3, Captain PMS or First officer PMS in the Unit box. Each INS and PMS panel on the Center
+Console also has a button that opens the window on its unit. The window opens on the display: the
+unit's state, the overhead mode selector (off, standby, align, nav or attitude, so "All INS NAV"
+can be checked here), the display selector, the windows as words ("Present position: N 36 05.1,
+W 115 08.0", "Leg: 0 to 1") and its lights; on a PMS the page title, then lines 1 to 6 for the line
+keys, then its mode lights. When a PMS page changes you hear its title and the cursor goes to
+line 1; when an INS moves to its next leg you hear "Leg 1 to 2".
+
+What you type is read back once it has landed: "Entry, left window: 36051N", "1: GMT, entering:
+1200Z", or "Entry closed" when the entry closes. A PMS value the unit refuses shows ERROR for about
+a second and is read at once; an INS Insert the unit refuses changes nothing, so nothing is said.
+An entry holding a character the unit has no key for is not sent at all, and stays in the box to
+edit.
+
+  Enter (input box)  Send the keys you typed: digits, and on an INS the letters N, S, E, W, L
+                     and R (the INS has no letter keys: N is 2, S is 8, E is 6, W is 4, L is 7,
+                     R is 9). A dot is left out, so "36 05.1" types 36051. On a PMS a space is
+                     the SP key; for a minus sign on the SAT line type 9 first.
+  Ctrl+Enter         Insert
+  Ctrl+1 to Ctrl+6   PMS line keys 1 to 6 (or F1 to F6, with the alternate layout in FMC Settings)
+  Page Up / Down     PMS previous and next page; Right Arrow or Alt+Right also goes to the next page
+  Backspace          CLR on a PMS, CLEAR on an INS (on the display). On a PMS, Clear deletes the
+                     last character and the entry stays open (Page Up or Page Down abandons it);
+                     on an INS, Clear closes a position or waypoint entry and does nothing on the
+                     cross track page.
+  Alt+S              Go to the input box
+  Alt+Home           Back to the display
+  Escape             Close the window
+  INS buttons        Insert, Clear, Hold, Track change; the display selector, waypoint selector
+                     and auto/manual/remote selector; Enter present position (types the
+                     simulator's position on the position page); automatic waypoint loading; the
+                     waypoint list.
+  PMS buttons        Insert, Clear, Next page, Previous page, Performance management, Line 1 key
+                     to Line 6 key.
+
+To enter the present position by hand: Display selector to Position, type N3605.1, Enter,
+Ctrl+Enter, then W11508.0, Enter, Ctrl+Enter. To start navigating from waypoint 0 to 1: Track
+change, type 01, Enter, Ctrl+Enter. To key a parallel offset: on the Cross track page type 1, then
+L or R, then the miles with a tenth (1R50 is right 5.0 miles), Enter, then Ctrl+Enter. On the PMS
+takeoff page: Ctrl+1, type the time (1200), Enter, Ctrl+Enter. For a position update select
+Position first, then Hold (the manual's order, Hold then Position, does nothing in this aircraft).
+Set all three auto/manual/remote selectors to Remote before typing waypoints, so they reach every
+unit; in Remote the leg line is the pair being ranged, not a flown leg.
 
 
 CIRCUIT BREAKERS
@@ -252,6 +301,9 @@ Autopilot:
   Ctrl+L     Localizer on or off (read back)
   Shift+P    ILS on or off (read back)
 
+INS and PMS:
+  Shift+M    INS and PMS window (see THE INS AND PMS WINDOW above)
+
 Teleport:
   Shift+R    Runway Teleport
   Shift+G    Gate Teleport
@@ -312,6 +364,14 @@ it anywhere else - turning thrust management straight back off, say - you hear t
 The flap handle, the parking brake and the ground spoiler arm are announced when something
 other than MSFS Blind Assist moves them - a hardware lever, or the aircraft's own automation
 ("Flaps 14 degrees", "Parking brake set"). Changes you make in MSFS Blind Assist are not.
+
+The INS and PMS are announced on their own: each INS's ready to navigate, warning and battery
+lights and INS 1's waypoint alert light (the units light it together while they fly the same
+legs, and INS 1 feeds the captain's HSI and the autopilot; INS 3 when the instrument source
+switch selects it); "INS 1 navigating" when a unit starts navigating by itself because its mode
+selector was already at NAV while it aligned (its ready to navigate light flashes for about a
+second then, too short to be spoken); and "PMS climb", "PMS cruise" and "PMS descent" when the
+aircraft changes the PMS mode.
 
 Ctrl+M opens the monitor manager: type in the search box to narrow the list, use the Show filter
 to see only the muted rows, and untick an item to stop it announcing. Your choices are
