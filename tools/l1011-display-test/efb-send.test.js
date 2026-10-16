@@ -186,6 +186,35 @@ test('an OFP on this tablet older than the plan sent is named in the read-back',
   ]);
 });
 
+// Live: the INS stores its list a second after the event, so the page warning spoke first and the
+// read-back then said the same thing again.
+test('while a send is being read back, the OFP page does not speak its own warning first', () => {
+  const { A, sim } = tablet(1, OLD_OFP);
+  press(A);
+  sim.send(PLAN, 'KLAS', { 1: KEPT });
+  sim.wait(1100);
+  assert.deepStrictEqual(alerts(A), []);
+  assert.ok(lines(A).includes('static|This OFP differs from the route in INS 1 (to KSFO). Reload OFP and Send to INS both use SimBrief\'s latest plan. [k=status:ofpdiffers]'));
+  sim.wait(1000);
+  assert.deepStrictEqual(alerts(A).length, 1);
+  assert.ok(alerts(A)[0].indexOf('older plan') > 0);
+});
+
+// Live: after Reload OFP the kept line still told the pilot to reload.
+test('once the OFP is reloaded, the kept read-back line no longer calls it older', () => {
+  const { A, sim, document } = tablet(1, OLD_OFP);
+  press(A);
+  sim.send(PLAN, 'KLAS', { 1: KEPT });
+  sim.wait(2600);
+  assert.ok(alerts(A)[0].indexOf('older plan') > 0);
+  document.querySelector('.simbrief-viewer__plan pre').textContent = OFP;
+  sim.wait(20000);
+  const all = lines(A);
+  assert.strictEqual(all[all.indexOf('button|Send to INS') + 1],
+    'static|KLAS to KSFO sent to INS 1: 3 waypoints in 1 batch, first KENNO. [k=status:inssend]');
+  assert.ok(!all.some((l) => l.indexOf('differs') >= 0));
+});
+
 test('the origin is left out when the overlay is not this plan\'s', () => {
   const { A, sim } = tablet(1, OFP);
   press(A);

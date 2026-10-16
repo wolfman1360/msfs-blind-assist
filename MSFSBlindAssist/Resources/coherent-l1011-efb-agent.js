@@ -423,12 +423,16 @@
     if (b && shown(b)) button(out, 'Reload OFP', b);
     b = page.querySelector('.send-to-ins-button');
     if (b && shown(b)) button(out, 'Send to INS', b, { disabled: b.getAttribute('data-active') === 'false' });
-    if (lastSend && now() - lastSend.at >= SPOKEN_MS) stat(out, lastSend.text, { key: 'status:inssend' });
     var viewer = page.querySelector('.simbrief-viewer');
     var plan = shownPlan(page);
     var planText = shownPlanText(page);
+    // Kept as a line once spoken; it calls the OFP older only while that OFP is still the one shown.
+    if (lastSend && now() - lastSend.at >= SPOKEN_MS) stat(out, sendText(lastSend.ofp === planText), { key: 'status:inssend' });
     var differs = planText === null ? '' : routeDiffers(planText);
-    if (differs && lastSend && lastSend.older && lastSend.ofp === planText) stat(out, differs, { key: 'status:ofpdiffers' });
+    // Not spoken while a send is being read back (the INS stores its list a second before the read-back
+    // is ready, and the read-back names an older OFP itself), nor after the read-back said it.
+    var said = send || (lastSend && lastSend.older && lastSend.ofp === planText);
+    if (differs && said) stat(out, differs, { key: 'status:ofpdiffers' });
     else if (differs) out.push(item('alert', differs, { live: 'assertive', key: 'alert:ofpdiffers' }));
     var pres = plan ? plan.querySelectorAll('pre') : [];
     if (pres.length > 0) {
@@ -588,8 +592,12 @@
         : '.');
     }
     var older = planText !== null && !ofpShows(planText, fixes);
-    if (older) said += ' This tablet\'s OFP is an older plan: press Reload OFP to read the one sent.';
     return { text: said, at: s.heard, ofp: planText, older: older };
+  }
+
+  // The read-back, with the older-OFP sentence when it was found and still applies.
+  function sendText(stillShown) {
+    return lastSend.text + (lastSend.older && stillShown ? ' This tablet\'s OFP is an older plan: press Reload OFP to read the one sent.' : '');
   }
 
   // Called on every scrape with the OFP shown (null on another page): reads the press back once the
@@ -886,7 +894,7 @@
     var page = visiblePage(root);
     settleSend(page && TABS[page.tab][2] === 'page-ofp' ? shownPlanText(page.node) : null);
     // A fresh read-back speaks on any page; once older it is a line on the OFP page (ofp()).
-    if (lastSend && now() - lastSend.at < SPOKEN_MS) out.push(item('alert', lastSend.text, { live: 'assertive', key: 'alert:inssend' }));
+    if (lastSend && now() - lastSend.at < SPOKEN_MS) out.push(item('alert', sendText(true), { live: 'assertive', key: 'alert:inssend' }));
     tabs(root, page, out);
     var name = page ? TABS[page.tab][1] : '';
     if (page) {
