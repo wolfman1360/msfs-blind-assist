@@ -74,6 +74,36 @@ public static class L1011PmsDisplay
         return lines;
     }
 
+    private static readonly Regex Letters = new(@"^[A-Za-z]+$", RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// A PMS line key's name: the line, its label words and its shortcut, as the PMDG CDU window names its
+    /// buttons ("Init Ref (Alt+I)"): "Line 1, GMT (Ctrl+1)", or "(F1)" with the alternate layout. Only the
+    /// label words: a value changes every second (GMT, PR ALT), and a button whose name keeps changing is read
+    /// again and again.
+    /// </summary>
+    public static string LineKeyLabel(L1011PmsScreen? s, int line, bool alternateKeys)
+    {
+        string n = line.ToString(CultureInfo.InvariantCulture);
+        string key = alternateKeys ? "F" + n : "Ctrl+" + n;
+        string label = s == null ? string.Empty : LineLabel(At(s.Left, line - 1));
+        return label.Length == 0 ? $"Line {n} ({key})" : $"Line {n}, {label} ({key})";
+    }
+
+    /// <summary>A left cell's label words: its leading words of letters ("CLB 250/320/820" is CLB, "CLB MANUAL ?"
+    /// is CLB MANUAL); a cell whose first word is not letters is a label in full ("3 ENG CRZ STD"); a blank
+    /// cell, or one with no letters, has none.</summary>
+    private static string LineLabel(string? cell)
+    {
+        string clean = Clean(cell);
+        if (clean.Length == 0 || clean == "blank")
+            return string.Empty;
+        var lead = clean.Split(' ').TakeWhile(w => Letters.IsMatch(w)).ToList();
+        if (lead.Count > 0)
+            return string.Join(" ", lead);
+        return clean.Any(char.IsLetter) ? clean : string.Empty;
+    }
+
     /// <summary>"_" padding as one space, surrounding space trimmed, "---" read as "blank".</summary>
     public static string Clean(string? cell)
     {

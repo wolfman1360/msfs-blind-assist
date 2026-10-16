@@ -129,8 +129,11 @@ you untick them. What you type is always read back, and so is a value the unit r
                      the SP key; for a minus sign on the SAT line type 9 first.
   Ctrl+Enter         Insert
   Ctrl+1 to Ctrl+6   PMS line keys 1 to 6 (or F1 to F6, with the alternate layout in FMC Settings)
-  Page Up / Down     PMS previous and next page; Right Arrow on the display, or Alt+Right, goes to
-                     the next page
+  Page Up / Down     Previous and next page (also Alt+Left and Alt+Right; Right Arrow on the display
+                     goes to the next page). On a PMS, its pages. On an INS, the pages are the
+                     display selector's positions: the selector turns one position and the new
+                     one is said ("Distance and time"); it stops at both ends ("Last position:
+                     Test").
   Backspace          CLR on a PMS, CLEAR on an INS (on the display). On a PMS, Clear deletes the
                      last character and the entry stays open (Page Up or Page Down abandons it);
                      on an INS, Clear closes a position or waypoint entry and does nothing on the
@@ -142,8 +145,9 @@ you untick them. What you type is always read back, and so is a value the unit r
                      and auto/manual/remote selector; Enter present position (types the
                      simulator's position on the position page); automatic waypoint loading; the
                      waypoint list.
-  PMS buttons        Insert, Clear, Next page, Previous page, Performance management, Line 1 key
-                     to Line 6 key.
+  PMS buttons        Insert, Clear, Next page, Previous page, Performance management (goes to the
+                     page for the flight phase: on the ground, TAKEOFF), and the six line keys,
+                     each named by its line and shortcut ("Line 1, GMT (Ctrl+1)").
 
 To enter the present position by hand: Display selector to Position, type N3605.1, Enter,
 Ctrl+Enter, then W11508.0, Enter, Ctrl+Enter. To start navigating from waypoint 0 to 1: Track

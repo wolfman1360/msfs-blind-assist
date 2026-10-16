@@ -29,6 +29,49 @@ public class L1011PmsDisplayTests
         }, lines);
     }
 
+    // The PMS line keys name the line they press and their shortcut, as the PMDG CDU window's buttons do
+    // ("Init Ref (Alt+I)"), from the line's label words only: a value changes every second (GMT, PR ALT), and
+    // a button whose name keeps changing is read again and again.
+    [Fact]
+    public void A_line_key_names_its_line_and_its_shortcut()
+    {
+        var page = Pms("TAKEOFF", Page1Left, new[] { "2147Z", ".632", "-482", "412", "116.6", "---" });
+        Assert.Equal(new[]
+        {
+            "Line 1, GMT (Ctrl+1)", "Line 2, EPR (Ctrl+2)", "Line 3, PR ALT (Ctrl+3)",
+            "Line 4, GW (Ctrl+4)", "Line 5, FUEL (Ctrl+5)", "Line 6, SAT (Ctrl+6)",
+        }, Enumerable.Range(1, 6).Select(n => L1011PmsDisplay.LineKeyLabel(page, n, alternateKeys: false)));
+        Assert.Equal("Line 1, GMT (F1)", L1011PmsDisplay.LineKeyLabel(page, 1, alternateKeys: true));
+    }
+
+    [Fact]
+    public void A_line_key_takes_the_label_words_and_leaves_the_values_out()
+    {
+        var climb = Pms("CLB OPTIMUM",
+            new[] { "CLB 250/320/820", "EPR   .716/.788", "ALT 430  OPT 350", "TOC  ---NM ----Z", "CLB MANUAL ?", "SAT -45   TAS 480" },
+            new[] { "", "", "", "", "", "" });
+        Assert.Equal(new[] { "CLB", "EPR", "ALT", "TOC", "CLB MANUAL", "SAT" },
+            Enumerable.Range(1, 6).Select(n => L1011PmsDisplay.LineKeyLabel(climb, n, false).Split(" (")[0].Replace($"Line {n}, ", "")));
+        var cruise = Pms("3ENG CRUISE STD",
+            new[] { "CRZ______0.830/285", "FUEL REM", "ALT_430____OPT 350", "STEP", "TOD____000NM 0000Z", "SAT_-45____TAS 480" },
+            new[] { "", "157.3", "", "----Z", "", "" });
+        Assert.Equal("Line 1, CRZ (Ctrl+1)", L1011PmsDisplay.LineKeyLabel(cruise, 1, false));
+        Assert.Equal("Line 2, FUEL REM (Ctrl+2)", L1011PmsDisplay.LineKeyLabel(cruise, 2, false));
+    }
+
+    [Fact]
+    public void A_line_with_no_label_words_is_named_by_its_number_alone()
+    {
+        var setup = Pms("FLIGHT SETUP",
+            new[] { "CLB OPTIMUM/250", "3 ENG CRZ STD", "DES OPTIMUM/250", "BOD DIS", "---", "" },
+            new[] { "_", "_", "_", "0", "0", "" });
+        Assert.Equal("Line 1, CLB (Ctrl+1)", L1011PmsDisplay.LineKeyLabel(setup, 1, false));
+        Assert.Equal("Line 2, 3 ENG CRZ STD (Ctrl+2)", L1011PmsDisplay.LineKeyLabel(setup, 2, false));   // a label that starts with a digit
+        Assert.Equal("Line 5 (Ctrl+5)", L1011PmsDisplay.LineKeyLabel(setup, 5, false));
+        Assert.Equal("Line 6 (Ctrl+6)", L1011PmsDisplay.LineKeyLabel(setup, 6, false));
+        Assert.Equal("Line 3 (Ctrl+3)", L1011PmsDisplay.LineKeyLabel(null, 3, false));
+    }
+
     [Fact]
     public void Underscore_padding_reads_as_one_space()
     {

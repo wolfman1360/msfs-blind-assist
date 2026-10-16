@@ -30,20 +30,25 @@ public class L1011InsKeyRoutingTests
     }
 
     [Fact]
-    public void An_ins_has_no_line_keys_and_no_pages()
+    public void An_ins_has_no_line_keys()
     {
         Assert.Equal(ActionKind.Pass, On(Keys.D1, ctrl: true, pms: false).Kind);
-        Assert.Equal(ActionKind.Pass, On(Keys.PageDown, pms: false).Kind);
-        Assert.Equal(ActionKind.Pass, On(Keys.Right, alt: true, pms: false).Kind);
+        Assert.Equal(ActionKind.Pass, On(Keys.F1, alternate: true, pms: false).Kind);
     }
 
-    [Fact]
-    public void Paging_on_a_pms()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Paging_on_a_pms_and_on_an_ins(bool pms)
     {
-        Assert.Equal(ActionKind.PreviousPage, On(Keys.PageUp).Kind);
-        Assert.Equal(ActionKind.NextPage, On(Keys.PageDown).Kind);
-        Assert.Equal(ActionKind.NextPage, On(Keys.Right, alt: true).Kind);
-        Assert.Equal(ActionKind.Pass, On(Keys.PageDown, ctrl: true).Kind);   // a binding matches its own chord only
+        // An INS's pages are its display selector's positions: the same keys turn it, as on a PMS and every
+        // CDU window in the fleet.
+        Assert.Equal(ActionKind.PreviousPage, On(Keys.PageUp, pms: pms).Kind);
+        Assert.Equal(ActionKind.NextPage, On(Keys.PageDown, pms: pms).Kind);
+        Assert.Equal(ActionKind.NextPage, On(Keys.Right, alt: true, pms: pms).Kind);
+        Assert.Equal(ActionKind.PreviousPage, On(Keys.Left, alt: true, pms: pms).Kind);
+        Assert.Equal(ActionKind.Pass, On(Keys.PageDown, ctrl: true, pms: pms).Kind);   // a binding matches its own chord only
+        Assert.Equal(ActionKind.Pass, On(Keys.Left, alt: true, shift: true, pms: pms).Kind);
     }
 
     [Fact]

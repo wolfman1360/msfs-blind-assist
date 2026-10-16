@@ -75,6 +75,10 @@ public sealed class L1011InsForm : Form
     private ComboBox _autoSelector = null!;
     private Button _autoBatch = null!;
     private DisplayListBox _waypoints = null!;
+    private readonly Button[] _lineKeys = new Button[6];
+
+    /// <summary>A page key's selector move, said once the aircraft reports it.</summary>
+    private L1011InsPages.ReadBack _pageReadBack = new();
 
     private CoherentDisplayClient? _client;
     private string? _clientNeedle;
@@ -107,6 +111,10 @@ public sealed class L1011InsForm : Form
 
     private string Seat => L1011InsDevices.Seat(_device) ?? "CPT";
 
+    private string DisplaySelectorKey => $"INS_{Unit.ToString(CultureInfo.InvariantCulture)}_ROTARY_MODE";
+
+    private static bool AlternateLineKeys => MSFSBlindAssist.Settings.SettingsManager.Current.MCDUUseAlternateLSKKeys;
+
     // ---------------------------------------------------------------------------------
     // Layout
     // ---------------------------------------------------------------------------------
@@ -130,12 +138,9 @@ public sealed class L1011InsForm : Form
             AccessibleDescription = "The unit's screen, one line at a time. Updates live.",
             IntegralHeight = false,
         };
-        _input = new TextBox
-        {
-            Width = 600,
-            AccessibleName = "Keypad input",
-            AccessibleDescription = "Digits, and on an INS the letters N, S, E, W, L and R. Enter sends the keys; Control Enter presses Insert.",
-        };
+        // Named only, as the PMDG CDU window's "Scratchpad" is: a description is read on every visit. The
+        // keys it takes are in the hotkey guide.
+        _input = new TextBox { Width = 600, AccessibleName = "Keypad input" };
         _unit = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 300, AccessibleName = "Unit" };
         foreach (var device in L1011InsDevices.All)
             _unit.Items.Add(L1011InsDevices.Name(device));
@@ -169,7 +174,8 @@ public sealed class L1011InsForm : Form
         for (int line = 1; line <= 6; line++)
         {
             int n = line;
-            AddButton(_pmsControls, $"Line {n} key", () => Press(L1011InsKeys.PmsLineKey(Seat, n)));
+            _lineKeys[n - 1] = AddButton(_pmsControls, L1011PmsDisplay.LineKeyLabel(null, n, AlternateLineKeys),
+                () => Press(L1011InsKeys.PmsLineKey(Seat, n)));
         }
 
         layout.Controls.Add(_display);
@@ -314,6 +320,7 @@ public sealed class L1011InsForm : Form
         _atOnceSpoken = null;
         _openEntry = null;
         _shown = null;
+        _pageReadBack = new();
 
         if (L1011InsDevices.ViewNeedle(device) != before)
         {
@@ -406,6 +413,9 @@ public sealed class L1011InsForm : Form
         if (IsDisposed)
             return;
         Repaint();
+        if (!L1011InsDevices.IsPms(_device)
+            && _pageReadBack.OnPoll(_def.InsSelectorPosition(DisplaySelectorKey, _sim), Environment.TickCount64) is string page)
+            _announcer.Announce(page);
         if (L1011InsDevices.EntryLine(_device, _scrape) is not string entry)
             return;
         if (L1011InsDevices.EntryReadsAtOnce(_device, _scrape))
@@ -453,7 +463,23 @@ public sealed class L1011InsForm : Form
         _shown = lines;
         _display.SetLines(lines);
         if (L1011InsDevices.IsPms(_device))
+        {
+            // The line keys name their lines; kept while the gauge blanks a page to redraw it.
+            var pms = _scrape?.Pms;
+            if (pms == null || L1011PmsDisplay.Lines(pms) != null)
+            {
+                for (int i = 0; i < _lineKeys.Length; i++)
+                {
+                    string label = L1011PmsDisplay.LineKeyLabel(_scrape?.Ins.Powered == false ? null : pms, i + 1, AlternateLineKeys);
+                    if (_lineKeys[i].Text != label)
+                    {
+                        _lineKeys[i].Text = label;
+                        _lineKeys[i].AccessibleName = label;
+                    }
+                }
+            }
             return;
+        }
 
         _waypoints.SetLines(_scrape == null
             ? new[] { "Reading the waypoints..." }
@@ -514,10 +540,10 @@ public sealed class L1011InsForm : Form
                 Press(L1011InsKeys.PmsLineKey(Seat, action.Line));
                 break;
             case L1011InsKeyRouting.ActionKind.NextPage:
-                Press(L1011InsKeys.PmsKey(Seat, "FWD"));
+                TurnPage(+1);
                 break;
             case L1011InsKeyRouting.ActionKind.PreviousPage:
-                Press(L1011InsKeys.PmsKey(Seat, "BACK"));
+                TurnPage(-1);
                 break;
             case L1011InsKeyRouting.ActionKind.FocusInput:
                 _input.Focus();
@@ -528,20 +554,40 @@ public sealed class L1011InsForm : Form
         }
     }
 
-    /// <summary>Backspace (CLR, or CLEAR on an INS) and, on a PMS, Right Arrow (the next page), on the display
-    /// only: the input box needs those keys to edit its own text.</summary>
+    /// <summary>Backspace (CLR, or CLEAR on an INS) and Right Arrow (the next page), on the display only: the
+    /// input box needs those keys to edit its own text.</summary>
     private void Display_KeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Alt || e.Control || e.Shift)
             return;
         if (e.KeyCode == Keys.Back)
             Press(L1011InsDevices.ClearKey(_device));
-        else if (e.KeyCode == Keys.Right && L1011InsDevices.IsPms(_device))
-            Press(L1011InsKeys.PmsKey(Seat, "FWD"));
+        else if (e.KeyCode == Keys.Right)
+            TurnPage(+1);
         else
             return;
         e.Handled = true;
         e.SuppressKeyPress = true;
+    }
+
+    /// <summary>The next or previous page: a PMS's FWD or BACK key; on an INS its display selector one position
+    /// on or back (<see cref="L1011InsPages"/>), said once the aircraft reports it.</summary>
+    private void TurnPage(int direction)
+    {
+        if (L1011InsDevices.IsPms(_device))
+        {
+            Press(L1011InsKeys.PmsKey(Seat, direction > 0 ? "FWD" : "BACK"));
+            return;
+        }
+        string key = DisplaySelectorKey;
+        var positions = _def.InsSelectorPositions(key);
+        var step = L1011InsPages.Next(positions, _def.InsSelectorPosition(key, _sim), direction);
+        if (step.Say != null)
+            _announcer.Announce(step.Say);
+        if (step.Target is not double target)
+            return;
+        _pageReadBack.Arm(target, positions[target], Environment.TickCount64);
+        _def.SetInsSelector(key, target, _sim, _announcer);
     }
 
     /// <summary>Enter sends the typed keys (no INSERT: Ctrl+Enter or the Insert button does that). A refused
@@ -713,13 +759,12 @@ public static class L1011InsKeyRouting
                 return new Action(ActionKind.LineKey, keyCode - Keys.F1 + 1);
             if (!useAlternateLskKeys && ctrlOnly && keyCode >= Keys.D1 && keyCode <= Keys.D6)
                 return new Action(ActionKind.LineKey, keyCode - Keys.D1 + 1);
-            if (none && keyCode == Keys.PageUp)
-                return new Action(ActionKind.PreviousPage);
-            if (none && keyCode == Keys.PageDown)
-                return new Action(ActionKind.NextPage);
-            if (altOnly && keyCode == Keys.Right)
-                return new Action(ActionKind.NextPage);
         }
+        // A PMS's pages, and an INS's: its display selector's positions (L1011InsPages).
+        if ((none && keyCode == Keys.PageUp) || (altOnly && keyCode == Keys.Left))
+            return new Action(ActionKind.PreviousPage);
+        if ((none && keyCode == Keys.PageDown) || (altOnly && keyCode == Keys.Right))
+            return new Action(ActionKind.NextPage);
         if (altOnly && keyCode == Keys.S)
             return new Action(ActionKind.FocusInput);
         if (altOnly && keyCode == Keys.Home)
