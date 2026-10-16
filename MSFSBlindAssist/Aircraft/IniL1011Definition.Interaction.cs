@@ -82,7 +82,7 @@ public partial class IniL1011Definition
             return;
         }
         if (commandedValue is double target)
-            _commanded.Record(row.Key, target, Clock());
+            _commanded.Record(row.Key, target, Clock(), plan.Via);
         _ = RunAsync(plan.Steps, sim);
     }
 

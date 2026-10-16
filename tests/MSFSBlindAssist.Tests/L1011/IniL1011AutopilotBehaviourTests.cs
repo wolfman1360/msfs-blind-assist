@@ -374,6 +374,36 @@ public class IniL1011AutopilotBehaviourTests
     }
 
     [Fact]
+    public void Shift_a_engages_command_through_cws_as_the_cockpit_paddle_does()
+    {
+        var trace = new List<string>();
+        _def.CanLand = _ => true;
+        _def.SendCalc = (_, rpn) => trace.Add("send:" + rpn);
+        _def.StepDelay = ms => { trace.Add("wait:" + ms); return Task.CompletedTask; };
+        Deliver("SWITCH_AFCS_AP_A", 2);
+        Assert.True(Hotkey(HotkeyAction.ToggleAutopilot1));
+        Assert.Equal(new[]
+        {
+            "send:1 (>L:SWITCH_AFCS_AP_A) (>H:AUTOPILOT_SWITCH_AFCS_AP_A)",
+            $"wait:{L1011WritePlan.PaddleNotchMs}",
+            "send:0 (>L:SWITCH_AFCS_AP_A) (>H:AUTOPILOT_SWITCH_AFCS_AP_A)",
+        }, trace);
+    }
+
+    [Fact]
+    public void The_cws_notch_passed_on_the_way_to_command_is_not_announced()
+    {
+        _def.CanLand = _ => true;
+        _def.SendCalc = (_, _) => { };
+        _def.StepDelay = _ => Task.CompletedTask;
+        Deliver("SWITCH_AFCS_AP_A", 2);
+        _def.AutopilotSelectors(_sim, _speech)[0].OnSelected(0);   // Ctrl+P's paddle combo: no read-back of its own
+        Deliver("SWITCH_AFCS_AP_A", 1);   // a batch catching the paddle at the CWS notch
+        Deliver("SWITCH_AFCS_AP_A", 0);
+        Assert.Empty(_speech.All);
+    }
+
+    [Fact]
     public void A_toggle_key_in_an_unknown_position_is_refused_aloud()
     {
         Assert.True(Hotkey(HotkeyAction.ToggleAutopilot1));

@@ -59,9 +59,8 @@ public partial class IniL1011Definition
             // value-matched echo); any other movement is the aircraft's and is spoken. A value box
             // button or toggle key reads its own result back, so the call-out stays quiet for that key until it has.
             // MainForm's UI echo wrap covers a panel combo pick, as on every aircraft.
-            bool ownCommand = (_commanded.Resolve(varName, null, Clock()) is double commanded
-                    && Math.Abs(commanded - value) < 0.5)
-                || _readBackPending.ContainsKey(varName);
+            // A position passed through on the way (an engage paddle's CWS notch) is MSFSBA's own too.
+            bool ownCommand = _commanded.IsOwn(varName, value, Clock()) || _readBackPending.ContainsKey(varName);
             foreach (string words in _afcs.Observe(varName, value, ownCommand))
                 announcer.Announce(words);
             return true;   // a mode button or engage paddle is also a position: the open control follows it

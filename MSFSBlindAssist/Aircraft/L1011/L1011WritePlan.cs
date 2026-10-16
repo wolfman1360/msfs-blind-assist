@@ -13,6 +13,10 @@ public sealed record L1011DelayStep(int Milliseconds) : L1011Step;
 /// control is already where the pilot asked; a refusal is an error the pilot must hear.</summary>
 public sealed record L1011Plan(IReadOnlyList<L1011Step> Steps, string? Refusal)
 {
+    /// <summary>Positions the control passes through on its way to the target (an engage paddle's CWS
+    /// notch): MSFSBA's own, so a delivery that catches one is not the aircraft moving it.</summary>
+    public IReadOnlyList<double> Via { get; init; } = Array.Empty<double>();
+
     public static readonly L1011Plan AlreadyThere = new(Array.Empty<L1011Step>(), null);
     public static L1011Plan Refused(string why) => new(Array.Empty<L1011Step>(), why);
     public bool IsEmpty => Steps.Count == 0;
@@ -36,6 +40,10 @@ public sealed record L1011Plan(IReadOnlyList<L1011Step> Steps, string? Refusal)
 /// <item>Buttons hold <see cref="EventButtonHoldMs"/> when the press fires an event and
 /// <see cref="PolledButtonHoldMs"/> when it only writes an L:var a gauge polls (test buttons,
 /// APU start), so the poll cannot miss the press.</item>
+/// <item>An autopilot engage paddle going to Command from Off, or from a position not known, stops
+/// at CWS first for <see cref="PaddleNotchMs"/>, as the cockpit's paddle cannot skip that notch:
+/// L1011_INS.js switches the pitch and roll loops on only in its CWS routine, and its Command routine
+/// leaves them as they are, so a paddle sent straight to Command shows Command and flies nothing.</item>
 /// </list>
 /// </summary>
 public static class L1011WritePlan
@@ -45,6 +53,17 @@ public static class L1011WritePlan
     public const int PolledButtonHoldMs = 2000;
     public const int SpringHoldMs = 1500;
     public const int MaxRpnLength = 900;
+
+    /// <summary>How long a paddle rests at CWS on its way to Command. The gauge runs a paddle's routine
+    /// 50 ms after the event, reading both paddles then; CWS and Command sent back to back ran only the
+    /// Command routine (seen live), so the rest must outlast that even at a low frame rate: a frame for
+    /// the event, the timer, a frame to run, twice over at 10 frames a second.</summary>
+    public const int PaddleNotchMs = 500;
+
+    private const double PaddleCommand = 0, PaddleCws = 1, PaddleOff = 2;
+
+    /// <summary>The autopilot engage paddles: positions 0 Command, 1 CWS, 2 Off.</summary>
+    private static readonly HashSet<string> Paddles = new(StringComparer.Ordinal) { "SWITCH_AFCS_AP_A", "SWITCH_AFCS_AP_B" };
 
     public const string UnknownPositionRefusal = "position unknown, try again in a moment";
     public const string NotAPositionRefusal = "not a position of this control";
@@ -66,6 +85,15 @@ public static class L1011WritePlan
                 if (current == null && effects.Any(e => e.IsToggleEvent))
                     return L1011Plan.Refused(UnknownPositionRefusal);
                 var steps = new List<L1011Step>();
+                if (Paddles.Contains(control.Id) && Math.Abs(target - PaddleCommand) < SameValueTolerance
+                    && (current == null || Math.Abs(current.Value - PaddleOff) < SameValueTolerance)
+                    && control.TransitionFor(PaddleCws) is { } cws)
+                {
+                    steps.AddRange(Batches(cws.Select(L1011Effect.Parse), PaddleCws));
+                    steps.Add(new L1011DelayStep(PaddleNotchMs));
+                    steps.AddRange(Batches(effects, target));
+                    return new L1011Plan(steps, null) { Via = new[] { PaddleCws } };
+                }
                 steps.AddRange(Batches(effects, target));
                 if (control.Kind == L1011Kinds.Spring && control.Rest is double rest
                     && Math.Abs(rest - target) >= SameValueTolerance
