@@ -67,14 +67,21 @@ public class PMDGAutopilotWindow : Form
         IReadOnlyList<ToggleButtonDef> buttons,
         IReadOnlyList<SelectorRowDef> selectors,
         Func<IReadOnlyList<string>>? status = null,
-        string statusName = "Status")
+        string statusName = "Status",
+        bool selectorsFirst = false)
     {
         _buttons = buttons;
         _selectors = selectors;
         _status = status;
         _statusName = statusName;
+        _selectorsFirst = selectorsFirst;
         BuildForm(title);
     }
+
+    /// <summary>The combos come before the buttons: the TriStar's engage switches are combos, and they go
+    /// where the PMDG 737 has its CMD A and CMD B buttons. Off, as for the PMDG and A300 windows, the
+    /// buttons come first.</summary>
+    private readonly bool _selectorsFirst;
 
     public void ShowForm()
     {
@@ -124,6 +131,9 @@ public class PMDGAutopilotWindow : Form
             row += 160;
         }
 
+        if (_selectorsFirst)
+            AddSelectors();
+
         // Buttons: two per row, filling left column then right.
         for (int i = 0; i < _buttons.Count; i++)
         {
@@ -145,62 +155,8 @@ public class PMDGAutopilotWindow : Form
         }
         if (_buttons.Count % 2 == 1) row += rowH;
 
-        // Selectors: each on its own row, label + combo.
-        foreach (var def in _selectors)
-        {
-            var label = new Label
-            {
-                // The '&' makes this the combo's Alt-key: a Label's mnemonic focuses
-                // the NEXT control in tab order, which is why the label needs a real
-                // TabIndex immediately before its combo (Labels are not tab STOPS,
-                // so keyboard tabbing is unaffected). The combo's explicit
-                // AccessibleName stays clean — explicit names don't strip '&'.
-                Text = PMDGAutopilotRowBinder.ApplyMnemonic(def.Label, def.Mnemonic),
-                Location = new Point(col1, row + 6),
-                Size = new Size(btnW, 20),
-                TabIndex = tab++,
-            };
-            var values = def.Positions.Keys.OrderBy(v => v).ToArray();
-            var combo = new ComboBox
-            {
-                Location = new Point(col2, row),
-                Size = new Size(btnW, 28),
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                AccessibleName = def.Label,
-                TabIndex = tab++,
-            };
-            foreach (double v in values) combo.Items.Add(def.Positions[v]);
-
-            var captured = def;
-            var capturedValues = values;
-            // SelectionChangeCommitted, NOT SelectedIndexChanged — the same choice every
-            // panel combo in this app makes (MainForm.PanelBuilder.cs wires its
-            // DropDownList combos on this event, with the reasoning in full).
-            // SelectedIndexChanged ALSO fires on programmatic assignment AND on a deferred
-            // replay when the combo is parented and its native handle is created, which
-            // fires a phantom user-action write during form build. No sync-guard flag can
-            // cover that replay here: ShowForm calls RefreshStates() BEFORE Show(), so
-            // SelectedIndex is assigned while no handle exists and any such flag is long
-            // reset by the time the handle is created and the replay lands.
-            // SelectionChangeCommitted fires only on a genuine user commit — which is also
-            // why RefreshStates can assign SelectedIndex with no guard at all.
-            //
-            // Keyboard-safe: the native combo sends CBN_SELCHANGE (what WinForms surfaces
-            // as SelectionChangeCommitted) for arrow-key selection on a closed
-            // DropDownList, not only for mouse picks in the dropdown. This app's blind
-            // users arrow through every panel combo on exactly this event.
-            combo.SelectionChangeCommitted += (_, _) =>
-            {
-                if (combo.SelectedIndex < 0) return;
-                captured.OnSelected(capturedValues[combo.SelectedIndex]);
-                RefreshSoon();
-            };
-
-            _selectorControls.Add((def, combo, values));
-            Controls.Add(label);
-            Controls.Add(combo);
-            row += rowH;
-        }
+        if (!_selectorsFirst)
+            AddSelectors();
 
         _closeButton = new Button
         {
@@ -246,6 +202,66 @@ public class PMDGAutopilotWindow : Form
             if (_previousWindow != IntPtr.Zero)
                 SetForegroundWindow(_previousWindow);
         };
+
+        // Selectors: each on its own row, label + combo.
+        void AddSelectors()
+        {
+            foreach (var def in _selectors)
+            {
+                var label = new Label
+                {
+                    // The '&' makes this the combo's Alt-key: a Label's mnemonic focuses
+                    // the NEXT control in tab order, which is why the label needs a real
+                    // TabIndex immediately before its combo (Labels are not tab STOPS,
+                    // so keyboard tabbing is unaffected). The combo's explicit
+                    // AccessibleName stays clean — explicit names don't strip '&'.
+                    Text = PMDGAutopilotRowBinder.ApplyMnemonic(def.Label, def.Mnemonic),
+                    Location = new Point(col1, row + 6),
+                    Size = new Size(btnW, 20),
+                    TabIndex = tab++,
+                };
+                var values = def.Positions.Keys.OrderBy(v => v).ToArray();
+                var combo = new ComboBox
+                {
+                    Location = new Point(col2, row),
+                    Size = new Size(btnW, 28),
+                    DropDownStyle = ComboBoxStyle.DropDownList,
+                    AccessibleName = def.Label,
+                    TabIndex = tab++,
+                };
+                foreach (double v in values) combo.Items.Add(def.Positions[v]);
+
+                var captured = def;
+                var capturedValues = values;
+                // SelectionChangeCommitted, NOT SelectedIndexChanged — the same choice every
+                // panel combo in this app makes (MainForm.PanelBuilder.cs wires its
+                // DropDownList combos on this event, with the reasoning in full).
+                // SelectedIndexChanged ALSO fires on programmatic assignment AND on a deferred
+                // replay when the combo is parented and its native handle is created, which
+                // fires a phantom user-action write during form build. No sync-guard flag can
+                // cover that replay here: ShowForm calls RefreshStates() BEFORE Show(), so
+                // SelectedIndex is assigned while no handle exists and any such flag is long
+                // reset by the time the handle is created and the replay lands.
+                // SelectionChangeCommitted fires only on a genuine user commit — which is also
+                // why RefreshStates can assign SelectedIndex with no guard at all.
+                //
+                // Keyboard-safe: the native combo sends CBN_SELCHANGE (what WinForms surfaces
+                // as SelectionChangeCommitted) for arrow-key selection on a closed
+                // DropDownList, not only for mouse picks in the dropdown. This app's blind
+                // users arrow through every panel combo on exactly this event.
+                combo.SelectionChangeCommitted += (_, _) =>
+                {
+                    if (combo.SelectedIndex < 0) return;
+                    captured.OnSelected(capturedValues[combo.SelectedIndex]);
+                    RefreshSoon();
+                };
+
+                _selectorControls.Add((def, combo, values));
+                Controls.Add(label);
+                Controls.Add(combo);
+                row += rowH;
+            }
+        }
     }
 
     /// <summary>Shared hide path for Escape and the Close button — mirrors what

@@ -175,6 +175,31 @@ public class IniL1011AutopilotBehaviourTests
         Assert.Equal(new[] { "Vertical speed: turn vertical speed mode on first" }, _speech.All);
     }
 
+    [Theory]
+    [InlineData(0.0, false)]
+    [InlineData(1.0, true)]
+    public void The_vertical_speed_box_takes_typing_only_while_the_mode_is_on(double mode, bool takesTyping)
+    {
+        // The PMDG 737's V/S box stays read-only until V/S is engaged.
+        Deliver("SWITCH_AFCS_VS", mode);
+        Assert.Equal(takesTyping, _def.AfcsBoxTakesTyping(L1011Afcs.VerticalSpeedKey, _sim));
+    }
+
+    [Fact]
+    public void The_vertical_speed_box_takes_typing_while_the_mode_is_not_known()
+    {
+        Assert.True(_def.AfcsBoxTakesTyping(L1011Afcs.VerticalSpeedKey, _sim));   // an unknown position never refuses
+    }
+
+    [Fact]
+    public void The_other_boxes_always_take_typing()
+    {
+        Deliver("SWITCH_AFCS_VS", 0);
+        Assert.True(_def.AfcsBoxTakesTyping(L1011Afcs.SpeedKey, _sim));
+        Assert.True(_def.AfcsBoxTakesTyping(L1011Afcs.HeadingKey, _sim));
+        Assert.True(_def.AfcsBoxTakesTyping(L1011Afcs.AltitudeKey, _sim));
+    }
+
     [Fact]
     public void A_typed_vertical_speed_with_the_mode_on_is_sent()
     {
@@ -208,11 +233,11 @@ public class IniL1011AutopilotBehaviourTests
     }
 
     [Fact]
-    public void The_speed_box_carries_its_four_buttons_with_their_names_and_positions()
+    public void The_speed_box_carries_its_three_buttons_with_their_names_and_positions()
     {
-        Deliver("SWITCH_AFCS_AT", 1);
+        Deliver("SWITCH_AFCS_TM", 1);
         var buttons = _def.ValueBoxButtons(L1011AutoflightWindows.Speed, _sim, _speech);
-        Assert.Equal(new[] { "&Autothrottle", "&Thrust management", "&IAS hold", "&Mach hold" }, buttons.Select(b => b.Label));
+        Assert.Equal(new[] { "&Thrust management", "&IAS hold", "&Mach hold" }, buttons.Select(b => b.Label));
         Assert.Equal("On", buttons[0].GetCurrentState());
         Assert.Equal("", buttons[1].GetCurrentState());   // not known yet
         Assert.All(buttons, b => Assert.True(b.SuppressStateAnnounce!()));   // the press reads back itself
@@ -225,7 +250,7 @@ public class IniL1011AutopilotBehaviourTests
         Deliver("SWITCH_AFCS_TM", 0);
         _freshValue = 0;   // the aircraft turned thrust management straight back off
         var buttons = _def.ValueBoxButtons(L1011AutoflightWindows.Speed, _sim, _speech);
-        buttons[1].OnPressed();
+        buttons[0].OnPressed();
         Assert.Equal(new[] { ("SWITCH_AFCS_TM", IniL1011Definition.BatchReadoutTimeoutMs) }, _freshReads);
         Assert.Equal(new[] { "Thrust management off" }, _speech.All);
         Assert.Empty(_speech.Interrupts);   // queued: it must not cut off the call-outs the press set off
@@ -238,7 +263,7 @@ public class IniL1011AutopilotBehaviourTests
         var gate = new TaskCompletionSource();
         _def.ReadBackDelay = _ => gate.Task;
         Deliver("SWITCH_AFCS_TM", 0);
-        _def.ValueBoxButtons(L1011AutoflightWindows.Speed, _sim, _speech)[1].OnPressed();
+        _def.ValueBoxButtons(L1011AutoflightWindows.Speed, _sim, _speech)[0].OnPressed();
         Deliver("SWITCH_AFCS_TM", 1);
         Deliver("SWITCH_AFCS_TM", 0);   // the aircraft turned it straight back
         Assert.Empty(_speech.All);      // the read-back is pending: the general call-out waits for it
@@ -262,22 +287,22 @@ public class IniL1011AutopilotBehaviourTests
             gates.Enqueue(gate);
             return gate.Task;
         };
-        Deliver("SWITCH_AFCS_AT", 0);
-        var autothrottle = _def.ValueBoxButtons(L1011AutoflightWindows.Speed, _sim, _speech)[0];
-        autothrottle.OnPressed();        // target On
-        Deliver("SWITCH_AFCS_AT", 1);    // it took
-        autothrottle.OnPressed();        // target Off, inside the first read-back's delay
-        Deliver("SWITCH_AFCS_AT", 0);    // it took
+        Deliver("SWITCH_AFCS_TM", 0);
+        var thrustManagement = _def.ValueBoxButtons(L1011AutoflightWindows.Speed, _sim, _speech)[0];
+        thrustManagement.OnPressed();    // target On
+        Deliver("SWITCH_AFCS_TM", 1);    // it took
+        thrustManagement.OnPressed();    // target Off, inside the first read-back's delay
+        Deliver("SWITCH_AFCS_TM", 0);    // it took
         _freshValue = 0;
         gates.Dequeue().SetResult();     // the first read-back speaks and finishes
-        Assert.Equal(new[] { "Autothrottle off" }, _speech.All);
+        Assert.Equal(new[] { "Thrust management off" }, _speech.All);
 
-        Deliver("SWITCH_AFCS_AT", 1);    // the aircraft puts it back on while the second press is still pending
-        Assert.Equal(new[] { "Autothrottle off" }, _speech.All);   // the call-out stays quiet for that key
+        Deliver("SWITCH_AFCS_TM", 1);    // the aircraft puts it back on while the second press is still pending
+        Assert.Equal(new[] { "Thrust management off" }, _speech.All);   // the call-out stays quiet for that key
 
         _freshValue = 1;
         gates.Dequeue().SetResult();     // the second read-back
-        Assert.Equal(new[] { "Autothrottle off", "Autothrottle on" }, _speech.All);   // one line per read-back
+        Assert.Equal(new[] { "Thrust management off", "Thrust management on" }, _speech.All);   // one line per read-back
     }
 
     [Fact]
@@ -298,13 +323,25 @@ public class IniL1011AutopilotBehaviourTests
         Assert.Equal(new[]
         {
             "&Flight director A", "Flight di&rector B", "T&urbulence", "&ILS", "&Localizer", "&VOR", "Bac&k course",
-            "Autopilot &disconnect", "Captain autot&hrottle disconnect", "Takeoff &go-around button",
+            "Au&tothrottle", "Autopilot &disconnect", "Captain autot&hrottle disconnect", "Takeoff &go-around button",
         }, buttons.Select(b => b.Label));
         var selectors = _def.AutopilotSelectors(_sim, _speech);
         Assert.Equal(new[] { "Autopilot A", "Autopilot B" }, selectors.Select(s => s.Label));
         Assert.Equal(new[] { "Command", "CWS", "Off" }, selectors[0].Positions.OrderBy(p => p.Key).Select(p => p.Value));
         Deliver("SWITCH_AFCS_AP_B", 2);
         Assert.Equal(2, selectors[1].GetCurrentValue());
+    }
+
+    [Fact]
+    public void The_autopilot_window_puts_the_engage_switches_straight_after_the_status_list()
+    {
+        using var window = _def.BuildAutopilotWindow(_sim, _speech);
+        var order = window.Controls.Cast<System.Windows.Forms.Control>()
+            .Where(c => c is not System.Windows.Forms.Label).OrderBy(c => c.TabIndex).ToList();
+        Assert.IsType<System.Windows.Forms.ListBox>(order[0]);
+        Assert.Equal("Autopilot A", Assert.IsType<System.Windows.Forms.ComboBox>(order[1]).AccessibleName);
+        Assert.Equal("Autopilot B", Assert.IsType<System.Windows.Forms.ComboBox>(order[2]).AccessibleName);
+        Assert.IsType<System.Windows.Forms.Button>(order[3]);   // Flight director A
     }
 
     [Fact]

@@ -70,33 +70,35 @@ A heading, navigation or pitch mode button only works while the autopilot or a f
 is on; the TriStar turns it straight back off otherwise. So with both flight directors and the
 autopilot off you hear "turn on a flight director or the autopilot first" and nothing is pressed.
 Turning vertical speed mode on sets its target to the aircraft's current vertical speed, so turn
-the mode on before you type a vertical speed; typed while the mode is off you hear "turn vertical
-speed mode on first". Thrust management needs an autopilot in command and the PMS takeoff page
-filled in; without them the TriStar turns it straight back off.
+the mode on before you type a vertical speed: the Ctrl+V box is read-only until it is on, and on
+the panel you hear "turn vertical speed mode on first". Thrust management needs an autopilot in
+command and the PMS takeoff page filled in; without them the TriStar turns it straight back off.
 
 Ctrl+S, Ctrl+H, Ctrl+A and Ctrl+V (input mode) open a box for the speed, heading, altitude or
 vertical speed, with the buttons that go with it:
-  Speed: Autothrottle, Thrust management, IAS hold, Mach hold.
-  Heading: Heading, INS.
-  Altitude: Altitude hold, VNAV.
+  Speed: Thrust management, IAS hold, Mach hold.
+  Heading: Heading, INS (Alt+N).
+  Altitude: Altitude hold (Alt+H), VNAV.
   Vertical speed: Vertical speed.
-Each button shows its state. Press one and about a second later you hear what the aircraft did:
-"Heading on", or "Thrust management off" when the aircraft did not take it. Type a value and
-press Enter - speed 100 to 350 knots, altitude 0 to 50000 feet, vertical speed -6000 to 6000
-feet per minute (both in steps of 100), heading 0 to 359 - and you hear the value set
-("Heading 090"). The box stays open for another value; Escape closes it. Opening another box, or
-Ctrl+B, closes the one that is open.
+Each button has an Alt+letter, the first letter unless shown above, and shows its state. Press
+one and about a second later you hear what the aircraft did: "Heading on", or "Thrust management
+off" when the aircraft did not take it. Type a value and press Enter - speed 100 to 350 knots,
+altitude 0 to 50000 feet, vertical speed -6000 to 6000 feet per minute (both in steps of 100),
+heading 0 to 359 - and you hear the value set ("Heading 090"). The box stays open for another
+value; Escape closes it. Opening another box, or Ctrl+B, closes the one that is open.
 
 Ctrl+P (input mode) opens the autopilot window. Its first list reads the glareshield's windows
 line by line as the cockpit draws them ("Speed: IAS 250", "Pitch: VS -1500", "Heading: 090"),
 then the engaged modes, the armed and captured modes, the autothrottle, thrust management and
 both autopilots. It updates while the window is open without moving your place. Below the list:
-Flight director A and B, Turbulence, ILS, Localizer, VOR and Back course, each showing the
-position the aircraft reports; then three one-shot buttons with no state: Autopilot disconnect,
-the captain's autothrottle disconnect and the takeoff go-around button; then the Autopilot A and
-B combo boxes (Command, CWS, Off). Nothing is spoken when you press a button: a switch's label
-changes once the aircraft has moved it, and a disconnect is heard as "Autopilot A off" when the
-aircraft moves the engage switch. Escape closes the window.
+the Autopilot A and B combo boxes (Command, CWS, Off); then Flight director A and B, Turbulence,
+ILS, Localizer, VOR, Back course and Autothrottle, each showing the position the aircraft
+reports; then three one-shot buttons with no state: Autopilot disconnect, the captain's
+autothrottle disconnect and the takeoff go-around button. Each has an Alt+letter, the first
+letter except Alt+R flight director B, Alt+U turbulence, Alt+K back course, Alt+T autothrottle,
+Alt+H the captain's autothrottle disconnect and Alt+G takeoff go-around. Nothing is spoken when
+you press a button: a switch's label changes once the aircraft has moved it, and a disconnect is
+heard as "Autopilot A off" when the aircraft moves the engage switch. Escape closes the window.
 
 
 THE INS AND PMS WINDOW - Press left bracket, then Shift+M
@@ -129,11 +131,11 @@ you untick them. What you type is always read back, and so is a value the unit r
                      the SP key; for a minus sign on the SAT line type 9 first.
   Ctrl+Enter         Insert
   Ctrl+1 to Ctrl+6   PMS line keys 1 to 6 (or F1 to F6, with the alternate layout in FMC Settings)
-  Page Up / Down     Previous and next page (also Alt+Left and Alt+Right; Right Arrow on the display
-                     goes to the next page). On a PMS, its pages. On an INS, the pages are the
-                     display selector's positions: the selector turns one position and the new
-                     one is said ("Distance and time"); it stops at both ends ("Last position:
-                     Test").
+  Page Up / Down     Previous and next page (also Alt+Up and Alt+Down, or Alt+Left and Alt+Right;
+                     Right Arrow on the display goes to the next page). On a PMS, its pages. On
+                     an INS, the pages are the display selector's positions: the selector turns
+                     one position and the new one is said ("Distance and time"); it stops at
+                     both ends ("Last position: Test").
   Backspace          CLR on a PMS, CLEAR on an INS (on the display). On a PMS, Clear deletes the
                      last character and the entry stays open (Page Up or Page Down abandons it);
                      on an INS, Clear closes a position or waypoint entry and does nothing on the
@@ -148,6 +150,8 @@ you untick them. What you type is always read back, and so is a value the unit r
   PMS buttons        Insert, Clear, Next page, Previous page, Performance management (goes to the
                      page for the flight phase: on the ground, TAKEOFF), and the six line keys,
                      each named by its line and shortcut ("Line 1, GMT (Ctrl+1)").
+                     Each button has an Alt+letter, the first letter except Alt+P Enter present
+                     position, Alt+V Previous page and Alt+M Performance management.
 
 To enter the present position by hand: Display selector to Position, type N3605.1, Enter,
 Ctrl+Enter, then W11508.0, Enter, Ctrl+Enter. To start navigating from waypoint 0 to 1: Track
@@ -210,7 +214,8 @@ window lists all 981 breakers, each with its number ("HYD IND QTY, breaker 4: in
 iniBuilds left unnamed read "Breaker 12: in". Type a name or a breaker number in Search to
 narrow the list, tick "Show pulled breakers only" to see what is pulled, and press Space or
 Enter on a breaker to pull it or push it in. The row changes to the new state. The states are
-read when the window opens; Refresh reads them again.
+read when the window opens; Refresh reads them again. Each time it opens, the search is empty and
+"Show pulled breakers only" is unticked.
 
 
 OUTPUT MODE - Press right bracket to activate
@@ -346,11 +351,11 @@ VATSIM:
 INPUT MODE - Press [ to activate
 
 Autopilot:
-  Ctrl+S     Set speed (with Autothrottle, Thrust management, IAS hold and Mach hold)
+  Ctrl+S     Set speed (with Thrust management, IAS hold and Mach hold)
   Ctrl+H     Set heading (with Heading and INS)
   Ctrl+A     Set altitude (with Altitude hold and VNAV)
   Ctrl+V     Set vertical speed (with Vertical speed - turn it on first)
-  Ctrl+P     Autopilot window (the glareshield windows, modes, engage switches)
+  Ctrl+P     Autopilot window (the glareshield windows, modes, engage switches, autothrottle)
   Shift+A    Autopilot A, Command or Off (read back)
   Ctrl+O     Autopilot B, Command or Off (read back)
   Ctrl+J     Autothrottle on or off (read back)

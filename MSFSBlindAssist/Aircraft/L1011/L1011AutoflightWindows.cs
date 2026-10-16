@@ -19,16 +19,16 @@ public sealed record L1011WindowSelector(string RowKey, char Mnemonic, string La
 /// <summary>
 /// The TriStar's input-mode autoflight windows, the A300's pattern: the value boxes (Ctrl+S, H, A,
 /// V) carry the mode buttons of their own axis, and Ctrl+P's window carries the engage cluster, the
-/// radio navigation and approach modes, the disconnects and TO/GA. Each control appears in one window
-/// only. Every label is the control's panel row name (<see cref="L1011PanelLayout"/>), so one control
-/// has one name across the app. Pure.
+/// autothrottle, the radio navigation and approach modes, the disconnects and TO/GA. Each control
+/// appears in one window only. Every label is the control's panel row name
+/// (<see cref="L1011PanelLayout"/>), so one control has one name across the app. Pure.
 /// </summary>
 public static class L1011AutoflightWindows
 {
-    /// <summary>Ctrl+S: the AUTOTHROTTLE block, and the pitch block's two speed holds.</summary>
+    /// <summary>Ctrl+S: thrust management, and the pitch block's two speed holds. The autothrottle is in
+    /// Ctrl+P, where the PMDG 737 has its A/T Arm and the A300 its autothrottle button.</summary>
     public static readonly IReadOnlyList<L1011WindowButton> Speed = new[]
     {
-        new L1011WindowButton("SWITCH_AFCS_AT", 'A', L1011ButtonState.Switch),
         new L1011WindowButton("SWITCH_AFCS_TM", 'T', L1011ButtonState.Switch),
         new L1011WindowButton("SWITCH_AFCS_IAS", 'I', L1011ButtonState.Switch),
         new L1011WindowButton("SWITCH_AFCS_MACH", 'M', L1011ButtonState.Switch),
@@ -41,10 +41,10 @@ public static class L1011AutoflightWindows
         new L1011WindowButton("SWITCH_AFCS_INS", 'N', L1011ButtonState.Switch),
     };
 
-    /// <summary>Ctrl+A: altitude hold and VNAV.</summary>
+    /// <summary>Ctrl+A: altitude hold and VNAV, on the PMDG 737 altitude dialog's letters.</summary>
     public static readonly IReadOnlyList<L1011WindowButton> Altitude = new[]
     {
-        new L1011WindowButton("SWITCH_AFCS_ALT", 'A', L1011ButtonState.Switch),
+        new L1011WindowButton("SWITCH_AFCS_ALT", 'H', L1011ButtonState.Switch),
         new L1011WindowButton("SWITCH_AFCS_VNAV", 'V', L1011ButtonState.Switch),
     };
 
@@ -55,7 +55,8 @@ public static class L1011AutoflightWindows
     };
 
     /// <summary>Ctrl+P's buttons: flight directors, turbulence, the radio navigation and approach
-    /// modes, the disconnects and TO/GA.</summary>
+    /// modes, the autothrottle, the disconnects and TO/GA (the PMDG 737's order). The autothrottle is
+    /// Alt+T, as the A300's autothrottle button is.</summary>
     public static readonly IReadOnlyList<L1011WindowButton> AutopilotButtons = new[]
     {
         new L1011WindowButton("SWITCH_AFCS_FD_A", 'F', L1011ButtonState.Switch),
@@ -65,6 +66,7 @@ public static class L1011AutoflightWindows
         new L1011WindowButton("SWITCH_AFCS_LOC", 'L', L1011ButtonState.Switch),
         new L1011WindowButton("SWITCH_AFCS_VOR", 'V', L1011ButtonState.Switch),
         new L1011WindowButton("SWITCH_AFCS_BC", 'K', L1011ButtonState.Switch),
+        new L1011WindowButton("SWITCH_AFCS_AT", 'T', L1011ButtonState.Switch),
         new L1011WindowButton(L1011Afcs.DisconnectKey, 'D', L1011ButtonState.None),
         new L1011WindowButton("SWITCH_CPT_AT_DISCO", 'H', L1011ButtonState.None),
         new L1011WindowButton("YOKE_CPT_TOGA", 'G', L1011ButtonState.None),

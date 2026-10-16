@@ -181,12 +181,13 @@ public partial class IniL1011Definition
     /// <summary>Shows a value box, closing an open one with another title first. Tracked, so an aircraft
     /// switch closes it: its writes would otherwise reach whatever aircraft is loaded next.</summary>
     private void ShowValueBox(string title, string parameter, string range, ScreenReaderAnnouncer announcer,
-        Func<string, (bool, string)> validate, List<ToggleButtonDef> buttons, Action<string> onSet, Form parentForm)
+        Func<string, (bool, string)> validate, List<ToggleButtonDef> buttons, Action<string> onSet, Form parentForm,
+        Func<bool>? takesTyping = null)
     {
         if (L1011AutoflightWindows.ReplacesOpenBox(_valueBox is { IsDisposed: false } open ? open.Text : null, title))
             _valueBox!.Close();
         ShowTrackedWindow(
-            () => _valueBox = new ValueInputForm(title, parameter, range, announcer, validate, buttons, onSet)
+            () => _valueBox = new ValueInputForm(title, parameter, range, announcer, validate, buttons, onSet, takesTyping)
             {
                 ShowCancelButton = false,
             },
@@ -214,8 +215,16 @@ public partial class IniL1011Definition
                 if (!_disposed && L1011Afcs.Parse(kind, input) is int value)
                     SetAfcsValue(key, value, sim, announcer);
             },
-            parentForm);
+            parentForm,
+            () => AfcsBoxTakesTyping(key, sim));
     }
+
+    /// <summary>Whether a value box's text box takes typing: the vertical speed box is read-only while vertical
+    /// speed mode is KNOWN off, as the PMDG 737's V/S box is until V/S is engaged (turning the mode on sets the
+    /// target to the current vertical speed, so a value typed first is lost). An unknown position never
+    /// refuses; the spoken refusal in <see cref="SetAfcsValue"/> stays behind it.</summary>
+    internal bool AfcsBoxTakesTyping(string key, SimConnectManager sim) =>
+        key != L1011Afcs.VerticalSpeedKey || AfcsPosition("SWITCH_AFCS_VS", sim) is not double vs || vs >= 0.5;
 
     /// <summary>A value box's mode buttons, labelled with their panel names and showing their positions.
     /// A press toggles through the row's write path and reads the result back fresh, so the box's own
@@ -259,8 +268,7 @@ public partial class IniL1011Definition
     {
         ShowTrackedWindow(() =>
         {
-            var window = new PMDGAutopilotWindow("TriStar Autopilot", AutopilotButtons(sim, announcer),
-                AutopilotSelectors(sim, announcer), () => AutopilotStatusLines(sim), "Autopilot status");
+            var window = BuildAutopilotWindow(sim, announcer);
             // The reader holds the L1011_AFCS view's one inspector socket only while the window is
             // shown: the window hides on close and is reused, so it follows Visible, not the form's life.
             window.VisibleChanged += (_, _) => SetAfcsReader(window.Visible);
@@ -268,6 +276,12 @@ public partial class IniL1011Definition
             return window;
         }, w => w.ShowForm());
     }
+
+    /// <summary>Ctrl+P's window: the status list, then the two engage switches, where the PMDG 737 has
+    /// CMD A and CMD B, then the buttons.</summary>
+    internal PMDGAutopilotWindow BuildAutopilotWindow(SimConnectManager sim, ScreenReaderAnnouncer announcer) =>
+        new("TriStar Autopilot", AutopilotButtons(sim, announcer), AutopilotSelectors(sim, announcer),
+            () => AutopilotStatusLines(sim), "Autopilot status", selectorsFirst: true);
 
     /// <summary>Starts the glareshield reader, or stops it and forgets what it read.</summary>
     private void SetAfcsReader(bool on)

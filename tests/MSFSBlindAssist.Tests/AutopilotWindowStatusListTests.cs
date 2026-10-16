@@ -31,6 +31,39 @@ public class AutopilotWindowStatusListTests
         Assert.Equal(0, list.SelectedIndex);
     }
 
+    private static SelectorRowDef[] Selectors() => new[]
+    {
+        new SelectorRowDef("Autopilot A", new Dictionary<double, string> { [0] = "Command", [1] = "Off" }, () => 1, _ => { }, 'A'),
+    };
+
+    /// <summary>The window's controls in tab order, skipping the labels (they are not tab stops).</summary>
+    private static List<Control> TabOrder(Form w) =>
+        w.Controls.Cast<Control>().Where(c => c is not Label).OrderBy(c => c.TabIndex).ToList();
+
+    [Fact]
+    public void By_default_the_buttons_come_before_the_combos()
+    {
+        using var w = new PMDGAutopilotWindow("737 Autopilot", Buttons(), Selectors());
+        var order = TabOrder(w);
+        Assert.IsType<Button>(order[0]);
+        Assert.IsType<ComboBox>(order[1]);
+    }
+
+    [Fact]
+    public void With_selectors_first_the_combos_come_straight_after_the_status_list()
+    {
+        using var w = new PMDGAutopilotWindow("TriStar Autopilot", Buttons(), Selectors(),
+            () => new[] { "Speed: IAS 250" }, "Autopilot status", selectorsFirst: true);
+        w.RefreshStates();
+        var order = TabOrder(w);
+        Assert.IsType<ListBox>(order[0]);
+        Assert.Equal("Autopilot A", Assert.IsType<ComboBox>(order[1]).AccessibleName);
+        Assert.Equal("&AP: On", Assert.IsType<Button>(order[2]).Text);
+        // The combo's Alt key is its label's mnemonic, which focuses the NEXT control in tab order.
+        var label = w.Controls.OfType<Label>().Single();
+        Assert.Equal(order[1].TabIndex - 1, label.TabIndex);
+    }
+
     [Fact]
     public void A_refresh_rewrites_changed_lines_in_place_and_keeps_the_readers_line()
     {

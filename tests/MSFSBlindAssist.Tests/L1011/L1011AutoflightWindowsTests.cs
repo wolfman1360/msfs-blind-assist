@@ -20,6 +20,24 @@ public class L1011AutoflightWindowsTests
     };
 
     [Fact]
+    public void The_autothrottle_sits_in_the_autopilot_window_as_the_737s_and_a300s_do()
+    {
+        Assert.DoesNotContain(L1011AutoflightWindows.Speed, b => b.RowKey == "SWITCH_AFCS_AT");
+        Assert.Equal(new[] { "SWITCH_AFCS_TM", "SWITCH_AFCS_IAS", "SWITCH_AFCS_MACH" },
+            L1011AutoflightWindows.Speed.Select(b => b.RowKey));
+        var autothrottle = Assert.Single(L1011AutoflightWindows.AutopilotButtons, b => b.RowKey == "SWITCH_AFCS_AT");
+        Assert.Equal('T', autothrottle.Mnemonic);   // the A300's autothrottle button is Alt+T too
+    }
+
+    [Fact]
+    public void The_altitude_box_letters_match_the_737s_altitude_dialog()
+    {
+        // The PMDG 737's MCP Altitude dialog: Altitude &Hold, &VNAV.
+        Assert.Equal(new[] { ('H', "SWITCH_AFCS_ALT"), ('V', "SWITCH_AFCS_VNAV") },
+            L1011AutoflightWindows.Altitude.Select(b => (b.Mnemonic, b.RowKey)));
+    }
+
+    [Fact]
     public void Every_window_control_is_a_placed_panel_row()
     {
         foreach (var (_, buttons) in Windows())

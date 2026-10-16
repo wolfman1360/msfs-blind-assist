@@ -98,15 +98,38 @@ public sealed class L1011CircuitBreakerForm : Form
         Controls.AddRange(new Control[] { searchLabel, _search, _pulledOnly, _list, _status, toggle, refresh, close });
     }
 
-    /// <summary>Shows the window with the list focused and reads every breaker's state.</summary>
+    /// <summary>Shows the window, filters cleared, with the list focused, and reads every breaker's state.</summary>
     public async void ShowForm()
     {
-        Refilter();
+        PrepareToShow();
         Show();
         Activate();
         _list.Focus();
         await ReadAsync(announceFailure: true, refilter: true);
     }
+
+    /// <summary>
+    /// Every open starts clean, as the Ctrl+M monitor managers do: the search empty and "pulled only" unticked,
+    /// so the window never opens on a short list for a reason the pilot cannot hear. The two resets are made with
+    /// filtering held off, so the list is built once.
+    /// </summary>
+    internal void PrepareToShow()
+    {
+        _resetting = true;
+        try
+        {
+            _search.Text = string.Empty;
+            _pulledOnly.Checked = false;
+        }
+        finally
+        {
+            _resetting = false;
+        }
+        Refilter();
+    }
+
+    /// <summary>Set while <see cref="PrepareToShow"/> clears the filters, so neither change rebuilds the list.</summary>
+    private bool _resetting;
 
     /// <summary>Reads every breaker's state; <paramref name="refilter"/> lists the breakers again
     /// (opening, Refresh), otherwise only the listed rows' text changes (a confirmation read).</summary>
@@ -148,7 +171,7 @@ public sealed class L1011CircuitBreakerForm : Form
     /// <summary>Lists the breakers the search and "pulled only" select, then writes their rows.</summary>
     private void Refilter()
     {
-        if (IsDisposed)
+        if (IsDisposed || _resetting)
             return;
         _visible = L1011CircuitBreakers.Visible(_breakers, _states, _search.Text, _pulledOnly.Checked);
         RefreshRows();

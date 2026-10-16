@@ -51,6 +51,19 @@ public class L1011InsKeyRoutingTests
         Assert.Equal(ActionKind.Pass, On(Keys.Left, alt: true, shift: true, pms: pms).Kind);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Alt_up_and_alt_down_page_as_in_the_pmdg_cdu_window(bool pms)
+    {
+        Assert.Equal(ActionKind.PreviousPage, On(Keys.Up, alt: true, pms: pms).Kind);
+        Assert.Equal(ActionKind.NextPage, On(Keys.Down, alt: true, pms: pms).Kind);
+        Assert.Equal(ActionKind.Pass, On(Keys.Down, alt: true, shift: true, pms: pms).Kind);
+        // On a focused combo Alt+Down and Alt+Up open and close its list.
+        Assert.Equal(ActionKind.Pass, On(Keys.Down, alt: true, combo: ComboFocus.Closed, pms: pms).Kind);
+        Assert.Equal(ActionKind.Pass, On(Keys.Up, alt: true, combo: ComboFocus.Dropped, pms: pms).Kind);
+    }
+
     [Fact]
     public void Ctrl_enter_presses_insert_on_any_unit()
     {

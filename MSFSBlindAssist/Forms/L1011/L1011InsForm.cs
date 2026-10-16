@@ -760,10 +760,11 @@ public static class L1011InsKeyRouting
             if (!useAlternateLskKeys && ctrlOnly && keyCode >= Keys.D1 && keyCode <= Keys.D6)
                 return new Action(ActionKind.LineKey, keyCode - Keys.D1 + 1);
         }
-        // A PMS's pages, and an INS's: its display selector's positions (L1011InsPages).
-        if ((none && keyCode == Keys.PageUp) || (altOnly && keyCode == Keys.Left))
+        // A PMS's pages, and an INS's: its display selector's positions (L1011InsPages). Alt+Up and Alt+Down
+        // are the PMDG CDU window's, Alt+Left and Alt+Right the MD-11's.
+        if ((none && keyCode == Keys.PageUp) || (altOnly && keyCode is Keys.Left or Keys.Up))
             return new Action(ActionKind.PreviousPage);
-        if ((none && keyCode == Keys.PageDown) || (altOnly && keyCode == Keys.Right))
+        if ((none && keyCode == Keys.PageDown) || (altOnly && keyCode is Keys.Right or Keys.Down))
             return new Action(ActionKind.NextPage);
         if (altOnly && keyCode == Keys.S)
             return new Action(ActionKind.FocusInput);
