@@ -207,6 +207,90 @@ public class IniL1011InsBehaviourTests
     }
 
     [Fact]
+    public async Task A_selector_pick_waits_for_the_keys_queued_before_it()
+    {
+        // A pick made from the window while typed keys are still being sent must not land between two key
+        // presses: it runs behind the chain, through the row's own write path. The gate holds the chain at
+        // its first wait, so "before" and "after" are exact, not timed.
+        var sent = new List<string>();
+        var gate = new TaskCompletionSource();
+        _def.SendCalc = (_, rpn) => sent.Add(rpn);
+        _def.StepDelay = _ => gate.Task;
+        _def.CanLand = _ => true;
+
+        Assert.True(_def.TypeKeys(L1011InsDevice.Ins2, "2", insert: false, _sim, _speech));
+        Assert.True(_def.KeysBusyForMs() > 0);
+        int keysSentSoFar = sent.Count;
+        Assert.True(keysSentSoFar > 0);
+
+        _def.SetInsSelector("INS_2_ROTARY_MODE", 5, _sim, _speech);
+        Assert.Equal(keysSentSoFar, sent.Count);   // nothing of the pick yet
+        Assert.DoesNotContain(sent, rpn => rpn.Contains("INS_2_ROTARY_MODE", StringComparison.Ordinal));
+
+        gate.SetResult();
+        await _def.KeysDone;
+
+        Assert.All(sent.Take(sent.Count - 1), rpn => Assert.Contains("INS_2_KEY_2", rpn));   // every key first
+        Assert.Contains("INS_2_ROTARY_MODE", sent[^1]);                                       // then the pick
+        Assert.Empty(_speech.All);
+    }
+
+    [Fact]
+    public async Task A_selector_pick_with_no_keys_queued_is_written_at_once()
+    {
+        var sent = new List<string>();
+        _def.SendCalc = (_, rpn) => sent.Add(rpn);
+        _def.CanLand = _ => true;
+        Assert.Equal(0, _def.KeysBusyForMs());
+
+        _def.SetInsSelector("INS_2_ROTARY_MODE", 5, _sim, _speech);
+
+        Assert.Single(sent);   // no await needed: the chain was idle
+        Assert.Contains("INS_2_ROTARY_MODE", sent[0]);
+        await _def.KeysDone;
+        Assert.Single(sent);
+    }
+
+    [Fact]
+    public async Task A_queued_selector_pick_keeps_the_rows_own_refusal_and_speaks_it_when_it_runs()
+    {
+        var gate = new TaskCompletionSource();
+        _def.SendCalc = (_, _) => { };
+        _def.StepDelay = _ => gate.Task;
+        _def.CanLand = _ => true;
+        Assert.True(_def.TypeKeys(L1011InsDevice.Ins1, "3", insert: false, _sim, _speech));
+
+        _def.CanLand = _ => false;   // the write cannot land when the pick's turn comes
+        _def.SetInsSelector("INS_1_ROTARY_MODE", 3, _sim, _speech);
+        Assert.Empty(_speech.All);   // not before the keys
+
+        gate.SetResult();
+        await _def.KeysDone;
+        Assert.Equal(new[] { "Display selector unavailable" }, _speech.All);
+    }
+
+    [Fact]
+    public async Task Keys_chained_after_a_queued_pick_run_behind_it()
+    {
+        var sent = new List<string>();
+        var gate = new TaskCompletionSource();
+        _def.SendCalc = (_, rpn) => sent.Add(rpn);
+        _def.StepDelay = _ => gate.Task;
+        _def.CanLand = _ => true;
+        Assert.True(_def.TypeKeys(L1011InsDevice.Ins2, "2", insert: false, _sim, _speech));
+        _def.SetInsSelector("INS_2_ROTARY_MODE", 5, _sim, _speech);
+        Assert.True(_def.TypeKeys(L1011InsDevice.Ins2, "4", insert: false, _sim, _speech));
+
+        gate.SetResult();
+        await _def.KeysDone;
+
+        int pick = sent.FindIndex(rpn => rpn.Contains("INS_2_ROTARY_MODE", StringComparison.Ordinal));
+        Assert.True(pick > 0);
+        Assert.DoesNotContain(sent.Take(pick), rpn => rpn.Contains("KEY_4", StringComparison.Ordinal));
+        Assert.Contains(sent.Skip(pick + 1), rpn => rpn.Contains("KEY_4", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Alignment_and_the_pms_phase_are_announced_and_muteable()
     {
         var vars = _def.GetVariables();

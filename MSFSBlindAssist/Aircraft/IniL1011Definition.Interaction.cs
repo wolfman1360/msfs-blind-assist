@@ -16,6 +16,13 @@ public partial class IniL1011Definition
 {
     private readonly L1011CommandedState _commanded = new();
 
+    /// <summary>Sends one calculator string (<see cref="SimConnectManager.ExecuteCalculatorCodeUnique"/>); tests
+    /// replace it to see what was sent, and in what order.</summary>
+    internal Action<SimConnectManager, string> SendCalc { get; set; } = (sim, rpn) => sim.ExecuteCalculatorCodeUnique(rpn);
+
+    /// <summary>The wait inside a plan (a button's hold, the pause between key strings); tests replace it.</summary>
+    internal Func<int, Task> StepDelay { get; set; } = Task.Delay;
+
     /// <summary>Steps still owed after a hold that has not finished (a button's release), keyed by
     /// run, so <see cref="Dispose"/> can let go of a held button before the definition goes away.</summary>
     private readonly Dictionary<int, IReadOnlyList<L1011Step>> _owed = new();
@@ -99,11 +106,11 @@ public partial class IniL1011Definition
                 switch (steps[i])
                 {
                     case L1011CalcStep calc:
-                        sim.ExecuteCalculatorCodeUnique(calc.Rpn);
+                        SendCalc(sim, calc.Rpn);
                         break;
                     case L1011DelayStep delay:
                         _owed[run] = steps.Skip(i + 1).ToList();
-                        await Task.Delay(delay.Milliseconds);
+                        await StepDelay(delay.Milliseconds);
                         _owed.Remove(run);
                         break;
                 }
@@ -128,7 +135,7 @@ public partial class IniL1011Definition
         foreach (var steps in _owed.Values.ToList())
             foreach (var step in steps)
                 if (step is L1011CalcStep calc)
-                    sim.ExecuteCalculatorCodeUnique(calc.Rpn);
+                    SendCalc(sim, calc.Rpn);
         _owed.Clear();
     }
 

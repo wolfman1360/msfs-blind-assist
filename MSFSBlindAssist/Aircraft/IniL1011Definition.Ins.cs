@@ -35,6 +35,9 @@ public partial class IniL1011Definition
     /// <summary>When (on <see cref="Clock"/>) the keys chained so far will have run.</summary>
     private long _keysIdleAtMs;
 
+    /// <summary>Completes when everything chained so far has run; tests await it.</summary>
+    internal Task KeysDone => _keyChain;
+
     /// <summary>How long the keys already chained still take, in ms (0 when the chain is idle): the window
     /// holds its read-back of what was typed until then.</summary>
     public int KeysBusyForMs() => (int)Math.Max(0, _keysIdleAtMs - Clock());
@@ -154,11 +157,18 @@ public partial class IniL1011Definition
     /// <summary>The position the aircraft REPORTS for an INS selector ([L1011-11]), or null.</summary>
     internal double? InsSelectorPosition(string key, SimConnectManager sim) => ReportedPosition(key, sim);
 
-    /// <summary>Moves an INS selector through its panel row's write path, so the refusals match the panels.</summary>
+    /// <summary>
+    /// Moves an INS selector through its panel row's write path, so the refusals match the panels. It runs
+    /// behind every key already chained ([L1011-14]): a pick made while typed keys are still being sent
+    /// must not land between two key presses. With the chain idle it runs at once. The refusals, the
+    /// commanded-position hold and the reported-position rule ([L1011-11]) are the row's own and apply when
+    /// the pick's turn comes, so a refusal is spoken then.
+    /// </summary>
     internal void SetInsSelector(string key, double value, SimConnectManager sim, ScreenReaderAnnouncer announcer)
     {
-        if (_rows.ContainsKey(key))
-            HandleUIVariableSet(key, value, GetVariables()[key], sim, announcer);
+        if (!_rows.ContainsKey(key))
+            return;
+        ChainAction(() => HandleUIVariableSet(key, value, GetVariables()[key], sim, announcer));
     }
 
     /// <summary>A unit's mode selector (overhead MSU) as MSFSBA knows it, for the alignment announcer.</summary>
@@ -184,6 +194,34 @@ public partial class IniL1011Definition
         _keysIdleAtMs = Math.Max(Clock(), _keysIdleAtMs) + duration;
         var previous = _keyChain;
         _keyChain = RunAfterAsync(previous, steps, sim);
+    }
+
+    /// <summary>Runs an action on the UI thread after every run already chained, and puts it in the chain, so
+    /// whatever is chained later waits for it too. At once (the chain is idle: its task is complete, so the
+    /// await continues inline) when nothing is queued. The action's own write is not awaited: a selector's
+    /// plan has no wait in it.</summary>
+    private void ChainAction(Action action) => _keyChain = RunActionAfterAsync(_keyChain, action);
+
+    private async Task RunActionAfterAsync(Task previous, Action action)
+    {
+        try
+        {
+            await previous;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("L1011", $"A keypad run failed: {ex.Message}");
+        }
+        if (_disposed)
+            return;
+        try
+        {
+            action();
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("L1011", $"A queued selector write failed: {ex.Message}");
+        }
     }
 
     private async Task RunAfterAsync(Task previous, IReadOnlyList<L1011Step> steps, SimConnectManager sim)
