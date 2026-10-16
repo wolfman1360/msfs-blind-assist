@@ -1,0 +1,636 @@
+using System.Globalization;
+using System.Runtime.InteropServices;
+using MSFSBlindAssist.Accessibility;
+using MSFSBlindAssist.Aircraft;
+using MSFSBlindAssist.Aircraft.L1011;
+using MSFSBlindAssist.SimConnect;
+using MSFSBlindAssist.Utils.Logging;
+
+namespace MSFSBlindAssist.Forms.L1011;
+
+/// <summary>
+/// The TriStar's three INS units and two PMS units as text (Shift+M in input mode, or a Center Console
+/// panel's "Open … window" button), built on the fleet's CDU windows (the A300 and MD-11 MCDU windows, the
+/// PMDG CDUs): ONE window, owned by MainForm, hidden on close and reused; the display first, then the input
+/// box, the unit combo and the unit's own buttons; a PMS page change is spoken by its title and puts the
+/// cursor on line 1; what was typed is read back once it has landed (<see cref="CduScratchpadAnnouncer"/>);
+/// the window's keys never take a chord the focused combo needs (<see cref="L1011InsKeyRouting"/>).
+///
+/// The display is read through the Coherent debugger from the unit's own view ("L1011_INS_1" carries INS 1
+/// and the captain's PMS, "L1011_INS_2" INS 2 and the first officer's PMS, "L1011_INS_3" INS 3). The reader
+/// holds that one view's socket only while the window is visible ([L1011-13]); nothing else is spoken: the
+/// screen reader reads every control, and the definition speaks errors and typed-value confirmations.
+/// </summary>
+public sealed class L1011InsForm : Form
+{
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    /// <summary>How often the reader scrapes the view, and the window polls, while it is shown.</summary>
+    public const int RefreshMs = 500;
+
+    /// <summary>A unit switch moves the reader to the new view only after this long without another switch,
+    /// so arrowing through the unit combo does not open a socket per unit.</summary>
+    private const int ViewSwitchMs = 300;
+
+    /// <summary>Beyond the last chained key: the gauge drawing it and the next scrape. A margin, not a
+    /// measurement (the A300 window's value).</summary>
+    private const int SettleMarginMs = 400;
+
+    private const string AgentFile = "coherent-l1011-ins-agent.js";
+
+    private readonly IniL1011Definition _def;
+    private readonly SimConnectManager _sim;
+    private readonly ScreenReaderAnnouncer _announcer;
+    private readonly System.Windows.Forms.Timer _poll = new() { Interval = RefreshMs };
+    private readonly System.Windows.Forms.Timer _viewSwitch = new() { Interval = ViewSwitchMs };
+    private readonly L1011InsWindowAnnouncer _changes = new();
+    private readonly CduScratchpadAnnouncer _entry = new("Entry closed", stablePolls: 2);
+
+    /// <summary>The entry line spoken on the first poll that saw it (a PMS line the unit erases within about a
+    /// second: <see cref="L1011InsDevices.EntryReadsAtOnce"/>); null while no such line shows, so the next one
+    /// is spoken again, and never fed to <see cref="_entry"/>, so it is never said twice.</summary>
+    private string? _atOnceSpoken;
+    private IntPtr _previousWindow = IntPtr.Zero;
+
+    private DisplayListBox _display = null!;
+    private TextBox _input = null!;
+    private ComboBox _unit = null!;
+    private FlowLayoutPanel _insControls = null!;
+    private FlowLayoutPanel _pmsControls = null!;
+    private ComboBox _displaySelector = null!;
+    private ComboBox _waypointSelector = null!;
+    private ComboBox _autoSelector = null!;
+    private Button _autoBatch = null!;
+    private DisplayListBox _waypoints = null!;
+
+    private CoherentDisplayClient? _client;
+    private string? _clientNeedle;
+    private L1011InsDevice _device = L1011InsDevice.Ins1;
+    private L1011InsScrapeResult? _scrape;
+    private IReadOnlyList<string>? _shown;
+    private bool _updating;
+    private bool _shownOnce;
+
+    public L1011InsForm(IniL1011Definition def, SimConnectManager sim, ScreenReaderAnnouncer announcer)
+    {
+        _def = def;
+        _sim = sim;
+        _announcer = announcer;
+        BuildLayout();
+        MonitorManagerShared.HideOnClose(this, () =>
+        {
+            if (_previousWindow != IntPtr.Zero) SetForegroundWindow(_previousWindow);
+        });
+        _poll.Tick += (_, _) => Poll();
+        _viewSwitch.Tick += (_, _) =>
+        {
+            _viewSwitch.Stop();
+            if (Visible) StartReader();
+        };
+        SwitchTo(_device);   // the first unit's selectors and words: a first open without a unit switch fills them too
+    }
+
+    private int Unit => L1011InsDevices.Unit(_device) ?? 1;
+
+    private string Seat => L1011InsDevices.Seat(_device) ?? "CPT";
+
+    // ---------------------------------------------------------------------------------
+    // Layout
+    // ---------------------------------------------------------------------------------
+
+    private void BuildLayout()
+    {
+        SuspendLayout();
+        Text = "TriStar INS and PMS";
+        AccessibleName = "TriStar INS and PMS";
+        ClientSize = new Size(640, 760);
+        StartPosition = FormStartPosition.CenterScreen;
+        KeyPreview = true;
+        ShowInTaskbar = false;
+
+        var layout = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true };
+
+        _display = new DisplayListBox
+        {
+            Size = new Size(600, 220),
+            AccessibleName = "INS 1 display",
+            AccessibleDescription = "The unit's screen, one line at a time. Updates live.",
+            IntegralHeight = false,
+        };
+        _input = new TextBox
+        {
+            Width = 600,
+            AccessibleName = "Keypad input",
+            AccessibleDescription = "Digits, and on an INS the letters N, S, E, W, L and R. Enter sends the keys; Control Enter presses Insert.",
+        };
+        _unit = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 300, AccessibleName = "Unit" };
+        foreach (var device in L1011InsDevices.All)
+            _unit.Items.Add(L1011InsDevices.Name(device));
+        _unit.SelectedIndex = 0;
+
+        _insControls = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true };
+        AddButton(_insControls, "&Insert", () => Press(L1011InsDevices.InsertKey(_device)));
+        AddButton(_insControls, "&Clear", () => Press(L1011InsDevices.ClearKey(_device)));
+        AddButton(_insControls, "&Hold", () => Press(L1011InsKeys.Hold(Unit)));
+        AddButton(_insControls, "&Track change", () => Press(L1011InsKeys.TrackChange(Unit)));
+        _displaySelector = AddSelector(_insControls, "Display selector");
+        _waypointSelector = AddSelector(_insControls, "Waypoint selector");
+        _autoSelector = AddSelector(_insControls, "Auto, manual, remote selector");
+        AddButton(_insControls, "Enter &present position", EnterPresentPosition);
+        _autoBatch = AddButton(_insControls, "Automatic waypoint loading: unknown", ToggleAutoBatch);
+        _waypoints = new DisplayListBox
+        {
+            Size = new Size(600, 180),
+            AccessibleName = "INS 1 waypoints",
+            IntegralHeight = false,
+            TabIndex = _insControls.Controls.Count,
+        };
+        _insControls.Controls.Add(_waypoints);
+
+        _pmsControls = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Visible = false };
+        AddButton(_pmsControls, "&Insert", () => Press(L1011InsDevices.InsertKey(_device)));
+        AddButton(_pmsControls, "&Clear", () => Press(L1011InsDevices.ClearKey(_device)));
+        AddButton(_pmsControls, "&Next page", () => Press(L1011InsKeys.PmsKey(Seat, "FWD")));
+        AddButton(_pmsControls, "Pre&vious page", () => Press(L1011InsKeys.PmsKey(Seat, "BACK")));
+        AddButton(_pmsControls, "Performance &management", () => Press(L1011InsKeys.PmsKey(Seat, "PERF_MGT")));
+        for (int line = 1; line <= 6; line++)
+        {
+            int n = line;
+            AddButton(_pmsControls, $"Line {n} key", () => Press(L1011InsKeys.PmsLineKey(Seat, n)));
+        }
+
+        layout.Controls.Add(_display);
+        layout.Controls.Add(_input);
+        layout.Controls.Add(_unit);
+        layout.Controls.Add(_insControls);
+        layout.Controls.Add(_pmsControls);
+        int tab = 0;
+        _display.TabIndex = tab++;
+        _input.TabIndex = tab++;
+        _unit.TabIndex = tab++;
+        _insControls.TabIndex = tab++;
+        _pmsControls.TabIndex = tab++;
+        Controls.Add(layout);
+
+        _unit.SelectionChangeCommitted += (_, _) =>
+        {
+            if (!_updating && _unit.SelectedIndex >= 0)
+                SwitchTo(L1011InsDevices.All[_unit.SelectedIndex]);   // silent: the reader said the new unit
+        };
+        _display.KeyDown += Display_KeyDown;
+        _input.KeyDown += Input_KeyDown;
+        KeyDown += Form_KeyDown;
+        ResumeLayout(false);
+    }
+
+    private static Button AddButton(Control parent, string text, System.Action click)
+    {
+        var button = new Button { Text = text, Width = 300, Height = 28, TabIndex = parent.Controls.Count };
+        button.Click += (_, _) => click();
+        parent.Controls.Add(button);
+        return button;
+    }
+
+    private ComboBox AddSelector(Control parent, string name)
+    {
+        var combo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 300, AccessibleName = name, TabIndex = parent.Controls.Count };
+        combo.SelectionChangeCommitted += (_, _) =>
+        {
+            if (_updating || combo.SelectedIndex < 0 || combo.Tag is not string key)
+                return;
+            var target = _def.InsSelectorPositions(key).OrderBy(p => p.Key).ElementAt(combo.SelectedIndex).Key;
+            _def.SetInsSelector(key, target, _sim, _announcer);
+        };
+        parent.Controls.Add(combo);
+        return combo;
+    }
+
+    // ---------------------------------------------------------------------------------
+    // Units and the reader
+    // ---------------------------------------------------------------------------------
+
+    /// <summary>Shows the window on a unit (a panel button), or on the one it last showed (Shift+M), with the
+    /// cursor on its display. A re-show is silent.</summary>
+    public void ShowForm(L1011InsDevice? device)
+    {
+        _previousWindow = GetForegroundWindow();
+        if (device is L1011InsDevice d && d != _device)
+            SwitchTo(d);
+        Show();
+        BringToFront();
+        Activate();
+        TopMost = true;
+        TopMost = false;
+        if (!_shownOnce && _display.Items.Count > 0)
+            _display.SelectedIndex = 0;   // a first open names the unit through the reader's read of the row
+        _shownOnce = true;
+        ActiveControl = _display;
+        _display.Focus();
+    }
+
+    protected override void OnVisibleChanged(EventArgs e)
+    {
+        base.OnVisibleChanged(e);
+        if (Visible)
+        {
+            _changes.Reset();
+            _entry.Reset();
+            _atOnceSpoken = null;
+            StartReader();
+            _poll.Start();
+            Repaint();
+        }
+        else
+        {
+            _poll.Stop();
+            _viewSwitch.Stop();
+            StopReader();
+        }
+    }
+
+    /// <summary>Moves the window to another unit: its view, its controls and its words, silently.</summary>
+    private void SwitchTo(L1011InsDevice device)
+    {
+        string before = L1011InsDevices.ViewNeedle(_device);
+        _device = device;
+        bool pms = L1011InsDevices.IsPms(device);
+        string name = L1011InsDevices.Name(device);
+
+        _updating = true;
+        try
+        {
+            _unit.SelectedIndex = L1011InsDevices.All.ToList().IndexOf(device);
+            if (!pms)
+            {
+                string n = Unit.ToString(CultureInfo.InvariantCulture);
+                Fill(_displaySelector, $"INS_{n}_ROTARY_MODE");
+                Fill(_waypointSelector, $"INS_{n}_ROTARY_WPT");
+                Fill(_autoSelector, $"INS_{n}_ROTARY_AUTO");
+            }
+        }
+        finally
+        {
+            _updating = false;
+        }
+
+        _display.AccessibleName = name + " display";
+        _waypoints.AccessibleName = name + " waypoints";
+        _insControls.Visible = !pms;
+        _pmsControls.Visible = pms;
+        _changes.Reset();
+        _entry.Reset();
+        _atOnceSpoken = null;
+        _shown = null;
+
+        if (L1011InsDevices.ViewNeedle(device) != before)
+        {
+            StopReader();
+            _viewSwitch.Stop();
+            if (Visible) _viewSwitch.Start();
+        }
+        else
+        {
+            _client?.SetActive(true);   // a fresh push for the unit now shown
+        }
+        Repaint();
+    }
+
+    private void Fill(ComboBox combo, string key)
+    {
+        combo.Tag = key;
+        combo.Items.Clear();
+        foreach (var p in _def.InsSelectorPositions(key).OrderBy(p => p.Key))
+            combo.Items.Add(p.Value);
+    }
+
+    /// <summary>
+    /// The scrape with the shown INS's overhead mode selector as the aircraft REPORTS it ([L1011-11]), for
+    /// the display's "Mode selector" line: the reader runs in the INS view, which does not know the MSU; the
+    /// Overhead row does (<c>L:ROTARY_INS_MODE_n</c>, 0 Off, 1 Standby, 2 Align, 3 Nav, 4 Attitude), read the
+    /// way the three selector combos are. Null stays null; a PMS is returned as is.
+    /// </summary>
+    private L1011InsScrapeResult? WithMsu(L1011InsScrapeResult? scrape)
+    {
+        if (scrape == null || L1011InsDevices.IsPms(_device))
+            return scrape;
+        int? msu = _def.InsSelectorPosition(L1011InsAlignmentAnnouncer.MsuKey(Unit), _sim) is double m ? (int)Math.Round(m) : null;
+        return scrape with { Ins = scrape.Ins with { Msu = msu } };
+    }
+
+    /// <summary>Starts the shown unit's reader (the view's one inspector socket).</summary>
+    private void StartReader()
+    {
+        string needle = L1011InsDevices.ViewNeedle(_device);
+        if (_client != null && _clientNeedle == needle)
+            return;
+        StopReader();
+        var reader = new CoherentDisplayClient(needle, RefreshMs, AgentFile);
+        reader.RowsUpdated += rows => OnRows(reader, rows);
+        reader.Error += message => Log.Warn("L1011", $"INS reader: {message}");
+        _client = reader;
+        _clientNeedle = needle;
+        reader.Start();
+    }
+
+    /// <summary>Stops the reader and forgets what it read: its socket goes back to the view.</summary>
+    private void StopReader()
+    {
+        _client?.Dispose();
+        _client = null;
+        _clientNeedle = null;
+        _scrape = null;
+    }
+
+    /// <summary>Takes a reader's rows only while it is the running one (a post queued before it stopped is dropped).</summary>
+    private void OnRows(CoherentDisplayClient source, List<string> rows)
+    {
+        if (InvokeRequired)
+        {
+            try { BeginInvoke(new System.Action(() => OnRows(source, rows))); } catch (InvalidOperationException) { }
+            return;
+        }
+        if (IsDisposed || !ReferenceEquals(source, _client) || L1011InsScrape.Parse(rows) is not L1011InsScrapeResult parsed)
+            return;
+        _scrape = parsed;
+        string? words = _changes.Observe(_device, parsed);
+        Repaint();
+        if (words == null)
+            return;
+        _announcer.Announce(words);
+        if (L1011InsDevices.IsPms(_device) && _display.Items.Count > 1)
+            _display.SelectedIndex = 1;   // a new page: the cursor on line 1, as on every CDU window
+    }
+
+    // ---------------------------------------------------------------------------------
+    // Read-out
+    // ---------------------------------------------------------------------------------
+
+    private void Poll()
+    {
+        if (IsDisposed)
+            return;
+        Repaint();
+        if (L1011InsDevices.EntryLine(_device, _scrape) is not string entry)
+            return;
+        if (L1011InsDevices.EntryReadsAtOnce(_device, _scrape))
+        {
+            // A PMS line the unit erases within about a second (its ERROR word after a refused value; "---"
+            // drawn inside the label while the entry is open): read on the first poll that sees it, not after
+            // two stable polls ([CORE-7], a validation error always speaks), and not held back by the typing
+            // suppression (it is never half-landed). The stable-poll announcer is not fed it, so it is never
+            // said twice; the line the gauge draws next (the value as it was, or an emptied entry) is read back
+            // the ordinary way. An INS INSERT the unit refuses changes nothing and so says nothing.
+            if (entry != _atOnceSpoken)
+            {
+                _atOnceSpoken = entry;
+                _announcer.Announce(entry);
+            }
+            return;
+        }
+        _atOnceSpoken = null;
+        if (_entry.OnPoll(entry, DateTime.UtcNow) is string say)
+            _announcer.Announce(say);
+    }
+
+    private void Repaint()
+    {
+        if (IsDisposed)
+            return;
+        var lines = L1011InsDevices.Lines(_device, WithMsu(_scrape)) ?? _shown ?? L1011InsDevices.Lines(_device, null)!;
+        _shown = lines;
+        _display.SetLines(lines);
+        if (L1011InsDevices.IsPms(_device))
+            return;
+
+        _waypoints.SetLines(_scrape == null
+            ? new[] { "Reading the waypoints..." }
+            : L1011InsWaypoints.Lines(_scrape.Waypoints, _scrape.ActiveBatch, _scrape.BatchCount));
+
+        string loading = "Automatic waypoint loading: " + (_scrape?.AutoBatch switch { true => "on", false => "off", _ => "unknown" });
+        if (_autoBatch.Text != loading)
+        {
+            _autoBatch.Text = loading;
+            _autoBatch.AccessibleName = loading;
+        }
+
+        _updating = true;
+        try
+        {
+            foreach (var combo in new[] { _displaySelector, _waypointSelector, _autoSelector })
+            {
+                if (combo.Tag is not string key || combo.DroppedDown)
+                    continue;
+                var ordered = _def.InsSelectorPositions(key).OrderBy(p => p.Key).ToList();
+                int index = _def.InsSelectorPosition(key, _sim) is double v ? ordered.FindIndex(p => Math.Abs(p.Key - v) < 0.01) : -1;
+                if (index >= 0 && combo.SelectedIndex != index)
+                    combo.SelectedIndex = index;
+            }
+        }
+        finally
+        {
+            _updating = false;
+        }
+    }
+
+    // ---------------------------------------------------------------------------------
+    // Keys
+    // ---------------------------------------------------------------------------------
+
+    private void Form_KeyDown(object? sender, KeyEventArgs e)
+    {
+        var combo = ActiveControl as ComboBox;
+        var focus = combo == null ? L1011InsKeyRouting.ComboFocus.None
+            : combo.DroppedDown ? L1011InsKeyRouting.ComboFocus.Dropped
+            : L1011InsKeyRouting.ComboFocus.Closed;
+        var action = L1011InsKeyRouting.Resolve(e.KeyCode, e.Alt, e.Control, e.Shift, focus,
+            MSFSBlindAssist.Settings.SettingsManager.Current.MCDUUseAlternateLSKKeys, L1011InsDevices.IsPms(_device));
+        if (action.Kind == L1011InsKeyRouting.ActionKind.Pass)
+            return;
+        e.Handled = true;
+        e.SuppressKeyPress = true;
+        switch (action.Kind)
+        {
+            case L1011InsKeyRouting.ActionKind.Close:
+                Close();
+                break;
+            case L1011InsKeyRouting.ActionKind.Insert:
+                Press(L1011InsDevices.InsertKey(_device));
+                break;
+            case L1011InsKeyRouting.ActionKind.LineKey:
+                Press(L1011InsKeys.PmsLineKey(Seat, action.Line));
+                break;
+            case L1011InsKeyRouting.ActionKind.NextPage:
+                Press(L1011InsKeys.PmsKey(Seat, "FWD"));
+                break;
+            case L1011InsKeyRouting.ActionKind.PreviousPage:
+                Press(L1011InsKeys.PmsKey(Seat, "BACK"));
+                break;
+            case L1011InsKeyRouting.ActionKind.FocusInput:
+                _input.Focus();
+                break;
+            case L1011InsKeyRouting.ActionKind.FocusDisplay:
+                _display.Focus();
+                break;
+        }
+    }
+
+    /// <summary>Backspace (CLR, or CLEAR on an INS) and, on a PMS, Right Arrow (the next page), on the display
+    /// only: the input box needs those keys to edit its own text.</summary>
+    private void Display_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Alt || e.Control || e.Shift)
+            return;
+        if (e.KeyCode == Keys.Back)
+            Press(L1011InsDevices.ClearKey(_device));
+        else if (e.KeyCode == Keys.Right && L1011InsDevices.IsPms(_device))
+            Press(L1011InsKeys.PmsKey(Seat, "FWD"));
+        else
+            return;
+        e.Handled = true;
+        e.SuppressKeyPress = true;
+    }
+
+    /// <summary>Enter sends the typed keys (no INSERT: Ctrl+Enter or the Insert button does that). A refused
+    /// entry stays in the box, to be edited and sent again.</summary>
+    private void Input_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyCode != Keys.Return || e.Alt || e.Control || e.Shift)
+            return;
+        e.Handled = true;
+        e.SuppressKeyPress = true;
+        if (_input.Text.Length == 0)
+            return;
+        if (!_def.TypeKeys(_device, _input.Text, insert: false, _sim, _announcer))
+            return;
+        HoldReadBack();
+        _input.Clear();
+    }
+
+    private void Press(string controlId)
+    {
+        if (_def.PressKeys(_device, new[] { controlId }, _sim, _announcer))
+            HoldReadBack();
+    }
+
+    /// <summary>Holds the read-back of what was typed until the chained keys have landed, so an entry is read
+    /// once, settled (the A300 window's rule).</summary>
+    private void HoldReadBack()
+    {
+        var until = DateTime.UtcNow.AddMilliseconds(_def.KeysBusyForMs() + SettleMarginMs);
+        if (until > _entry.SuppressUntil)
+            _entry.SuppressUntil = until;
+    }
+
+    /// <summary>The simulator's own position, typed into this INS on its POSITION page.</summary>
+    private void EnterPresentPosition()
+    {
+        int unit = Unit;
+        if (_scrape?.Ins.Entry is { Length: > 0 })
+        {
+            _announcer.Announce($"INS {unit.ToString(CultureInfo.InvariantCulture)}: an entry is open. Press Clear, then try again");
+            return;
+        }
+        if (!_sim.IsConnected)
+        {
+            _announcer.Announce($"INS {unit.ToString(CultureInfo.InvariantCulture)} keypad unavailable");
+            return;
+        }
+        _sim.RequestAircraftPositionAsync(position =>
+        {
+            void Enter()
+            {
+                if (_def.EnterPresentPosition(unit, position.Latitude, position.Longitude, _sim, _announcer))
+                    HoldReadBack();
+            }
+            if (IsDisposed)
+                return;
+            if (InvokeRequired)
+            {
+                try { BeginInvoke(new System.Action(Enter)); } catch (InvalidOperationException) { }
+            }
+            else
+            {
+                Enter();
+            }
+        });
+    }
+
+    private void ToggleAutoBatch()
+    {
+        if (_scrape?.AutoBatch is not bool on)
+        {
+            _announcer.Announce("Automatic waypoint loading: state unknown");
+            return;
+        }
+        _def.SetAutoBatch(Unit, !on, _sim, _announcer);
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _poll.Stop();
+            _poll.Dispose();
+            _viewSwitch.Stop();
+            _viewSwitch.Dispose();
+            StopReader();
+        }
+        base.Dispose(disposing);
+    }
+}
+
+/// <summary>
+/// The INS window's form-wide keys, as a pure function of the chord, what has focus, the line-select layout
+/// setting and whether a PMS is shown. The A300 MCDU window's rules: a chord the focused unit combo needs is
+/// never taken (<see cref="MSFSBlindAssist.Forms.MD11.Md11McduForm.KeyRouting.ComboBoxNeedsKey"/>), and a
+/// binding matches its own chord and nothing more. The PMS has six LEFT line keys only; the INS has none.
+/// </summary>
+public static class L1011InsKeyRouting
+{
+    public enum ComboFocus { None, Closed, Dropped }
+
+    public enum ActionKind { Pass, Close, Insert, LineKey, NextPage, PreviousPage, FocusInput, FocusDisplay }
+
+    public readonly record struct Action(ActionKind Kind, int Line = 0)
+    {
+        public static readonly Action Pass = new(ActionKind.Pass);
+    }
+
+    public static Action Resolve(Keys keyCode, bool alt, bool control, bool shift, ComboFocus combo,
+        bool useAlternateLskKeys, bool pms)
+    {
+        if (combo != ComboFocus.None
+            && MSFSBlindAssist.Forms.MD11.Md11McduForm.KeyRouting.ComboBoxNeedsKey(keyCode, alt, control, shift, combo == ComboFocus.Dropped))
+            return Action.Pass;
+        bool none = !alt && !control && !shift;
+        bool ctrlOnly = control && !alt && !shift;
+        bool altOnly = alt && !control && !shift;
+
+        if (keyCode == Keys.Escape && none)
+            return new Action(ActionKind.Close);
+        if (keyCode == Keys.Return && ctrlOnly)
+            return new Action(ActionKind.Insert);
+        if (pms)
+        {
+            if (useAlternateLskKeys && none && keyCode >= Keys.F1 && keyCode <= Keys.F6)
+                return new Action(ActionKind.LineKey, keyCode - Keys.F1 + 1);
+            if (!useAlternateLskKeys && ctrlOnly && keyCode >= Keys.D1 && keyCode <= Keys.D6)
+                return new Action(ActionKind.LineKey, keyCode - Keys.D1 + 1);
+            if (none && keyCode == Keys.PageUp)
+                return new Action(ActionKind.PreviousPage);
+            if (none && keyCode == Keys.PageDown)
+                return new Action(ActionKind.NextPage);
+            if (altOnly && keyCode == Keys.Right)
+                return new Action(ActionKind.NextPage);
+        }
+        if (altOnly && keyCode == Keys.S)
+            return new Action(ActionKind.FocusInput);
+        if (altOnly && keyCode == Keys.Home)
+            return new Action(ActionKind.FocusDisplay);
+        return Action.Pass;
+    }
+}

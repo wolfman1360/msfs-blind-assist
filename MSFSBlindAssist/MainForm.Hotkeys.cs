@@ -243,8 +243,8 @@ public partial class MainForm
                 }
                 else if (currentAircraft is IniL1011Definition)
                 {
-                    // The TriStar has no MCDU window (its INS/PMS is a later session); the Fenix
-                    // fallback below must not open on it.
+                    // The TriStar's three INS and two PMS units (MainForm.L1011.cs).
+                    ShowL1011InsDialog(null);
                 }
                 else
                 {
