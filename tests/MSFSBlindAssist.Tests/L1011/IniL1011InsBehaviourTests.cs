@@ -81,6 +81,90 @@ public class IniL1011InsBehaviourTests
         Assert.Equal(0, _def.KeysBusyForMs());
     }
 
+    /// <summary>Puts the unit's display selector somewhere the definition knows: a pick through its panel row,
+    /// which the definition trusts for L1011CommandedState.HoldMs over the 1 Hz cache (the never-connected
+    /// manager has no cache), the way a pilot's own pick would be.</summary>
+    private void SelectorIsAt(int unit, double position)
+    {
+        string key = $"INS_{unit}_ROTARY_MODE";
+        Assert.True(_def.HandleUIVariableSet(key, position, _def.GetVariables()[key], _sim, _speech));
+        Assert.Empty(_speech.All);   // a pick that can land is silent
+    }
+
+    private static readonly int FifteenKeysMs = 15 * (IniL1011Definition.KeyHoldMs + IniL1011Definition.KeyGapMs);
+
+    private const string PresentPositionWords = "INS 2: entering present position N 36 05.1, W 115 08.0";
+
+    [Fact]
+    public void The_present_position_entry_turns_the_selector_to_position_then_keys_the_position()
+    {
+        // [L1011-14]: on any other page the N/S/E/W keys start no entry, so the selector moves first, the
+        // gauge gets SelectorSettleMs to draw the page, then the 15 keys follow in the same chain.
+        _def.CanLand = _ => true;
+        SelectorIsAt(2, 5);
+        Assert.True(_def.EnterPresentPosition(2, 36.08540568, -115.13363512, _sim, _speech));
+        Assert.Equal(IniL1011Definition.SelectorSettleMs + FifteenKeysMs, _def.KeysBusyForMs());
+        Assert.Equal(new[] { PresentPositionWords }, _speech.All);
+    }
+
+    [Fact]
+    public void The_present_position_entry_chains_no_settle_when_the_selector_is_already_at_position()
+    {
+        _def.CanLand = _ => true;
+        SelectorIsAt(2, 3);
+        Assert.True(_def.EnterPresentPosition(2, 36.08540568, -115.13363512, _sim, _speech));
+        Assert.Equal(FifteenKeysMs, _def.KeysBusyForMs());
+        Assert.Equal(new[] { PresentPositionWords }, _speech.All);
+    }
+
+    [Fact]
+    public void The_present_position_sentence_is_the_same_under_a_comma_decimal_culture()
+    {
+        var saved = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("sv-SE");
+            _def.CanLand = _ => true;
+            SelectorIsAt(2, 5);
+            Assert.True(_def.EnterPresentPosition(2, 36.08540568, -115.13363512, _sim, _speech));
+            Assert.Equal(new[] { PresentPositionWords }, _speech.All);
+            Assert.Equal(IniL1011Definition.SelectorSettleMs + FifteenKeysMs, _def.KeysBusyForMs());
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = saved;
+        }
+    }
+
+    [Fact]
+    public void Every_control_a_present_position_can_press_is_a_button_in_the_map()
+    {
+        // Digits 0-9 and INSERT, on all three units: the entry's whole key set, swept over many places so a
+        // key the sequence can reach but this list lacks fails here, not in the sim.
+        var wanted = new HashSet<string>();
+        foreach (int unit in new[] { 1, 2, 3 })
+        {
+            for (char digit = '0'; digit <= '9'; digit++)
+                wanted.Add($"INS_{unit}_KEY_{digit}");
+            wanted.Add($"INS_{unit}_KEY_INSERT");
+        }
+        var emitted = new HashSet<string>();
+        var random = new Random(1011);
+        foreach (int unit in new[] { 1, 2, 3 })
+            for (int i = 0; i < 2_000; i++)
+                foreach (var id in L1011InsKeys.PresentPositionControls(unit, random.NextDouble() * 180 - 90, random.NextDouble() * 360 - 180))
+                    emitted.Add(id);
+        Assert.Equal(wanted.OrderBy(id => id), emitted.OrderBy(id => id));
+
+        var map = L1011ControlMap.Load();
+        foreach (var id in wanted)
+        {
+            var control = map.Find(id);
+            Assert.True(control != null, $"{id} is not in the control map");
+            Assert.Equal(L1011Kinds.Button, control!.Kind);
+        }
+    }
+
     [Fact]
     public void Chained_keys_say_how_long_they_still_take()
     {

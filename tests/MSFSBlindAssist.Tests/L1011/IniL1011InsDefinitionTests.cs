@@ -72,7 +72,8 @@ public class IniL1011InsDefinitionTests
         var lamps = L1011Annunciators.All.Where(l => l.Var.StartsWith("INS_", StringComparison.Ordinal)).ToList();
         Assert.Equal(10, lamps.Count);
         Assert.All(lamps, l => Assert.Equal("INS " + l.Var[4], l.Panel));
-        Assert.Single(lamps, l => l.Var.EndsWith("_ALERT_INDEX", StringComparison.Ordinal));
+        var alert = Assert.Single(lamps, l => l.Var.EndsWith("_ALERT_INDEX", StringComparison.Ordinal));
+        Assert.Equal("INS_1_ALERT_INDEX", alert.Var);   // INS 1 feeds the captain's HSI and the autopilot
         Assert.Contains(lamps, l => l.Var == "INS_1_READY" && l.Name == "INS 1 ready to navigate light");
         Assert.Contains("LAMP_INS_3_WARN", _def.GetPanelDisplayVariables()["INS 3"]);
     }
