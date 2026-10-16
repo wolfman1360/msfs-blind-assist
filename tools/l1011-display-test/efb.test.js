@@ -1,6 +1,9 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
+const { JSDOM } = require('jsdom');
 const { load, reveal, conceal, scrape, lines, idxOf, agentSource } = require('./efb-run');
 
 // coherent-l1011-efb-agent.js against compact live captures of the Paper Flight Bag (2026-10-03).
@@ -497,4 +500,36 @@ test('every control has a name, and keys are unique on every page', () => {
     const keys = els.filter((e) => e.key).map((e) => e.key);
     assert.strictEqual(new Set(keys).size, keys.length, name + ': a key repeats');
   }
+});
+
+// efb-capture.js is how the fixtures are made, so it must not commit what a pilot's own tablet shows:
+// the Navigraph account name, the flight plan's airport codes (button text and data-airport) and a
+// looked-up METAR. A synthetic tablet with obviously fake values stands in for the live one.
+test('the capture tool keeps no personal data', () => {
+  const dom = new JSDOM(
+    '<!DOCTYPE html><html><body><div id="iniEFB"><div class="page">' +
+      '<div class="navigraph-login__auth"><span>YOU ARE LOGGED IN AS <b>TESTUSER</b></span></div>' +
+      '<div class="charts-sidebar__airport" data-airport="ZZZZ"></div>' +
+      '<div class="charts-icao-populate"><div class="btn-group" role="group">' +
+      '<button type="button" data-airport="ZZZZ">ZZZZ</button>' +
+      '<button type="button" data-airport="ZZZZ">ZZZZ</button>' +
+      '</div></div>' +
+      '<p class="card-text wx-flight-value">ZZZZ 000000Z</p>' +
+      '</div></div></body></html>',
+    { runScripts: 'outside-only' });
+  const { window } = dom;
+  window.getComputedStyle = () => ({ display: 'block', visibility: 'visible' });
+  window.Element.prototype.getBoundingClientRect = function () {
+    return { top: 0, left: 0, right: 100, bottom: 20, width: 100, height: 20, x: 0, y: 0 };
+  };
+  const html = window.eval(fs.readFileSync(path.join(__dirname, 'efb-capture.js'), 'utf8'));
+  assert.strictEqual(typeof html, 'string');
+  for (const secret of ['TESTUSER', 'ZZZZ', '000000Z', 'data-airport']) {
+    assert.ok(html.indexOf(secret) < 0, 'the capture still holds ' + secret);
+  }
+  for (const kept of ['navigraph-login__auth', 'YOU ARE LOGGED IN AS', 'charts-icao-populate', 'btn-group', 'wx-flight-value']) {
+    assert.ok(html.indexOf(kept) >= 0, 'the capture lost ' + kept);
+  }
+  assert.strictEqual((html.match(/<button/g) || []).length, 2);
+  assert.strictEqual((html.match(/>----</g) || []).length, 3, 'the two shortcuts and the METAR read ----');
 });

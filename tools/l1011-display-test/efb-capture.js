@@ -2,8 +2,9 @@
 // display fixture"). Evaluated in an iniEFBL1011_n view, it stamps data-vis="1" from the LIVE computed style,
 // clones the tablet, keeps the nav bar, the pause overlay, the keyboard shell and the visible page (on the Menu,
 // only the sidebar and the visible pane), and returns that clone's HTML with iniBuilds' inline handlers,
-// decorative images, coordinates and every field value removed, the Navigraph code removed and the OFP replaced
-// by a two-line stand-in. The live page is left as it was. Not a test: node --test does not pick it up.
+// decorative images, coordinates and every field value removed, the Navigraph code and account name, the
+// airport shortcuts (text and data-airport) and the METAR removed, and the OFP replaced by a two-line
+// stand-in. The live page is left as it was. Not a test: node --test does not pick it up.
 (function () {
   var root = document.getElementById('iniEFB');
   var all = root.getElementsByTagName('*');
@@ -26,6 +27,15 @@
   for (var q = panes.length - 1; q >= 0; q--) if (!panes[q].getAttribute('data-vis')) panes[q].parentNode.removeChild(panes[q]);
   drop('script, style, svg, canvas, img.perforated, .virtual-keyboard .keyboard-input, .navigation-bar-background');
   drop('.navigraph-login__usercode span');
+  // What the pilot's own tablet shows about them: the Navigraph account name, the flight plan's airport
+  // shortcuts (text here, data-airport below) and a looked-up METAR, which names an airport.
+  function blank(sel, text) {
+    var n = clone.querySelectorAll(sel);
+    for (var k = n.length - 1; k >= 0; k--) n[k].textContent = text;
+  }
+  blank('.navigraph-login__auth b', '');
+  blank('.charts-icao-populate button', '----');
+  blank('.wx-flight-value', '----');
   var imgs = clone.querySelectorAll('img');
   for (var m = imgs.length - 1; m >= 0; m--) if (!imgs[m].id && !imgs[m].classList.contains('toggle-icon')) imgs[m].parentNode.removeChild(imgs[m]);
   var plan = clone.querySelector('.simbrief-viewer__plan');
@@ -39,7 +49,7 @@
   everything.forEach(function (el) {
     for (var a = el.attributes.length - 1; a >= 0; a--) {
       var name = el.attributes[a].name;
-      if (!KEEP.test(name) || name.indexOf('data-react') === 0 || name === 'data-rect') { el.removeAttribute(name); continue; }
+      if (!KEEP.test(name) || name.indexOf('data-react') === 0 || name === 'data-rect' || name === 'data-airport') { el.removeAttribute(name); continue; }
       if (name === 'src') el.setAttribute('src', el.getAttribute('src').split('/').pop());
       if (name === 'style') {
         var kept = (el.getAttribute('style') || '').split(';').map(function (s) { return s.trim(); }).filter(function (s) {
