@@ -96,9 +96,12 @@
     'btn-thirdparty': 'Third party', 'btn-audio': 'Audio'
   };
   var FE_STATUS = { 'is-matched': 'set', 'is-unmatched': 'not set', 'is-in-progress': 'in progress', 'is-unknown': 'status unknown' };
-  // Status lines the menu panes rewrite in place: spoken politely by the form while it is open.
-  var LIVE_STATUS = ['panelstates-step-display', 'helper-result', 'helper-live-dist', 'helper-timer-display',
-    'helper-armed-label', 'throttle-calib-status'];
+  // Status lines the menu panes rewrite in place now and then: spoken politely by the form while it
+  // is open.
+  var LIVE_STATUS = ['panelstates-step-display', 'helper-result', 'helper-armed-label', 'throttle-calib-status'];
+  // A countdown changes every second, so it is patched in place (its key) and read when the pilot
+  // arrows onto it, never spoken by itself: the A300 tablet never speaks a moving number either.
+  var SILENT_STATUS = ['helper-live-dist', 'helper-timer-display'];
 
   // ---- small helpers ------------------------------------------------------------------------
 
@@ -156,7 +159,7 @@
     o = o || {};
     o.type = 'text';
     o.value = node.value;
-    o.disabled = !!node.disabled;
+    o.disabled = inert(node);   // the same rule as the buttons, and as setValue's refusal
     o.act = { field: node };
     out.push(item('', label, o));
   }
@@ -322,7 +325,8 @@
       if (b && shown(b)) button(out, LOAD_TIMED[t][1], b);
     }
     var remaining = byId(popup, 'ls-time-remaining');
-    if (remaining && shown(remaining)) stat(out, 'Time remaining: ' + text(remaining), { live: 'polite', key: 'status:loadtime' });
+    // A countdown: kept in place by its key, never spoken by itself (see SILENT_STATUS).
+    if (remaining && shown(remaining)) stat(out, 'Time remaining: ' + text(remaining), { key: 'status:loadtime' });
     b = byId(popup, 'load-settings-close-btn');
     if (b && shown(b)) button(out, 'Back', b);
   }
@@ -436,6 +440,7 @@
     var pane = null, paneName = '';
     var side = page.querySelectorAll('.page-options__sidebar button.btn');
     for (var i = 0; i < side.length; i++) {
+      if (!shown(side[i])) continue;
       var on = cls(side[i], 'active');
       if (on) paneName = sidebarName(side[i]);
       button(out, sidebarName(side[i]) + (on ? ' (selected)' : ''), side[i], { kind: 'tab' });
@@ -487,6 +492,11 @@
 
   function liveStatus(el) {
     for (var i = 0; i < LIVE_STATUS.length; i++) if (cls(el, LIVE_STATUS[i])) return LIVE_STATUS[i];
+    return '';
+  }
+
+  function silentStatus(el) {
+    for (var i = 0; i < SILENT_STATUS.length; i++) if (cls(el, SILENT_STATUS[i])) return SILENT_STATUS[i];
     return '';
   }
 
@@ -576,10 +586,11 @@
         button(out, label, c, { key: key, disabled: cls(c, 'helper-pause-btn-disabled') });
         continue;
       }
-      if (tag === 'IMG' || tag === 'SVG' || tag === 'CANVAS' || tag === 'LABEL') continue;
-      var live = liveStatus(c);
-      if (live) {
-        if (shown(c) && text(c)) stat(out, text(c), { live: 'polite', key: 'status:' + live });
+      var upper = tag.toUpperCase();   // an svg element's tagName is lowercase in an HTML document
+      if (upper === 'IMG' || upper === 'SVG' || upper === 'CANVAS' || upper === 'LABEL') continue;
+      var live = liveStatus(c), silent = silentStatus(c);
+      if (live || silent) {
+        if (shown(c) && text(c)) stat(out, text(c), live ? { live: 'polite', key: 'status:' + live } : { key: 'status:' + silent });
         continue;
       }
       if (cls(c, 'panelstates-error-display')) {

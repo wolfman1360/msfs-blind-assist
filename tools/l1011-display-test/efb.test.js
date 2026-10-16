@@ -175,7 +175,7 @@ test('kilograms, and the timed loading controls once TIMED is chosen', () => {
   assert.ok(all.includes('select|Load and unload time = TIMED {INSTANT / TIMED / REALISTIC}'));
   assert.ok(all.includes('button|Select final load state [dis]'));
   assert.ok(all.includes('button|Start load or unload [dis]'));
-  assert.ok(all.includes('static|Time remaining: 30:00 [k=status:loadtime, polite]'));
+  assert.ok(all.includes('static|Time remaining: 30:00 [k=status:loadtime]'));
   const start = document.getElementById('ls-start-btn');
   const seen = events(start, ['click']);
   assert.strictEqual(A.clickElement(idxOf(A, 'Start load or unload')), false);
@@ -377,6 +377,37 @@ test('aircraft settings: one dropdown per visible setting, its value from the ac
   assert.deepStrictEqual(imperial, []);
 });
 
+test('a settings tab the tablet does not show is not offered, like every other hidden control', () => {
+  const { document, A } = load('aircraft');
+  assert.ok(lines(A).includes('tab|Audio'));
+  conceal(document.querySelector('.btn-audio'));
+  const tabs = lines(A).filter((l) => l.startsWith('tab|'));
+  assert.ok(!tabs.includes('tab|Audio'), 'the hidden Audio tab is offered');
+  for (const t of ['tab|Autocomplete', 'tab|Panel states', 'tab|Helper', 'tab|Aircraft settings (selected)', 'tab|Throttle calibration', 'tab|Third party']) {
+    assert.ok(tabs.includes(t), 'lost ' + t);
+  }
+});
+
+test('a drawing in a settings pane is not read: its text elements are skipped', () => {
+  const { document, A } = load('aircraft');
+  const pane = document.querySelector('.options-Aircraft');
+  // An svg element's tagName is lowercase in an HTML document.
+  pane.insertAdjacentHTML('beforeend', '<svg data-vis="1"><text data-vis="1">STRAY DRAWING WORDS</text></svg>');
+  assert.strictEqual(pane.lastElementChild.tagName, 'svg');
+  assert.ok(!lines(A).some((l) => l.indexOf('STRAY DRAWING WORDS') >= 0));
+});
+
+test('a field the tablet will not take input in reads disabled, and typing into it is refused', () => {
+  const { document, A } = load('takeoff');
+  const weight = document.getElementById('to_weight_input');
+  weight.value = '407.3';
+  assert.ok(lines(A).includes('text|Takeoff weight (thousand lb) = 407.3'));
+  weight.setAttribute('style', 'opacity: 0.35; pointer-events: none;');
+  assert.ok(lines(A).includes('text|Takeoff weight (thousand lb) = 407.3 [dis]'));
+  assert.strictEqual(A.setValue(idxOf(A, 'Takeoff weight'), '300'), false);
+  assert.strictEqual(weight.value, '407.3');
+});
+
 test('panel states: the four states, the progress line, and an error spoken as an alert', () => {
   const { document, A } = load('panelstates');
   assert.deepStrictEqual(withoutTabs(lines(A)), [
@@ -404,6 +435,27 @@ test('the top of descent calculator: fields named by their titles, the result li
     'static|Result: -- NM [k=status:helper-result, polite]',
     'button|BACK',
   ]);
+});
+
+// A number that changes every second is patched in place (its key) and read when the pilot arrows onto
+// it; given `live`, the shell would speak it on every tick while the window is open. The lines the
+// tablet rewrites only now and then stay polite.
+test('the countdowns are kept in place but never spoken by themselves', () => {
+  const { document, A } = load('helper');
+  const timerView = document.querySelector('.helper-timer-columns').parentElement;
+  reveal(timerView);
+  const armed = document.querySelector('.helper-armed-label');
+  reveal(armed);
+  document.querySelector('.helper-live-dist').textContent = '12.3 NM';
+  document.querySelector('.helper-timer-display').textContent = '01:00:00';
+  const all = lines(A);
+  assert.ok(all.includes('static|12.3 NM [k=status:helper-live-dist]'), 'the distance to top of descent');
+  assert.ok(all.includes('static|01:00:00 [k=status:helper-timer-display]'), 'the top of descent timer');
+  assert.ok(all.includes('static|AUTO PAUSE IS ARMED [k=status:helper-armed-label, polite]'), 'the armed label is still spoken');
+  assert.ok(all.includes('static|Result: -- NM [k=status:helper-result, polite]'), 'the calculator result is still spoken');
+  for (const e of scrape(A).elements) {
+    if (e.key === 'status:helper-live-dist' || e.key === 'status:helper-timer-display') assert.strictEqual(e.live, '', e.key);
+  }
 });
 
 test('third party: the SimBrief Id, the streamer switch and the Navigraph sign-in code', () => {
