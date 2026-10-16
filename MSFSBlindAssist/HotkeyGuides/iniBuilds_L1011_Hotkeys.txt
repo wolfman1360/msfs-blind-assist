@@ -160,8 +160,8 @@ THE PAPER FLIGHT BAG TABLET - Press left bracket, then Shift+T (captain) or Ctrl
 Each pilot's tablet opens in its own window, read as a list of controls and text, live, in the
 order the tablet shows them. The first eight items are its tabs: Menu, Ground, Load sheet, OFP,
 Takeoff performance, Landing performance, Charts and Enroute map; the one shown says "current
-page", and the window says the page's name when it changes. F5 reads the page again; Escape closes
-the window.
+page", and the window says the page's name when it changes. F5 reads the page again, F6 says
+whether the tablet is connected, and Alt+F4 closes the window.
 
   Ground                Doors, ground power, air conditioning cart, jetway, ramp truck, luggage,
                         catering and pushback, each button saying its state ("Door 1 left:
