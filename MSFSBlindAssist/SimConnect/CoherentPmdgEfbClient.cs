@@ -25,6 +25,8 @@ namespace MSFSBlindAssist.SimConnect
     ///     in-page getTabletSide() equals the requested side wins.
     ///   • TFDi MD-11 — <see cref="ForMd11"/>: ONE "TFDi_MD11_efb" view, so there
     ///     is no side to probe and the first match is taken.
+    ///   • iniBuilds L-1011 TriStar — <see cref="ForL1011"/>: one view per seat,
+    ///     "iniEFBL1011_1" and "iniEFBL1011_2", told apart by title, so no side probe.
     ///
     /// Page ids shift between sim restarts, so the view is resolved BY TITLE every
     /// (re)connect — never hardcoded.
@@ -133,6 +135,18 @@ namespace MSFSBlindAssist.SimConnect
         /// </summary>
         public static CoherentPmdgEfbClient ForMd11()
             => new("TFDi_MD11_efb", "coherent-md11-efb-agent.js", "__MSFSBA_MD11_EFB", side: null);
+
+        /// <summary>
+        /// The iniBuilds L-1011 TriStar's Paper Flight Bag. Each seat's tablet is its own view
+        /// (live 2026-10-03: "VCockpit10 - iniEFBL1011_1" captain, "VCockpit17 - iniEFBL1011_2" first
+        /// officer), so the title alone picks the side. A plain DOM app (msfs-sdk), not React.
+        /// </summary>
+        public static CoherentPmdgEfbClient ForL1011(bool firstOfficer)
+            => new(L1011ViewTitle(firstOfficer), L1011AgentFile, "__MSFSBA_L1011_EFB", side: null);
+
+        internal const string L1011AgentFile = "coherent-l1011-efb-agent.js";
+
+        internal static string L1011ViewTitle(bool firstOfficer) => firstOfficer ? "iniEFBL1011_2" : "iniEFBL1011_1";
 
         public void Start()
         {

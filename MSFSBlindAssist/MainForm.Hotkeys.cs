@@ -270,6 +270,11 @@ public partial class MainForm
                     // package, read through the same debugger transport as the PMDG tablet.
                     ShowMd11EfbDialog();
                 }
+                else if (currentAircraft is IniL1011Definition)
+                {
+                    // The TriStar's Paper Flight Bag, the same transport, its own reader (MainForm.L1011.cs).
+                    ShowL1011EfbDialog(firstOfficer: false);
+                }
                 else if (currentAircraft?.AircraftCode == "IFLY_737MAX8")
                 {
                     // iFly SP1 EFB — served over HTTP by the iFly EFB process, hosted in WebView2.
@@ -292,6 +297,8 @@ public partial class MainForm
             case HotkeyAction.ShowPMDGEFBFirstOfficer:
                 if (currentAircraft is IPMDGAircraft pmdgEfbFo && pmdgEfbFo.HasEFBSupport)
                     ShowPmdgCoherentEfbDialog(firstOfficer: true);
+                else if (currentAircraft is IniL1011Definition)
+                    ShowL1011EfbDialog(firstOfficer: true);
                 break;
             case HotkeyAction.ShowRMP:
                 if (currentAircraft is FlyByWireA380Definition)
