@@ -1,5 +1,6 @@
 using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Forms.FBWA380;
+using MSFSBlindAssist.Forms.L1011;
 using MSFSBlindAssist.Services;
 using Xunit;
 
@@ -65,10 +66,14 @@ public class MonitorRowLabelUniquenessTests
     public void Monitor_manager_rows_have_distinct_labels(IAircraftDefinition aircraft)
     {
         // The rows the pilot actually sees: the A380 dialog folds its E/WD lines into one
-        // synthetic row, so it is measured through the same builder call its form makes.
-        var rows = aircraft.AircraftCode == "FBW_A380"
-            ? FBWA380MonitorManagerForm.BuildRows(aircraft.GetVariables())
-            : MonitorRowBuilder.Build(aircraft.GetVariables());
+        // synthetic row, and the TriStar's adds its INS window call-outs, so each is measured
+        // through the same builder call its form makes.
+        var rows = aircraft.AircraftCode switch
+        {
+            "FBW_A380" => FBWA380MonitorManagerForm.BuildRows(aircraft.GetVariables()),
+            "INI_L1011" => L1011MonitorManagerForm.BuildRows(aircraft.GetVariables()),
+            _ => MonitorRowBuilder.Build(aircraft.GetVariables()),
+        };
 
         var collisions = rows
             .GroupBy(r => r.Label, StringComparer.OrdinalIgnoreCase)

@@ -150,6 +150,16 @@ public partial class IniL1011Definition
         return true;
     }
 
+    /// <summary>The INS window's new-leg ("Leg 0 to 1") or PMS new-page call-out, or null when its Ctrl+M row
+    /// is off (<see cref="L1011InsWindowCallouts"/>). The window asks before it speaks.</summary>
+    internal string? InsWindowChange(bool pms, string words) =>
+        L1011InsWindowCallouts.Change(pms, words, SettingsSource().L1011DisabledMonitorVariablesSet);
+
+    /// <summary>The INS window's entry read-back, or null when it is "Entry closed" and that Ctrl+M row is
+    /// off. What was typed is always returned.</summary>
+    internal string? InsWindowEntry(string say) =>
+        L1011InsWindowCallouts.Entry(say, SettingsSource().L1011DisabledMonitorVariablesSet);
+
     /// <summary>An INS panel selector's positions in its row's words (empty for a key that is no row).</summary>
     internal IReadOnlyDictionary<double, string> InsSelectorPositions(string key) =>
         _rows.TryGetValue(key, out var row) ? row.Positions : new Dictionary<double, string>();

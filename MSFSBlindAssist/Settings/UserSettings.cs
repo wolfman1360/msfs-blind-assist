@@ -340,7 +340,8 @@ public class UserSettings
         // when AircraftCode == "INI_L1011" (the generic gate and, through DefAnnounceMuteSets, the
         // wrap around ProcessSimVarUpdate, where the lever call-outs are spoken), and by the
         // definition itself for the warning lights, which it speaks from the batch hook outside that
-        // wrap. Persisted across sessions.
+        // wrap, and for the INS window's own call-outs (a new leg, a PMS page title, "Entry closed":
+        // three synthetic keys from L1011InsWindowCallouts, no variable behind them). Persisted across sessions.
         public List<string> L1011DisabledMonitorVariables { get; set; } = new List<string>();
 
         /// <summary>Runtime-only HashSet sidecar of <see cref="L1011DisabledMonitorVariables"/>. See <see cref="FenixDisabledMonitorVariablesSet"/>.</summary>

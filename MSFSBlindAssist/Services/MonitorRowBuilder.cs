@@ -24,14 +24,39 @@ public static class MonitorRowBuilder
             rows.Add(new MonitorRow(kv.Key, LabelFor(kv.Key, kv.Value)));
         }
 
-        // Sort by what the pilot actually reads. Ties break on the key: List.Sort is unstable
-        // and a Dictionary has no guaranteed enumeration order, so without a tie-break two
-        // same-labelled rows could swap places between runs.
-        rows.Sort((a, b) =>
+        SortRows(rows);
+        return rows;
+    }
+
+    /// <summary>
+    /// Sort by what the pilot actually reads. Ties break on the key: List.Sort is unstable
+    /// and a Dictionary has no guaranteed enumeration order, so without a tie-break two
+    /// same-labelled rows could swap places between runs.
+    /// </summary>
+    private static void SortRows(List<MonitorRow> rows)
+        => rows.Sort((a, b) =>
         {
             int byLabel = string.Compare(a.Label, b.Label, StringComparison.OrdinalIgnoreCase);
             return byLabel != 0 ? byLabel : string.CompareOrdinal(a.Key, b.Key);
         });
+
+    /// <summary>
+    /// The standard row build plus rows for call-outs that have no SimVar behind them (the TriStar's
+    /// INS window speaks a new leg, a PMS page title and "Entry closed" from its own form, never from a
+    /// variable update). Like the A380's fold row they are synthetic: the key goes into the aircraft's
+    /// disabled list and whoever speaks the call-out checks that list. Unlike the fold row they are
+    /// sorted in with the rest, so a pilot searching or arrowing finds them by name. An extra row whose
+    /// key a listed variable already has is not added a second time.
+    /// </summary>
+    public static List<MonitorRow> BuildWithExtra(IReadOnlyDictionary<string, SimVarDefinition> variables,
+                                                  IEnumerable<MonitorRow> extra)
+    {
+        var rows = Build(variables);
+        var known = new HashSet<string>(rows.Select(r => r.Key), StringComparer.Ordinal);
+        foreach (var row in extra)
+            if (known.Add(row.Key))
+                rows.Add(row);
+        SortRows(rows);
         return rows;
     }
 

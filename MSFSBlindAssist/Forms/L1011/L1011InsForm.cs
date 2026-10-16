@@ -50,7 +50,7 @@ public sealed class L1011InsForm : Form
     private readonly System.Windows.Forms.Timer _poll = new() { Interval = RefreshMs };
     private readonly System.Windows.Forms.Timer _viewSwitch = new() { Interval = ViewSwitchMs };
     private readonly L1011InsWindowAnnouncer _changes = new();
-    private readonly CduScratchpadAnnouncer _entry = new("Entry closed", stablePolls: 2);
+    private readonly CduScratchpadAnnouncer _entry = new(L1011InsWindowCallouts.EntryClosedWords, stablePolls: 2);
 
     /// <summary>The automatic waypoint loading press waiting for the reader to report its new state.</summary>
     private readonly L1011AutoBatchReadBack _autoBatchReadBack = new();
@@ -368,8 +368,10 @@ public sealed class L1011InsForm : Form
         Repaint();
         if (words != null)
         {
-            _announcer.Announce(words);
-            if (L1011InsDevices.IsPms(_device) && _display.Items.Count > 1)
+            bool pms = L1011InsDevices.IsPms(_device);
+            if (_def.InsWindowChange(pms, words) is string callOut)   // a Ctrl+M row can mute the call-out
+                _announcer.Announce(callOut);
+            if (pms && _display.Items.Count > 1)
                 _display.SelectedIndex = 1;   // a new page: the cursor on line 1, as on every CDU window
         }
         if (loading != null)
@@ -403,8 +405,8 @@ public sealed class L1011InsForm : Form
             return;
         }
         _atOnceSpoken = null;
-        if (_entry.OnPoll(entry, DateTime.UtcNow) is string say)
-            _announcer.Announce(say);
+        if (_entry.OnPoll(entry, DateTime.UtcNow) is string say && _def.InsWindowEntry(say) is string spoken)
+            _announcer.Announce(spoken);   // "Entry closed" can be muted in Ctrl+M; what was typed always speaks
     }
 
     private void Repaint()

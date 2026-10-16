@@ -177,6 +177,47 @@ public class MonitorRowBuilderTests
         Assert.Equal(FoldLabel, rows[^1].Label);
     }
 
+    // --- BuildWithExtra: rows for call-outs that have no SimVar behind them ------------------
+
+    [Fact]
+    public void ExtraRowsAreSortedInWithTheVariableRows()
+    {
+        var vars = new Dictionary<string, SimVarDefinition>
+        {
+            ["A"] = Announced("Alpha"),
+            ["Z"] = Announced("Zulu"),
+        };
+        var extra = new[] { new MonitorRow("X_LATE", "window zulu-ish"), new MonitorRow("X_MID", "Mike call-out") };
+
+        var rows = MonitorRowBuilder.BuildWithExtra(vars, extra);
+
+        Assert.Equal(new[] { "Alpha", "Mike call-out", "window zulu-ish", "Zulu" }, LabelsOf(rows));
+    }
+
+    [Fact]
+    public void AnExtraRowWhoseKeyIsAlreadyListedIsNotAddedTwice()
+    {
+        var vars = new Dictionary<string, SimVarDefinition> { ["A"] = Announced("Alpha") };
+
+        var rows = MonitorRowBuilder.BuildWithExtra(vars, new[] { new MonitorRow("A", "Other label"), new MonitorRow("B", "Bravo") });
+
+        Assert.Equal(new[] { "A", "B" }, KeysOf(rows));
+        Assert.Equal("Alpha", rows[0].Label);
+    }
+
+    [Fact]
+    public void NoExtraRowsBuildsExactlyLikeBuild()
+    {
+        var vars = new Dictionary<string, SimVarDefinition>
+        {
+            ["A32NX_AUTOBRAKE"] = Announced("Autobrake"),
+            ["A32NX_GEAR"] = Announced("Landing Gear"),
+        };
+
+        Assert.Equal(KeysOf(MonitorRowBuilder.Build(vars)),
+                     KeysOf(MonitorRowBuilder.BuildWithExtra(vars, Array.Empty<MonitorRow>())));
+    }
+
     [Fact]
     public void AVariableSetWithNothingToFoldBuildsExactlyLikeBuild()
     {
