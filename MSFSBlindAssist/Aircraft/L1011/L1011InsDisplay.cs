@@ -60,10 +60,19 @@ public static class L1011InsDisplay
     /// <summary>"off", "standby", "align", "nav", "attitude"; "unknown" for null or a value the MSU never reports.</summary>
     public static string MsuName(int? msu) => msu is int m && m >= 0 && m < MsuNames.Length ? MsuNames[m] : "unknown";
 
+    /// <summary>How far above a whole number a status may sit and still be that number. The countdown lands on
+    /// 2.0000000000000053 for about a second before it is exactly 2 (measured live with a 40 ms sampler, 2026-10-16),
+    /// and the app's variable cache ignores a change of 0.001 or less, so the definition never receives the exact 2.</summary>
+    public const double StatusTolerance = 1e-6;
+
+    /// <summary>The status as the gauge shows it: the whole number the countdown is rounded up to, a hair above one
+    /// (<see cref="StatusTolerance"/>) counting as that number. 16.666... is still 17.</summary>
+    public static int ShownStatus(double status) => (int)Math.Ceiling(status - StatusTolerance);
+
     /// <summary>"navigating", "aligned, ready to navigate", "aligning, status 45", "not aligned".</summary>
     public static string StateText(double status)
     {
-        int shown = (int)Math.Ceiling(status);
+        int shown = ShownStatus(status);
         return shown switch
         {
             1 => "navigating",

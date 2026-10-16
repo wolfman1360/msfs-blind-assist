@@ -519,6 +519,22 @@ public class IniL1011InsBehaviourTests
     }
 
     [Fact]
+    public void Turning_the_mode_selector_to_nav_after_the_live_countdown_does_not_say_navigating()
+    {
+        // The values the definition really receives: the cache drops the exact 2 as a change of 0.001 or less
+        // from the 2.0000000000000053 before it.
+        _def.CanLand = _ => true;
+        string msu = L1011InsAlignmentAnnouncer.MsuKey(1);
+        string status = L1011InsAlignmentAnnouncer.StatusKey(1);
+        Assert.True(_def.HandleUIVariableSet(msu, 2, _def.GetVariables()[msu], _sim, _speech));   // ALIGN
+        foreach (double value in new[] { 90, 75.33333333333333, 60.666666666666664, 46, 31.333333333333336, 16.666666666666668, 2.0000000000000053 })
+            Deliver(status, value);
+        Assert.True(_def.HandleUIVariableSet(msu, 3, _def.GetVariables()[msu], _sim, _speech));   // the pilot turns it to NAV
+        Deliver(status, 1);
+        Assert.Empty(_speech.All);
+    }
+
+    [Fact]
     public void A_context_reset_makes_the_next_value_a_baseline_again()
     {
         Deliver(L1011InsAlignmentAnnouncer.StatusKey(2), 50);

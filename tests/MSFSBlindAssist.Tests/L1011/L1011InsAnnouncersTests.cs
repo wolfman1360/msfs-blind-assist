@@ -52,6 +52,48 @@ public class L1011InsAnnouncersTests
         Assert.Null(a.Observe(1, 1, Nav));
     }
 
+    // The status the gauge counts down, as a 40 ms sampler measured it in the INS view (live, 2026-10-16): it falls
+    // 16.666... and then lands on 2.0000000000000053 for about a second before it is exactly 2 (READY lights only at
+    // exactly 2). The app's variable cache ignores a change of 0.001 or less, so the definition never receives the
+    // exact 2: the value it holds is the one a hair above.
+    private static readonly double[] LiveCountdown =
+        { 90, 75.33333333333333, 60.666666666666664, 46, 31.333333333333336, 16.666666666666668, 2.0000000000000053 };
+
+    [Fact]
+    public void The_live_countdown_to_aligned_then_the_pilots_turn_to_nav_is_silent()
+    {
+        var a = new L1011InsAlignmentAnnouncer();
+        foreach (double status in LiveCountdown)
+            Assert.Null(a.Observe(1, status, Align));           // aligning, then aligned at 2.0000000000000053
+        Assert.Null(a.Observe(1, 2.0000000000000053, Nav));     // the pilot turns the MSU to NAV
+        Assert.Null(a.Observe(1, 1, Nav));
+        Assert.Null(a.Observe(1, 1, Nav));
+    }
+
+    [Fact]
+    public void The_live_countdown_with_the_msu_at_nav_throughout_speaks_navigating_once()
+    {
+        var a = new L1011InsAlignmentAnnouncer();
+        foreach (double status in LiveCountdown)
+            Assert.Null(a.Observe(1, status, Nav));
+        Assert.Equal("INS 1 navigating", a.Observe(1, 1, Nav));
+        Assert.Null(a.Observe(1, 1, Nav));
+    }
+
+    [Fact]
+    public void A_status_a_hair_above_an_integer_is_that_integer_but_a_real_fraction_rounds_up()
+    {
+        Assert.Equal(2, L1011InsDisplay.ShownStatus(2.0000000000000053));
+        Assert.Equal(2, L1011InsDisplay.ShownStatus(2));
+        Assert.Equal(1, L1011InsDisplay.ShownStatus(1.0000000000000002));
+        Assert.Equal(90, L1011InsDisplay.ShownStatus(90.00000000000001));
+        Assert.Equal(17, L1011InsDisplay.ShownStatus(16.666666666666668));
+        Assert.Equal(3, L1011InsDisplay.ShownStatus(2.01));
+        Assert.Equal(3, L1011InsDisplay.ShownStatus(2.000002));   // past the tolerance: still aligning
+        Assert.Equal(46, L1011InsDisplay.ShownStatus(46));
+        Assert.Equal(0, L1011InsDisplay.ShownStatus(0));
+    }
+
     [Fact]
     public void A_seeded_aligned_unit_stays_aligned_when_the_msu_goes_to_nav()
     {

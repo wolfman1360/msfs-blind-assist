@@ -58,7 +58,7 @@ public sealed class L1011InsAlignmentAnnouncer
     /// </summary>
     private static State? Classify(double status, double? msu, State? before)
     {
-        int shown = (int)Math.Ceiling(status);
+        int shown = L1011InsDisplay.ShownStatus(status);
         return shown switch
         {
             1 => State.Navigating,

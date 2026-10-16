@@ -185,6 +185,21 @@ public class L1011InsDisplayTests
     }
 
     [Fact]
+    public void A_status_a_hair_above_two_reads_as_aligned()
+    {
+        // Live (2026-10-16): the status lands on 2.0000000000000053 for about a second before it is exactly 2.
+        // The state line must say aligned the way it does for 2, and the status window shows 02 either way.
+        var lines = L1011InsDisplay.Lines(Screen(7, " 0875 ", "    02 ", dots: "2,5", status: 2.0000000000000053));
+        Assert.Equal("INS 1: aligned, ready to navigate", lines[0]);
+        Assert.Equal("Status: 02, aligned", lines[4]);
+        Assert.Equal("aligned, ready to navigate", L1011InsDisplay.StateText(2.0000000000000053));
+        Assert.Equal("navigating", L1011InsDisplay.StateText(1.0000000000000002));
+        Assert.Equal("not aligned", L1011InsDisplay.StateText(90.00000000000001));
+        Assert.Equal("aligning, status 17", L1011InsDisplay.StateText(16.666666666666668));   // a real fraction still rounds up
+        Assert.Equal("aligning, status 3", L1011InsDisplay.StateText(2.01));
+    }
+
+    [Fact]
     public void The_test_position_and_its_leftover_88()
     {
         var lines = L1011InsDisplay.Lines(Screen(8, "88888X", "R88888Y", fromTo: "88", dots: "1,2,3,4,5,6"));
