@@ -71,6 +71,51 @@ public class L1011InsDisplayTests
         Assert.Equal("Ground speed: 123 knots", lines[4]);
     }
 
+    [Theory]
+    [InlineData(0, "Track: no data", "Ground speed: no data")]
+    [InlineData(5, "Distance: no data", "Time: no data")]
+    [InlineData(7, "Desired track: no data", "Status: no data")]
+    public void A_freshly_powered_units_placeholder_reads_as_no_data(int mode, string first, string second)
+    {
+        // Live (2026-10-16): INS 2 powered by its MSU with its display selector never turned since the flight
+        // loaded; the spans still held the gauge's power-up text "00000N" and "072  0 " and the window read
+        // "Track: no data | Ground speed: 720 knots". The same pair would read "Time: 72.0 minutes" on Distance
+        // and time and "Status: 0720, aligning" on Desired track and status.
+        var lines = L1011InsDisplay.Lines(Screen(mode, "00000N", "072  0 ", status: 90));
+        Assert.Equal(first, lines[3]);
+        Assert.Equal(second, lines[4]);
+    }
+
+    [Fact]
+    public void A_window_whose_digits_are_separated_by_a_blank_is_not_a_number()
+    {
+        Assert.Equal("Track: no data", L1011InsDisplay.Lines(Screen(0, " 08 74", "  0123 ", dots: "2,5"))[3]);
+        Assert.Equal("Ground speed: no data", L1011InsDisplay.Lines(Screen(0, " 0874 ", "  01 23", dots: "2,5"))[4]);
+        Assert.Equal("Heading: no data", L1011InsDisplay.Lines(Screen(1, "0 874 ", "R 0080 ", dots: "2,4,5,6"))[3]);
+        Assert.Equal("Drift angle: no data", L1011InsDisplay.Lines(Screen(1, " 0874 ", "R 00 80", dots: "2,4,5,6"))[4]);
+        Assert.Equal("Cross track: no data", L1011InsDisplay.Lines(Screen(2, "R01 23", "L 0045 ", dots: "4,5,6"))[3]);
+        Assert.Equal("Track error: no data", L1011InsDisplay.Lines(Screen(2, "R0123 ", "L 0 045", dots: "4,5,6"))[4]);
+        Assert.Equal("Distance: no data", L1011InsDisplay.Lines(Screen(5, " 00 35", "  0124 ", dots: "6"))[3]);
+        Assert.Equal("Time: no data", L1011InsDisplay.Lines(Screen(5, "  0035", " 01 24 ", dots: "6"))[4]);
+        Assert.Equal("Status: no data", L1011InsDisplay.Lines(Screen(7, " 0875 ", "   4 5 ", dots: "2,5", status: 44.2))[4]);
+        Assert.Equal("Desired track: no data", L1011InsDisplay.Lines(Screen(7, " 08 75", "    45 ", dots: "2,5", status: 44.2))[3]);
+        Assert.Equal("Wind: no data", L1011InsDisplay.Lines(Screen(6, "  270 ", "  01 5 ", dots: "2"))[3]);
+        Assert.Equal("Wind: no data", L1011InsDisplay.Lines(Screen(6, " 2 70 ", "   015 ", dots: "2"))[3]);
+    }
+
+    [Fact]
+    public void Blanks_around_a_number_and_after_a_side_letter_still_read_as_before()
+    {
+        // The live shapes: leading and trailing blanks, a side letter then a blank ("R 0123 "), the 8888 and ---- fills.
+        Assert.Equal("Cross track: right 12.3 miles", L1011InsDisplay.Lines(Screen(2, "R 0123 ", "L 0045 ", dots: "4,5,6"))[3]);
+        Assert.Equal("Track error: left 4.5 degrees", L1011InsDisplay.Lines(Screen(2, "R0123 ", "L 0045 ", dots: "4,5,6"))[4]);
+        Assert.Equal("Ground speed: 123 knots", L1011InsDisplay.Lines(Screen(0, " 0874 ", "  0123 ", dots: "2,5"))[4]);
+        Assert.Equal("Ground speed: 123 knots", L1011InsDisplay.Lines(Screen(0, " 0874 ", "0123", dots: "2,5"))[4]);
+        Assert.Equal("Status: 45, aligning", L1011InsDisplay.Lines(Screen(7, " 0875 ", "    45 ", dots: "2,5", status: 44.2))[4]);
+        Assert.Equal("Drift angle: no data", L1011InsDisplay.Lines(Screen(1, " 8888 ", "R 8888 ", status: 90))[4]);
+        Assert.Equal("Time: no data", L1011InsDisplay.Lines(Screen(5, "  ----", "   ----"))[4]);
+    }
+
     [Fact]
     public void Eights_are_no_data_while_the_unit_is_not_navigating()
     {

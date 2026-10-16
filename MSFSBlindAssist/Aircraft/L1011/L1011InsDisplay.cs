@@ -144,8 +144,8 @@ public static class L1011InsDisplay
                 break;
             case 6:
             {
-                string dir = Collapse(s.Left), speed = Collapse(s.Right);
-                yield return IsDigits(dir) && IsDigits(speed)
+                string? dir = NumberText(s.Left), speed = NumberText(s.Right);
+                yield return dir != null && speed != null
                     ? $"Wind: {dir} degrees at {int.Parse(speed, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture)} knots"
                     : "Wind: no data";
                 break;
@@ -153,8 +153,8 @@ public static class L1011InsDisplay
             case 7:
             {
                 yield return "Desired track: " + Angle(s.Left, leftDot);
-                string status = Collapse(s.Right);
-                yield return IsDigits(status)
+                string? status = NumberText(s.Right);
+                yield return status != null
                     ? $"Status: {status}, {StatusWords(int.Parse(status, CultureInfo.InvariantCulture))}"
                     : "Status: no data";
                 break;
@@ -202,8 +202,8 @@ public static class L1011InsDisplay
     /// <summary>A heading or track: three digits and a tenth, "087.4".</summary>
     private static string Angle(string window, bool dot)
     {
-        string d = Collapse(window);
-        if (!IsDigits(d) || d == "8888")
+        string? d = NumberText(window);
+        if (d == null || d == "8888")
             return "no data";
         return dot && d.Length > 1 ? d[..^1] + "." + d[^1] : d;
     }
@@ -211,8 +211,8 @@ public static class L1011InsDisplay
     /// <summary>A whole number with its unit, leading zeros dropped: "123 knots".</summary>
     private static string Whole(string window, string unit)
     {
-        string d = Collapse(window);
-        if (!IsDigits(d) || d == "8888")
+        string? d = NumberText(window);
+        if (d == null || d == "8888")
             return "no data";
         return $"{long.Parse(d, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture)} {unit}";
     }
@@ -220,27 +220,39 @@ public static class L1011InsDisplay
     /// <summary>A number whose last digit is a tenth: "12.4 minutes".</summary>
     private static string Tenths(string window, string unit)
     {
-        string d = Collapse(window);
-        if (!IsDigits(d) || d == "8888")
+        string? d = NumberText(window);
+        if (d == null || d == "8888")
             return "no data";
         double v = long.Parse(d, CultureInfo.InvariantCulture) / 10.0;
         return $"{v.ToString("0.0", CultureInfo.InvariantCulture)} {unit}";
     }
 
-    /// <summary>A side letter (R or L) then a number with a tenth: "right 12.3 miles".</summary>
+    /// <summary>A side letter (R or L) then a number with a tenth: "right 12.3 miles". Blanks after the letter
+    /// are the gauge's padding ("R 0123 "); blanks between the digits make it no number.</summary>
     private static string Signed(string window, string unit)
     {
-        string w = Collapse(window);
+        string w = (window ?? string.Empty).TrimStart();
         if (w.Length < 2 || (w[0] != 'R' && w[0] != 'L'))
             return "no data";
         string side = w[0] == 'R' ? "right" : "left";
-        string rest = w[1..].Trim();
-        if (!IsDigits(rest) || rest == "8888")
+        string? rest = NumberText(w[1..]);
+        if (rest == null || rest == "8888")
             return "no data";
         return $"{side} {Tenths(rest, unit)}";
     }
 
-    private static bool IsDigits(string s) => s.Length > 0 && s.All(char.IsAsciiDigit);
+    /// <summary>
+    /// The digits of a window that holds ONE number, or null. Blanks before and after the digits are the
+    /// gauge's padding and are dropped; a blank BETWEEN digits means the slots are not one number, which is
+    /// what a freshly powered unit shows before its display selector is turned: the gauge's power-up text
+    /// "00000N" and "072  0 " (live, 2026-10-16), which collapsed read as 720 knots, 72.0 minutes or a status
+    /// of 0720. The "8888" and "----" fills are the caller's.
+    /// </summary>
+    private static string? NumberText(string window)
+    {
+        string trimmed = (window ?? string.Empty).Trim();
+        return trimmed.Length > 0 && trimmed.All(char.IsAsciiDigit) ? trimmed : null;
+    }
 
     /// <summary>
     /// An open cross-track (parallel offset) entry as the cockpit shows it: the side letter, then the miles
