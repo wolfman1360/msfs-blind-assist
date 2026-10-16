@@ -34,9 +34,9 @@ public sealed class L1011InsAlignmentAnnouncer
 
     public string? Observe(int unit, double status, double? msu)
     {
-        if (Classify(status, msu) is not State now)
-            return null;   // not a status the gauge writes: keep what was known
         bool known = _last.TryGetValue(unit, out var before);
+        if (Classify(status, msu, known ? before : null) is not State now)
+            return null;   // not a status the gauge writes: keep what was known
         _last[unit] = now;
         if (known && now == State.Navigating && before == State.Aligning)
             return $"INS {unit.ToString(CultureInfo.InvariantCulture)} navigating";
@@ -45,17 +45,24 @@ public sealed class L1011InsAlignmentAnnouncer
 
     /// <summary>A baseline from the cache after a context reset; true when this unit had none.</summary>
     public bool Seed(int unit, double status, double? msu) =>
-        Classify(status, msu) is State now && _last.TryAdd(unit, now);
+        Classify(status, msu, null) is State now && _last.TryAdd(unit, now);
 
     public void Reset() => _last.Clear();
 
-    private static State? Classify(double status, double? msu)
+    /// <summary>
+    /// A status of 2 is "aligned" unless the MSU is in NAV, where it is the one update before 1 (the unit is still
+    /// aligning). But once a unit is KNOWN aligned it stays aligned at 2 whatever the MSU reports: the pilot
+    /// turning the selector from ALIGN to NAV leaves the status at 2 for an update, and that turn is their own,
+    /// never "navigating by itself" (live, 2026-10-16). Only a status of 3 or more, a re-alignment, makes it
+    /// aligning again.
+    /// </summary>
+    private static State? Classify(double status, double? msu, State? before)
     {
         int shown = (int)Math.Ceiling(status);
         return shown switch
         {
             1 => State.Navigating,
-            2 => msu == MsuNav ? State.Aligning : State.Aligned,   // in NAV a 2 is the one update before 1
+            2 => before == State.Aligned || msu != MsuNav ? State.Aligned : State.Aligning,
             >= 3 => State.Aligning,                               // aligning, or not aligned (90)
             _ => null,
         };

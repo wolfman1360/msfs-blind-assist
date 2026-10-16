@@ -440,6 +440,23 @@ public class IniL1011InsBehaviourTests
     }
 
     [Fact]
+    public void Turning_the_mode_selector_from_align_to_nav_in_the_app_does_not_say_navigating()
+    {
+        // The live case: the pilot's own pick of the MSU is the position the definition knows (commanded), and
+        // the status rests at 2 for an update after the turn before it goes to 1.
+        _def.CanLand = _ => true;
+        string msu = L1011InsAlignmentAnnouncer.MsuKey(1);
+        Assert.True(_def.HandleUIVariableSet(msu, 2, _def.GetVariables()[msu], _sim, _speech));   // ALIGN
+        Deliver(L1011InsAlignmentAnnouncer.StatusKey(1), 90);
+        Deliver(L1011InsAlignmentAnnouncer.StatusKey(1), 33.2);
+        Deliver(L1011InsAlignmentAnnouncer.StatusKey(1), 2);                                       // aligned
+        Assert.True(_def.HandleUIVariableSet(msu, 3, _def.GetVariables()[msu], _sim, _speech));   // the pilot turns it to NAV
+        Deliver(L1011InsAlignmentAnnouncer.StatusKey(1), 2);
+        Deliver(L1011InsAlignmentAnnouncer.StatusKey(1), 1);
+        Assert.Empty(_speech.All);
+    }
+
+    [Fact]
     public void A_context_reset_makes_the_next_value_a_baseline_again()
     {
         Deliver(L1011InsAlignmentAnnouncer.StatusKey(2), 50);

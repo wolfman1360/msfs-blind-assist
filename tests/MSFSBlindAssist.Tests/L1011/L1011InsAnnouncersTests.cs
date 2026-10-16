@@ -39,6 +39,54 @@ public class L1011InsAnnouncersTests
     }
 
     [Fact]
+    public void Turning_the_knob_to_nav_while_the_status_still_rests_at_two_stays_silent()
+    {
+        // Live (2026-10-16): INS 1 aligned with its MSU at ALIGN (status 2, READY NAV lit); the pilot turned the
+        // MSU to NAV and the status stayed at 2 for one more update. The announcer re-read that 2 with the MSU at
+        // NAV as "aligning", so the 1 that followed spoke "INS 1 navigating" over the pilot's own turn.
+        var a = new L1011InsAlignmentAnnouncer();
+        a.Observe(1, 40, Align);
+        Assert.Null(a.Observe(1, 2, Align));
+        Assert.Null(a.Observe(1, 2, Nav));   // the knob is at NAV, the status still 2: aligned, not aligning
+        Assert.Null(a.Observe(1, 1, Nav));
+        Assert.Null(a.Observe(1, 1, Nav));
+    }
+
+    [Fact]
+    public void A_seeded_aligned_unit_stays_aligned_when_the_msu_goes_to_nav()
+    {
+        var a = new L1011InsAlignmentAnnouncer();
+        Assert.True(a.Seed(1, 2, Align));
+        Assert.Null(a.Observe(1, 2, Nav));
+        Assert.Null(a.Observe(1, 1, Nav));
+    }
+
+    [Fact]
+    public void Only_a_new_alignment_makes_an_aligned_unit_able_to_navigate_by_itself_again()
+    {
+        // A status of 3 or more is a re-alignment: the unit is aligning again, so with the MSU left at NAV the
+        // status resting at 2 and then 1 is a unit starting to navigate by itself.
+        var a = new L1011InsAlignmentAnnouncer();
+        a.Observe(1, 40, Align);
+        Assert.Null(a.Observe(1, 2, Align));   // aligned, MSU at ALIGN
+        Assert.Null(a.Observe(1, 60, Nav));    // aligning again, MSU at NAV
+        Assert.Null(a.Observe(1, 2, Nav));
+        Assert.Equal("INS 1 navigating", a.Observe(1, 1, Nav));
+    }
+
+    [Fact]
+    public void An_aligned_unit_that_goes_to_nav_and_back_to_two_does_not_speak()
+    {
+        var a = new L1011InsAlignmentAnnouncer();
+        a.Observe(2, 40, Align);
+        Assert.Null(a.Observe(2, 2, Align));
+        Assert.Null(a.Observe(2, 2, Nav));
+        Assert.Null(a.Observe(2, 2, Align));   // knob back to ALIGN
+        Assert.Null(a.Observe(2, 2, Nav));
+        Assert.Null(a.Observe(2, 1, Nav));
+    }
+
+    [Fact]
     public void Units_are_independent_and_reset_restores_the_baseline()
     {
         var a = new L1011InsAlignmentAnnouncer();
