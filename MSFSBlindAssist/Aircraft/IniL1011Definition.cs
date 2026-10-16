@@ -205,6 +205,28 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
                 vars[flag.Key] = def;
         }
 
+        // Each INS's alignment status and the PMS flight phase: they speak on their own
+        // (L1011InsAlignmentAnnouncer, L1011PmsPhaseAnnouncer) and each has a Ctrl+M row.
+        foreach (var (key, name) in new[]
+        {
+            (L1011InsAlignmentAnnouncer.StatusKey(1), "INS 1 alignment"),
+            (L1011InsAlignmentAnnouncer.StatusKey(2), "INS 2 alignment"),
+            (L1011InsAlignmentAnnouncer.StatusKey(3), "INS 3 alignment"),
+            (L1011PmsPhaseAnnouncer.Key, "PMS flight phase"),
+        })
+        {
+            var def = new SimVarDefinition
+            {
+                Name = key,
+                DisplayName = name,
+                Type = SimVarType.LVar,
+                UpdateFrequency = UpdateFrequency.Continuous,
+                IsAnnounced = true,
+            };
+            if (batchNames.Add(ContinuousBatchLayout.FullName(def)))
+                vars[key] = def;
+        }
+
         // The pitch window's mode, the AFCS gauge's own VS_MASTER_SOURCE (L1011_AFCS.js update100).
         vars[PitchModeKey] = new SimVarDefinition
         {

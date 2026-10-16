@@ -21,6 +21,11 @@ namespace MSFSBlindAssist.Aircraft;
 /// armed/captured flags, through <see cref="L1011AfcsAnnouncer"/> inside ProcessSimVarUpdate, under the
 /// same wrap; MSFSBA's own press, within <see cref="L1011CommandedState.HoldMs"/>, is silent only
 /// while the switch sits where it was put (any other movement is the aircraft's and is spoken, except that a value box button or toggle key speaks its own read-back instead).</item>
+/// <item>The INS and the PMS: "INS 1 navigating" when a unit starts navigating by itself
+/// (<see cref="L1011InsAlignmentAnnouncer"/>) and "PMS climb/cruise/descent" when the aircraft changes
+/// the PMS mode (<see cref="L1011PmsPhaseAnnouncer"/>), inside ProcessSimVarUpdate under the same wrap
+/// ([L1011-15]). The INS lights (READY NAV, WARN, BATT, INS 1's waypoint ALERT) are warning lights like
+/// any other.</item>
 /// </list>
 /// Switch positions are consumed silently: the panel combo follows them, nothing is spoken.
 /// </summary>
@@ -29,6 +34,8 @@ public partial class IniL1011Definition
     private readonly L1011LampGate _lampGate = new();
     private readonly Dictionary<string, bool> _lightTest = new(StringComparer.Ordinal);
     private readonly Dictionary<string, double> _leverLast = new(StringComparer.Ordinal);
+    private readonly L1011InsAlignmentAnnouncer _insAlignment = new();
+    private readonly L1011PmsPhaseAnnouncer _pmsPhase = new();
     private ScreenReaderAnnouncer? _announcer;
 
     /// <summary>
@@ -58,6 +65,24 @@ public partial class IniL1011Definition
             foreach (string words in _afcs.Observe(varName, value, ownCommand))
                 announcer.Announce(words);
             return true;   // a mode button or engage paddle is also a position: the open control follows it
+        }
+
+        if (L1011InsAlignmentAnnouncer.UnitOf(varName) is int unit)
+        {
+            if (_seedGate.Armed)
+                _seedGate.NoteValue(varName, value, ownedByAircraft: true);
+            if (_insAlignment.Observe(unit, value, MsuPosition(unit)) is string navigating)
+                announcer.Announce(navigating);
+            return true;
+        }
+
+        if (varName == L1011PmsPhaseAnnouncer.Key)
+        {
+            if (_seedGate.Armed)
+                _seedGate.NoteValue(varName, value, ownedByAircraft: true);
+            if (_pmsPhase.Observe(value) is string phase)
+                announcer.Announce(phase);
+            return true;
         }
 
         if (_lamps.ContainsKey(varName))
@@ -133,17 +158,22 @@ public partial class IniL1011Definition
         _lightTest.Clear();
         _leverLast.Clear();
         _afcs.Reset();
+        _insAlignment.Reset();
+        _pmsPhase.Reset();
         _readBackPending.Clear();
         _commanded.Clear();
         _seedGate.Arm(KnownSeedValues());
     }
 
-    /// <summary>The keys the seed pass fills: every lamp, every announced lever, both light-test switches.</summary>
+    /// <summary>The keys the seed pass fills: every lamp, every announced lever, both light-test switches,
+    /// the autopilot's announced states, each INS's alignment status and the PMS flight phase.</summary>
     private IEnumerable<string> SeedKeys() =>
         _lamps.Keys
             .Concat(new[] { L1011Levers.FlapHandleKey, L1011Levers.ParkingBrakeKey, L1011Levers.GroundSpoilersKey })
             .Concat(L1011Annunciators.LightTestKeys)
-            .Concat(L1011AfcsModes.All.Select(s => s.Key));
+            .Concat(L1011AfcsModes.All.Select(s => s.Key))
+            .Concat(new[] { 1, 2, 3 }.Select(L1011InsAlignmentAnnouncer.StatusKey))
+            .Append(L1011PmsPhaseAnnouncer.Key);
 
     private IEnumerable<KeyValuePair<string, double>> KnownSeedValues()
     {
@@ -173,6 +203,14 @@ public partial class IniL1011Definition
             else if (L1011Annunciators.LightTestKeys.Contains(key))
             {
                 if (_lightTest.TryAdd(key, value >= 0.5)) seeded++;
+            }
+            else if (L1011InsAlignmentAnnouncer.UnitOf(key) is int unit)
+            {
+                if (_insAlignment.Seed(unit, value, MsuPosition(unit))) seeded++;
+            }
+            else if (key == L1011PmsPhaseAnnouncer.Key)
+            {
+                if (_pmsPhase.Seed(value)) seeded++;
             }
             else if (_leverLast.TryAdd(key, value))
             {

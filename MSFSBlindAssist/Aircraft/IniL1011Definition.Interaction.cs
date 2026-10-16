@@ -172,6 +172,11 @@ public partial class IniL1011Definition
 
     private void HandleCustomSet(L1011PlacedRow row, double value, SimConnectManager sim, ScreenReaderAnnouncer announcer)
     {
+        if (L1011InsDevices.FromWindowKey(row.Key) is L1011InsDevice device)
+        {
+            OpenInsWindow?.Invoke(device);
+            return;
+        }
         switch (row.Key)
         {
             case L1011Levers.BreakerListKey:
