@@ -1,3 +1,4 @@
+using System.Globalization;
 using MSFSBlindAssist.Aircraft.L1011;
 
 namespace MSFSBlindAssist.Tests.L1011;
@@ -98,6 +99,30 @@ public class L1011PmsDisplayTests
         Assert.Equal("Lights: climb, climb 1, insert", L1011PmsDisplay.Lines(screen)![7]);
         Assert.Equal("Lights: cruise, descent, climb 2",
             L1011PmsDisplay.Lines(screen with { Lights = new[] { "CRUISE", "DESCENT", "CLIMB_2" } })![7]);
+    }
+
+    [Fact]
+    public void A_comma_decimal_culture_changes_nothing()
+    {
+        var saved = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+            var cruise = L1011PmsDisplay.Lines(Pms("3ENG CRUISE STD",
+                new[] { "CRZ______0.830/285", "FUEL REM", "ALT_430____OPT 350", "STEP", "TOD____000NM 0000Z", "SAT_-45____TAS 480" },
+                new[] { "", "157.3", "", "----Z", "", "" }))!;
+            Assert.Equal("1: CRZ 0.830/285", cruise[1]);
+            Assert.Equal("2: FUEL REM 157.3", cruise[2]);
+            Assert.Equal("6: SAT -45 TAS 480", cruise[6]);
+
+            var entry = L1011PmsDisplay.Lines(Pms("TAKEOFF", Page1Left, new[] { "12Z", "---", "1969", "---", "---", "---" },
+                entry: true, line: 1))!;
+            Assert.Equal("1: GMT, entering: 12Z", entry[1]);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = saved;
+        }
     }
 
     [Fact]

@@ -88,4 +88,24 @@ public class L1011InsWaypointsTests
             CultureInfo.CurrentCulture = saved;
         }
     }
+
+    [Fact]
+    public void A_comma_decimal_culture_changes_nothing_in_the_list()
+    {
+        var saved = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("sv-SE");
+            var lines = L1011InsWaypoints.Lines(Slots(
+                new L1011InsWaypoint("KENNO", 37.2982, -117.3102)), activeBatch: 1, batchCount: 1);
+            Assert.Equal("Waypoint 1, KENNO: N 37 17.9, W 117 18.6", lines[0]);
+            Assert.Equal("Waypoint 2: not set", lines[1]);
+            Assert.Equal("Route: batch 1 of 1", lines[9]);
+            Assert.Equal(10, lines.Count);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = saved;
+        }
+    }
 }
