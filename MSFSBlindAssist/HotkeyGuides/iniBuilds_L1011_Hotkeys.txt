@@ -114,7 +114,8 @@ What you type is read back once it has landed: "Entry, left window: 36051N", "1:
 1200Z", or "Entry closed" when the entry closes. A PMS value the unit refuses shows ERROR for about
 a second and is read at once; an INS Insert the unit refuses changes nothing, so nothing is said.
 An entry holding a character the unit has no key for is not sent at all, and stays in the box to
-edit.
+edit. The automatic waypoint loading button says its new state, "Automatic waypoint loading on" or
+"off", once the unit shows it, and says nothing if the state does not change.
 
   Enter (input box)  Send the keys you typed: digits, and on an INS the letters N, S, E, W, L
                      and R (the INS has no letter keys: N is 2, S is 8, E is 6, W is 4, L is 7,
@@ -122,7 +123,8 @@ edit.
                      the SP key; for a minus sign on the SAT line type 9 first.
   Ctrl+Enter         Insert
   Ctrl+1 to Ctrl+6   PMS line keys 1 to 6 (or F1 to F6, with the alternate layout in FMC Settings)
-  Page Up / Down     PMS previous and next page; Right Arrow or Alt+Right also goes to the next page
+  Page Up / Down     PMS previous and next page; Right Arrow on the display, or Alt+Right, goes to
+                     the next page
   Backspace          CLR on a PMS, CLEAR on an INS (on the display). On a PMS, Clear deletes the
                      last character and the entry stays open (Page Up or Page Down abandons it);
                      on an INS, Clear closes a position or waypoint entry and does nothing on the
