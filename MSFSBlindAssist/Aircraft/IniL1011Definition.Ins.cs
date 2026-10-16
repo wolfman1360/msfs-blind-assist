@@ -8,20 +8,15 @@ namespace MSFSBlindAssist.Aircraft;
 
 /// <summary>
 /// The INS and PMS keypads behind the INS window (<see cref="Forms.L1011.L1011InsForm"/>, which MainForm
-/// owns, as the fleet's CDU windows): every key is the cockpit's own click on a map control, sent in order
-/// through ONE chain so two quick presses can never interleave ([L1011-14]). Refused aloud ("INS 1 keypad
+/// owns, as the fleet's CDU windows): every key is the cockpit's own click on a map control, a run of keys is
+/// sent as one calculator string (or, past the length limit, consecutive strings cut between keys), through
+/// ONE chain so two quick presses can never interleave, and a selector move from the window waits behind
+/// every key already chained ([L1011-14]). Refused aloud ("INS 1 keypad
 /// unavailable") when the calculator path cannot land a write, and before anything is sent when typed text
 /// holds a character the unit has no key for. The window's selectors are the INS panels' own rows.
 /// </summary>
 public partial class IniL1011Definition
 {
-    /// <summary>How long a keypad key is held. The INS and PMS act on the press event; the release only
-    /// lets the key's animation spring back, so a short hold is enough (L1011_INS.js has no debounce).</summary>
-    public const int KeyHoldMs = 60;
-
-    /// <summary>The pause after each key, so the gauge has drawn one key before the next arrives.</summary>
-    public const int KeyGapMs = 40;
-
     /// <summary>The pause after the display selector moves, before the keys that need its new page.</summary>
     public const int SelectorSettleMs = 400;
 
@@ -60,27 +55,31 @@ public partial class IniL1011Definition
         return ids.Count == 0 || PressKeys(device, ids, sim, announcer);
     }
 
-    /// <summary>Presses map controls on a unit's keypad, in order. True when they were sent.</summary>
+    /// <summary>
+    /// Presses map controls on a unit's keypad, in order, as ONE calculator string (each key's press, then
+    /// its release, back to back: <see cref="L1011InsKeys.RunSteps"/>), or consecutive strings cut between
+    /// keys when it would pass <see cref="L1011InsKeys.MaxRunLength"/>. True when they were sent.
+    /// </summary>
     public bool PressKeys(L1011InsDevice device, IReadOnlyList<string> controlIds, SimConnectManager sim, ScreenReaderAnnouncer announcer)
     {
         _sim = sim;
         string what = L1011InsDevices.Name(device) + " keypad";
-        var steps = new List<L1011Step>();
+        var clicks = new List<string>();
         foreach (var id in controlIds)
         {
-            if (KeySteps(id) is not IReadOnlyList<L1011Step> keySteps)
+            if (KeyClick(id) is not string click)
             {
                 announcer.Announce($"{what}: {id} is not a control of this aircraft");
                 return false;
             }
-            steps.AddRange(keySteps);
+            clicks.Add(click);
         }
         if (!CanLand(sim))
         {
             announcer.Announce($"{what} unavailable");
             return false;
         }
-        Chain(steps, sim);
+        Chain(L1011InsKeys.RunSteps(clicks), sim);
         return true;
     }
 
@@ -122,8 +121,9 @@ public partial class IniL1011Definition
                 _commanded.Record(selectorKey, PositionPage, Clock());
             }
         }
-        foreach (var id in L1011InsKeys.PresentPositionControls(unit, latitude, longitude))
-            steps.AddRange(KeySteps(id) ?? Array.Empty<L1011Step>());
+        var clicks = L1011InsKeys.PresentPositionControls(unit, latitude, longitude)
+            .Select(KeyClick).OfType<string>().ToList();   // every id is in the map (IniL1011InsBehaviourTests pins it)
+        steps.AddRange(L1011InsKeys.RunSteps(clicks));
 
         Chain(steps, sim);
         announcer.Announce($"INS {unit.ToString(CultureInfo.InvariantCulture)}: entering present position {L1011InsWaypoints.Position(latitude, longitude)}");
@@ -185,15 +185,15 @@ public partial class IniL1011Definition
     private double? MsuPosition(int unit) =>
         _sim is SimConnectManager sim ? CurrentPosition(L1011InsAlignmentAnnouncer.MsuKey(unit), sim) : null;
 
-    /// <summary>One key's press, short hold, release and gap; null when the map has no such control.</summary>
-    private IReadOnlyList<L1011Step>? KeySteps(string controlId)
+    /// <summary>One key's click as calculator code (its press, then its release: <see cref="L1011InsKeys.ClickRpn"/>
+    /// of the control's own <see cref="L1011WritePlan.ForPress"/> plan, [L1011-1]); null when the map has no such
+    /// control or it cannot be pressed.</summary>
+    private string? KeyClick(string controlId)
     {
         if (_map.Find(controlId) is not L1011Control control)
             return null;
-        var plan = L1011WritePlan.ForPress(control, KeyHoldMs);
-        if (plan.Refusal != null)
-            return null;
-        return plan.Steps.Append(new L1011DelayStep(KeyGapMs)).ToList();
+        var plan = L1011WritePlan.ForPress(control);
+        return plan.Refusal == null ? L1011InsKeys.ClickRpn(plan) : null;
     }
 
     /// <summary>Runs steps after every run already chained, on the UI thread, and notes when they will

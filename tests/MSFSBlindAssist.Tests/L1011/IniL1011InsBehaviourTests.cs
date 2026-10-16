@@ -18,10 +18,30 @@ public class IniL1011InsBehaviourTests
     private readonly SpeechCapture _speech = new();
     private readonly SimConnectManager _sim = new(IntPtr.Zero);   // never connected
 
+    /// <summary>What the chain did, in order: "send:&lt;calculator string&gt;" and "wait:&lt;ms&gt;". Waits return at
+    /// once, so a test sees the whole run; the busy estimate (<see cref="IniL1011Definition.KeysBusyForMs"/>) is
+    /// computed from the steps, not from how long they took.</summary>
+    private readonly List<string> _trace = new();
+
     public IniL1011InsBehaviourTests()
     {
-        _def = new IniL1011Definition { Clock = () => _now, SettingsSource = () => _settings };
+        _def = new IniL1011Definition
+        {
+            Clock = () => _now,
+            SettingsSource = () => _settings,
+            SendCalc = (_, rpn) => _trace.Add("send:" + rpn),
+            StepDelay = ms => { _trace.Add("wait:" + ms); return Task.CompletedTask; },
+        };
     }
+
+    private IEnumerable<string> Sent => _trace.Where(t => t.StartsWith("send:", StringComparison.Ordinal)).Select(t => t[5..]);
+
+    // What one key's click reads in the calculator string, written out from the map's own press and release
+    // (independent of the production packing): a digit key presses its pad and lets the push var go; INSERT sets
+    // the push var, presses, and lets it go.
+    private static string Digit(int unit, char digit) => $"(>H:PAD_INS_{unit}_KEY_{digit}) 0 (>L:INS_{unit}_KEY_{digit}_PUSH)";
+    private static string Insert(int unit) => $"1 (>L:INS_{unit}_KEY_INSERT_PUSH) (>H:INS_{unit}_KEY_INSERT) 0 (>L:INS_{unit}_KEY_INSERT_PUSH)";
+    private static string Join(params string[] clicks) => string.Join(' ', clicks);
 
     private void Deliver(string key, double value) => _def.ProcessSimVarUpdate(key, value, _speech);
 
@@ -91,19 +111,33 @@ public class IniL1011InsBehaviourTests
         Assert.Empty(_speech.All);   // a pick that can land is silent
     }
 
-    private static readonly int FifteenKeysMs = 15 * (IniL1011Definition.KeyHoldMs + IniL1011Definition.KeyGapMs);
-
     private const string PresentPositionWords = "INS 2: entering present position N 36 05.1, W 115 08.0";
+
+    /// <summary>The 15 keys of unit 2's present position (lat 36.08540568, lon -115.13363512): N (the 2 key), 3 6 0 5 1,
+    /// INSERT, W (the 4 key), 1 1 5 0 8 0, INSERT, in ONE calculator string: 744 characters, under the limit.</summary>
+    private static readonly string PresentPositionString = Join(
+        Digit(2, '2'), Digit(2, '3'), Digit(2, '6'), Digit(2, '0'), Digit(2, '5'), Digit(2, '1'), Insert(2),
+        Digit(2, '4'), Digit(2, '1'), Digit(2, '1'), Digit(2, '5'), Digit(2, '0'), Digit(2, '8'), Digit(2, '0'), Insert(2));
 
     [Fact]
     public void The_present_position_entry_turns_the_selector_to_position_then_keys_the_position()
     {
         // [L1011-14]: on any other page the N/S/E/W keys start no entry, so the selector moves first, the
-        // gauge gets SelectorSettleMs to draw the page, then the 15 keys follow in the same chain.
+        // gauge gets SelectorSettleMs to draw the page, then the 15 keys follow in the same chain, as ONE string.
         _def.CanLand = _ => true;
         SelectorIsAt(2, 5);
+        _trace.Clear();
         Assert.True(_def.EnterPresentPosition(2, 36.08540568, -115.13363512, _sim, _speech));
-        Assert.Equal(IniL1011Definition.SelectorSettleMs + FifteenKeysMs, _def.KeysBusyForMs());
+
+        Assert.Equal(4, _trace.Count);
+        Assert.StartsWith("send:", _trace[0]);
+        Assert.Contains("INS_2_ROTARY_MODE", _trace[0]);                            // the selector move
+        Assert.Equal("wait:" + IniL1011Definition.SelectorSettleMs, _trace[1]);     // the page draws
+        Assert.Equal("send:" + PresentPositionString, _trace[2]);                   // the whole position, one string
+        Assert.Equal("wait:" + L1011InsKeys.RunGapMs, _trace[3]);
+        Assert.True(PresentPositionString.Length <= L1011InsKeys.MaxRunLength);
+        Assert.Equal(IniL1011Definition.SelectorSettleMs + L1011InsKeys.RunGapMs, _def.KeysBusyForMs());
+        Assert.Equal(450, _def.KeysBusyForMs());
         Assert.Equal(new[] { PresentPositionWords }, _speech.All);
     }
 
@@ -112,8 +146,11 @@ public class IniL1011InsBehaviourTests
     {
         _def.CanLand = _ => true;
         SelectorIsAt(2, 3);
+        _trace.Clear();
         Assert.True(_def.EnterPresentPosition(2, 36.08540568, -115.13363512, _sim, _speech));
-        Assert.Equal(FifteenKeysMs, _def.KeysBusyForMs());
+
+        Assert.Equal(new[] { "send:" + PresentPositionString, "wait:" + L1011InsKeys.RunGapMs }, _trace);
+        Assert.Equal(L1011InsKeys.RunGapMs, _def.KeysBusyForMs());
         Assert.Equal(new[] { PresentPositionWords }, _speech.All);
     }
 
@@ -126,14 +163,97 @@ public class IniL1011InsBehaviourTests
             System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("sv-SE");
             _def.CanLand = _ => true;
             SelectorIsAt(2, 5);
+            _trace.Clear();
             Assert.True(_def.EnterPresentPosition(2, 36.08540568, -115.13363512, _sim, _speech));
             Assert.Equal(new[] { PresentPositionWords }, _speech.All);
-            Assert.Equal(IniL1011Definition.SelectorSettleMs + FifteenKeysMs, _def.KeysBusyForMs());
+            Assert.Equal("send:" + PresentPositionString, _trace[2]);
+            Assert.Equal(IniL1011Definition.SelectorSettleMs + L1011InsKeys.RunGapMs, _def.KeysBusyForMs());
         }
         finally
         {
             System.Globalization.CultureInfo.CurrentCulture = saved;
         }
+    }
+
+    [Fact]
+    public void A_typed_run_is_one_string_with_each_keys_press_then_release_in_order()
+    {
+        _def.CanLand = _ => true;
+        Assert.True(_def.TypeKeys(L1011InsDevice.Ins1, "N36", insert: false, _sim, _speech));
+        Assert.Equal(new[] { "send:" + Join(Digit(1, '2'), Digit(1, '3'), Digit(1, '6')), "wait:50" }, _trace);
+        Assert.Empty(_speech.All);
+    }
+
+    [Fact]
+    public void Insert_is_the_last_click_of_the_same_string()
+    {
+        _def.CanLand = _ => true;
+        Assert.True(_def.TypeKeys(L1011InsDevice.Ins3, "01", insert: true, _sim, _speech));
+        Assert.Equal(new[] { "send:" + Join(Digit(3, '0'), Digit(3, '1'), Insert(3)), "wait:50" }, _trace);
+    }
+
+    [Fact]
+    public void A_single_pressed_key_is_one_string_too()
+    {
+        _def.CanLand = _ => true;
+        Assert.True(_def.PressKeys(L1011InsDevice.Ins1, new[] { L1011InsDevices.ClearKey(L1011InsDevice.Ins1) }, _sim, _speech));
+        Assert.Equal(new[] { "send:(>H:PAD_INS_1_KEY_CLEAR) 0 (>L:INS_1_KEY_CLEAR_PUSH)", "wait:50" }, _trace);
+    }
+
+    [Fact]
+    public void The_pms_keys_follow_the_same_path()
+    {
+        _def.CanLand = _ => true;
+        Assert.True(_def.TypeKeys(L1011InsDevice.CaptainPms, "12 5", insert: true, _sim, _speech));
+        Assert.True(_def.PressKeys(L1011InsDevice.FirstOfficerPms, new[] { "PMS_FO_FWD" }, _sim, _speech));
+        Assert.Equal(new[]
+        {
+            "send:(>H:PAD_PMS_CPT_1) 0 (>L:PMS_CPT_1_PUSH) (>H:PAD_PMS_CPT_2) 0 (>L:PMS_CPT_2_PUSH) "
+                + "(>H:PAD_PMS_CPT_SP) 0 (>L:PMS_CPT_SP_PUSH) (>H:PAD_PMS_CPT_5) 0 (>L:PMS_CPT_5_PUSH) "
+                + "(>H:PAD_PMS_CPT_INSERT) 0 (>L:PMS_CPT_INSERT_PUSH)",
+            "wait:50",
+            "send:(>H:PAD_PMS_FO_FWD) 0 (>L:PMS_FO_FWD_PUSH)",
+            "wait:50",
+        }, _trace);
+    }
+
+    [Fact]
+    public void A_run_longer_than_the_limit_splits_between_keys_with_a_gap_after_each_string()
+    {
+        _def.CanLand = _ => true;
+        Assert.True(_def.TypeKeys(L1011InsDevice.Ins1, "0123456789012345678901234", insert: false, _sim, _speech));   // 25 keys
+
+        var clicks = "0123456789012345678901234".Select(c => Digit(1, c)).ToArray();
+        Assert.Equal(new[]
+        {
+            "send:" + Join(clicks.Take(20).ToArray()), "wait:50",    // 20 keys of 44 characters: 899
+            "send:" + Join(clicks.Skip(20).ToArray()), "wait:50",
+        }, _trace);
+        Assert.All(Sent, rpn => Assert.True(rpn.Length <= L1011InsKeys.MaxRunLength));
+        Assert.Equal(2 * L1011InsKeys.RunGapMs, _def.KeysBusyForMs());
+    }
+
+    [Fact]
+    public void Two_runs_chained_one_after_the_other_are_separated_by_the_gap()
+    {
+        _def.CanLand = _ => true;
+        Assert.True(_def.TypeKeys(L1011InsDevice.Ins2, "5", insert: false, _sim, _speech));
+        Assert.True(_def.TypeKeys(L1011InsDevice.Ins2, "7", insert: true, _sim, _speech));
+        Assert.Equal(new[]
+        {
+            "send:" + Digit(2, '5'), "wait:50",
+            "send:" + Join(Digit(2, '7'), Insert(2)), "wait:50",
+        }, _trace);
+        Assert.Equal(2 * L1011InsKeys.RunGapMs, _def.KeysBusyForMs());
+    }
+
+    [Fact]
+    public void Nothing_is_sent_when_a_key_in_the_run_is_refused()
+    {
+        _def.CanLand = _ => true;
+        Assert.False(_def.PressKeys(L1011InsDevice.Ins1, new[] { "INS_1_KEY_2", "INS_1_KEY_Q" }, _sim, _speech));
+        Assert.Empty(_trace);
+        Assert.Equal(0, _def.KeysBusyForMs());
     }
 
     [Fact]
@@ -173,7 +293,7 @@ public class IniL1011InsBehaviourTests
         Assert.Equal(0, _def.KeysBusyForMs());
         Assert.True(_def.TypeKeys(L1011InsDevice.Ins1, "2", insert: false, _sim, _speech));
         int oneKey = _def.KeysBusyForMs();
-        Assert.Equal(IniL1011Definition.KeyHoldMs + IniL1011Definition.KeyGapMs, oneKey);
+        Assert.Equal(L1011InsKeys.RunGapMs, oneKey);   // one string, then the gap before whatever follows
         _now += 30;
         Assert.True(_def.TypeKeys(L1011InsDevice.Ins1, "3", insert: false, _sim, _speech));
         Assert.Equal(2 * oneKey - 30, _def.KeysBusyForMs());   // queued behind the first

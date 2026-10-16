@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 
 namespace MSFSBlindAssist.Aircraft.L1011;
 
@@ -66,6 +67,53 @@ public static class L1011InsKeys
         return on
             ? $"1 (>L:INS_{n}_AUTO_BATCH_ENABLED) (>H:INS_{n}_RESUME_AUTOBATCH)"
             : $"0 (>L:INS_{n}_AUTO_BATCH_ENABLED)";
+    }
+
+    /// <summary>The longest calculator string a run of keys is sent as: the MobiFlight command channel holds
+    /// 1,024 characters, terminator included, and <c>ExecuteCalculatorCodeUnique</c> adds a "&lt;seq&gt; 0 * " prefix
+    /// (<see cref="L1011WritePlan.MaxRpnLength"/>, the same bound a control's own write is cut at).</summary>
+    public const int MaxRunLength = L1011WritePlan.MaxRpnLength;
+
+    /// <summary>The pause after each string of keys, so one string is never sent right on top of the next and
+    /// the gauge has taken it before the next arrives.</summary>
+    public const int RunGapMs = 50;
+
+    /// <summary>
+    /// One key's click as calculator code: the control's own press effects then its own release effects
+    /// (<see cref="L1011WritePlan.ForPress"/>), in that order and with its hold dropped. The INS takes a run
+    /// of keys in one string with each key's press and release back to back (measured live, 2026-10-15), so
+    /// the hold that was once slept between them is not needed.
+    /// </summary>
+    public static string ClickRpn(L1011Plan press) =>
+        string.Join(' ', press.Steps.OfType<L1011CalcStep>().Select(step => step.Rpn));
+
+    /// <summary>
+    /// A run of keys as the steps that send it: every key's click in order, as ONE calculator string, or as
+    /// consecutive strings cut only BETWEEN keys when one would pass <see cref="MaxRunLength"/> (a single key
+    /// longer than that goes alone, never cut), each followed by <see cref="RunGapMs"/>. Pure.
+    /// </summary>
+    public static IReadOnlyList<L1011Step> RunSteps(IReadOnlyList<string> clicks)
+    {
+        var steps = new List<L1011Step>();
+        var current = new StringBuilder();
+        void Flush()
+        {
+            if (current.Length == 0)
+                return;
+            steps.Add(new L1011CalcStep(current.ToString()));
+            steps.Add(new L1011DelayStep(RunGapMs));
+            current.Clear();
+        }
+        foreach (var click in clicks)
+        {
+            if (current.Length > 0 && current.Length + 1 + click.Length > MaxRunLength)
+                Flush();
+            if (current.Length > 0)
+                current.Append(' ');
+            current.Append(click);
+        }
+        Flush();
+        return steps;
     }
 
     private static string Sexagesimal(double value, int degreeDigits, char hemisphere)

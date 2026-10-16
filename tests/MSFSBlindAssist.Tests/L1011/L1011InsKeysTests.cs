@@ -86,6 +86,97 @@ public class L1011InsKeysTests
         }
     }
 
+    // --- One calculator string per run of keys (measured live 2026-10-15: the INS takes several keys in ONE
+    // string, each key's press and release back to back with no delay, exactly as key by key) ----------------
+
+    private static readonly L1011ControlMap Map = L1011ControlMap.Load();
+
+    private static string ClickOf(string controlId) => L1011InsKeys.ClickRpn(L1011WritePlan.ForPress(Map.Find(controlId)!));
+
+    [Fact]
+    public void A_keys_click_is_its_press_then_its_release_with_no_wait_between()
+    {
+        Assert.Equal("(>H:PAD_INS_1_KEY_2) 0 (>L:INS_1_KEY_2_PUSH)", ClickOf("INS_1_KEY_2"));
+        Assert.Equal("1 (>L:INS_1_KEY_INSERT_PUSH) (>H:INS_1_KEY_INSERT) 0 (>L:INS_1_KEY_INSERT_PUSH)", ClickOf("INS_1_KEY_INSERT"));
+        Assert.Equal("(>H:PAD_PMS_CPT_FWD) 0 (>L:PMS_CPT_FWD_PUSH)", ClickOf("PMS_CPT_FWD"));
+    }
+
+    [Fact]
+    public void A_click_is_the_map_controls_own_press_plan_with_the_hold_dropped()
+    {
+        // [L1011-1]: the key stays the control's own click (L1011WritePlan.ForPress), only concatenated.
+        foreach (var id in new[] { "INS_2_KEY_7", "INS_3_KEY_INSERT", "INS_1_KEY_CLEAR", "PMS_FO_LSK_3" })
+        {
+            var plan = L1011WritePlan.ForPress(Map.Find(id)!);
+            Assert.Equal(string.Join(' ', plan.Steps.OfType<L1011CalcStep>().Select(s => s.Rpn)), L1011InsKeys.ClickRpn(plan));
+        }
+    }
+
+    [Fact]
+    public void Keys_that_fit_go_out_as_one_string_followed_by_a_gap()
+    {
+        var steps = L1011InsKeys.RunSteps(new[] { "a", "b", "c" });
+        Assert.Equal(new L1011Step[] { new L1011CalcStep("a b c"), new L1011DelayStep(L1011InsKeys.RunGapMs) }, steps);
+    }
+
+    [Fact]
+    public void Nothing_to_press_makes_no_steps()
+    {
+        Assert.Empty(L1011InsKeys.RunSteps(Array.Empty<string>()));
+    }
+
+    [Fact]
+    public void A_run_over_the_limit_splits_at_a_key_boundary_with_a_gap_after_each_string()
+    {
+        string a = new('a', 400), b = new('b', 400), c = new('c', 400);
+        var steps = L1011InsKeys.RunSteps(new[] { a, b, c });
+        Assert.Equal(new L1011Step[]
+        {
+            new L1011CalcStep(a + " " + b), new L1011DelayStep(L1011InsKeys.RunGapMs),
+            new L1011CalcStep(c), new L1011DelayStep(L1011InsKeys.RunGapMs),
+        }, steps);
+    }
+
+    [Fact]
+    public void A_string_may_be_exactly_the_limit_and_one_more_splits()
+    {
+        string fits = new string('a', 449) + " " + new string('b', 450);   // 900
+        Assert.Equal(L1011InsKeys.MaxRunLength, fits.Length);
+        Assert.Equal(2, L1011InsKeys.RunSteps(new[] { new string('a', 449), new string('b', 450) }).Count);   // one string, one gap
+
+        var split = L1011InsKeys.RunSteps(new[] { new string('a', 449), new string('b', 451) });   // 901
+        Assert.Equal(4, split.Count);
+        Assert.Equal(new[] { 449, 451 }, split.OfType<L1011CalcStep>().Select(s => s.Rpn.Length));
+    }
+
+    [Fact]
+    public void A_key_longer_than_the_limit_goes_alone_and_is_never_cut()
+    {
+        string huge = new('h', 1_000);
+        var calcs = L1011InsKeys.RunSteps(new[] { "a", huge, "b" }).OfType<L1011CalcStep>().Select(s => s.Rpn).ToList();
+        Assert.Equal(new[] { "a", huge, "b" }, calcs);
+    }
+
+    [Fact]
+    public void Twenty_five_digit_keys_make_two_strings_cut_between_keys()
+    {
+        var clicks = Enumerable.Range(0, 25).Select(i => ClickOf($"INS_1_KEY_{i % 10}")).ToList();
+        var calcs = L1011InsKeys.RunSteps(clicks).OfType<L1011CalcStep>().Select(s => s.Rpn).ToList();
+        Assert.Equal(2, calcs.Count);
+        Assert.All(calcs, rpn => Assert.True(rpn.Length <= L1011InsKeys.MaxRunLength));
+        Assert.Equal(string.Join(' ', clicks), string.Join(' ', calcs));                 // nothing lost, nothing reordered
+        Assert.Equal(string.Join(' ', clicks.Take(20)), calcs[0]);                         // 20 keys of 44 characters fit in 900
+        Assert.Equal(string.Join(' ', clicks.Skip(20)), calcs[1]);
+    }
+
+    [Fact]
+    public void The_limit_leaves_room_for_the_unique_prefix_in_the_1024_character_command()
+    {
+        Assert.Equal(900, L1011InsKeys.MaxRunLength);
+        Assert.True(L1011InsKeys.MaxRunLength + "9223372036854775807 0 * ".Length < 1024);
+        Assert.Equal(50, L1011InsKeys.RunGapMs);
+    }
+
     [Theory]
     [InlineData(1)]
     [InlineData(2)]
