@@ -18,7 +18,9 @@ function agentSource() {
 // Shown = data-vis="1", answered through getComputedStyle and getBoundingClientRect as the live page
 // would; pointer-events comes from the nearest inline style (how the tablet makes a control
 // click-through); opacity from the element's own inline style.
-function load(name) {
+// `before(window)`, when given, runs ahead of the agent: it gives the page what the sim provides
+// (GetStoredData, SimVar, Coherent, the clock).
+function load(name, before) {
   const html = fs.readFileSync(path.join(__dirname, 'fixtures', 'efb-' + name + '.html'), 'utf8');
   const dom = new JSDOM('<!DOCTYPE html><html><body>' + html + '</body></html>', { runScripts: 'outside-only' });
   const { window } = dom;
@@ -37,6 +39,7 @@ function load(name) {
     const on = vis(this);
     return { top: 0, left: 0, right: on ? 100 : 0, bottom: on ? 20 : 0, width: on ? 100 : 0, height: on ? 20 : 0, x: 0, y: 0 };
   };
+  if (before) before(window);
   const installed = window.eval(agentSource());
   return { window, document: window.document, A: window.__MSFSBA_L1011_EFB, installed };
 }

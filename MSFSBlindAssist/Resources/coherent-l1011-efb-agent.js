@@ -18,6 +18,10 @@
  *  - The tablet rewrites classes several times a second with no net change, so "nothing changed"
  *    is decided by comparing the produced elements, never by watching the DOM.
  *  - The tablet keeps working when its "Electricity" wrapper says off, so that is ignored.
+ *  - Send to INS downloads SimBrief's latest plan (never the OFP shown), writes its navlog to the
+ *    DataStore and fires the seat's H: event; nothing on the tablet confirms it. The reader hears
+ *    that event (one Coherent listener per page) after the pilot's own press and reads the
+ *    DataStore back: the navlog, the route overlay's origin, the waypoints the INS kept.
  * READ ONLY apart from the presses and typing the pilot asks for. Coherent GT is Chromium-49
  * class, so this is ES5.
  */
@@ -102,6 +106,15 @@
   // A countdown changes every second, so it is patched in place (its key) and read when the pilot
   // arrows onto it, never spoken by itself: the A300 tablet never speaks a moving number either.
   var SILENT_STATUS = ['helper-live-dist', 'helper-timer-display'];
+
+  // Send to INS (docs/l1011.md, "Paper Flight Bag"): the seat's H: event, then one second later the
+  // INS writes the waypoints it kept; a unit in Remote passes the route on with its own event a second
+  // after that.
+  var SEND_EVENTS = { EFB_TO_INS_SENT: 1, EFB_TO_INS_SENT_2: 2, EFB_TO_INS_SENT_3: 3 };
+  var SEND_SETTLE_MS = 2000;     // after the last event: its unit loads in a second, plus a second
+  var SEND_TIMEOUT_MS = 15000;   // no event by then: the download failed and nothing was sent
+  var SEND_GIVE_UP_MS = 60000;   // a later event is still read back until then
+  var SPOKEN_MS = 20000;         // a read-back is spoken while this fresh, then a line on the OFP page
 
   // ---- small helpers ------------------------------------------------------------------------
 
@@ -394,13 +407,29 @@
 
   // ---- OFP ---------------------------------------------------------------------------------------
 
+  function shownPlan(page) {
+    var viewer = page.querySelector('.simbrief-viewer');
+    return viewer && viewer.getAttribute('data-active') === 'true' && shown(viewer) ? viewer.querySelector('.simbrief-viewer__plan') : null;
+  }
+
+  // The OFP the tablet shows, as text, or null with none shown.
+  function shownPlanText(page) {
+    var plan = shownPlan(page);
+    return plan && text(plan) ? plan.textContent : null;
+  }
+
   function ofp(page, out) {
     var b = page.querySelector('.reload-button');
     if (b && shown(b)) button(out, 'Reload OFP', b);
     b = page.querySelector('.send-to-ins-button');
     if (b && shown(b)) button(out, 'Send to INS', b, { disabled: b.getAttribute('data-active') === 'false' });
+    if (lastSend && now() - lastSend.at >= SPOKEN_MS) stat(out, lastSend.text, { key: 'status:inssend' });
     var viewer = page.querySelector('.simbrief-viewer');
-    var plan = viewer && viewer.getAttribute('data-active') === 'true' && shown(viewer) ? viewer.querySelector('.simbrief-viewer__plan') : null;
+    var plan = shownPlan(page);
+    var planText = shownPlanText(page);
+    var differs = planText === null ? '' : routeDiffers(planText);
+    if (differs && lastSend && lastSend.older && lastSend.ofp === planText) stat(out, differs, { key: 'status:ofpdiffers' });
+    else if (differs) out.push(item('alert', differs, { live: 'assertive', key: 'alert:ofpdiffers' }));
     var pres = plan ? plan.querySelectorAll('pre') : [];
     if (pres.length > 0) {
       for (var i = 0; i < pres.length; i++) out.push(item('static', pres[i].textContent, { type: 'pre', key: 'ofp:plan:' + i }));
@@ -411,6 +440,233 @@
     }
     var close = viewer && plan ? viewer.querySelector('.close-btn') : null;
     if (close && shown(close)) button(out, 'Close OFP', close);
+  }
+
+  // ---- Send to INS read-back -----------------------------------------------------------------------
+  //
+  // What the aircraft does (package 1.0.8): the press downloads SimBrief's latest plan and writes its
+  // navlog fixes (the first SID fix to the destination airport; never the origin) to the DataStore,
+  // NAVIGRAPH_ARRAY from the captain's tablet or NAVIGRAPH_ARRAY_2 from the first officer's, and the
+  // shared NAVIGRAPH_ROUTE_OVERLAY (the origin, then those fixes), then fires H:EFB_TO_INS_SENT or _2.
+  // A failed download writes and fires nothing. One second later INS n writes the waypoints it kept to
+  // IMPORTED_WAYPOINTS(_n), "SB01 - KENNO/N3717.9/W11718.6" a line; a unit that is off empties it.
+
+  var send = null;       // the pilot's press: { seat, at, heard, last (event), units, failed }
+  var lastSend = null;   // what was said about it: { text, at, ofp (the OFP judged), older }
+
+  function now() { return Date.now(); }
+
+  function seat() {
+    var root = document.querySelector('ini-efb-l1011');
+    if (!root) return 0;
+    var m = /Index=(\d)/.exec(root.getAttribute('url') || '');
+    var n = m ? +m[1] : +root.instrumentIndex;
+    return n === 1 || n === 2 ? n : 0;
+  }
+
+  // A DataStore value, unwrapped from the JSON the tablet and the INS store it as (twice, for msfs-sdk).
+  function stored(k) {
+    if (typeof GetStoredData !== 'function') return null;
+    var v;
+    try { v = GetStoredData(k); } catch (e) { return null; }
+    for (var i = 0; i < 3 && typeof v === 'string' && v !== ''; i++) {
+      try { v = JSON.parse(v); } catch (e) { break; }
+    }
+    return v;
+  }
+
+  function lvarOn(name) {
+    try { return typeof SimVar !== 'undefined' && +SimVar.GetSimVarValue(name, 'number') !== 0; } catch (e) { return false; }
+  }
+
+  function unitKey(base, unit) { return unit === 1 ? base : base + '_' + unit; }
+
+  function navlog(unit) {
+    var v = stored(unitKey('NAVIGRAPH_ARRAY', unit));
+    return Array.isArray(v) ? v : [];
+  }
+
+  function ident(f) { return String((f && f.ident) || '').replace(/^\s+|\s+$/g, ''); }
+
+  // What the INS keeps of a navlog (L1011_INS.js simbriefToArray): neither airport at the ends, no
+  // TOC or TOD, and the SID and STAR fixes only with IMPORT SID/STAR WPTS on.
+  function insKeeps(fixes, sidStar) {
+    var out = [];
+    for (var i = 0; i < fixes.length; i++) {
+      var f = fixes[i] || {}, id = ident(f).toUpperCase();
+      if ((i === 0 || i === fixes.length - 1) && f.type === 'apt') continue;
+      if (f.is_sid_star === '1' && !sidStar) continue;
+      if (id === 'TOC' || id === 'TOD') continue;
+      out.push(f);
+    }
+    return out;
+  }
+
+  // INS n's own list, as it stores it: the idents cut to five characters.
+  function importedIdents(unit) {
+    var v = stored(unitKey('IMPORTED_WAYPOINTS', unit)), out = [];
+    if (typeof v !== 'string' || !v) return out;
+    var rows = v.split('\n');
+    for (var i = 0; i < rows.length; i++) {
+      var m = /^SB\d+ - ([^\/]*)\//.exec(rows[i]);
+      if (m) out.push(m[1].replace(/\s+$/, ''));
+    }
+    return out;
+  }
+
+  function sameList(kept, idents) {
+    if (kept.length !== idents.length) return false;
+    for (var i = 0; i < kept.length; i++) if (ident(kept[i]).slice(0, 5) !== idents[i]) return false;
+    return true;
+  }
+
+  function destination(fixes) {
+    var last = fixes[fixes.length - 1];
+    return last && last.type === 'apt' ? ident(last) : '';
+  }
+
+  // The origin is only in the route overlay. Both tablets write that key (a plan loading writes it too),
+  // so it counts only when its fixes are this navlog's: the overlay skips a fix at the same place as the
+  // one before, so its fixes are this navlog's in order, ending with the same one.
+  function origin(fixes) {
+    var ov = stored('NAVIGRAPH_ROUTE_OVERLAY');
+    if (!Array.isArray(ov) || ov.length < 2 || fixes.length === 0) return '';
+    var name = String((ov[0] || {}).name || '');
+    if (!/^[A-Z0-9]{3,4}$/.test(name)) return '';   // "ORIGIN" when SimBrief gave no origin
+    if (String((ov[ov.length - 1] || {}).name) !== ident(fixes[fixes.length - 1])) return '';
+    for (var i = 1, j = 0; i < ov.length; i++, j++) {
+      while (j < fixes.length && ident(fixes[j]) !== String((ov[i] || {}).name)) j++;
+      if (j >= fixes.length) return '';
+    }
+    return name;
+  }
+
+  // Whether the OFP text, in capitals, has the word standing alone.
+  function mentions(upperText, word) {
+    var w = word.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    return !!w && new RegExp('(^|[^A-Z0-9])' + w + '([^A-Z0-9]|$)').test(upperText);
+  }
+
+  // An OFP shows a navlog when it names the destination and the first and last named en-route fixes
+  // (outside the SID and STAR): every OFP layout lists them, so no layout is parsed. With nothing to
+  // look for it cannot tell, and counts as showing it.
+  function ofpShows(planText, fixes) {
+    var words = [], named = [], dest = destination(fixes);
+    if (dest) words.push(dest);
+    for (var i = 0; i < fixes.length; i++) if (fixes[i] && fixes[i].type === 'wpt' && fixes[i].is_sid_star !== '1') named.push(ident(fixes[i]));
+    if (named.length) words.push(named[0], named[named.length - 1]);
+    var upper = planText.toUpperCase();
+    for (var w = 0; w < words.length; w++) if (!mentions(upper, words[w])) return false;
+    return true;
+  }
+
+  // "1", "1 and 2", "1, 2 and 3".
+  function spokenList(units) {
+    if (units.length < 2) return units.join('');
+    return units.slice(0, -1).join(', ') + ' and ' + units[units.length - 1];
+  }
+
+  function count(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+
+  function readBack(s, planText) {
+    var fixes = navlog(s.seat), units = s.units.slice().sort(), sidStar = lvarOn('L:INI_SIDSTAR_IMPORT');
+    var kept = insKeeps(fixes, sidStar), dest = destination(fixes), from = dest ? origin(fixes) : '';
+    var head = (from ? from + ' to ' + dest : dest ? 'Route to ' + dest : 'Route') + ' sent to INS ' + spokenList(units);
+    var said;
+    if (kept.length) {
+      said = head + ': ' + count(kept.length, 'waypoint', 'waypoints') + ' in ' + count(Math.ceil(kept.length / 9), 'batch', 'batches') +
+        ', first ' + ident(kept[0]) + '.';
+      var off = [];
+      for (var i = 0; i < units.length; i++) if (importedIdents(units[i]).length === 0) off.push(units[i]);
+      if (off.length === 1) said += ' INS ' + off[0] + ' is off and kept nothing: turn it on, then send again.';
+      else if (off.length) said += ' INS ' + spokenList(off) + ' are off and kept nothing: turn them on, then send again.';
+    } else {
+      var onSidStar = false;
+      for (var k = 0; k < fixes.length; k++) if (fixes[k] && fixes[k].is_sid_star === '1' && fixes[k].type !== 'apt') onSidStar = true;
+      said = head + ', but the INS kept no waypoints' + (!sidStar && onSidStar
+        ? ': every fix is on the SID or STAR. Turn on IMPORT SID/STAR WPTS (Menu, Aircraft settings), then send again.'
+        : '.');
+    }
+    var older = planText !== null && !ofpShows(planText, fixes);
+    if (older) said += ' This tablet\'s OFP is an older plan: press Reload OFP to read the one sent.';
+    return { text: said, at: s.heard, ofp: planText, older: older };
+  }
+
+  // Called on every scrape with the OFP shown (null on another page): reads the press back once the
+  // INS has had time to load, or says nothing was sent.
+  function settleSend(planText) {
+    if (!send) return;
+    var t = now();
+    if (send.heard) {
+      if (t - send.last < SEND_SETTLE_MS) return;
+      lastSend = readBack(send, planText);
+      send = null;
+      return;
+    }
+    if (!send.failed && t - send.at >= SEND_TIMEOUT_MS) {
+      send.failed = true;
+      lastSend = {
+        text: 'Send to INS: nothing sent after 15 seconds. The tablet first downloads SimBrief\'s latest plan: check the SimBrief ID (Menu, Third party) and the internet connection.',
+        at: send.at + SEND_TIMEOUT_MS, ofp: null, older: false
+      };
+    }
+    if (t - send.at > SEND_GIVE_UP_MS) send = null;
+  }
+
+  // Every H: event in the sim passes here: only the seat's own, after the pilot's own press, starts a
+  // read-back; another unit's event before it is read back is a unit in Remote taking the route too,
+  // and the read-back waits for that unit to load.
+  function onSimEvent(target, args) {
+    var name = String((Array.isArray(args) ? args[0] : (typeof args === 'string' ? args : target)) || '').replace(/^H:/, '');
+    var unit = SEND_EVENTS.hasOwnProperty(name) ? SEND_EVENTS[name] : 0;
+    if (!unit || !send) return;
+    var t = now();
+    if (!send.heard) {
+      if (unit === send.seat) { send.heard = t; send.last = t; send.units = [unit]; }
+      return;
+    }
+    if (send.units.indexOf(unit) < 0) { send.units.push(unit); send.last = t; }
+  }
+
+  // One listener per page: a reinstalled reader clears the one before it.
+  function listen() {
+    if (typeof Coherent === 'undefined' || !Coherent || typeof Coherent.on !== 'function') return;
+    var old = window.__MSFSBA_L1011_EFB_EVENTS;
+    if (old && typeof old.clear === 'function') { try { old.clear(); } catch (e) { } }
+    try { window.__MSFSBA_L1011_EFB_EVENTS = Coherent.on('OnInteractionEvent', onSimEvent); } catch (e) { }
+  }
+
+  function armSend() {
+    var s = seat();
+    send = s ? { seat: s, at: now(), heard: 0, last: 0, units: [], failed: false } : null;
+  }
+
+  // The routes the INS units hold: a unit's list, when it is what its stored navlog makes (else the
+  // pairing is unknown and the unit is left out).
+  function heldRoutes() {
+    var sidStar = lvarOn('L:INI_SIDSTAR_IMPORT'), out = [];
+    for (var u = 1; u <= 3; u++) {
+      var idents = importedIdents(u);
+      if (!idents.length) continue;
+      var fixes = navlog(u);
+      if (sameList(insKeeps(fixes, sidStar), idents)) out.push({ unit: u, fixes: fixes, dest: destination(fixes) });
+    }
+    return out;
+  }
+
+  function routeDiffers(planText) {
+    var held = heldRoutes(), i;
+    for (i = 0; i < held.length; i++) if (ofpShows(planText, held[i].fixes)) return '';
+    var dests = [], units = {};
+    for (i = 0; i < held.length; i++) {
+      var d = held[i].dest;
+      if (!units.hasOwnProperty('k' + d)) { units['k' + d] = []; dests.push(d); }
+      units['k' + d].push(held[i].unit);
+    }
+    if (!dests.length) return '';
+    var parts = [];
+    for (i = 0; i < dests.length; i++) parts.push('INS ' + spokenList(units['k' + dests[i]]) + (dests[i] ? ' (to ' + dests[i] + ')' : ''));
+    return 'This OFP differs from the route in ' + parts.join(' or ') + '. Reload OFP and Send to INS both use SimBrief\'s latest plan.';
   }
 
   // ---- Charts and map ------------------------------------------------------------------------------
@@ -628,6 +884,9 @@
     pauseOverlay(root, out);
     simRate(root, out);
     var page = visiblePage(root);
+    settleSend(page && TABS[page.tab][2] === 'page-ofp' ? shownPlanText(page.node) : null);
+    // A fresh read-back speaks on any page; once older it is a line on the OFP page (ofp()).
+    if (lastSend && now() - lastSend.at < SPOKEN_MS) out.push(item('alert', lastSend.text, { live: 'assertive', key: 'alert:inssend' }));
     tabs(root, page, out);
     var name = page ? TABS[page.tab][1] : '';
     if (page) {
@@ -761,6 +1020,7 @@
   function clickElement(idx) {
     var a = acts[idx];
     if (!a || !a.press || !attached(a.press) || inert(a.press)) return false;
+    if (cls(a.press, 'send-to-ins-button')) armSend();
     a.press.click();
     return true;
   }
@@ -803,5 +1063,6 @@
     findRoot: function () { return document.getElementById('iniEFB'); },
     isVisible: shown
   };
+  listen();
   return MARK;
 })();
