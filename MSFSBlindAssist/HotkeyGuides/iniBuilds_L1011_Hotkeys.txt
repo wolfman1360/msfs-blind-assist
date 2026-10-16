@@ -176,7 +176,8 @@ when it changes. F5 reads the page again, and Alt+F4 closes the window.
                         Menu, Third party, Simbrief Id); the plan is then readable line by line.
                         Send to INS loads its en-route waypoints into INS 1 from the captain's
                         tablet, or INS 2 from the first officer's, nine at a time; the INS and PMS
-                        window (Shift+M) shows them in that unit's waypoint list.
+                        window (Shift+M) shows them in that unit's waypoint list. Switch that INS
+                        on first: one that is off takes no waypoints.
   Takeoff performance   Weight, pressure altitude and temperature (Sync from aircraft fills them),
                         takeoff flaps, Calculate, then the results: V1, VR, V2, the flap
                         retraction speeds and the EPR settings. Set bugs and EPR sets them.
