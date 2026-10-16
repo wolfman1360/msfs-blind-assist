@@ -155,6 +155,68 @@ public class IniL1011InsBehaviourTests
     }
 
     [Fact]
+    public async Task Enter_present_position_decides_the_selector_move_when_its_turn_comes()
+    {
+        // A page picked from the window just before it records its position only when the pick RUNS, behind the
+        // keys still being sent. Deciding at queue time saw the selector still at POSITION, chained no move, and
+        // keyed the position onto the picked page.
+        var gate = new TaskCompletionSource();
+        _def.StepDelay = ms => { _trace.Add("wait:" + ms); return gate.Task; };
+        _def.CanLand = _ => true;
+        SelectorIsAt(2, 3);
+        _trace.Clear();
+
+        Assert.True(_def.TypeKeys(L1011InsDevice.Ins2, "5", insert: false, _sim, _speech));       // keeps the chain busy
+        _def.SetInsSelector("INS_2_ROTARY_MODE", 5, _sim, _speech);                                // queued behind it
+        Assert.True(_def.EnterPresentPosition(2, 36.08540568, -115.13363512, _sim, _speech));    // queued behind the pick
+        Assert.Equal(new[] { "send:" + Digit(2, '5'), "wait:50" }, _trace);                        // nothing past the first run yet
+        gate.SetResult();
+        await _def.KeysDone;
+
+        Assert.Equal(new[]
+        {
+            "send:" + Digit(2, '5'), "wait:50",
+            "send:5 (>L:INS_2_ROTARY_MODE) (>H:INS_2_DISPLAY_MODE)",    // the pick, after the keys
+            "send:3 (>L:INS_2_ROTARY_MODE) (>H:INS_2_DISPLAY_MODE)",    // POSITION again, decided at the run's turn
+            "wait:" + IniL1011Definition.SelectorSettleMs,
+            "send:" + PresentPositionString, "wait:50",
+        }, _trace);
+    }
+
+    [Fact]
+    public async Task Enter_present_position_behind_queued_keys_moves_nothing_when_the_selector_is_at_position()
+    {
+        var gate = new TaskCompletionSource();
+        _def.StepDelay = ms => { _trace.Add("wait:" + ms); return gate.Task; };
+        _def.CanLand = _ => true;
+        SelectorIsAt(2, 3);
+        _trace.Clear();
+
+        Assert.True(_def.TypeKeys(L1011InsDevice.Ins2, "5", insert: false, _sim, _speech));
+        Assert.True(_def.EnterPresentPosition(2, 36.08540568, -115.13363512, _sim, _speech));
+        gate.SetResult();
+        await _def.KeysDone;
+
+        Assert.Equal(new[] { "send:" + Digit(2, '5'), "wait:50", "send:" + PresentPositionString, "wait:50" }, _trace);
+    }
+
+    [Fact]
+    public void Enter_present_position_queued_behind_keys_counts_a_possible_move_in_the_busy_time()
+    {
+        // The move is decided later, so what is still unknown is counted: a pick queued ahead of it may change
+        // the page. The window holds its read-back of the typed position for this long (an upper bound).
+        var gate = new TaskCompletionSource();
+        _def.StepDelay = _ => gate.Task;
+        _def.CanLand = _ => true;
+        SelectorIsAt(2, 3);
+        Assert.True(_def.TypeKeys(L1011InsDevice.Ins2, "5", insert: false, _sim, _speech));
+        Assert.Equal(L1011InsKeys.RunGapMs, _def.KeysBusyForMs());
+        Assert.True(_def.EnterPresentPosition(2, 36.08540568, -115.13363512, _sim, _speech));
+        Assert.Equal(L1011InsKeys.RunGapMs + IniL1011Definition.SelectorSettleMs + L1011InsKeys.RunGapMs, _def.KeysBusyForMs());
+        gate.SetResult();
+    }
+
+    [Fact]
     public void The_present_position_sentence_is_the_same_under_a_comma_decimal_culture()
     {
         var saved = System.Globalization.CultureInfo.CurrentCulture;

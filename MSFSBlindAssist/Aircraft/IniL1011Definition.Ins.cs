@@ -87,7 +87,9 @@ public partial class IniL1011Definition
     /// Types the aircraft's present position into an INS (latitude, INSERT, longitude, INSERT), turning
     /// the display selector to POSITION first when it is elsewhere: on any other page the N/S/E/W keys
     /// start no entry (L1011_INS.js). Alignment starts by itself once the position is in and the mode
-    /// selector is at ALIGN or NAV. The figure is spoken, as for any typed value. A position that is not a
+    /// selector is at ALIGN or NAV. Whether the selector must move is decided when this run's turn comes in
+    /// the chain (<see cref="ChainBuilt"/>), so a page picked just before it is seen. The figure is spoken, as
+    /// for any typed value. A position that is not a
     /// place on the globe (not finite, latitude past 90, longitude past 180) is refused aloud before anything
     /// is chained: <see cref="L1011InsKeys.PresentPositionControls"/> does no range check, and would key
     /// digits the unit takes as another figure or a null control.
@@ -108,9 +110,44 @@ public partial class IniL1011Definition
             return false;
         }
 
-        var steps = new List<L1011Step>();
         string selectorKey = $"INS_{unit.ToString(CultureInfo.InvariantCulture)}_ROTARY_MODE";
-        const double PositionPage = 3;
+        var clicks = L1011InsKeys.PresentPositionControls(unit, latitude, longitude)
+            .Select(KeyClick).OfType<string>().ToList();   // every id is in the map (IniL1011InsBehaviourTests pins it)
+        var keyRun = L1011InsKeys.RunSteps(clicks);
+
+        // Whether the selector must move to POSITION is decided when this run's turn comes in the chain, not
+        // now: a page picked from the window just before this call records its position only when the pick
+        // RUNS (behind the keys still being sent), so a decision made here could see the old page and key the
+        // position onto the new one. What the chain is told now is an upper bound for KeysBusyForMs: the move
+        // and its settle are counted when it may be needed (anything is queued ahead, or the selector is not
+        // known to be at POSITION).
+        int busyEstimate = DurationMs(keyRun) + (SelectorMayMove(selectorKey, sim) ? SelectorMoveMs(selectorKey) : 0);
+        ChainBuilt(busyEstimate, () => PresentPositionSteps(selectorKey, keyRun, sim), sim);
+        announcer.Announce($"INS {unit.ToString(CultureInfo.InvariantCulture)}: entering present position {L1011InsWaypoints.Position(latitude, longitude)}");
+        return true;
+    }
+
+    /// <summary>The display selector's POSITION page (the manual's "Display selector switch"): the page the
+    /// present position is keyed on.</summary>
+    private const double PositionPage = 3;
+
+    /// <summary>Whether the move to POSITION may be needed by the time a present-position run reaches its turn.</summary>
+    private bool SelectorMayMove(string selectorKey, SimConnectManager sim) =>
+        _map.Find(selectorKey) != null && (KeysBusyForMs() > 0 || CurrentPosition(selectorKey, sim) != PositionPage);
+
+    /// <summary>What the move to POSITION and the wait for its page take, for the busy estimate.</summary>
+    private int SelectorMoveMs(string selectorKey) =>
+        SelectorSettleMs + (_map.Find(selectorKey) is L1011Control selector
+            ? DurationMs(L1011WritePlan.ForSet(selector, PositionPage, null).Steps)
+            : 0);
+
+    /// <summary>
+    /// A present-position run at its turn: the selector move to POSITION and its settle when the selector is
+    /// not there NOW (what the chain has done before this run, picks included), then the keys.
+    /// </summary>
+    private IReadOnlyList<L1011Step> PresentPositionSteps(string selectorKey, IReadOnlyList<L1011Step> keyRun, SimConnectManager sim)
+    {
+        var steps = new List<L1011Step>();
         if (CurrentPosition(selectorKey, sim) != PositionPage && _map.Find(selectorKey) is L1011Control selector)
         {
             var plan = L1011WritePlan.ForSet(selector, PositionPage, CurrentPosition(selectorKey, sim));
@@ -121,13 +158,8 @@ public partial class IniL1011Definition
                 _commanded.Record(selectorKey, PositionPage, Clock());
             }
         }
-        var clicks = L1011InsKeys.PresentPositionControls(unit, latitude, longitude)
-            .Select(KeyClick).OfType<string>().ToList();   // every id is in the map (IniL1011InsBehaviourTests pins it)
-        steps.AddRange(L1011InsKeys.RunSteps(clicks));
-
-        Chain(steps, sim);
-        announcer.Announce($"INS {unit.ToString(CultureInfo.InvariantCulture)}: entering present position {L1011InsWaypoints.Position(latitude, longitude)}");
-        return true;
+        steps.AddRange(keyRun);
+        return steps;
     }
 
     /// <summary>
@@ -198,12 +230,22 @@ public partial class IniL1011Definition
 
     /// <summary>Runs steps after every run already chained, on the UI thread, and notes when they will
     /// all have run.</summary>
-    private void Chain(IReadOnlyList<L1011Step> steps, SimConnectManager sim)
+    private void Chain(IReadOnlyList<L1011Step> steps, SimConnectManager sim) =>
+        ChainBuilt(DurationMs(steps), () => steps, sim);
+
+    /// <summary>The waits in steps, in ms: how long they take apart from sending.</summary>
+    private static int DurationMs(IEnumerable<L1011Step> steps) =>
+        (int)steps.OfType<L1011DelayStep>().Sum(d => (long)d.Milliseconds);
+
+    /// <summary>
+    /// Like <see cref="Chain"/>, but the steps are built when the run's turn comes (after every run already
+    /// chained has run), from what the chain has done by then. <paramref name="estimatedMs"/> is what
+    /// <see cref="KeysBusyForMs"/> counts for it now, an upper bound.
+    /// </summary>
+    private void ChainBuilt(long estimatedMs, Func<IReadOnlyList<L1011Step>> build, SimConnectManager sim)
     {
-        long duration = steps.OfType<L1011DelayStep>().Sum(d => (long)d.Milliseconds);
-        _keysIdleAtMs = Math.Max(Clock(), _keysIdleAtMs) + duration;
-        var previous = _keyChain;
-        _keyChain = RunAfterAsync(previous, steps, sim);
+        _keysIdleAtMs = Math.Max(Clock(), _keysIdleAtMs) + estimatedMs;
+        _keyChain = RunBuiltAfterAsync(_keyChain, build, sim);
     }
 
     /// <summary>Runs an action on the UI thread after every run already chained, and puts it in the chain, so
@@ -234,7 +276,7 @@ public partial class IniL1011Definition
         }
     }
 
-    private async Task RunAfterAsync(Task previous, IReadOnlyList<L1011Step> steps, SimConnectManager sim)
+    private async Task RunBuiltAfterAsync(Task previous, Func<IReadOnlyList<L1011Step>> build, SimConnectManager sim)
     {
         try
         {
@@ -243,6 +285,16 @@ public partial class IniL1011Definition
         catch (Exception ex)
         {
             Log.Warn("L1011", $"A keypad run failed: {ex.Message}");
+        }
+        IReadOnlyList<L1011Step> steps;
+        try
+        {
+            steps = build();
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("L1011", $"A keypad run could not be built: {ex.Message}");
+            return;
         }
         await RunAsync(steps, sim);
     }
