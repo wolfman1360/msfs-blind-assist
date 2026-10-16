@@ -422,7 +422,8 @@ public sealed class L1011InsForm : Form
         {
             foreach (var combo in new[] { _displaySelector, _waypointSelector, _autoSelector })
             {
-                if (combo.Tag is not string key || combo.DroppedDown)
+                // A combo the pilot is in is theirs: the reported position lags a commit by up to a batch.
+                if (combo.Tag is not string key || !L1011InsKeyRouting.RepaintsSelector(combo.Focused, combo.DroppedDown))
                     continue;
                 var ordered = _def.InsSelectorPositions(key).OrderBy(p => p.Key).ToList();
                 int index = _def.InsSelectorPosition(key, _sim) is double v ? ordered.FindIndex(p => Math.Abs(p.Key - v) < 0.01) : -1;
@@ -599,6 +600,14 @@ public static class L1011InsKeyRouting
     {
         public static readonly Action Pass = new(ActionKind.Pass);
     }
+
+    /// <summary>
+    /// Whether the window may rewrite a selector combo to the position the aircraft reports: never one the
+    /// pilot is in (focused, or with its list dropped). The report ([L1011-11]) lags a committed choice by up
+    /// to a batch, so repainting a combo being arrowed through would say the new position, the old one, then
+    /// the new one again; the other fleet windows skip the focused combo the same way.
+    /// </summary>
+    public static bool RepaintsSelector(bool focused, bool droppedDown) => !focused && !droppedDown;
 
     public static Action Resolve(Keys keyCode, bool alt, bool control, bool shift, ComboFocus combo,
         bool useAlternateLskKeys, bool pms)

@@ -71,4 +71,15 @@ public class L1011InsKeyRoutingTests
         Assert.Equal(ActionKind.Close, On(Keys.Escape, combo: ComboFocus.Closed).Kind);
         Assert.Equal(ActionKind.LineKey, On(Keys.D2, ctrl: true, combo: ComboFocus.Closed).Kind);
     }
+
+    [Fact]
+    public void A_selector_the_pilot_is_in_is_never_repainted()
+    {
+        // The reported position lags a commit by up to one batch (about a second): repainting a combo the
+        // pilot is arrowing through would say the new position, the old one, then the new one again.
+        Assert.True(RepaintsSelector(focused: false, droppedDown: false));
+        Assert.False(RepaintsSelector(focused: true, droppedDown: false));
+        Assert.False(RepaintsSelector(focused: false, droppedDown: true));
+        Assert.False(RepaintsSelector(focused: true, droppedDown: true));
+    }
 }
