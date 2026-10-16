@@ -67,12 +67,21 @@ public partial class IniL1011Definition
     }
 
     /// <summary>A readout's value as the status display shows it ("12,400 pounds"); lamps use
-    /// their on/off descriptions.</summary>
+    /// their on/off descriptions. A gated autopilot flag shows "on" only while its mode is on, as
+    /// Ctrl+P's list and the call-outs see it ([L1011-12]).</summary>
     public override bool TryGetDisplayOverride(string varKey, double value, out string displayText)
     {
         if (_readouts.TryGetValue(varKey, out var readout))
         {
             displayText = L1011Readouts.FormatValue(readout, value);
+            return true;
+        }
+        if (L1011AfcsModes.IsGatedFlag(varKey))
+        {
+            var sim = _sim;
+            bool on = value >= 0.5
+                && L1011AfcsModes.FlagModeOn(varKey, key => sim != null ? ReportedPosition(key, sim) : _afcs.Last(key));
+            displayText = on ? "on" : "off";
             return true;
         }
         return base.TryGetDisplayOverride(varKey, value, out displayText);

@@ -19,12 +19,16 @@ public sealed record L1011PmsScreen(string Seat, string Title, IReadOnlyList<str
 /// A PMS page as lines: "Captain PMS, page: TAKEOFF", then one line per row, numbered so the line
 /// select key is obvious ("1: GMT 0755Z"), then the lit lamps ("Lights: climb, insert"). The gauge
 /// pads with "_" and writes "---" for a value not yet known (L1011_INS.js, package 1.0.8): runs of "_"
-/// read as one space, "---" reads "blank". A page the gauge is redrawing (it blanks everything for
-/// 200 ms) is null, so the window keeps the page it has.
+/// read as one space, "---" reads "blank". An EPR row gets back the leading 1 the gauge does not draw
+/// (".642" reads 1.642, as the tablet reader says it). A page the gauge is redrawing (it blanks
+/// everything for 200 ms) is null, so the window keeps the page it has.
 /// </summary>
 public static class L1011PmsDisplay
 {
     private static readonly Regex Spaces = new(@"\s+", RegexOptions.CultureInvariant);
+
+    /// <summary>An EPR as the gauge draws it, thousandths only (it stores epr / 1000 + 1): ".642" is 1.642.</summary>
+    private static readonly Regex EprThousandths = new(@"(?<!\d)\.(\d{3})(?!\d)", RegexOptions.CultureInvariant);
 
     private static readonly Dictionary<string, string> LightWords = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -59,7 +63,10 @@ public static class L1011PmsDisplay
                 continue;
             }
             var parts = new[] { left, right }.Where(p => p.Length > 0).ToList();
-            lines.Add($"{n}: {(parts.Count == 0 ? "blank" : string.Join(" ", parts))}");
+            string row = parts.Count == 0 ? "blank" : string.Join(" ", parts);
+            if (row.StartsWith("EPR ", StringComparison.Ordinal))
+                row = EprThousandths.Replace(row, "1.$1");
+            lines.Add($"{n}: {row}");
         }
         var lit = (s.Lights ?? Array.Empty<string>())
             .Select(l => LightWords.TryGetValue(l.Trim(), out var w) ? w : null).Where(w => w != null).ToList();
@@ -108,7 +115,7 @@ public static class L1011InsWaypoints
             }
             anySet = true;
             string ident = p.Ident.Trim();
-            string label = ident.Length == 0 || TypedIdent.IsMatch(ident) ? $"Waypoint {n}" : $"Waypoint {n}, {ident}";
+            string label = ident.Length == 0 || IsTyped(ident) ? $"Waypoint {n}" : $"Waypoint {n}, {ident}";
             lines.Add($"{label}: {Position(p.Latitude, p.Longitude)}");
         }
         // The gauge keeps a route's batch numbers after a power loss has emptied every slot (live).
@@ -116,6 +123,9 @@ public static class L1011InsWaypoints
             lines.Add($"Route: batch {activeBatch.ToString(CultureInfo.InvariantCulture)} of {batchCount.ToString(CultureInfo.InvariantCulture)}");
         return lines;
     }
+
+    /// <summary>A slot typed in on the keypad: the gauge names it USER&lt;k&gt;, which says nothing to the pilot.</summary>
+    public static bool IsTyped(string ident) => TypedIdent.IsMatch(ident.Trim());
 
     /// <summary>"N 37 17.9, W 117 18.6".</summary>
     public static string Position(double latitude, double longitude)

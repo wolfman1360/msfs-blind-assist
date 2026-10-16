@@ -14,9 +14,11 @@ public sealed record L1011Readout(string Key, string Name, string SimVar, string
 
 /// <summary>
 /// The TriStar's gauges as text. Stock simulator variables are used wherever the investigation
-/// found them correct on this aircraft (engines, fuel, radios, gear, flaps, trims, battery and bus
-/// voltage, cabin pressure); the engineer's own needle L:vars have unverified scaling and are left
-/// out. Fuel tank indices follow the aircraft's own load sheet (efb-wasm-systems.md 2.4).
+/// found them correct on this aircraft (fuel, radios, gear, flaps, trims, battery voltage, cabin
+/// pressure); the engine gauges read the aircraft's own variables, and the electrical buses and
+/// hydraulic systems their indexed modular-system variables, as the cockpit gauges do. The
+/// engineer's own needle L:vars have unverified scaling and are left out. Fuel tank indices follow
+/// the aircraft's own load sheet (efb-wasm-systems.md 2.4).
 /// Numbers are formatted with the invariant culture: a decimal comma would read "29,92".
 /// </summary>
 public static class L1011Readouts
@@ -30,7 +32,13 @@ public static class L1011Readouts
         var list = new List<L1011Readout>
         {
             new("L1011_RO_BATTERY_VOLTS", "Battery voltage", "ELECTRICAL BATTERY VOLTAGE", "Volts", "0.0", "volts", "Electrical"),
-            new("L1011_RO_MAIN_BUS_VOLTS", "Main bus voltage", "ELECTRICAL MAIN BUS VOLTAGE", "Volts", "0.0", "volts", "Electrical"),
+            // The modular electrical system's own buses (systems.cfg bus.9, 12, 13, 23, 21); the legacy
+            // ELECTRICAL MAIN BUS VOLTAGE is never fed and read 0.0 with every bus powered.
+            new("L1011_RO_AC_BUS_1_VOLTS", "AC bus 1 voltage", "ELECTRICAL BUS VOLTAGE:9", "Volts", "0", "volts", "Electrical"),
+            new("L1011_RO_AC_BUS_2_VOLTS", "AC bus 2 voltage", "ELECTRICAL BUS VOLTAGE:12", "Volts", "0", "volts", "Electrical"),
+            new("L1011_RO_AC_BUS_3_VOLTS", "AC bus 3 voltage", "ELECTRICAL BUS VOLTAGE:13", "Volts", "0", "volts", "Electrical"),
+            new("L1011_RO_AC_ESS_VOLTS", "AC essential bus voltage", "ELECTRICAL BUS VOLTAGE:23", "Volts", "0", "volts", "Electrical"),
+            new("L1011_RO_DC_ESS_VOLTS", "DC essential bus voltage", "ELECTRICAL BUS VOLTAGE:21", "Volts", "0.0", "volts", "Electrical"),
             new("L1011_RO_APU_RPM", "APU speed", "APU PCT RPM", "Percent", "0", "percent", "APU"),
             new("L1011_RO_FUEL_TOTAL", "Total fuel", "FUEL TOTAL QUANTITY WEIGHT", "Pounds", "#,##0", "pounds", "Fuel"),
             new("L1011_RO_CABIN_ALT", "Cabin altitude", "PRESSURIZATION CABIN ALTITUDE", "Feet", "#,##0", "feet", "Pressurization"),
@@ -60,14 +68,19 @@ public static class L1011Readouts
         for (int i = 0; i < tanks.Length; i++)
             list.Add(new($"L1011_RO_TANK_{i + 1}", $"{tanks[i]} fuel", $"FUELSYSTEM TANK WEIGHT:{i + 1}", "Pounds", "#,##0", "pounds", "Fuel"));
 
-        for (int n = 1; n <= 4; n++)
-            list.Add(new($"L1011_RO_HYD_{n}", $"Hydraulic pressure {n}", $"HYDRAULIC PRESSURE:{n}", "Psi", "#,##0", "psi", "Hydraulics"));
+        // Systems A to D: the pressure checkers on each system's junction (systems.cfg actuators 7 to
+        // 10, SYSTEM_1_CHECKER to SYSTEM_4_CHECKER), which the cockpit's pressure gauges read.
+        string[] systems = { "A", "B", "C", "D" };
+        for (int n = 0; n < systems.Length; n++)
+            list.Add(new($"L1011_RO_HYD_{systems[n]}", $"System {systems[n]} hydraulic pressure", $"HYDRAULIC ACTUATOR PRESSURE:{n + 7}", "Psi", "#,##0", "psi", "Hydraulics"));
 
+        // The engine gauges' own variables (L1011_COCKPIT.behavior.xml): EPR, N1 and N3 (the RB211's
+        // high-pressure spool, the manual's start cues). The stock pressure ratio read 1.34 at idle.
         for (int e = 1; e <= 3; e++)
         {
-            list.Add(new($"L1011_RO_EPR_{e}", $"Engine {e} EPR", $"TURB ENG PRESSURE RATIO:{e}", "Ratio", "0.00", string.Empty, "Engine Instruments"));
-            list.Add(new($"L1011_RO_N1_{e}", $"Engine {e} N1", $"TURB ENG N1:{e}", "Percent", "0.0", "percent", "Engine Instruments"));
-            list.Add(new($"L1011_RO_N2_{e}", $"Engine {e} N2", $"TURB ENG N2:{e}", "Percent", "0.0", "percent", "Engine Instruments"));
+            list.Add(new($"L1011_RO_EPR_{e}", $"Engine {e} EPR", $"L:ENG{e}_EPR_CALC", "number", "0.000", string.Empty, "Engine Instruments"));
+            list.Add(new($"L1011_RO_N1_{e}", $"Engine {e} N1", $"L:INI_ENG{e}_N1", "number", "0.0", "percent", "Engine Instruments"));
+            list.Add(new($"L1011_RO_N3_{e}", $"Engine {e} N3", $"L:INI_ENG{e}_N3", "number", "0.0", "percent", "Engine Instruments"));
             list.Add(new($"L1011_RO_EGT_{e}", $"Engine {e} turbine gas temperature", $"ENG EXHAUST GAS TEMPERATURE:{e}", "Celsius", "0", "degrees", "Engine Instruments"));
             list.Add(new($"L1011_RO_FF_{e}", $"Engine {e} fuel flow", $"ENG FUEL FLOW PPH:{e}", "Pounds per hour", "#,##0", "pounds per hour", "Engine Instruments"));
             list.Add(new($"L1011_RO_OIL_PRESS_{e}", $"Engine {e} oil pressure", $"ENG OIL PRESSURE:{e}", "Psi", "0", "psi", "Engine Oil and Vibration"));

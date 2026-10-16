@@ -274,7 +274,9 @@ public static partial class L1011PanelLayout
             R("SWITCH_HUMIDITY_AIR", "Humidifier")),
 
         P("Pressurization",
-            R("ROTARY_CAB_PRESS_MODE", "Pressurization mode", "0=Auto;1=Standby;2=Manual"),
+            // The manual's GRD CHK, NORM and STBY; the tooltips name no position. 1 is NORM (the tablet's
+            // ready-for-takeoff state and the checklist); 0 and 2 follow the manual's order.
+            R("ROTARY_CAB_PRESS_MODE", "Pressurization mode", "0=Ground check;1=Normal;2=Standby"),
             R("ROTARY_FLT_CAB", "Cabin altitude"),
             R("ROTARY_CAB_PRESS", "Barometric pressure"),
             R("ROTARY_CABIN_BARO", "Cabin barometric setting"),

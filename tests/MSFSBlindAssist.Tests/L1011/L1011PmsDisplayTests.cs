@@ -76,6 +76,25 @@ public class L1011PmsDisplayTests
     }
 
     [Fact]
+    public void An_epr_reads_with_its_leading_one_as_the_tablet_reader_says_it()
+    {
+        // The gauge stores epr / 1000 + 1 and draws the thousandths only (".642" is EPR 1.642); the tablet
+        // reader already restores the 1 ("Takeoff EPR: 1.643").
+        var takeoff = L1011PmsDisplay.Lines(Pms("TAKEOFF", Page1Left, new[] { "0755Z", ".642", "1969", "418", "122.6", "19" }))!;
+        Assert.Equal("2: EPR 1.642", takeoff[2]);
+        Assert.Equal("5: FUEL 122.6", takeoff[5]);   // only the EPR row
+        string[] climb = { "CLB 250/320/820", "EPR   .522/.574", "ALT_430____OPT 350", "TOC__059NM 1632Z", "CLB MANUAL ?", "SAT 019   TAS 006" };
+        Assert.Equal("2: EPR 1.522/1.574", L1011PmsDisplay.Lines(Pms("CLB OPTIMUM", climb, new[] { "", "", "", "", "", "" }))![2]);
+    }
+
+    [Fact]
+    public void An_epr_being_typed_is_shown_as_typed()
+    {
+        var right = new[] { "0755Z", ".6_", "1969", "---", "---", "---" };
+        Assert.Equal("2: EPR, entering: .6", L1011PmsDisplay.Lines(Pms("TAKEOFF", Page1Left, right, entry: true, line: 2))![2]);
+    }
+
+    [Fact]
     public void A_page_being_redrawn_is_null_so_the_window_keeps_the_last_page()
     {
         var blank = new[] { "", "", "", "", "", "" };

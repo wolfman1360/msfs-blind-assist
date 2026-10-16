@@ -71,6 +71,14 @@ public class L1011InsDisplayTests
         Assert.Equal("Ground speed: 123 knots", lines[4]);
     }
 
+    [Fact]
+    public void One_mile_and_one_knot_read_in_the_singular()
+    {
+        Assert.Equal("Distance: 1 mile", L1011InsDisplay.Lines(Screen(5, "  0001", "  0124 ", dots: "6"))[3]);
+        Assert.Equal("Ground speed: 1 knot", L1011InsDisplay.Lines(Screen(0, " 0874 ", "  0001 ", dots: "2,5"))[4]);
+        Assert.Equal("Distance: 0 miles", L1011InsDisplay.Lines(Screen(5, "  0000", "  0124 ", dots: "6"))[3]);
+    }
+
     [Theory]
     [InlineData(0, "Track: no data", "Ground speed: no data")]
     [InlineData(5, "Distance: no data", "Time: no data")]

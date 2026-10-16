@@ -217,13 +217,14 @@ public static class L1011InsDisplay
         return dot && d.Length > 1 ? d[..^1] + "." + d[^1] : d;
     }
 
-    /// <summary>A whole number with its unit, leading zeros dropped: "123 knots".</summary>
+    /// <summary>A whole number with its unit, leading zeros dropped: "123 knots", "1 knot".</summary>
     private static string Whole(string window, string unit)
     {
         string? d = NumberText(window);
         if (d == null || d == "8888")
             return "no data";
-        return $"{long.Parse(d, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture)} {unit}";
+        long n = long.Parse(d, CultureInfo.InvariantCulture);
+        return $"{n.ToString(CultureInfo.InvariantCulture)} {(n == 1 ? unit.TrimEnd('s') : unit)}";
     }
 
     /// <summary>A number whose last digit is a tenth: "12.4 minutes".</summary>

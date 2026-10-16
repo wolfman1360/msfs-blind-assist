@@ -44,6 +44,8 @@ public sealed record L1011Plan(IReadOnlyList<L1011Step> Steps, string? Refusal)
 /// at CWS first for <see cref="PaddleNotchMs"/>, as the cockpit's paddle cannot skip that notch:
 /// L1011_INS.js switches the pitch and roll loops on only in its CWS routine, and its Command routine
 /// leaves them as they are, so a paddle sent straight to Command shows Command and flies nothing.</item>
+/// <item>The APU start button's press is followed by <c>H:APU</c> in the same string, as the tablet's own
+/// APU ON step sends it: the start switch alone cycled the inlet doors and the APU never turned.</item>
 /// </list>
 /// </summary>
 public static class L1011WritePlan
@@ -64,6 +66,13 @@ public static class L1011WritePlan
 
     /// <summary>The autopilot engage paddles: positions 0 Command, 1 CWS, 2 Off.</summary>
     private static readonly HashSet<string> Paddles = new(StringComparer.Ordinal) { "SWITCH_AFCS_AP_A", "SWITCH_AFCS_AP_B" };
+
+    /// <summary>The APU start button, whose press also fires the APU panel's event (<see cref="ApuPanelEvent"/>).</summary>
+    private const string ApuStart = "SWITCH_APU_START";
+
+    /// <summary>The event the tablet's own APU ON step sends after the start switch, and the master switch's
+    /// click sends too. Without it the start switch alone cycled the inlet doors and the APU never turned.</summary>
+    private const string ApuPanelEvent = "H:APU";
 
     public const string UnknownPositionRefusal = "position unknown, try again in a moment";
     public const string NotAPositionRefusal = "not a position of this control";
@@ -126,7 +135,10 @@ public static class L1011WritePlan
             return L1011Plan.Refused(NotSettableRefusal);
         if (control.Press.Count == 0)
             return L1011Plan.Refused(NotSettableRefusal);
-        var steps = new List<L1011Step>(Batches(control.Press.Select(L1011Effect.Parse), null));
+        var press = control.Press.Select(L1011Effect.Parse).ToList();
+        if (control.Id == ApuStart)
+            press.Add(L1011Effect.Parse(ApuPanelEvent));
+        var steps = new List<L1011Step>(Batches(press, null));
         if (control.Kind == L1011Kinds.Button && control.Release.Count > 0)
         {
             steps.Add(new L1011DelayStep(holdOverrideMs is > 0 ? holdOverrideMs.Value : HoldFor(control)));

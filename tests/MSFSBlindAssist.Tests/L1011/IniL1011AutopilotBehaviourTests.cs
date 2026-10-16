@@ -111,6 +111,28 @@ public class IniL1011AutopilotBehaviourTests
         Assert.Equal(new[] { "VOR on", "VOR captured" }, _speech.All);
     }
 
+    [Fact]
+    public void The_autopilot_panels_status_list_shows_a_vor_received_with_vor_mode_off_as_off()
+    {
+        // The panel's status list read "VOR captured: on" at the gate with VOR mode off, while
+        // Ctrl+P's list, which is gated ([L1011-12]), showed nothing.
+        Deliver("SWITCH_AFCS_VOR", 0);
+        Deliver("SWITCH_AFCS_BC", 0);
+        Deliver("ANN_VOR_ACTIVE", 1);
+        Assert.True(_def.TryGetDisplayOverride("ANN_VOR_ACTIVE", 1, out var text));
+        Assert.Equal("off", text);
+
+        Deliver("SWITCH_AFCS_VOR", 1);
+        Assert.True(_def.TryGetDisplayOverride("ANN_VOR_ACTIVE", 1, out text));
+        Assert.Equal("on", text);
+    }
+
+    [Fact]
+    public void The_status_list_leaves_an_ungated_flag_to_its_own_words()
+    {
+        Assert.False(_def.TryGetDisplayOverride("ANN_LOC_ACTIVE", 1, out _));
+    }
+
     private void NoDirectorOrAutopilot()
     {
         Deliver("SWITCH_AFCS_FD_A", 0);

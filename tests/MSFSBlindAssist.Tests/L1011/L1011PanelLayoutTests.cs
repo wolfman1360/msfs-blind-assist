@@ -92,6 +92,16 @@ public class L1011PanelLayoutTests
         Assert.Equal("Fast left rotation", compass.Positions[0]);
     }
 
+    [Fact]
+    public void The_pressurization_mode_selector_uses_the_manuals_words()
+    {
+        // The manual's selector is GRD CHK, NORM and STBY; there is no manual mode (the outflow valves
+        // have their own switches). The tablet's ready-for-takeoff state leaves it at 1, the
+        // checklist's NORM; it read "Standby" there before.
+        var mode = Placement.RowsByPanel["Pressurization"].Single(r => r.Key == "ROTARY_CAB_PRESS_MODE");
+        Assert.Equal(new[] { "Ground check", "Normal", "Standby" }, mode.Positions.OrderBy(p => p.Key).Select(p => p.Value));
+    }
+
     [Theory]
     [InlineData("OFF", "Off")]
     [InlineData("ALTITUDE MODE ON", "Altitude mode on")]

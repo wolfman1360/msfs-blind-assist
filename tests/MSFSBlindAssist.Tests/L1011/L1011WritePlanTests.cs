@@ -97,6 +97,26 @@ public class L1011WritePlanTests
     }
 
     [Fact]
+    public void The_apu_start_press_fires_the_apu_panels_event_after_the_switch()
+    {
+        // Measured from a stopped APU with the master on: L:SWITCH_APU_START alone (the cockpit click's
+        // only effect) cycled the inlet doors and the APU never turned; with H:APU after it, as the
+        // tablet's own APU ON step sends, the first press started it.
+        var start = new L1011Control
+        {
+            Id = "SWITCH_APU_START", Kind = L1011Kinds.Button, StateVar = "L:SWITCH_APU_START",
+            Press = new() { "L:SWITCH_APU_START, boolean=1" },
+            Release = new() { "L:SWITCH_APU_START, boolean=0" },
+        };
+        Assert.Equal(new[]
+        {
+            "1 (>L:SWITCH_APU_START, boolean) (>H:APU)",
+            $"wait {L1011WritePlan.PolledButtonHoldMs}",
+            "0 (>L:SWITCH_APU_START, boolean)",
+        }, Rpn(L1011WritePlan.ForPress(start)));
+    }
+
+    [Fact]
     public void A_switch_writes_its_variable_then_fires_its_events_in_one_command()
     {
         var plan = L1011WritePlan.ForSet(Battery(), 1, 0);
