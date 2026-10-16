@@ -47,7 +47,7 @@ public sealed class L1011Placement
 /// supplies the few the aircraft lacks. Position words not yet checked live are tracked in the
 /// "Verify in the simulator" list of docs/l1011.md.
 ///
-/// The INS/PMS keypads and the EFB are placed by later sessions.
+/// The INS and PMS keypads are in the INS window, not on the panels; the EFB is placed by a later session.
 /// </summary>
 public static partial class L1011PanelLayout
 {

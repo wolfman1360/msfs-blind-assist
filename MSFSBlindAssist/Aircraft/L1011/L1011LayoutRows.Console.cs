@@ -1,14 +1,25 @@
+using System.Globalization;
+
 namespace MSFSBlindAssist.Aircraft.L1011;
 
 public static partial class L1011PanelLayout
 {
     /// <summary>
-    /// The center console, in the manual's console-preparation order: disconnect handles, fuel and
-    /// ignition switches, thrust levers, speed brake and flaps, radios, audio panels, navigation
-    /// radios, ADF, transponder, weather radar. The INS keypads and the PMS are session 3.
+    /// The center console: the three INS units and the two PMS units first, grouped by unit (the manual's
+    /// console preparation sets INS 1 and 2, then the PMS, and INS 3 later, among the other items), then
+    /// the rest in the manual's console-preparation order: disconnect handles, fuel and ignition switches,
+    /// thrust levers, speed brake and flaps, radios, audio panels, navigation radios, ADF, transponder,
+    /// weather radar. An INS or PMS panel's first row opens the INS window on that unit (display, keypad
+    /// and waypoints); the keypads themselves are in that window, not on the panels.
     /// </summary>
     private static L1011LayoutPanel[] ConsolePanels() => new[]
     {
+        InsPanel(1),
+        InsPanel(2),
+        InsPanel(3),
+        P("Captain PMS", R(L1011InsDevices.WindowKey(L1011InsDevice.CaptainPms), "Open captain PMS window")),
+        P("First Officer PMS", R(L1011InsDevices.WindowKey(L1011InsDevice.FirstOfficerPms), "Open first officer PMS window")),
+
         P("Disconnect Handles",
             R("LEVER_PITCH_DISC", "Pitch disconnect handle", "0=Stowed;1=Pulled"),
             R("LEVER_ROLL_DISC", "Roll disconnect handle", "0=Stowed;1=Pulled")),
@@ -123,4 +134,25 @@ public static partial class L1011PanelLayout
             R("ROTARY_WX_CPT_BRT", "Captain radar brightness"),
             R("ROTARY_WX_FO_BRT", "First officer radar brightness")),
     };
+
+    /// <summary>The display selector's positions (the manual's "Display selector switch") in the INS window's
+    /// own words (the cockpit labels use slashes).</summary>
+    private const string InsDisplaySelectorWords =
+        "0=Track and ground speed;1=Heading and drift angle;2=Cross track and track error;3=Position;4=Waypoint;" +
+        "5=Distance and time;6=Wind;7=Desired track and status;8=Test";
+
+    /// <summary>The waypoint thumbwheel has no words in the aircraft; 0 shows the present position.</summary>
+    private const string InsWaypointWords = "0=0, present position;1=1;2=2;3=3;4=4;5=5;6=6;7=7;8=8;9=9";
+
+    /// <summary>One INS unit: the button that opens its window, then its three selectors.</summary>
+    private static L1011LayoutPanel InsPanel(int unit)
+    {
+        string n = unit.ToString(CultureInfo.InvariantCulture);
+        var device = L1011InsDevices.All.Single(d => L1011InsDevices.Unit(d) == unit);
+        return P("INS " + n,
+            R(L1011InsDevices.WindowKey(device), $"Open INS {n} window"),
+            R($"INS_{n}_ROTARY_MODE", "Display selector", InsDisplaySelectorWords),
+            R($"INS_{n}_ROTARY_WPT", "Waypoint selector", InsWaypointWords),
+            R($"INS_{n}_ROTARY_AUTO", "Auto, manual, remote selector"));
+    }
 }

@@ -120,5 +120,20 @@ public static class L1011Annunciators
         new L1011Lamp("AVIONIC_FWD_LO_FLOW", "Forward avionics low cooling flow", "Air Conditioning"),
         new L1011Lamp("AVIONIC_MID_LO_FLOW", "Mid avionics low cooling flow", "Air Conditioning"),
         new L1011Lamp("LX_PAX_OXY_FLOW", "Passenger oxygen flow", "Passenger Oxygen"),
+
+        // READY NAV, WARN and BATT for each unit. The waypoint ALERT for INS 1 only: the units light it
+        // together while they fly the same legs, and INS 1 feeds the captain's HSI and the autopilot (INS 3
+        // when the instrument source switch selects it). A one-update READY NAV flash (a unit aligning with
+        // its MSU at NAV) is below the lamp gate's settle time and never spoken.
+        new L1011Lamp("INS_1_READY", "INS 1 ready to navigate light", "INS 1"),
+        new L1011Lamp("INS_1_ALERT_INDEX", "INS 1 waypoint alert light", "INS 1"),
+        new L1011Lamp("INS_1_WARN", "INS 1 warning light", "INS 1"),
+        new L1011Lamp("INS_1_ON_BAT", "INS 1 battery light", "INS 1"),
+        new L1011Lamp("INS_2_READY", "INS 2 ready to navigate light", "INS 2"),
+        new L1011Lamp("INS_2_WARN", "INS 2 warning light", "INS 2"),
+        new L1011Lamp("INS_2_ON_BAT", "INS 2 battery light", "INS 2"),
+        new L1011Lamp("INS_3_READY", "INS 3 ready to navigate light", "INS 3"),
+        new L1011Lamp("INS_3_WARN", "INS 3 warning light", "INS 3"),
+        new L1011Lamp("INS_3_ON_BAT", "INS 3 battery light", "INS 3"),
     };
 }

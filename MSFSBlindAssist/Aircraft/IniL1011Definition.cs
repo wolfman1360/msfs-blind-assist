@@ -27,8 +27,11 @@ namespace MSFSBlindAssist.Aircraft;
 /// <item>Gauges are on-request readouts listed in each panel's status display.</item>
 /// <item>The 981 circuit breakers are never data definitions: the breaker window reads them through
 /// the Coherent debugger (<see cref="L1011CircuitBreakers"/>).</item>
+/// <item>The three INS units and the two PMS units: panels first on the Center Console, and the INS
+/// window (Shift+M, <see cref="Forms.L1011.L1011InsForm"/>), whose keys go through one chain
+/// (<see cref="PressKeys"/>) and whose display is read through the Coherent debugger.</item>
 /// </list>
-/// The INS/PMS and the EFB are added by later sessions (design doc).
+/// The EFB is added by a later session (design doc).
 /// </summary>
 public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
 {
@@ -332,6 +335,15 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
                     RenderAsButton = true,
                 };
             case L1011Afcs.DisconnectKey:
+                return new SimVarDefinition
+                {
+                    Name = "MSFSBA_" + row.Key,
+                    DisplayName = row.Name,
+                    Type = SimVarType.LVar,
+                    UpdateFrequency = UpdateFrequency.Never,
+                    RenderAsButton = true,
+                };
+            case var key when L1011InsDevices.FromWindowKey(key) != null:
                 return new SimVarDefinition
                 {
                     Name = "MSFSBA_" + row.Key,
