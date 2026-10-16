@@ -87,6 +87,33 @@ public class L1011InsKeysTests
     }
 
     [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void Automatic_waypoint_loading_is_the_navigation_screens_own_switch(int unit)
+    {
+        // L1011_NAVIGATION.js toggleAutoBatch: on sets the flag and resumes the route, off only clears the flag.
+        Assert.Equal($"1 (>L:INS_{unit}_AUTO_BATCH_ENABLED) (>H:INS_{unit}_RESUME_AUTOBATCH)", L1011InsKeys.AutoBatchRpn(unit, on: true));
+        Assert.Equal($"0 (>L:INS_{unit}_AUTO_BATCH_ENABLED)", L1011InsKeys.AutoBatchRpn(unit, on: false));
+    }
+
+    [Fact]
+    public void A_comma_decimal_culture_changes_no_automatic_loading_string()
+    {
+        var saved = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("sv-SE");
+            Assert.Equal("1 (>L:INS_2_AUTO_BATCH_ENABLED) (>H:INS_2_RESUME_AUTOBATCH)", L1011InsKeys.AutoBatchRpn(2, on: true));
+            Assert.Equal("0 (>L:INS_2_AUTO_BATCH_ENABLED)", L1011InsKeys.AutoBatchRpn(2, on: false));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = saved;
+        }
+    }
+
+    [Theory]
     [InlineData('5', "PMS_CPT_5")]
     [InlineData(' ', "PMS_CPT_SP")]
     public void Pms_characters_map_to_its_keypad(char typed, string control)

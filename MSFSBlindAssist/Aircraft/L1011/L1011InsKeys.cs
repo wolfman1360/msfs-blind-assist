@@ -54,6 +54,20 @@ public static class L1011InsKeys
         return keys;
     }
 
+    /// <summary>
+    /// The calculator string for automatic waypoint loading (the NAVIGATION screen's AUTO BATCH switch,
+    /// L1011_NAVIGATION.js toggleAutoBatch): on sets <c>L:INS_n_AUTO_BATCH_ENABLED</c> and resumes the
+    /// imported route (<c>H:INS_n_RESUME_AUTOBATCH</c>), off only clears the flag. The unit is formatted
+    /// with the invariant culture.
+    /// </summary>
+    public static string AutoBatchRpn(int unit, bool on)
+    {
+        string n = unit.ToString(CultureInfo.InvariantCulture);
+        return on
+            ? $"1 (>L:INS_{n}_AUTO_BATCH_ENABLED) (>H:INS_{n}_RESUME_AUTOBATCH)"
+            : $"0 (>L:INS_{n}_AUTO_BATCH_ENABLED)";
+    }
+
     private static string Sexagesimal(double value, int degreeDigits, char hemisphere)
     {
         double abs = Math.Abs(value);
