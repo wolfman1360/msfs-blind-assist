@@ -58,6 +58,23 @@ public class IniL1011InsDefinitionTests
         Assert.Equal("Remote", vars["INS_2_ROTARY_AUTO"].ValueDescriptions[2]);
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void The_overhead_mode_selectors_read_in_full_words(int unit)
+    {
+        // The aircraft's labels are "Off, Stby, Align, Nav, Att"; the panel says the words the INS window does.
+        string key = $"ROTARY_INS_MODE_{unit}";
+        var words = _def.GetVariables()[key].ValueDescriptions;
+        Assert.Equal(new[] { 0.0, 1, 2, 3, 4 }, words.Keys.OrderBy(k => k));
+        Assert.Equal(new[] { "Off", "Standby", "Align", "Nav", "Attitude" }, words.OrderBy(w => w.Key).Select(w => w.Value));
+        Assert.Contains(key, _def.GetPanelControls()["INS Mode Selectors"]);
+        // The window's "Mode selector" line says the same words, in lower case.
+        for (int position = 0; position <= 4; position++)
+            Assert.Equal(words[position].ToLowerInvariant(), L1011InsDisplay.MsuName(position));
+    }
+
     [Fact]
     public void Each_pms_panel_holds_its_window_button()
     {

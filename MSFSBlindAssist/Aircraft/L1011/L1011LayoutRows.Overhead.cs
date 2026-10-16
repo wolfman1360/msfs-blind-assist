@@ -2,6 +2,10 @@ namespace MSFSBlindAssist.Aircraft.L1011;
 
 public static partial class L1011PanelLayout
 {
+    /// <summary>The INS mode selectors' positions in full words (the aircraft's labels are "Off, Stby, Align, Nav,
+    /// Att"), as the INS window's "Mode selector" line says them (<see cref="L1011InsDisplay.MsuName"/>).</summary>
+    private const string InsModeWords = "0=Off;1=Standby;2=Align;3=Nav;4=Attitude";
+
     /// <summary>
     /// The overhead, in the order of the manual's overhead preparation: INS mode selectors, fire
     /// handles, compass, lighting, master radio, wipers, anti-ice, window heat, air data heat,
@@ -12,9 +16,9 @@ public static partial class L1011PanelLayout
     private static L1011LayoutPanel[] OverheadPanels() => new[]
     {
         P("INS Mode Selectors",
-            R("ROTARY_INS_MODE_1", "INS 1 mode"),
-            R("ROTARY_INS_MODE_2", "INS 2 mode"),
-            R("ROTARY_INS_MODE_3", "INS 3 mode")),
+            R("ROTARY_INS_MODE_1", "INS 1 mode", InsModeWords),
+            R("ROTARY_INS_MODE_2", "INS 2 mode", InsModeWords),
+            R("ROTARY_INS_MODE_3", "INS 3 mode", InsModeWords)),
 
         P("Engine Fire Handles",
             R("HANDLE_FIRE_1", "Engine 1 fire handle", "0=In;1=Pulled"),
