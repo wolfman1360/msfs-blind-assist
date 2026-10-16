@@ -13,8 +13,8 @@ READ THIS FIRST - WHAT THIS VERSION COVERS
 Choose iniBuilds L-1011 TriStar from the Aircraft menu. This version covers the TriStar's
 switch panels: the flight engineer's station, the overhead, the main instrument panel and the
 center console, in the order the TriStar's own preflight flows call for them, the glareshield
-autopilot, and the three INS units and two PMS units (Shift+M). Not included yet: the Paper
-Flight Bag tablet. Until it arrives, operate it in the simulator.
+autopilot, the three INS units and two PMS units (Shift+M), and the Paper Flight Bag tablet
+(Shift+T for the captain's, Ctrl+Shift+T for the first officer's).
 
 
 THE PANELS
@@ -153,6 +153,46 @@ takeoff page: Ctrl+1, type the time (1200), Enter, Ctrl+Enter. For a position up
 Position first, then Hold (the manual's order, Hold then Position, does nothing in this aircraft).
 Set all three auto/manual/remote selectors to Remote before typing waypoints, so they reach every
 unit; in Remote the leg line is the pair being ranged, not a flown leg.
+
+
+THE PAPER FLIGHT BAG TABLET - Press left bracket, then Shift+T (captain) or Ctrl+Shift+T (first officer)
+
+Each pilot's tablet opens in its own window, read as a list of controls and text, live, in the
+order the tablet shows them. The first eight items are its tabs: Menu, Ground, Load sheet, OFP,
+Takeoff performance, Landing performance, Charts and Enroute map; the one shown says "current
+page", and the window says the page's name when it changes. F5 reads the page again; Escape closes
+the window.
+
+  Ground                Doors, ground power, air conditioning cart, jetway, ramp truck, luggage,
+                        catering and pushback, each button saying its state ("Door 1 left:
+                        closed"); after a press it reads its new state. Chocks and maintenance
+                        opens the chocks, covers, cowl doors and technicians list.
+  Load sheet            Fuel per tank, cargo and passengers, in thousands of pounds or kilograms
+                        as the tablet shows. Type a value and press Enter: it is loaded the way
+                        the tablet's own LOAD key loads it. SimBrief import loads the figures
+                        of your SimBrief plan; Load settings chooses instant, timed or realistic
+                        loading.
+  OFP                   Reload OFP fetches your SimBrief plan (type your SimBrief ID first, in
+                        Menu, Third party, Simbrief Id); the plan is then readable line by line.
+                        Send to INS loads its en-route waypoints into INS 1 from the captain's
+                        tablet, or INS 2 from the first officer's, nine at a time; the INS and PMS
+                        window (Shift+M) shows them in that unit's waypoint list.
+  Takeoff performance   Weight, pressure altitude and temperature (Sync from aircraft fills them),
+                        takeoff flaps, Calculate, then the results: V1, VR, V2, the flap
+                        retraction speeds and the EPR settings. Set bugs and EPR sets them.
+  Landing performance   Weight, field elevation, runway condition and anti-skid, Calculate, the
+                        approach speeds, Set bugs.
+  Charts, Enroute map   Pictures, which cannot be read here; the Charts page offers the METAR
+                        lookup.
+  Menu                  Autocomplete (the flight engineer's flows: open a flow to hear each step
+                        and whether it is set; a step's button completes it), Panel states,
+                        Helper (top of descent calculator and timer, in-flight fuel manager),
+                        Aircraft settings, Throttle calibration, Third party (SimBrief ID,
+                        Navigraph code) and Audio.
+
+While the window is open, the tablet's progress and result lines (a panel state's progress, the
+descent calculator's result, the loading timer, the METAR answer) are read as they change, and its
+alerts (the top of descent pause, a load or performance error) are spoken at once.
 
 
 CIRCUIT BREAKERS
@@ -311,6 +351,10 @@ Autopilot:
 
 INS and PMS:
   Shift+M    INS and PMS window (see THE INS AND PMS WINDOW above)
+
+Tablet (Paper Flight Bag):
+  Shift+T        The captain's tablet (see THE PAPER FLIGHT BAG TABLET above)
+  Ctrl+Shift+T   The first officer's tablet
 
 Teleport:
   Shift+R    Runway Teleport
