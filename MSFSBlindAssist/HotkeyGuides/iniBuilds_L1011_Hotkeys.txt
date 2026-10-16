@@ -114,8 +114,8 @@ What you type is read back once it has landed: "Entry, left window: 36051N", "1:
 1200Z", or "Entry closed" when the entry closes. A PMS value the unit refuses shows ERROR for about
 a second and is read at once; an INS Insert the unit refuses changes nothing, so nothing is said.
 An entry holding a character the unit has no key for is not sent at all, and stays in the box to
-edit. The automatic waypoint loading button says its new state, "Automatic waypoint loading on" or
-"off", once the unit shows it, and says nothing if the state does not change.
+edit. The automatic waypoint loading button's label shows the state the INS reports ("Automatic
+waypoint loading: on" or "off"), and your screen reader reads it when it changes.
 
 The keys you type go to the unit in one go, so a whole present position is in well under a second,
 and a selector you move in the window waits for keys that are still being sent. The window's own

@@ -18,10 +18,10 @@ namespace MSFSBlindAssist.Forms.L1011;
 ///
 /// The display is read through the Coherent debugger from the unit's own view ("L1011_INS_1" carries INS 1
 /// and the captain's PMS, "L1011_INS_2" INS 2 and the first officer's PMS, "L1011_INS_3" INS 3). The reader
-/// holds that one view's socket only while the window is visible ([L1011-13]); nothing else is spoken but the
-/// automatic waypoint loading button's new state, which a screen reader does not announce on a focused button
-/// (<see cref="L1011AutoBatchReadBack"/>): the screen reader reads every other control, and the definition
-/// speaks errors and typed-value confirmations.
+/// holds that one view's socket only while the window is visible ([L1011-13]); nothing else is spoken: the
+/// screen reader reads every control (the automatic waypoint loading button's label shows the state the INS
+/// reports, and the reader says it when it changes), and the definition speaks errors and typed-value
+/// confirmations.
 /// </summary>
 public sealed class L1011InsForm : Form
 {
@@ -54,9 +54,6 @@ public sealed class L1011InsForm : Form
 
     /// <summary>The window was just shown: the first activation puts the cursor on the display.</summary>
     private readonly L1011InsShowFocus _showFocus = new();
-
-    /// <summary>The automatic waypoint loading press waiting for the reader to report its new state.</summary>
-    private readonly L1011AutoBatchReadBack _autoBatchReadBack = new();
 
     /// <summary>The entry line spoken on the first poll that saw it (a PMS line the unit erases within about a
     /// second: <see cref="L1011InsDevices.EntryReadsAtOnce"/>); null while no such line shows, so the next one
@@ -309,7 +306,6 @@ public sealed class L1011InsForm : Form
         _pmsControls.Visible = pms;
         _changes.Reset();
         _entry.Reset();
-        _autoBatchReadBack.Reset();   // a press on another unit is not waited for
         _atOnceSpoken = null;
         _shown = null;
 
@@ -370,7 +366,6 @@ public sealed class L1011InsForm : Form
         _client = null;
         _clientNeedle = null;
         _scrape = null;
-        _autoBatchReadBack.Reset();   // nothing will report the state it waited for
     }
 
     /// <summary>Takes a reader's rows only while it is the running one (a post queued before it stopped is dropped).</summary>
@@ -385,7 +380,6 @@ public sealed class L1011InsForm : Form
             return;
         _scrape = parsed;
         string? words = _changes.Observe(_device, parsed);
-        string? loading = _autoBatchReadBack.Observe(parsed.AutoBatch, Environment.TickCount64);
         Repaint();
         if (words != null)
         {
@@ -395,8 +389,6 @@ public sealed class L1011InsForm : Form
             if (pms && _display.Items.Count > 1)
                 _display.SelectedIndex = 1;   // a new page: the cursor on line 1, as on every CDU window
         }
-        if (loading != null)
-            _announcer.Announce(loading);   // queued behind the above, never cutting other speech
     }
 
     // ---------------------------------------------------------------------------------
@@ -594,9 +586,9 @@ public sealed class L1011InsForm : Form
         });
     }
 
-    /// <summary>Turns automatic waypoint loading the other way, then reads the new state back once the reader
-    /// reports it (<see cref="L1011AutoBatchReadBack"/>): the button's label changes on the next scrape, which
-    /// a screen reader does not announce on a focused button.</summary>
+    /// <summary>Turns automatic waypoint loading the other way. Nothing is said: the button's label shows the
+    /// state the INS reports (<see cref="Repaint"/>), and the screen reader reads it when it changes, as it does
+    /// the PMDG windows' buttons ([CORE-7]); an app read-back after the press was a double.</summary>
     private void ToggleAutoBatch()
     {
         if (_scrape?.AutoBatch is not bool on)
@@ -604,8 +596,7 @@ public sealed class L1011InsForm : Form
             _announcer.Announce("Automatic waypoint loading: state unknown");
             return;
         }
-        if (_def.SetAutoBatch(Unit, !on, _sim, _announcer))
-            _autoBatchReadBack.Expect(!on, Environment.TickCount64, _def.KeysBusyForMs());
+        _def.SetAutoBatch(Unit, !on, _sim, _announcer);
     }
 
     protected override void Dispose(bool disposing)

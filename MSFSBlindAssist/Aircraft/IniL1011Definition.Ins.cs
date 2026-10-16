@@ -134,8 +134,8 @@ public partial class IniL1011Definition
     /// Automatic waypoint loading (the NAVIGATION screen's AUTO BATCH): with it on, the INS loads the next
     /// nine waypoints of an imported route when it reaches waypoint 9. Turning it on also resumes the
     /// route, exactly as the screen's own switch does (L1011_NAVIGATION.js toggleAutoBatch,
-    /// <see cref="L1011InsKeys.AutoBatchRpn"/>). True when the write was chained; the window then reads the
-    /// new state back once the reader reports it (<see cref="L1011AutoBatchReadBack"/>).
+    /// <see cref="L1011InsKeys.AutoBatchRpn"/>). True when the write was chained. Nothing is spoken: the
+    /// window's button shows the state the INS reports and the screen reader reads it when it changes.
     /// </summary>
     public bool SetAutoBatch(int unit, bool on, SimConnectManager sim, ScreenReaderAnnouncer announcer)
     {
