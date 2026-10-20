@@ -213,7 +213,9 @@ The Engineer Station's Circuit Breakers panel has an "Open circuit breaker list"
 window lists all 981 breakers, each with its number ("HYD IND QTY, breaker 4: in"); the ones
 iniBuilds left unnamed read "Breaker 12: in". Type a name or a breaker number in Search to
 narrow the list, tick "Show pulled breakers only" to see what is pulled, and press Space or
-Enter on a breaker to pull it or push it in. The row changes to the new state. The states are
+Enter on a breaker to pull it or push it in. The row changes to the new state, and about a second
+and a half later the cockpit's answer is spoken: "HYD IND QTY, breaker 4: pulled", or "HYD IND
+QTY, breaker 4: still in" if the breaker did not move. The states are
 read when the window opens; Refresh reads them again. Each time it opens, the search is empty and
 "Show pulled breakers only" is unticked.
 

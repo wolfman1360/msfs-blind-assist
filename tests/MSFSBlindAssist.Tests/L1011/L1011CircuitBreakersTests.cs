@@ -106,6 +106,19 @@ public class L1011CircuitBreakersTests
     }
 
     [Fact]
+    public void A_pull_or_push_is_confirmed_with_the_state_the_cockpit_read_back()
+    {
+        // The row is rewritten in place under a steady focus, which a screen reader does not read again,
+        // so the confirmation read speaks once: the row's new text, or that the breaker did not move.
+        var breaker = new L1011Breaker { Index = 285, Title = "INSTR GND COOL" };
+        Assert.Equal("INSTR GND COOL, breaker 285: pulled", L1011CircuitBreakers.Confirmation(breaker, pulled: true, readPulled: true));
+        Assert.Equal("INSTR GND COOL, breaker 285: in", L1011CircuitBreakers.Confirmation(breaker, pulled: false, readPulled: false));
+        Assert.Equal("INSTR GND COOL, breaker 285: still in", L1011CircuitBreakers.Confirmation(breaker, pulled: true, readPulled: false));
+        Assert.Equal("INSTR GND COOL, breaker 285: still pulled", L1011CircuitBreakers.Confirmation(breaker, pulled: false, readPulled: true));
+        Assert.Equal("Breaker 12: still in", L1011CircuitBreakers.Confirmation(new L1011Breaker { Index = 12 }, pulled: true, readPulled: false));
+    }
+
+    [Fact]
     public void A_pull_or_push_before_the_states_are_read_is_refused_with_a_way_out()
     {
         Assert.Equal("Breaker states unknown. Press Refresh.", L1011CircuitBreakers.StatesUnknownRefusal);

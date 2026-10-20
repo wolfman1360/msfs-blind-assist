@@ -9,8 +9,10 @@ namespace MSFSBlindAssist.Forms.L1011;
 /// The TriStar's circuit breakers as one searchable list ("HYD IND QTY, breaker 4: in"). States are read all at
 /// once through the Coherent debugger (<see cref="L1011CircuitBreakers.BulkReadScript"/>) when the
 /// window opens and on Refresh; Space or Enter on a row pulls or pushes it in by replaying the
-/// cockpit's own click. The changed row updates in place, so the screen reader reads the new state
-/// itself and nothing is announced on top of it; only a failure is spoken. The list is re-filtered
+/// cockpit's own click. The changed row updates in place, which a screen reader does not read again
+/// under a steady focus, so the confirmation read 1.5 s later speaks the breaker's state once
+/// (<see cref="L1011CircuitBreakers.Confirmation"/>: "INSTR GND COOL, breaker 285: pulled", or
+/// "still in" when it did not move). The list is re-filtered
 /// only when the window opens, the search or "pulled only" changes, or Refresh is pressed: a pull,
 /// a push and its confirmation read rewrite the listed rows without adding or removing one, so the
 /// cursor never moves to another breaker (the Ctrl+M monitor managers' rule: never on a tick).
@@ -28,6 +30,10 @@ public sealed class L1011CircuitBreakerForm : Form
     private IReadOnlyList<int> _visible = Array.Empty<int>();
     private bool _reading;
 
+    /// <summary>How many times each breaker has been pulled or pushed: only a breaker's latest press is
+    /// confirmed aloud, so a quick pull and push back is heard once, in the state it ended in.</summary>
+    private readonly int[] _presses;
+
     private TextBox _search = null!;
     private CheckBox _pulledOnly = null!;
     private DisplayListBox _list = null!;
@@ -38,6 +44,7 @@ public sealed class L1011CircuitBreakerForm : Form
         _breakers = breakers;
         _sim = sim;
         _announcer = announcer;
+        _presses = new int[breakers.Count];
         BuildUi();
         MonitorManagerShared.HideOnClose(this);
     }
@@ -133,10 +140,11 @@ public sealed class L1011CircuitBreakerForm : Form
 
     /// <summary>Reads every breaker's state; <paramref name="refilter"/> lists the breakers again
     /// (opening, Refresh), otherwise only the listed rows' text changes (a confirmation read).</summary>
-    private async Task ReadAsync(bool announceFailure, bool refilter)
+    /// <returns>True when the states were read; false when another read was in flight or this one failed.</returns>
+    private async Task<bool> ReadAsync(bool announceFailure, bool refilter)
     {
         if (_reading || _breakers.Count == 0)
-            return;
+            return false;
         _reading = true;
         try
         {
@@ -144,23 +152,25 @@ public sealed class L1011CircuitBreakerForm : Form
                 L1011CircuitBreakers.BulkReadScript(_breakers));
             var states = L1011CircuitBreakers.ParseStates(result, _breakers.Count);
             if (IsDisposed)
-                return;
+                return false;
             if (states == null)
             {
                 _status.Text = "Breaker states unavailable: the cockpit's engineer panel did not answer.";
                 if (announceFailure)
                     _announcer.Announce("Circuit breakers could not be read");
-                return;
+                return false;
             }
             _states = states;
             if (refilter)
                 Refilter();
             else
                 RefreshRows();
+            return true;
         }
         catch (Exception ex)
         {
             Log.Warn("L1011", $"Breaker read failed: {ex.Message}");
+            return false;
         }
         finally
         {
@@ -214,16 +224,21 @@ public sealed class L1011CircuitBreakerForm : Form
             if (step is L1011CalcStep calc)
                 _sim.ExecuteCalculatorCodeUnique(calc.Rpn);
 
-        // Show the commanded state at once (the screen reader reads the changed row), then confirm.
+        // Show the commanded state at once, then confirm it aloud: a screen reader does not read a row
+        // again when its text changes under a steady focus.
         _states[index] = pull;
         RefreshRows();
-        _ = ConfirmAsync();
+        _ = ConfirmAsync(index, pull, ++_presses[index]);
     }
 
-    private async Task ConfirmAsync()
+    /// <summary>Reads the breakers again once the click has landed and speaks the pressed breaker's state once
+    /// (<see cref="L1011CircuitBreakers.Confirmation"/>), unless that breaker has been pressed again since.</summary>
+    private async Task ConfirmAsync(int index, bool pulled, int press)
     {
         await Task.Delay(ConfirmReadDelayMs);
-        if (!IsDisposed && Visible)
-            await ReadAsync(announceFailure: false, refilter: false);
+        if (IsDisposed || !Visible || press != _presses[index])
+            return;
+        if (await ReadAsync(announceFailure: false, refilter: false) && press == _presses[index])
+            _announcer.Announce(L1011CircuitBreakers.Confirmation(_breakers[index], pulled, _states![index]));
     }
 }

@@ -27,7 +27,18 @@ public static class L1011CircuitBreakers
     }
 
     public static string ItemText(L1011Breaker breaker, bool? pulled) =>
-        $"{DisplayName(breaker)}: {(pulled == null ? "unknown" : pulled.Value ? "pulled" : "in")}";
+        $"{DisplayName(breaker)}: {(pulled == null ? "unknown" : StateWord(pulled.Value))}";
+
+    /// <summary>
+    /// Spoken once when the confirmation read after a pull (<paramref name="pulled"/>) or push comes back: the
+    /// row's new text when the breaker moved ("INSTR GND COOL, breaker 285: pulled"), otherwise
+    /// "INSTR GND COOL, breaker 285: still in". The row is rewritten in place under a steady focus, which a
+    /// screen reader does not read again, so without this a pull or push says nothing.
+    /// </summary>
+    public static string Confirmation(L1011Breaker breaker, bool pulled, bool readPulled) =>
+        readPulled == pulled ? ItemText(breaker, readPulled) : $"{DisplayName(breaker)}: still {StateWord(readPulled)}";
+
+    private static string StateWord(bool pulled) => pulled ? "pulled" : "in";
 
     /// <summary>ES5 (Coherent GT is Chromium-49 class): one '1' or '0' per breaker, in list order.</summary>
     public static string BulkReadScript(IReadOnlyList<L1011Breaker> breakers)
