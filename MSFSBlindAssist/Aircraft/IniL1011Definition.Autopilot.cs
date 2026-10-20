@@ -28,6 +28,15 @@ public partial class IniL1011Definition
     /// one batch period plus the aircraft applying it (the A300's value).</summary>
     public const int ToggleReadBackMs = 1200;
 
+    /// <summary>The inner pitch loop, <c>L:INI_PITCH_PID_STATE</c>, read for the engage health check.</summary>
+    public const string PitchLoopKey = "L1011_AFCS_PITCH_LOOP";
+
+    /// <summary>The inner roll loop, <c>L:INI_ROLL_PID_STATE</c>, read for the engage health check.</summary>
+    public const string RollLoopKey = "L1011_AFCS_ROLL_LOOP";
+
+    /// <summary>The speed target readout (<c>L:INI_AT_TARGET</c>), which the autothrottle read-back adds.</summary>
+    private const string SpeedTargetKey = "L1011_RO_AFCS_SPEED";
+
     /// <summary>The wait before a read-back; tests replace it.</summary>
     internal Func<int, Task> ReadBackDelay { get; set; } = Task.Delay;
 
@@ -151,7 +160,7 @@ public partial class IniL1011Definition
             if (_disposed)
                 return;
             if (await ReadFresh(sim, key, BatchReadoutTimeoutMs) is double value && L1011AfcsModes.Words(key, value) is string words)
-                announcer.Announce(words);
+                announcer.Announce(await CompleteReadBackAsync(key, value, words, sim));
         }
         catch (Exception ex)
         {
@@ -168,6 +177,27 @@ public partial class IniL1011Definition
                     _readBackPending.Remove(key);
             }
         }
+    }
+
+    /// <summary>
+    /// What the aircraft now does with the press, added to the read-back's words, each read fresh: the
+    /// speed the autothrottle holds once on ("Autothrottle on, speed 250": the aircraft resets the target
+    /// to 250 when it engages), and for an engage paddle at Command, an inner loop that is not flying
+    /// ("Autopilot A command, not flying pitch"). A statement, never a refusal: the press stands.
+    /// </summary>
+    private async Task<string> CompleteReadBackAsync(string key, double value, string words, SimConnectManager sim)
+    {
+        if (key == "SWITCH_AFCS_AT" && value >= 0.5)
+            return await ReadFresh(sim, SpeedTargetKey, ReadoutTimeoutMs) is double knots
+                ? L1011AfcsModes.WithSpeedTarget(words, knots)
+                : words;
+        if (L1011AutoflightWindows.IsEngagePaddle(key) && Math.Abs(value) < 0.5)
+        {
+            double? pitchLoop = await ReadFresh(sim, PitchLoopKey, ReadoutTimeoutMs);
+            double? rollLoop = await ReadFresh(sim, RollLoopKey, ReadoutTimeoutMs);
+            return L1011AfcsModes.WithLoopHealth(words, pitchLoop, rollLoop);
+        }
+        return words;
     }
 
     // =================================================================================

@@ -17,8 +17,8 @@ namespace MSFSBlindAssist.Aircraft;
 /// flap handle, parking brake and ground-spoiler arm (<see cref="L1011Levers.Announcement"/>), spoken
 /// from ProcessSimVarUpdate, where MainForm's wrap applies both the Ctrl+M mute and the UI echo —
 /// so the pilot's own combo pick is never spoken back.</item>
-/// <item>AUTOPILOT states (<see cref="L1011AfcsModes"/>): engage paddles, mode buttons and the
-/// armed/captured flags, through <see cref="L1011AfcsAnnouncer"/> inside ProcessSimVarUpdate, under the
+/// <item>AUTOPILOT states (<see cref="L1011AfcsModes"/>): engage paddles, mode buttons, the
+/// autothrottle's alpha mode and the armed/captured flags, through <see cref="L1011AfcsAnnouncer"/> inside ProcessSimVarUpdate, under the
 /// same wrap; MSFSBA's own press, within <see cref="L1011CommandedState.HoldMs"/>, is silent only
 /// while the switch sits where it was put (any other movement is the aircraft's and is spoken, except that a value box button or toggle key speaks its own read-back instead).</item>
 /// <item>The INS and the PMS: "INS 1 navigating" when a unit starts navigating by itself

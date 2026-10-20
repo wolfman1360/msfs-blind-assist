@@ -81,14 +81,177 @@ public class L1011ReadoutsTests
         // gauges L:INI_ENGn_N1 and L:INI_ENGn_N3. The stock TURB ENG PRESSURE RATIO read 1.34 at idle.
         Assert.Equal($"L:ENG{engine}_EPR_CALC", Readout($"L1011_RO_EPR_{engine}").SimVar);
         Assert.Equal($"L:INI_ENG{engine}_N1", Readout($"L1011_RO_N1_{engine}").SimVar);
+        Assert.Equal($"L:INI_ENG{engine}_N2", Readout($"L1011_RO_N2_{engine}").SimVar);
         Assert.Equal($"L:INI_ENG{engine}_N3", Readout($"L1011_RO_N3_{engine}").SimVar);
+        Assert.Equal($"Engine {engine} N2", Readout($"L1011_RO_N2_{engine}").Name);
         Assert.Equal($"Engine {engine} N3", Readout($"L1011_RO_N3_{engine}").Name);
     }
 
     [Fact]
-    public void The_rb211_has_no_n2_gauge_on_the_panel()
+    public void N2_reads_the_engineers_n2_gauge_variable_never_the_stock_one()
     {
-        Assert.DoesNotContain(L1011Readouts.All, r => r.Name.EndsWith(" N2", StringComparison.Ordinal));
+        // The flight engineer's engine status panel has N2 gauges (manual 2.8); the stock TURB ENG
+        // variables are not what the TriStar's gauges show.
+        Assert.DoesNotContain(L1011Readouts.All, r => r.SimVar.StartsWith("TURB ENG", StringComparison.Ordinal));
+        var n2 = Readout("L1011_RO_N2_1");
+        Assert.Equal("Engine Instruments", n2.Panel);
+        Assert.Equal("1.3 percent", L1011Readouts.FormatValue(n2, 1.26));   // live, engine off
+    }
+
+    [Fact]
+    public void The_cabin_barometric_setting_reads_kohlsman_5_as_the_baro_set_readout_reads_kohlsman_4()
+    {
+        var cabin = Readout("L1011_RO_CABIN_BARO_SETTING");
+        Assert.Equal(("Cabin barometric setting", "KOHLSMAN SETTING MB:5", "Pressurization"), (cabin.Name, cabin.SimVar, cabin.Panel));
+        var baro = Readout("L1011_RO_CABIN_BARO");
+        Assert.Equal((baro.Units, baro.Format, baro.Suffix), (cabin.Units, cabin.Format, cabin.Suffix));
+        Assert.Equal("1013 hectopascals", L1011Readouts.FormatValue(cabin, 1013.25));
+    }
+
+    [Theory]
+    [InlineData("L1011_RO_OUTFLOW_FWD", "Forward outflow valve", "L:OUTFLOW_VALVE_FWD")]
+    [InlineData("L1011_RO_OUTFLOW_AFT", "Aft outflow valve", "L:OUTFLOW_VALVE_AFT")]
+    public void The_outflow_valves_read_percent_open(string key, string name, string simVar)
+    {
+        var valve = Readout(key);
+        Assert.Equal((name, simVar, "Pressurization"), (valve.Name, valve.SimVar, valve.Panel));
+        Assert.Equal("100 percent open", L1011Readouts.FormatValue(valve, 100));   // live at the gate
+        Assert.Equal("37 percent open", L1011Readouts.FormatValue(valve, 36.6));
+    }
+
+    [Theory]
+    [InlineData("L1011_RO_DH_CPT", "Captain decision height", "L:ROTARY_RA_CPT_DH_SET", "Captain Instruments", 200, "200 feet")]
+    [InlineData("L1011_RO_DH_FO", "First officer decision height", "L:ROTARY_RA_FO_DH_SET", "First Officer Instruments", 499, "499 feet")]
+    [InlineData("L1011_RO_REF_BUG_CPT", "Captain reference speed bug", "L:BUG_CPT_REF_SPEED", "Captain Instruments", 60, "60 knots")]
+    [InlineData("L1011_RO_REF_BUG_FO", "First officer reference speed bug", "L:BUG_FO_REF_SPEED", "First Officer Instruments", 137.4, "137 knots")]
+    public void Each_pilot_reads_the_decision_height_and_reference_bug_the_knobs_set(string key, string name, string simVar,
+        string panel, double value, string spoken)
+    {
+        // L1011_INSTRUMENTS.js: the DH knobs set L:ROTARY_RA_CPT_DH_SET and L:ROTARY_RA_FO_DH_SET (0 to 499 feet),
+        // the reference bug knobs L:BUG_CPT_REF_SPEED and L:BUG_FO_REF_SPEED (knots).
+        var readout = Readout(key);
+        Assert.Equal((name, simVar, panel), (readout.Name, readout.SimVar, readout.Panel));
+        Assert.Equal(spoken, L1011Readouts.FormatValue(readout, value));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void Each_ins_panel_reads_the_distance_and_time_to_the_waypoint(int unit)
+    {
+        var distance = Readout($"L1011_RO_INS_{unit}_DISTANCE");
+        var time = Readout($"L1011_RO_INS_{unit}_TIME");
+        Assert.Equal(($"INS {unit} distance to waypoint", $"L:CPT_HSI_INS_{unit}_DISTANCE_NM", $"INS {unit}"),
+            (distance.Name, distance.SimVar, distance.Panel));
+        Assert.Equal(($"INS {unit} time to waypoint", $"L:CPT_HSI_INS_{unit}_TIME_MIN", $"INS {unit}"),
+            (time.Name, time.SimVar, time.Panel));
+        Assert.Equal("123.4 miles", L1011Readouts.FormatValue(distance, 123.44));
+        Assert.Equal("0.0 minutes", L1011Readouts.FormatValue(time, 0));   // below 100 knots ground speed
+    }
+
+    [Theory]
+    [InlineData("L1011_RO_SET_TEMP_FLT_STA", "Flight station set temperature", "L:TEMP_SET_FLT_STA")]
+    [InlineData("L1011_RO_SET_TEMP_FWD_CAB", "Forward cabin set temperature", "L:TEMP_SET_FWD_CAB")]
+    [InlineData("L1011_RO_SET_TEMP_MID_CAB", "Mid cabin set temperature", "L:TEMP_SET_MID_CAB")]
+    [InlineData("L1011_RO_SET_TEMP_AFT_CAB", "Aft cabin set temperature", "L:TEMP_SET_AFT_CAB")]
+    public void The_zone_temperature_knobs_read_the_temperature_they_set(string key, string name, string simVar)
+    {
+        var set = Readout(key);
+        Assert.Equal((name, simVar, "Air Conditioning"), (set.Name, set.SimVar, set.Panel));
+        Assert.Equal("24 degrees", L1011Readouts.FormatValue(set, 24));   // live at the gate
+    }
+
+    [Theory]
+    [InlineData(1, "Flight station zone temperature")]
+    [InlineData(2, "Forward cabin zone temperature")]
+    [InlineData(3, "Mid cabin zone temperature")]
+    [InlineData(4, "Aft cabin zone temperature")]
+    [InlineData(5, "Galley zone temperature")]
+    public void The_zone_temperatures_read_in_the_zone_display_order(int area, string name)
+    {
+        // L1011_ENGINEER_PANEL.js reads Area_1 to Area_5 for the zone temperature display (systems.cfg:
+        // cockpit, forward cabin, mid cabin, rear cabin, galley).
+        var zone = Readout($"L1011_RO_ZONE_TEMP_{area}");
+        Assert.Equal((name, $"PNEUMATICS AREA TEMPERATURE:{area}", "Celsius", "Air Conditioning"),
+            (zone.Name, zone.SimVar, zone.Units, zone.Panel));
+        Assert.Equal("19 degrees", L1011Readouts.FormatValue(zone, 19.0));   // live, area 1
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void The_pack_temperatures_read_each_pack(int pack)
+    {
+        var temperature = Readout($"L1011_RO_PACK_TEMP_{pack}");
+        Assert.Equal(($"Pack {pack} temperature", $"PNEUMATICS PACK TEMPERATURE:{pack}", "Celsius", "Air Conditioning"),
+            (temperature.Name, temperature.SimVar, temperature.Units, temperature.Panel));
+        Assert.Equal("25 degrees", L1011Readouts.FormatValue(temperature, 24.7));   // live
+    }
+
+    [Theory]
+    [InlineData("L1011_RO_PACK_FLOW_1", "Pack 1 valve flow", "L:SWITCH_PACK_FLOW_ENG_1_FLOWBAR", "Air Conditioning")]
+    [InlineData("L1011_RO_PACK_FLOW_2", "Pack 2 valve flow", "L:SWITCH_PACK_FLOW_ENG_2_FLOWBAR", "Air Conditioning")]
+    [InlineData("L1011_RO_PACK_FLOW_3", "Pack 3 valve flow", "L:SWITCH_PACK_FLOW_ENG_3_FLOWBAR", "Air Conditioning")]
+    [InlineData("L1011_RO_HI_PRESS_FLOW_1", "Engine 1 high pressure valve flow", "L:SWITCH_HI_PRESS_ENG_1_FLOWBAR", "Bleed Air")]
+    [InlineData("L1011_RO_HI_PRESS_FLOW_2", "Engine 2 high pressure valve flow", "L:SWITCH_HI_PRESS_ENG_2_FLOWBAR", "Bleed Air")]
+    [InlineData("L1011_RO_HI_PRESS_FLOW_3", "Engine 3 high pressure valve flow", "L:SWITCH_HI_PRESS_ENG_3_FLOWBAR", "Bleed Air")]
+    [InlineData("L1011_RO_ISLN_FLOW_1", "Engine 1 isolation valve flow", "L:SWITCH_ISLN_VALVE_ENG_1_FLOWBAR", "Bleed Air")]
+    [InlineData("L1011_RO_ISLN_FLOW_2", "Engine 2 isolation valve flow", "L:SWITCH_ISLN_VALVE_ENG_2_FLOWBAR", "Bleed Air")]
+    [InlineData("L1011_RO_ISLN_FLOW_3", "Engine 3 isolation valve flow", "L:SWITCH_ISLN_VALVE_ENG_3_FLOWBAR", "Bleed Air")]
+    [InlineData("L1011_RO_XBLEED_1_FLOW", "Crossbleed valve 1 flow", "L:SWITCH_XBLEED_1_FLOWBAR", "Bleed Air")]
+    [InlineData("L1011_RO_XBLEED_3_FLOW", "Crossbleed valve 3 flow", "L:SWITCH_XBLEED_3_FLOWBAR", "Bleed Air")]
+    [InlineData("L1011_RO_FUSELAGE_ISLN_FLOW", "Fuselage isolation valve flow", "L:SWITCH_APU_ISLN_VALVE_FLOWBAR", "Bleed Air")]
+    public void The_valve_flowbars_read_on_while_the_valve_is_open_with_pressure(string key, string name, string simVar, string panel)
+    {
+        // L1011_ENGINEER_PANEL.js: the flowbar in each switch is 1 while its valve is open with pressure.
+        var flow = Readout(key);
+        Assert.Equal((name, simVar, panel), (flow.Name, flow.SimVar, flow.Panel));
+        Assert.Equal("on", L1011Readouts.FormatValue(flow, 1));
+        Assert.Equal("off", L1011Readouts.FormatValue(flow, 0));
+    }
+
+    [Theory]
+    [InlineData("L1011_RO_WING_ANTI_ICE_LEFT", "Left wing anti-ice valve", "L:SWITCH_ANTI_ICE_LEFT_MAN_OPEN")]
+    [InlineData("L1011_RO_WING_ANTI_ICE_RIGHT", "Right wing anti-ice valve", "L:SWITCH_ANTI_ICE_RIGHT_MAN_OPEN")]
+    public void The_wing_anti_ice_valves_read_open_or_closed(string key, string name, string simVar)
+    {
+        var valve = Readout(key);
+        Assert.Equal((name, simVar, "Anti-Ice"), (valve.Name, valve.SimVar, valve.Panel));
+        Assert.Equal("open", L1011Readouts.FormatValue(valve, 1));
+        Assert.Equal("closed", L1011Readouts.FormatValue(valve, 0));
+    }
+
+    [Fact]
+    public void A_flow_or_temperature_line_never_takes_the_name_of_a_switch_or_knob_beside_it()
+    {
+        // The "Flight station temperature" knob sets the zone, and the "Pack 1 flow" switch is the valve's
+        // position, not its flowbar: a status line with the same name would read as that control's value.
+        var rows = L1011PanelLayout.Place(L1011ControlMap.Load(), L1011Levers.Keys).RowsByPanel;
+        foreach (var panel in new[] { "Air Conditioning", "Bleed Air", "Anti-Ice" })
+        {
+            var names = rows[panel].Select(r => r.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            Assert.All(L1011Readouts.All.Where(r => r.Panel == panel), r => Assert.DoesNotContain(r.Name, names));
+        }
+    }
+
+    [Fact]
+    public void The_new_decimal_readouts_keep_their_decimal_point_in_a_comma_culture()
+    {
+        var saved = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+            Assert.Equal("1.3 percent", L1011Readouts.FormatValue(Readout("L1011_RO_N2_2"), 1.26));
+            Assert.Equal("123.4 miles", L1011Readouts.FormatValue(Readout("L1011_RO_INS_1_DISTANCE"), 123.44));
+            Assert.Equal("12.5 minutes", L1011Readouts.FormatValue(Readout("L1011_RO_INS_3_TIME"), 12.46));
+            Assert.Equal("1013 hectopascals", L1011Readouts.FormatValue(Readout("L1011_RO_CABIN_BARO_SETTING"), 1013.25));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = saved;
+        }
     }
 
     [Theory]

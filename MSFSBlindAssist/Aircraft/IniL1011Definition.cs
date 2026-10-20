@@ -184,9 +184,9 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
             };
         }
 
-        // The autopilot's armed and captured flags: announced (L1011AfcsAnnouncer), listed in the
-        // Autopilot panel's status display, muteable in Ctrl+M.
-        foreach (var flag in L1011AfcsModes.Flags)
+        // The autopilot's armed and captured flags and the autothrottle's alpha mode: announced
+        // (L1011AfcsAnnouncer), listed in the Autopilot panel's status display, muteable in Ctrl+M.
+        foreach (var flag in L1011AfcsModes.AircraftStates)
         {
             var descriptions = new Dictionary<double, string> { [0] = "off", [1] = "on" };
             if (flag.Key == "FLARE_ACTIVE")
@@ -240,6 +240,23 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
             },
             RenderAsReadOnlyStatus = true,
         };
+
+        // The inner pitch and roll loops (L1011_INS.js: 1 while the autopilot flies its targets), read
+        // fresh after an engage to Command: a paddle at Command with either loop off flies nothing.
+        foreach (var (key, lvar, name) in new[]
+        {
+            (PitchLoopKey, "INI_PITCH_PID_STATE", "Autopilot pitch loop"),
+            (RollLoopKey, "INI_ROLL_PID_STATE", "Autopilot roll loop"),
+        })
+        {
+            vars[key] = new SimVarDefinition
+            {
+                Name = lvar,
+                DisplayName = name,
+                Type = SimVarType.LVar,
+                UpdateFrequency = UpdateFrequency.OnRequest,
+            };
+        }
 
         // End-to-end MobiFlight probe target: every TriStar write is a calculator-path string, and
         // with no WASM module installed each one is dropped with nothing to say so. Registering this

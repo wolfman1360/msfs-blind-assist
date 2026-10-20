@@ -21,6 +21,13 @@ public class IniL1011AutopilotBehaviourTests
     private readonly List<(string Key, int TimeoutMs)> _freshReads = new();
     private double? _freshValue;
 
+    /// <summary>A fresh read's answer for one key; any other key answers <see cref="_freshValue"/>.</summary>
+    private readonly Dictionary<string, double?> _freshByKey = new(StringComparer.Ordinal);
+
+    private const string SpeedTargetKey = "L1011_RO_AFCS_SPEED";
+    private const string PitchLoopKey = "L1011_AFCS_PITCH_LOOP";
+    private const string RollLoopKey = "L1011_AFCS_ROLL_LOOP";
+
     public IniL1011AutopilotBehaviourTests()
     {
         _def = new IniL1011Definition { Clock = () => _now, SettingsSource = () => _settings };
@@ -29,7 +36,7 @@ public class IniL1011AutopilotBehaviourTests
         _def.ReadFresh = (_, key, timeoutMs) =>
         {
             _freshReads.Add((key, timeoutMs));
-            return Task.FromResult(_freshValue);
+            return Task.FromResult(_freshByKey.TryGetValue(key, out var answer) ? answer : _freshValue);
         };
     }
 
@@ -417,7 +424,7 @@ public class IniL1011AutopilotBehaviourTests
     [Theory]
     [InlineData(HotkeyAction.ToggleAutopilot1, "SWITCH_AFCS_AP_A", 2, 0, "Autopilot A command")]
     [InlineData(HotkeyAction.ToggleAutopilot2, "SWITCH_AFCS_AP_B", 0, 2, "Autopilot B off")]
-    [InlineData(HotkeyAction.ToggleAutothrust, "SWITCH_AFCS_AT", 0, 1, "Autothrottle on")]
+    [InlineData(HotkeyAction.ToggleAutothrust, "SWITCH_AFCS_AT", 0, 1, "Autothrottle on, speed 250")]
     [InlineData(HotkeyAction.ToggleLocalizer, "SWITCH_AFCS_LOC", 1, 0, "Localizer off")]
     [InlineData(HotkeyAction.ToggleApproachMode, "SWITCH_AFCS_ILS", 0, 1, "ILS on")]
     public void A_toggle_key_moves_its_control_and_reads_it_back(HotkeyAction action, string key, double now, double landed, string spoken)
@@ -427,9 +434,114 @@ public class IniL1011AutopilotBehaviourTests
         Deliver(key, now);
         _speech.All.Clear();
         _freshValue = landed;
+        _freshByKey[SpeedTargetKey] = 250;
+        _freshByKey[PitchLoopKey] = 1;   // the autopilot flies what it shows
+        _freshByKey[RollLoopKey] = 1;
         Assert.True(Hotkey(action));
         Assert.Equal(new[] { spoken }, _speech.All);
         Assert.Empty(_speech.Interrupts);   // queued behind any call-out the press set off
+    }
+
+    [Fact]
+    public void Autothrottle_on_reads_back_the_speed_the_aircraft_now_holds()
+    {
+        // The aircraft resets L:INI_AT_TARGET to 250 when the autothrottle engages (it read 100 at the gate).
+        _def.CanLand = _ => true;
+        Deliver("SWITCH_AFCS_AT", 0);
+        _freshValue = 1;
+        _freshByKey[SpeedTargetKey] = 250;
+        Assert.True(Hotkey(HotkeyAction.ToggleAutothrust));
+        Assert.Equal(new[] { "Autothrottle on, speed 250" }, _speech.All);
+        Assert.Equal(new[]
+        {
+            ("SWITCH_AFCS_AT", IniL1011Definition.BatchReadoutTimeoutMs),
+            (SpeedTargetKey, IniL1011Definition.ReadoutTimeoutMs),
+        }, _freshReads);
+        Assert.Empty(_speech.Interrupts);
+    }
+
+    [Fact]
+    public void Autothrottle_off_reads_back_without_a_target()
+    {
+        _def.CanLand = _ => true;
+        Deliver("SWITCH_AFCS_AT", 1);
+        _freshValue = 0;
+        Assert.True(Hotkey(HotkeyAction.ToggleAutothrust));
+        Assert.Equal(new[] { "Autothrottle off" }, _speech.All);
+        Assert.Equal(new[] { "SWITCH_AFCS_AT" }, _freshReads.Select(r => r.Key));
+    }
+
+    [Fact]
+    public void Autothrottle_on_says_only_on_when_the_target_does_not_answer()
+    {
+        _def.CanLand = _ => true;
+        Deliver("SWITCH_AFCS_AT", 0);
+        _freshValue = 1;
+        _freshByKey[SpeedTargetKey] = null;
+        Assert.True(Hotkey(HotkeyAction.ToggleAutothrust));
+        Assert.Equal(new[] { "Autothrottle on" }, _speech.All);
+    }
+
+    [Fact]
+    public void Alpha_mode_is_announced_when_the_aircraft_changes_it()
+    {
+        Deliver("INI_AOA_SPEED_MODE", 0);
+        Deliver("INI_AOA_SPEED_MODE", 1);
+        Deliver("INI_AOA_SPEED_MODE", 0);
+        Assert.Equal(new[] { "Autothrottle alpha mode", "Autothrottle alpha mode off" }, _speech.All);
+    }
+
+    [Theory]
+    [InlineData(HotkeyAction.ToggleAutopilot1, "SWITCH_AFCS_AP_A", 1.0, 1.0, "Autopilot A command")]
+    [InlineData(HotkeyAction.ToggleAutopilot1, "SWITCH_AFCS_AP_A", 0.0, 1.0, "Autopilot A command, not flying pitch")]
+    [InlineData(HotkeyAction.ToggleAutopilot2, "SWITCH_AFCS_AP_B", 1.0, 0.0, "Autopilot B command, not flying roll")]
+    [InlineData(HotkeyAction.ToggleAutopilot2, "SWITCH_AFCS_AP_B", 0.0, 0.0, "Autopilot B command, not flying pitch or roll")]
+    public void An_engage_to_command_says_when_the_aircraft_is_not_flying_it(HotkeyAction action, string key,
+        double pitchLoop, double rollLoop, string spoken)
+    {
+        // Flight 1: a paddle showing Command with an inner loop off flies nothing on that axis.
+        _def.CanLand = _ => true;
+        _def.SendCalc = (_, _) => { };
+        _def.StepDelay = _ => Task.CompletedTask;
+        Deliver(key, 2);
+        _freshValue = 0;   // the paddle reads Command
+        _freshByKey[PitchLoopKey] = pitchLoop;
+        _freshByKey[RollLoopKey] = rollLoop;
+        Assert.True(Hotkey(action));
+        Assert.Equal(new[] { spoken }, _speech.All);
+        Assert.Equal(new[] { key, PitchLoopKey, RollLoopKey }, _freshReads.Select(r => r.Key));
+        Assert.Empty(_speech.Interrupts);
+    }
+
+    [Fact]
+    public void A_command_that_flies_nothing_is_said_and_the_press_stands()
+    {
+        var sent = new List<string>();
+        _def.CanLand = _ => true;
+        _def.SendCalc = (_, rpn) => sent.Add(rpn);
+        _def.StepDelay = _ => Task.CompletedTask;
+        Deliver("SWITCH_AFCS_AP_A", 2);
+        _freshValue = 0;
+        _freshByKey[PitchLoopKey] = 0;
+        _freshByKey[RollLoopKey] = 0;
+        Assert.True(Hotkey(HotkeyAction.ToggleAutopilot1));
+        Assert.Equal(new[] { "Autopilot A command, not flying pitch or roll" }, _speech.All);
+        Assert.Equal(new[]
+        {
+            "1 (>L:SWITCH_AFCS_AP_A) (>H:AUTOPILOT_SWITCH_AFCS_AP_A)",
+            "0 (>L:SWITCH_AFCS_AP_A) (>H:AUTOPILOT_SWITCH_AFCS_AP_A)",
+        }, sent);   // the CWS notch and Command, and nothing after: a statement, never a refusal
+    }
+
+    [Fact]
+    public void Disengaging_reads_no_inner_loops()
+    {
+        _def.CanLand = _ => true;
+        Deliver("SWITCH_AFCS_AP_A", 0);
+        _freshValue = 2;
+        Assert.True(Hotkey(HotkeyAction.ToggleAutopilot1));
+        Assert.Equal(new[] { "Autopilot A off" }, _speech.All);
+        Assert.Equal(new[] { "SWITCH_AFCS_AP_A" }, _freshReads.Select(r => r.Key));
     }
 
     [Fact]

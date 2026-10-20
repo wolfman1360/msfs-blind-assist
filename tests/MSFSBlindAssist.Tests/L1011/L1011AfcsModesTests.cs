@@ -32,6 +32,63 @@ public class L1011AfcsModesTests
     }
 
     [Fact]
+    public void Alpha_mode_says_when_the_autothrottle_holds_angle_of_attack_and_when_it_stops()
+    {
+        // L:INI_AOA_SPEED_MODE is 1 while the autothrottle holds angle of attack instead of speed (the
+        // glareshield's speed window reads AOA). It is not an armed or captured mode.
+        Assert.Equal("Autothrottle alpha mode", L1011AfcsModes.Words("INI_AOA_SPEED_MODE", 1));
+        Assert.Equal("Autothrottle alpha mode off", L1011AfcsModes.Words("INI_AOA_SPEED_MODE", 0));
+        Assert.DoesNotContain(L1011AfcsModes.Flags, f => f.Key == "INI_AOA_SPEED_MODE");
+    }
+
+    [Fact]
+    public void Alpha_mode_speaks_after_its_baseline_both_ways()
+    {
+        var a = new L1011AfcsAnnouncer();
+        Assert.Empty(a.Observe("INI_AOA_SPEED_MODE", 0));
+        Assert.Equal(new[] { "Autothrottle alpha mode" }, a.Observe("INI_AOA_SPEED_MODE", 1));
+        Assert.Equal(new[] { "Autothrottle alpha mode off" }, a.Observe("INI_AOA_SPEED_MODE", 0));
+    }
+
+    [Fact]
+    public void Alpha_mode_never_lists_in_the_armed_and_captured_line()
+    {
+        var values = new Dictionary<string, double> { ["INI_AOA_SPEED_MODE"] = 0 };
+        var lines = L1011AutopilotStatus.Lines(null, k => values.TryGetValue(k, out var v) ? v : null);
+        Assert.Contains("Armed and captured: none", lines);
+    }
+
+    [Theory]
+    [InlineData(250.0, "Autothrottle on, speed 250")]
+    [InlineData(249.6, "Autothrottle on, speed 250")]
+    public void The_autothrottle_read_back_adds_the_speed_it_holds(double knots, string spoken)
+    {
+        Assert.Equal(spoken, L1011AfcsModes.WithSpeedTarget("Autothrottle on", knots));
+        var saved = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
+            Assert.Equal(spoken, L1011AfcsModes.WithSpeedTarget("Autothrottle on", knots));
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = saved;
+        }
+    }
+
+    [Theory]
+    [InlineData(1.0, 1.0, "Autopilot A command")]
+    [InlineData(0.0, 1.0, "Autopilot A command, not flying pitch")]
+    [InlineData(1.0, 0.0, "Autopilot A command, not flying roll")]
+    [InlineData(0.0, 0.0, "Autopilot A command, not flying pitch or roll")]
+    [InlineData(null, 0.0, "Autopilot A command, not flying roll")]   // a loop not read is no claim
+    [InlineData(null, null, "Autopilot A command")]
+    public void An_engage_read_back_names_the_inner_loop_that_is_not_flying(double? pitchLoop, double? rollLoop, string spoken)
+    {
+        Assert.Equal(spoken, L1011AfcsModes.WithLoopHealth("Autopilot A command", pitchLoop, rollLoop));
+    }
+
+    [Fact]
     public void Silent_controls_are_not_announced()
     {
         Assert.False(L1011AfcsModes.IsAnnounced("SWITCH_AFCS_ALT_MODE"));

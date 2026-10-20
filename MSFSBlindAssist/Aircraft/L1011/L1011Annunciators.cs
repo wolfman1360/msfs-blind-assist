@@ -51,7 +51,30 @@ public static class L1011Annunciators
         new L1011Lamp("STBY_PWR_ON_LIGHT", "Standby power on light", "Electrical"),
         new L1011Lamp("STBY_UNARM_LIGHT", "Standby power unarmed light", "Electrical"),
         new L1011Lamp("EXTERNAL_POWER_AVAILABLE", "External power available", "Electrical"),
+        new L1011Lamp("STBY_PWR_FLOWBAR_LIGHT", "Standby power flowbar light", "Electrical"),
+        new L1011Lamp("IDG_OIL_PRESSURE_1", "IDG 1 low pressure light", "Electrical"),
+        new L1011Lamp("IDG_OIL_PRESSURE_2", "IDG 2 low pressure light", "Electrical"),
+        new L1011Lamp("IDG_OIL_PRESSURE_3", "IDG 3 low pressure light", "Electrical"),
         new L1011Lamp("LX_APU_LOW_OIL_SEQ1", "APU low oil", "APU"),
+        new L1011Lamp("LX_APU_INLET_DOOR_SEQ1", "APU doors in transit light", "APU"),
+        new L1011Lamp("LX_APU_BATTERY_SEQ1", "APU battery condition light", "APU"),
+        new L1011Lamp("LX_APU_INLET_FLOW_SEQ1", "APU inlet flow light", "APU"),
+        new L1011Lamp("LX_APU_MAX_SEQ1", "APU max mode light", "APU"),
+        new L1011Lamp("APU_FUEL_PRI", "APU primary fuel light", "APU"),
+        new L1011Lamp("APU_FUEL_SEC", "APU secondary fuel light", "APU"),
+
+        // The start VALVE OPEN lights: lit 3 s after the starter engages, out at about 46 percent N3
+        // (L1011_OVERHEAD_PANEL.js; the manual's start cue).
+        new L1011Lamp("SWITCH_GND_START_ENG_1_LIGHT", "Engine 1 start valve open light", "Engine Start"),
+        new L1011Lamp("SWITCH_GND_START_ENG_2_LIGHT", "Engine 2 start valve open light", "Engine Start"),
+        new L1011Lamp("SWITCH_GND_START_ENG_3_LIGHT", "Engine 3 start valve open light", "Engine Start"),
+
+        new L1011Lamp("DUMP_LIGHT_1", "Tank 1 dump light", "Fuel Jettison and Engine Fuel"),
+        new L1011Lamp("DUMP_LIGHT_2L", "Tank 2 left dump light", "Fuel Jettison and Engine Fuel"),
+        new L1011Lamp("DUMP_LIGHT_2R", "Tank 2 right dump light", "Fuel Jettison and Engine Fuel"),
+        new L1011Lamp("DUMP_LIGHT_3", "Tank 3 dump light", "Fuel Jettison and Engine Fuel"),
+        // Lit while the refuel power button has been pressed (read 1 at the gate; the baseline is silent).
+        new L1011Lamp("SWITCH_REFUEL_POWER_ON", "Refuel power on light", "Fuel"),
 
         new L1011Lamp("LX_MIP_ELEC_SYS", "Electrical system caution", "Warning Lights"),
         new L1011Lamp("LX_MIP_ESS_POWER", "Essential power caution", "Warning Lights"),
@@ -67,6 +90,9 @@ public static class L1011Annunciators
         new L1011Lamp("LX_MIP_OIL_PRESS_ENG_3", "Engine 3 low oil pressure", "Warning Lights"),
         new L1011Lamp("LX_MIP_RUDDER_LMTR", "Rudder limiter caution", "Warning Lights"),
         new L1011Lamp("LX_MIP_FAIL_ARMED_ENG_2", "Engine 2 fail armed", "Warning Lights"),
+        // The captain's glareshield ENGINE 2 FAIL light; the first officer's (SWITCH_AFCS_FO_ENG_2_FAIL)
+        // means the same and is not announced, as only INS 1's waypoint ALERT is.
+        new L1011Lamp("SWITCH_AFCS_CPT_ENG_2_FAIL", "Engine 2 fail light", "Warning Lights"),
         new L1011Lamp("LX_MIP_ANTI_SKID", "Anti-skid caution", "Warning Lights"),
         new L1011Lamp("LX_MIP_ECS", "Air conditioning caution", "Warning Lights"),
         new L1011Lamp("LX_MIP_ELEVATOR", "Elevator caution", "Warning Lights"),
@@ -78,6 +104,7 @@ public static class L1011Annunciators
         new L1011Lamp("BRK_NORM_LOW_PRESS", "Normal brakes low pressure", "Landing Gear and Brakes"),
         new L1011Lamp("BRK_ALT_LOW_PRESS", "Alternate brakes low pressure", "Landing Gear and Brakes"),
         new L1011Lamp("INI_ABRK_ARM_FAILED", "Autobrake arm failed", "Antiskid and Autobrake"),
+        new L1011Lamp("INI_ABRK_ARMED", "Autobrake armed light", "Antiskid and Autobrake"),
 
         new L1011Lamp("LE_FLAPS_LIGHT_WASM", "Leading edge flaps light", "Speed Brake and Flaps"),
         new L1011Lamp("LE_SLATS_LIGHT_WASM", "Leading edge slats light", "Speed Brake and Flaps"),
