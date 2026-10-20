@@ -4,7 +4,10 @@ namespace MSFSBlindAssist.Aircraft.L1011;
 /// <param name="Var">The L:var the cockpit model's emissive material reads (from the map's "lamps").</param>
 /// <param name="Name">The spoken name; the announcement is "{Name} on" or "{Name} off".</param>
 /// <param name="Panel">The layout panel whose status display shows it.</param>
-public sealed record L1011Lamp(string Var, string Name, string Panel);
+/// <param name="LitBelow">For a lamp the model lights from a measured value rather than a flag: the
+/// threshold the emissive compares against, lit while the value is BELOW it (the IDG low-pressure
+/// lights read the IDG oil pressure against 40 psi). Null for a plain light, lit at 1.</param>
+public sealed record L1011Lamp(string Var, string Name, string Panel, double? LitBelow = null);
 
 /// <summary>
 /// The TriStar's lights that MSFS Blind Assist announces. Every variable here is read by an
@@ -23,6 +26,10 @@ public static class L1011Annunciators
     public static string KeyFor(L1011Lamp lamp) => KeyPrefix + lamp.Var;
 
     public static string Announcement(L1011Lamp lamp, bool lit) => $"{lamp.Name} {(lit ? "on" : "off")}";
+
+    /// <summary>Whether the delivered value lights the lamp: a plain light at 1, a threshold lamp below its threshold.</summary>
+    public static bool IsLit(L1011Lamp lamp, double value) =>
+        lamp.LitBelow is double threshold ? value < threshold : value >= 0.5;
 
     public static IReadOnlyList<L1011Lamp> All { get; } = new[]
     {
@@ -52,9 +59,10 @@ public static class L1011Annunciators
         new L1011Lamp("STBY_UNARM_LIGHT", "Standby power unarmed light", "Electrical"),
         new L1011Lamp("EXTERNAL_POWER_AVAILABLE", "External power available", "Electrical"),
         new L1011Lamp("STBY_PWR_FLOWBAR_LIGHT", "Standby power flowbar light", "Electrical"),
-        new L1011Lamp("IDG_OIL_PRESSURE_1", "IDG 1 low pressure light", "Electrical"),
-        new L1011Lamp("IDG_OIL_PRESSURE_2", "IDG 2 low pressure light", "Electrical"),
-        new L1011Lamp("IDG_OIL_PRESSURE_3", "IDG 3 low pressure light", "Electrical"),
+        // The model lights these from the oil pressure: "(L:IDG_OIL_PRESSURE_n, psi) 40 <".
+        new L1011Lamp("IDG_OIL_PRESSURE_1", "IDG 1 low pressure light", "Electrical", LitBelow: 40),
+        new L1011Lamp("IDG_OIL_PRESSURE_2", "IDG 2 low pressure light", "Electrical", LitBelow: 40),
+        new L1011Lamp("IDG_OIL_PRESSURE_3", "IDG 3 low pressure light", "Electrical", LitBelow: 40),
         new L1011Lamp("LX_APU_LOW_OIL_SEQ1", "APU low oil", "APU"),
         new L1011Lamp("LX_APU_INLET_DOOR_SEQ1", "APU doors in transit light", "APU"),
         new L1011Lamp("LX_APU_BATTERY_SEQ1", "APU battery condition light", "APU"),

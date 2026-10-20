@@ -84,11 +84,11 @@ public partial class IniL1011Definition
             return true;
         }
 
-        if (_lamps.ContainsKey(varName))
+        if (_lamps.TryGetValue(varName, out var lamp))
         {
             if (_seedGate.Armed)
                 _seedGate.NoteValue(varName, value, ownedByAircraft: true);
-            _lampGate.Observe(varName, value >= 0.5, Clock());
+            _lampGate.Observe(varName, L1011Annunciators.IsLit(lamp, value), Clock());
             return true;
         }
 
@@ -191,9 +191,9 @@ public partial class IniL1011Definition
         {
             if (sim.GetCachedVariableValue(key) is not double value)
                 continue;
-            if (_lamps.ContainsKey(key))
+            if (_lamps.TryGetValue(key, out var lamp))
             {
-                if (_lampGate.Seed(key, value >= 0.5)) seeded++;
+                if (_lampGate.Seed(key, L1011Annunciators.IsLit(lamp, value))) seeded++;
             }
             else if (L1011AfcsModes.IsAnnounced(key))
             {

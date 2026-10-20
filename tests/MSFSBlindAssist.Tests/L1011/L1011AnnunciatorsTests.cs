@@ -59,6 +59,32 @@ public class L1011AnnunciatorsTests
         Assert.Equal((name, panel), (lamp.Name, lamp.Panel));
     }
 
+    [Theory]
+    // The cockpit model lights the IDG LOW PRESS lamp from the oil pressure itself:
+    // "(L:IDG_OIL_PRESSURE_n, psi) 40 <" (L1011_COCKPIT.behavior.xml), so the lamp is lit BELOW the
+    // threshold; a running IDG reads about 1,241,057 and a disconnected one 0.
+    [InlineData("IDG_OIL_PRESSURE_1")]
+    [InlineData("IDG_OIL_PRESSURE_2")]
+    [InlineData("IDG_OIL_PRESSURE_3")]
+    public void An_IDG_low_pressure_light_is_lit_below_40_psi(string var)
+    {
+        var lamp = L1011Annunciators.All.Single(l => l.Var == var);
+        Assert.Equal(40, lamp.LitBelow);
+        Assert.True(L1011Annunciators.IsLit(lamp, 0));
+        Assert.True(L1011Annunciators.IsLit(lamp, 39.9));
+        Assert.False(L1011Annunciators.IsLit(lamp, 40));
+        Assert.False(L1011Annunciators.IsLit(lamp, 1241056.8));
+    }
+
+    [Fact]
+    public void Every_other_lamp_is_a_plain_light_lit_at_one()
+    {
+        var plain = L1011Annunciators.All.Where(l => l.LitBelow == null).ToList();
+        Assert.Equal(L1011Annunciators.All.Count - 3, plain.Count);
+        Assert.All(plain, l => Assert.True(L1011Annunciators.IsLit(l, 1)));
+        Assert.All(plain, l => Assert.False(L1011Annunciators.IsLit(l, 0)));
+    }
+
     [Fact]
     public void Only_the_captains_engine_2_fail_light_is_announced()
     {
