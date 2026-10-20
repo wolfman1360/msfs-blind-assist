@@ -28,6 +28,10 @@ public partial class IniL1011Definition
     private readonly Dictionary<int, IReadOnlyList<L1011Step>> _owed = new();
     private int _nextRunId;
 
+    /// <summary>Per Set row, how many writes have been sent: a settle re-read goes ahead only while its
+    /// write is still the row's latest. Touched on the UI thread only.</summary>
+    private readonly Dictionary<string, int> _setGeneration = new(StringComparer.Ordinal);
+
     public override bool HandleUIVariableSet(string varKey, double value, SimVarDefinition varDef,
         SimConnectManager simConnect, ScreenReaderAnnouncer announcer)
     {
@@ -97,9 +101,15 @@ public partial class IniL1011Definition
         var run = RunAsync(plan.Steps, sim);
         // A Set row is read again once its write has landed, so its combo or slider shows what the
         // aircraft did: a gauge can put a switch straight back without the variable changing (no
-        // delivery comes), and a knob is never refreshed by the batch.
+        // delivery comes), and a knob is never refreshed by the batch. Only the LAST write of a burst
+        // is read again: a slider swept by a held key writes every step, and an earlier step's answer
+        // would pull the thumb, and the next write, back behind where the pilot has got to.
         if (commandedValue != null)
-            _ = ReReadAfterSettleAsync(row.Key, L1011WritePlan.ReReadSettleMs, sim, run);
+        {
+            int generation = _setGeneration[row.Key] = _setGeneration.GetValueOrDefault(row.Key) + 1;
+            _ = ReReadAfterSettleAsync(row.Key, L1011WritePlan.ReReadSettleMs, sim, run,
+                stillLatest: () => _setGeneration.GetValueOrDefault(row.Key) == generation);
+        }
     }
 
     /// <summary>A refused pick must not leave the combo on a position the aircraft never took: ask
@@ -175,17 +185,19 @@ public partial class IniL1011Definition
     /// <summary>
     /// Reads a row again once its write has settled, so its combo or slider follows what the aircraft
     /// did: after <paramref name="run"/> (a plan's steps, a spring switch's return included) has
-    /// finished, plus <paramref name="settleMs"/>. The awaits resume on the UI thread; nothing is asked
-    /// once the definition has gone away.
+    /// finished, plus <paramref name="settleMs"/>, and only if <paramref name="stillLatest"/> says no
+    /// later write has superseded this one. The awaits resume on the UI thread; nothing is asked once
+    /// the definition has gone away.
     /// </summary>
-    private async Task ReReadAfterSettleAsync(string key, int settleMs, SimConnectManager sim, Task? run = null)
+    private async Task ReReadAfterSettleAsync(string key, int settleMs, SimConnectManager sim, Task? run = null,
+        Func<bool>? stillLatest = null)
     {
         try
         {
             if (run != null)
                 await run;
             await SettleDelay(settleMs);
-            if (_disposed)
+            if (_disposed || stillLatest?.Invoke() == false)
                 return;
             ReRead(key, sim);
         }

@@ -190,6 +190,69 @@ public class IniL1011BehaviourTests
     }
 
     [Fact]
+    public void Knob_writes_inside_the_settle_are_read_again_once_after_the_last()
+    {
+        // A held key sweeps a slider one step per repeat. An earlier step's re-read would answer with a
+        // value behind the thumb and pull the thumb, and the next write, back.
+        var settles = new List<TaskCompletionSource>();
+        _def.CanLand = _ => true;
+        _def.SendCalc = (_, _) => { };
+        _def.SettleDelay = _ => { var s = new TaskCompletionSource(); settles.Add(s); return s.Task; };
+
+        Assert.True(Set(PanelLightsKey, 40));
+        _now += 30;
+        Assert.True(Set(PanelLightsKey, 41));
+        Assert.Equal(2, settles.Count);
+        settles[0].SetResult();
+        Assert.Empty(_reReads);            // the earlier write's settle: a later write is still landing
+        settles[1].SetResult();
+        Assert.Equal(new[] { PanelLightsKey }, _reReads);
+    }
+
+    [Fact]
+    public void A_write_to_another_row_does_not_cancel_a_re_read()
+    {
+        var settles = new List<TaskCompletionSource>();
+        _def.CanLand = _ => true;
+        _def.SendCalc = (_, _) => { };
+        _def.SettleDelay = _ => { var s = new TaskCompletionSource(); settles.Add(s); return s.Task; };
+
+        Assert.True(Set(PanelLightsKey, 40));
+        Assert.True(Set(GroundServiceKey, 2));
+        settles.ForEach(s => s.SetResult());
+        Assert.Equal(new[] { PanelLightsKey, GroundServiceKey }, _reReads);
+    }
+
+    [Fact]
+    public void A_set_write_that_cannot_land_schedules_no_settle_re_read()
+    {
+        var waits = new List<int>();
+        _def.SettleDelay = ms => { waits.Add(ms); return Task.CompletedTask; };
+
+        Assert.True(Set(GroundServiceKey, 0));   // CalcWriteCanLand is false: nothing is sent
+        Assert.Empty(waits);
+        Assert.Equal(new[] { GroundServiceKey }, _reReads);   // the refusal's own snap-back, at once
+        Assert.Equal(new[] { "Ground service bus unavailable" }, _speech.All);
+    }
+
+    [Fact]
+    public void An_already_there_pick_schedules_no_settle_re_read()
+    {
+        var waits = new List<int>();
+        var sent = new List<string>();
+        _def.CanLand = _ => true;
+        _def.SendCalc = (_, rpn) => sent.Add(rpn);
+        _def.SettleDelay = ms => { waits.Add(ms); return Task.CompletedTask; };
+        _def.CachedValue = (_, _) => 1;    // Off
+
+        Assert.True(Set(GroundServiceKey, 1));
+        Assert.Empty(sent);
+        Assert.Empty(waits);
+        Assert.Empty(_reReads);
+        Assert.Empty(_speech.All);
+    }
+
+    [Fact]
     public void A_spring_switch_is_read_again_only_after_it_has_been_let_go()
     {
         var hold = new TaskCompletionSource();

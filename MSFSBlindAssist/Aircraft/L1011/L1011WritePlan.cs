@@ -58,7 +58,8 @@ public static class L1011WritePlan
 
     /// <summary>How long after a Set row's plan has run the row is read again, so its combo or slider shows
     /// what the aircraft did: a gauge can put a switch straight back, and a knob is read only on request.
-    /// One 1 Hz batch period plus margin, as the gear lever's settle: a judgement, not a measurement.</summary>
+    /// The gear lever's re-read waits the same (<see cref="L1011Levers.GearSettleMs"/>). One 1 Hz batch
+    /// period plus margin: a judgement, not a measurement.</summary>
     public const int ReReadSettleMs = 1500;
 
     /// <summary>How long a paddle rests at CWS on its way to Command. The gauge runs a paddle's routine

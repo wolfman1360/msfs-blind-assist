@@ -77,7 +77,8 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
             sim.RequestVariable(key, forceUpdate: true);
     };
 
-    /// <summary>The wait before the gear lever is re-read after a write; tests replace it.</summary>
+    /// <summary>The wait before a row is read again after its write (every Set row, and the gear lever);
+    /// tests replace it.</summary>
     internal Func<int, Task> SettleDelay { get; set; } = Task.Delay;
 
     public IniL1011Definition()
