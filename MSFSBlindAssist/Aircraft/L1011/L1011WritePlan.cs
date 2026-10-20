@@ -56,6 +56,11 @@ public static class L1011WritePlan
     public const int SpringHoldMs = 1500;
     public const int MaxRpnLength = 900;
 
+    /// <summary>How long after a Set row's plan has run the row is read again, so its combo or slider shows
+    /// what the aircraft did: a gauge can put a switch straight back, and a knob is read only on request.
+    /// One 1 Hz batch period plus margin, as the gear lever's settle: a judgement, not a measurement.</summary>
+    public const int ReReadSettleMs = 1500;
+
     /// <summary>How long a paddle rests at CWS on its way to Command. The gauge runs a paddle's routine
     /// 50 ms after the event, reading both paddles then; CWS and Command sent back to back ran only the
     /// Command routine (seen live), so the rest must outlast that even at a low frame rate: a frame for

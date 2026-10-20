@@ -109,6 +109,107 @@ public class IniL1011BehaviourTests
         Assert.Empty(_speech.All);
     }
 
+    /// <summary>A knob row (a slider), read on request when its panel opens and never by the batch.</summary>
+    private const string PanelLightsKey = "ROTARY_FE_LIGHTS_PANEL";
+
+    /// <summary>A three-position switch row on the continuous batch: 0 APU, 1 Off, 2 External power.</summary>
+    private const string GroundServiceKey = "TOGGLE_GND_APU";
+
+    [Fact]
+    public void A_knob_write_is_read_again_after_the_settle()
+    {
+        var settle = new TaskCompletionSource();
+        var waits = new List<int>();
+        var sent = new List<string>();
+        _def.CanLand = _ => true;
+        _def.SendCalc = (_, rpn) => sent.Add(rpn);
+        _def.SettleDelay = ms => { waits.Add(ms); return settle.Task; };
+
+        Assert.True(Set(PanelLightsKey, 100));
+        Assert.Equal(new[] { "100 (>L:ROTARY_FE_LIGHTS_PANEL)" }, sent);
+        Assert.Equal(new[] { L1011WritePlan.ReReadSettleMs }, waits);
+        Assert.Empty(_reReads);            // not before the settle
+        settle.SetResult();
+        Assert.Equal(new[] { PanelLightsKey }, _reReads);
+        Assert.Empty(_speech.All);         // the pilot's own slider move is never spoken back
+    }
+
+    [Fact]
+    public void A_knob_moved_back_after_the_hold_is_written_though_its_cache_still_holds_that_value()
+    {
+        // Seen live: End wrote 100; Home 2.5 s later sent nothing, because the cache still held the 0
+        // read when the panel opened, and the plan called 0 "already there".
+        var sent = new List<string>();
+        _def.CanLand = _ => true;
+        _def.SendCalc = (_, rpn) => sent.Add(rpn);
+        _def.SettleDelay = _ => Task.CompletedTask;
+        _def.CachedValue = (_, _) => 0;    // the panel-open read, never refreshed
+
+        Assert.True(Set(PanelLightsKey, 100));
+        _now += L1011CommandedState.HoldMs + 1;
+        Assert.True(Set(PanelLightsKey, 0));
+        Assert.Equal(new[] { "100 (>L:ROTARY_FE_LIGHTS_PANEL)", "0 (>L:ROTARY_FE_LIGHTS_PANEL)" }, sent);
+        Assert.Empty(_speech.All);
+    }
+
+    [Fact]
+    public void A_knob_set_again_to_what_msfsba_just_commanded_is_not_sent_twice()
+    {
+        var sent = new List<string>();
+        _def.CanLand = _ => true;
+        _def.SendCalc = (_, rpn) => sent.Add(rpn);
+        _def.SettleDelay = _ => Task.CompletedTask;
+
+        Assert.True(Set(PanelLightsKey, 100));
+        _now += 1_000;
+        Assert.True(Set(PanelLightsKey, 100));
+        Assert.Equal(new[] { "100 (>L:ROTARY_FE_LIGHTS_PANEL)" }, sent);
+    }
+
+    [Fact]
+    public void A_switch_write_the_aircraft_undoes_is_read_again_after_the_settle()
+    {
+        // Seen live: the ground service bus picked to APU; the aircraft's ground service logic put it
+        // straight back to Off, the variable never changed, no delivery came, and the combo kept
+        // showing APU. The re-read makes the next delivery put the combo where the aircraft is.
+        var settle = new TaskCompletionSource();
+        var waits = new List<int>();
+        var sent = new List<string>();
+        _def.CanLand = _ => true;
+        _def.SendCalc = (_, rpn) => sent.Add(rpn);
+        _def.SettleDelay = ms => { waits.Add(ms); return settle.Task; };
+        _def.CachedValue = (_, _) => 1;    // Off, and the aircraft keeps it there
+
+        Assert.True(Set(GroundServiceKey, 0));
+        Assert.Equal(new[] { "0 (>L:TOGGLE_GND_APU) (>H:ELECTRICAL)" }, sent);
+        Assert.Equal(new[] { L1011WritePlan.ReReadSettleMs }, waits);
+        Assert.Empty(_reReads);            // not before the settle
+        settle.SetResult();
+        Assert.Equal(new[] { GroundServiceKey }, _reReads);
+        Assert.Empty(_speech.All);
+    }
+
+    [Fact]
+    public void A_spring_switch_is_read_again_only_after_it_has_been_let_go()
+    {
+        var hold = new TaskCompletionSource();
+        var trace = new List<string>();
+        _def.CanLand = _ => true;
+        _def.SendCalc = (_, rpn) => trace.Add("send:" + rpn);
+        _def.StepDelay = ms => { trace.Add("hold:" + ms); return hold.Task; };
+        _def.SettleDelay = ms => { trace.Add("settle:" + ms); return Task.CompletedTask; };
+        _def.ReRead = (key, _) => trace.Add("read:" + key);
+
+        Assert.True(Set("SWITCH_ENG_1_DISCH", 2));
+        Assert.Equal(new[] { "send:2 (>L:SWITCH_ENG_1_DISCH)", $"hold:{L1011WritePlan.SpringHoldMs}" }, trace);
+        hold.SetResult();
+        Assert.Equal(new[]
+        {
+            "send:2 (>L:SWITCH_ENG_1_DISCH)", $"hold:{L1011WritePlan.SpringHoldMs}",
+            "send:1 (>L:SWITCH_ENG_1_DISCH)", $"settle:{L1011WritePlan.ReReadSettleMs}", "read:SWITCH_ENG_1_DISCH",
+        }, trace);
+    }
+
     [Fact]
     public void A_toggle_switch_in_an_unknown_position_is_refused_before_anything_is_sent()
     {
