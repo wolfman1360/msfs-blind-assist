@@ -37,6 +37,9 @@ public partial class IniL1011Definition
     /// <summary>The speed target readout (<c>L:INI_AT_TARGET</c>), which the autothrottle read-back adds.</summary>
     private const string SpeedTargetKey = "L1011_RO_AFCS_SPEED";
 
+    /// <summary>The autothrottle switch, whose read-back adds the speed target.</summary>
+    private const string AutothrottleKey = "SWITCH_AFCS_AT";
+
     /// <summary>The wait before a read-back; tests replace it.</summary>
     internal Func<int, Task> ReadBackDelay { get; set; } = Task.Delay;
 
@@ -160,7 +163,11 @@ public partial class IniL1011Definition
             if (_disposed)
                 return;
             if (await ReadFresh(sim, key, BatchReadoutTimeoutMs) is double value && L1011AfcsModes.Words(key, value) is string words)
-                announcer.Announce(await CompleteReadBackAsync(key, value, words, sim));
+            {
+                string spoken = await CompleteReadBackAsync(key, value, words, sim);
+                if (!_disposed)   // the extra fresh reads can take seconds: the aircraft may have been switched away
+                    announcer.Announce(spoken);
+            }
         }
         catch (Exception ex)
         {
@@ -187,7 +194,7 @@ public partial class IniL1011Definition
     /// </summary>
     private async Task<string> CompleteReadBackAsync(string key, double value, string words, SimConnectManager sim)
     {
-        if (key == "SWITCH_AFCS_AT" && value >= 0.5)
+        if (key == AutothrottleKey && value >= 0.5)
             return await ReadFresh(sim, SpeedTargetKey, ReadoutTimeoutMs) is double knots
                 ? L1011AfcsModes.WithSpeedTarget(words, knots)
                 : words;
@@ -425,7 +432,7 @@ public partial class IniL1011Definition
                 ToggleAndReadBack("SWITCH_AFCS_AP_B", sim, announcer);
                 return true;
             case HotkeyAction.ToggleAutothrust:
-                ToggleAndReadBack("SWITCH_AFCS_AT", sim, announcer);
+                ToggleAndReadBack(AutothrottleKey, sim, announcer);
                 return true;
             case HotkeyAction.ToggleLocalizer:
                 ToggleAndReadBack("SWITCH_AFCS_LOC", sim, announcer);
@@ -440,7 +447,7 @@ public partial class IniL1011Definition
                 return true;
             case HotkeyAction.ReadSpeed:
                 _ = SpeakAsync(sim, announcer, "Speed target",
-                    v => $"Speed target {Math.Round(v[0]).ToString(System.Globalization.CultureInfo.InvariantCulture)}", "L1011_RO_AFCS_SPEED");
+                    v => $"Speed target {Math.Round(v[0]).ToString(System.Globalization.CultureInfo.InvariantCulture)}", SpeedTargetKey);
                 return true;
             case HotkeyAction.ReadAltitude:
                 _ = SpeakAsync(sim, announcer, "Selected altitude",

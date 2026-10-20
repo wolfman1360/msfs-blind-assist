@@ -186,15 +186,15 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
 
         // The autopilot's armed and captured flags and the autothrottle's alpha mode: announced
         // (L1011AfcsAnnouncer), listed in the Autopilot panel's status display, muteable in Ctrl+M.
-        foreach (var flag in L1011AfcsModes.AircraftStates)
+        foreach (var state in L1011AfcsModes.AircraftStates)
         {
             var descriptions = new Dictionary<double, string> { [0] = "off", [1] = "on" };
-            if (flag.Key == "FLARE_ACTIVE")
+            if (state.Key == "FLARE_ACTIVE")
                 descriptions[99] = "armed";   // it reads 99 while armed above 120 ft (L1011_INS.js); the status display would show the raw number
             var def = new SimVarDefinition
             {
-                Name = flag.Key,
-                DisplayName = flag.Name,
+                Name = state.Key,
+                DisplayName = state.Name,
                 Type = SimVarType.LVar,
                 UpdateFrequency = UpdateFrequency.Continuous,
                 IsAnnounced = true,
@@ -202,7 +202,7 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
                 RenderAsReadOnlyStatus = true,
             };
             if (batchNames.Add(ContinuousBatchLayout.FullName(def)))
-                vars[flag.Key] = def;
+                vars[state.Key] = def;
         }
 
         // Each INS's alignment status and the PMS flight phase: they speak on their own

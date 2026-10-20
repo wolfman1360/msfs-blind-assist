@@ -357,9 +357,10 @@ Autopilot:
   Ctrl+V     Set vertical speed (with Vertical speed - turn it on first)
   Ctrl+P     Autopilot window (the glareshield windows, modes, engage switches, autothrottle)
   Shift+A    Autopilot A, Command or Off (read back)
-  Ctrl+O     Autopilot B, Command or Off (read back). If either autopilot shows Command but
-             the aircraft is not flying it, the read-back adds "not flying pitch", "not flying
-             roll" or "not flying pitch or roll". The switch stays where you put it.
+  Ctrl+O     Autopilot B, Command or Off (read back)
+             With Shift+A or Ctrl+O, if the autopilot shows Command but the aircraft is not
+             flying it, the read-back adds "not flying pitch", "not flying roll" or "not flying
+             pitch or roll". The switch stays where you put it.
   Ctrl+J     Autothrottle on or off (read back, with the speed it now holds: "Autothrottle on,
              speed 250")
   Ctrl+L     Localizer on or off (read back)

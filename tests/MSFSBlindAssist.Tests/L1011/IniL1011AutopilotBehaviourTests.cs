@@ -460,6 +460,27 @@ public class IniL1011AutopilotBehaviourTests
         Assert.Empty(_speech.Interrupts);
     }
 
+    [Theory]
+    [InlineData(HotkeyAction.ToggleAutothrust, "SWITCH_AFCS_AT", 0.0, 1.0, SpeedTargetKey)]
+    [InlineData(HotkeyAction.ToggleAutopilot1, "SWITCH_AFCS_AP_A", 2.0, 0.0, RollLoopKey)]
+    public void A_read_back_finished_after_the_aircraft_is_switched_away_says_nothing(HotkeyAction action, string key,
+        double now, double landed, string lastRead)
+    {
+        // The extra fresh reads can take seconds; the definition may be disposed meanwhile.
+        _def.CanLand = _ => true;
+        _def.SendCalc = (_, _) => { };
+        _def.StepDelay = _ => Task.CompletedTask;
+        Deliver(key, now);
+        _def.ReadFresh = (_, k, _) =>
+        {
+            if (k == lastRead)
+                _def.Dispose();
+            return Task.FromResult<double?>(k == key ? landed : k == SpeedTargetKey ? 250 : 1);
+        };
+        Assert.True(Hotkey(action));
+        Assert.Empty(_speech.All);
+    }
+
     [Fact]
     public void Autothrottle_off_reads_back_without_a_target()
     {
