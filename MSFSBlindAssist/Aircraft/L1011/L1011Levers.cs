@@ -92,9 +92,9 @@ public static class L1011Levers
         target < 25 ? "(>K:GEAR_DOWN)" : target > 75 ? "(>K:GEAR_UP)" : "50 (>L:LEVER_LANDING_GEAR)";
 
     /// <summary>How long after a gear-lever write the lever is read again, so the combo follows a
-    /// refusal by the aircraft's own gauge ("up" on the ground). One 1 Hz batch period plus margin:
-    /// a judgement, not a measurement.</summary>
-    public const int GearSettleMs = 1500;
+    /// refusal by the aircraft's own gauge ("up" on the ground): the settle every Set row's re-read
+    /// waits (<see cref="L1011WritePlan.ReReadSettleMs"/>).</summary>
+    public const int GearSettleMs = L1011WritePlan.ReReadSettleMs;
 
     // ---- Speed brake, ground spoilers, parking brake --------------------------------------
 

@@ -28,6 +28,10 @@ public partial class IniL1011Definition
     private readonly Dictionary<int, IReadOnlyList<L1011Step>> _owed = new();
     private int _nextRunId;
 
+    /// <summary>Per Set row, how many writes have been sent: a settle re-read goes ahead only while its
+    /// write is still the row's latest. Touched on the UI thread only.</summary>
+    private readonly Dictionary<string, int> _setGeneration = new(StringComparer.Ordinal);
+
     public override bool HandleUIVariableSet(string varKey, double value, SimVarDefinition varDef,
         SimConnectManager simConnect, ScreenReaderAnnouncer announcer)
     {
@@ -50,7 +54,7 @@ public partial class IniL1011Definition
         }
         var plan = row.Action switch
         {
-            L1011RowAction.Set => L1011WritePlan.ForSet(control, value, CurrentPosition(row.Key, simConnect)),
+            L1011RowAction.Set => L1011WritePlan.ForSet(control, value, PlanFrom(row, simConnect)),
             L1011RowAction.Press => L1011WritePlan.ForPress(control, row.HoldMs),
             L1011RowAction.Increase => L1011WritePlan.ForStep(control, increase: true),
             L1011RowAction.Decrease => L1011WritePlan.ForStep(control, increase: false),
@@ -60,9 +64,20 @@ public partial class IniL1011Definition
         return true;
     }
 
+    /// <summary>The cache a write plans from (<see cref="SimConnectManager.GetCachedVariableValue"/>); tests replace it.</summary>
+    internal Func<SimConnectManager, string, double?> CachedValue { get; set; } = (sim, key) => sim.GetCachedVariableValue(key);
+
     /// <summary>The position to plan from: what MSFSBA just commanded while it is fresh, else the cache.</summary>
     private double? CurrentPosition(string key, SimConnectManager sim) =>
-        _commanded.Resolve(key, sim.GetCachedVariableValue(key), Clock());
+        _commanded.Resolve(key, CachedValue(sim, key), Clock());
+
+    /// <summary>The position a Set row's plan starts from. A knob is read on request (when its panel
+    /// opens), never by the batch, so its cache can be stale: it trusts only what MSFSBA just commanded,
+    /// and is written otherwise, so a slider moved back is never dropped as already there.</summary>
+    private double? PlanFrom(L1011PlacedRow row, SimConnectManager sim) =>
+        row.Control!.Kind == L1011Kinds.Knob
+            ? _commanded.Resolve(row.Key, cached: null, Clock())
+            : CurrentPosition(row.Key, sim);
 
     private void Execute(L1011PlacedRow row, L1011Plan plan, SimConnectManager sim, ScreenReaderAnnouncer announcer,
         double? commandedValue)
@@ -83,7 +98,18 @@ public partial class IniL1011Definition
         }
         if (commandedValue is double target)
             _commanded.Record(row.Key, target, Clock(), plan.Via);
-        _ = RunAsync(plan.Steps, sim);
+        var run = RunAsync(plan.Steps, sim);
+        // A Set row is read again once its write has landed, so its combo or slider shows what the
+        // aircraft did: a gauge can put a switch straight back without the variable changing (no
+        // delivery comes), and a knob is never refreshed by the batch. Only the LAST write of a burst
+        // is read again: a slider swept by a held key writes every step, and an earlier step's answer
+        // would pull the thumb, and the next write, back behind where the pilot has got to.
+        if (commandedValue != null)
+        {
+            int generation = _setGeneration[row.Key] = _setGeneration.GetValueOrDefault(row.Key) + 1;
+            _ = ReReadAfterSettleAsync(row.Key, L1011WritePlan.ReReadSettleMs, sim, run,
+                stillLatest: () => _setGeneration.GetValueOrDefault(row.Key) == generation);
+        }
     }
 
     /// <summary>A refused pick must not leave the combo on a position the aircraft never took: ask
@@ -157,23 +183,27 @@ public partial class IniL1011Definition
     }
 
     /// <summary>
-    /// The gear lever's own gauge refuses "up" on the ground: the write lands and nothing moves. Read
-    /// the lever again once it has settled (<see cref="L1011Levers.GearSettleMs"/>) so the combo
-    /// follows what the aircraft did. The await resumes on the UI thread; nothing is asked once the
-    /// definition has gone away.
+    /// Reads a row again once its write has settled, so its combo or slider follows what the aircraft
+    /// did: after <paramref name="run"/> (a plan's steps, a spring switch's return included) has
+    /// finished, plus <paramref name="settleMs"/>, and only if <paramref name="stillLatest"/> says no
+    /// later write has superseded this one. The awaits resume on the UI thread; nothing is asked once
+    /// the definition has gone away.
     /// </summary>
-    private async Task ReReadGearLeverAfterSettleAsync(SimConnectManager sim)
+    private async Task ReReadAfterSettleAsync(string key, int settleMs, SimConnectManager sim, Task? run = null,
+        Func<bool>? stillLatest = null)
     {
         try
         {
-            await SettleDelay(L1011Levers.GearSettleMs);
-            if (_disposed)
+            if (run != null)
+                await run;
+            await SettleDelay(settleMs);
+            if (_disposed || stillLatest?.Invoke() == false)
                 return;
-            ReRead(L1011Levers.GearLeverKey, sim);
+            ReRead(key, sim);
         }
         catch (Exception ex)
         {
-            Log.Warn("L1011", $"Gear lever re-read failed: {ex.Message}");
+            Log.Warn("L1011", $"Re-read of {key} failed: {ex.Message}");
         }
     }
 
@@ -196,8 +226,9 @@ public partial class IniL1011Definition
                 SendCustom(row.Key, row.Name, L1011Levers.FlapRpn((int)Math.Round(value)), sim, announcer);
                 return;
             case L1011Levers.GearLeverKey:
+                // The lever's own gauge refuses "up" on the ground: the write lands and nothing moves.
                 if (SendCustom(row.Key, row.Name, L1011Levers.GearRpn(value), sim, announcer))
-                    _ = ReReadGearLeverAfterSettleAsync(sim);
+                    _ = ReReadAfterSettleAsync(row.Key, L1011Levers.GearSettleMs, sim);
                 return;
             case L1011Levers.SpeedBrakeKey:
                 SendCustom(row.Key, row.Name, L1011Levers.SpeedBrakeRpn(value), sim, announcer);

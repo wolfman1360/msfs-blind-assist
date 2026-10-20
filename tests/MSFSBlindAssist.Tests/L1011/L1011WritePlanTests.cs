@@ -176,15 +176,34 @@ public class L1011WritePlanTests
             Rpn(L1011WritePlan.ForSet(discharge, 2, 1)));
     }
 
+    private static L1011Control FlightStationKnob() => new()
+    {
+        Id = "ROTARY_FLT_STA", Kind = L1011Kinds.Knob, StateVar = "L:ROTARY_FLT_STA",
+        Range = new[] { 0.0, 100.0 }, SetTemplate = new() { "L:ROTARY_FLT_STA={v}" },
+    };
+
     [Fact]
     public void A_knob_is_clamped_into_its_range()
     {
-        var knob = new L1011Control
-        {
-            Id = "ROTARY_FLT_STA", Kind = L1011Kinds.Knob, StateVar = "L:ROTARY_FLT_STA",
-            Range = new[] { 0.0, 100.0 }, SetTemplate = new() { "L:ROTARY_FLT_STA={v}" },
-        };
-        Assert.Equal(new[] { "100 (>L:ROTARY_FLT_STA)" }, Rpn(L1011WritePlan.ForSet(knob, 140, 20)));
+        Assert.Equal(new[] { "100 (>L:ROTARY_FLT_STA)" }, Rpn(L1011WritePlan.ForSet(FlightStationKnob(), 140, 20)));
+    }
+
+    [Fact]
+    public void A_knob_with_no_position_given_is_written_even_to_the_value_it_may_already_hold()
+    {
+        // The definition gives a knob no position once its own command has expired: a knob's cache is
+        // read on request and may be stale, so "already there" must never come from it.
+        var plan = L1011WritePlan.ForSet(FlightStationKnob(), 0, current: null);
+        Assert.Null(plan.Refusal);
+        Assert.Equal(new[] { "0 (>L:ROTARY_FLT_STA)" }, Rpn(plan));
+    }
+
+    [Fact]
+    public void A_knob_already_at_a_fresh_position_is_not_written_again()
+    {
+        var plan = L1011WritePlan.ForSet(FlightStationKnob(), 40, current: 40);
+        Assert.Null(plan.Refusal);
+        Assert.True(plan.IsEmpty);
     }
 
     [Fact]
