@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace MSFSBlindAssist.Aircraft.L1011;
 
 /// <summary>One autopilot state variable and the words spoken when it changes.</summary>
@@ -9,9 +11,9 @@ public sealed record L1011AfcsState(string Key, string Name, IReadOnlyDictionary
 
 /// <summary>
 /// The autopilot states the TriStar announces, all read from the variables the aircraft's own gauges
-/// use (package 1.0.8): the engage switches, the mode buttons, and the armed/captured flags that
-/// L1011_AFCS.js and L1011_INS.js write (ANN_VOR_ACTIVE is the INS gauge's, and counts only while VOR or
-/// back course is on: <see cref="FlagModeOn"/>). The gauge's own 0/50/100 annunciator variables (AFCS_CPT_*) are not used:
+/// use (package 1.0.8): the engage switches, the mode buttons, the autothrottle's alpha mode, and the
+/// armed/captured flags that L1011_AFCS.js and L1011_INS.js write (ANN_VOR_ACTIVE is the INS gauge's,
+/// and counts only while VOR or back course is on: <see cref="FlagModeOn"/>). The gauge's own 0/50/100 annunciator variables (AFCS_CPT_*) are not used:
 /// which legend each value shows is a texture detail the code does not name.
 /// </summary>
 public static class L1011AfcsModes
@@ -42,6 +44,12 @@ public static class L1011AfcsModes
         ("SWITCH_AFCS_TURB", "Turbulence"),
     };
 
+    /// <summary>
+    /// The autothrottle's alpha mode: 1 while it holds angle of attack instead of speed (the AFCS view's
+    /// speed window reads AOA). The aircraft's own change, so it always speaks, both ways.
+    /// </summary>
+    public const string AlphaModeKey = "INI_AOA_SPEED_MODE";
+
     /// <summary>Everything announced, in the order a change is spoken when several land at once.</summary>
     public static IReadOnlyList<L1011AfcsState> All { get; } = Build();
 
@@ -66,12 +74,22 @@ public static class L1011AfcsModes
         list.Add(new("ANN_ALT_ARM", "Altitude armed", When("Altitude armed")));
         list.Add(new("FLARE_ACTIVE", "Flare", When("Flare")));
         list.Add(new("ROLLOUT_ACTIVE", "Rollout", When("Rollout")));
+        list.Add(new(AlphaModeKey, "Autothrottle alpha mode", new Dictionary<double, string>
+        {
+            [0] = "Autothrottle alpha mode off", [1] = "Autothrottle alpha mode",
+        }));
         return list;
     }
 
-    /// <summary>The armed/captured flags: L:vars the gauge drives, not panel controls.</summary>
-    public static IReadOnlyList<L1011AfcsState> Flags { get; } =
+    /// <summary>The states the aircraft drives, not panel controls: the armed/captured flags and the
+    /// alpha mode. Each rides the batch with a Ctrl+M row and a line in the Autopilot panel's status display.</summary>
+    public static IReadOnlyList<L1011AfcsState> AircraftStates { get; } =
         All.Where(s => !s.Key.StartsWith("SWITCH_AFCS_", StringComparison.Ordinal)).ToList();
+
+    /// <summary>The armed/captured flags: L:vars the gauge drives, not panel controls. The alpha mode is
+    /// not one (Ctrl+P's speed window line already reads "Speed: AOA").</summary>
+    public static IReadOnlyList<L1011AfcsState> Flags { get; } =
+        AircraftStates.Where(s => s.Key != AlphaModeKey).ToList();
 
     /// <summary>
     /// Flags that mean what their words say only while one of their modes is on. L1011_INS.js sets
@@ -131,6 +149,31 @@ public static class L1011AfcsModes
         static bool Off(double? v, double offValue) => v is double d && Math.Abs(d - offValue) < 0.5;
         return Off(read("SWITCH_AFCS_FD_A"), 0) && Off(read("SWITCH_AFCS_FD_B"), 0)
             && Off(read("SWITCH_AFCS_AP_A"), 2) && Off(read("SWITCH_AFCS_AP_B"), 2);
+    }
+
+    /// <summary>
+    /// The autothrottle read-back with the speed the aircraft now holds ("Autothrottle on, speed 250"):
+    /// it resets <c>L:INI_AT_TARGET</c> to 250 when the autothrottle engages, so the pilot must hear it.
+    /// </summary>
+    public static string WithSpeedTarget(string words, double knots) =>
+        $"{words}, speed {Math.Round(knots).ToString(CultureInfo.InvariantCulture)}";
+
+    /// <summary>
+    /// An engage read-back with the inner loop that is not flying ("Autopilot A command, not flying
+    /// pitch"): a paddle at Command with <c>L:INI_PITCH_PID_STATE</c> or <c>L:INI_ROLL_PID_STATE</c> at
+    /// 0 flies nothing on that axis ([L1011-21]). A statement only, and a loop not read is no claim.
+    /// </summary>
+    public static string WithLoopHealth(string words, double? pitchLoop, double? rollLoop)
+    {
+        bool pitchOff = pitchLoop is double p && p < 0.5;
+        bool rollOff = rollLoop is double r && r < 0.5;
+        return (pitchOff, rollOff) switch
+        {
+            (true, true) => words + ", not flying pitch or roll",
+            (true, false) => words + ", not flying pitch",
+            (false, true) => words + ", not flying roll",
+            _ => words,
+        };
     }
 
     /// <summary>The engaged mode buttons, by name ("Heading, Altitude hold"), or "none".</summary>

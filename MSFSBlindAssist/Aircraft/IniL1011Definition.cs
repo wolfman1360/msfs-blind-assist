@@ -185,17 +185,17 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
             };
         }
 
-        // The autopilot's armed and captured flags: announced (L1011AfcsAnnouncer), listed in the
-        // Autopilot panel's status display, muteable in Ctrl+M.
-        foreach (var flag in L1011AfcsModes.Flags)
+        // The autopilot's armed and captured flags and the autothrottle's alpha mode: announced
+        // (L1011AfcsAnnouncer), listed in the Autopilot panel's status display, muteable in Ctrl+M.
+        foreach (var state in L1011AfcsModes.AircraftStates)
         {
             var descriptions = new Dictionary<double, string> { [0] = "off", [1] = "on" };
-            if (flag.Key == "FLARE_ACTIVE")
+            if (state.Key == "FLARE_ACTIVE")
                 descriptions[99] = "armed";   // it reads 99 while armed above 120 ft (L1011_INS.js); the status display would show the raw number
             var def = new SimVarDefinition
             {
-                Name = flag.Key,
-                DisplayName = flag.Name,
+                Name = state.Key,
+                DisplayName = state.Name,
                 Type = SimVarType.LVar,
                 UpdateFrequency = UpdateFrequency.Continuous,
                 IsAnnounced = true,
@@ -203,7 +203,7 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
                 RenderAsReadOnlyStatus = true,
             };
             if (batchNames.Add(ContinuousBatchLayout.FullName(def)))
-                vars[flag.Key] = def;
+                vars[state.Key] = def;
         }
 
         // Each INS's alignment status and the PMS flight phase: they speak on their own
@@ -241,6 +241,23 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
             },
             RenderAsReadOnlyStatus = true,
         };
+
+        // The inner pitch and roll loops (L1011_INS.js: 1 while the autopilot flies its targets), read
+        // fresh after an engage to Command: a paddle at Command with either loop off flies nothing.
+        foreach (var (key, lvar, name) in new[]
+        {
+            (PitchLoopKey, "INI_PITCH_PID_STATE", "Autopilot pitch loop"),
+            (RollLoopKey, "INI_ROLL_PID_STATE", "Autopilot roll loop"),
+        })
+        {
+            vars[key] = new SimVarDefinition
+            {
+                Name = lvar,
+                DisplayName = name,
+                Type = SimVarType.LVar,
+                UpdateFrequency = UpdateFrequency.OnRequest,
+            };
+        }
 
         // End-to-end MobiFlight probe target: every TriStar write is a calculator-path string, and
         // with no WASM module installed each one is dropped with nothing to say so. Registering this

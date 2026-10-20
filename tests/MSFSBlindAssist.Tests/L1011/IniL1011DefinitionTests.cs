@@ -90,6 +90,41 @@ public class IniL1011DefinitionTests
     }
 
     [Fact]
+    public void Every_lamp_is_registered_under_its_own_key()
+    {
+        // A lamp whose variable already rides the batch under another key is skipped (two keys with one
+        // name shift every later slot), so it would never speak.
+        var vars = Def.GetVariables();
+        Assert.All(L1011Annunciators.All, l =>
+        {
+            Assert.True(vars.TryGetValue(L1011Annunciators.KeyFor(l), out var def), l.Var);
+            Assert.Equal(l.Var, def!.Name);
+            Assert.True(ContinuousBatchLayout.RidesBatch(def));
+            Assert.True(def.IsAnnounced && !def.ExcludeFromMonitorManager, l.Var);   // its Ctrl+M row
+        });
+    }
+
+    [Fact]
+    public void Alpha_mode_rides_the_batch_with_a_ctrl_m_row_and_a_status_line()
+    {
+        var alpha = Def.GetVariables()["INI_AOA_SPEED_MODE"];
+        Assert.Equal(("INI_AOA_SPEED_MODE", "Autothrottle alpha mode", SimVarType.LVar), (alpha.Name, alpha.DisplayName, alpha.Type));
+        Assert.True(ContinuousBatchLayout.RidesBatch(alpha));
+        Assert.Contains("INI_AOA_SPEED_MODE", Services.MonitorRowBuilder.Build(Def.GetVariables()).Select(r => r.Key));
+        Assert.Contains("INI_AOA_SPEED_MODE", Def.GetPanelDisplayVariables()["Autopilot"]);
+    }
+
+    [Theory]
+    [InlineData("L1011_AFCS_PITCH_LOOP", "INI_PITCH_PID_STATE")]
+    [InlineData("L1011_AFCS_ROLL_LOOP", "INI_ROLL_PID_STATE")]
+    public void The_inner_loops_are_read_on_request_for_the_engage_health_check(string key, string lvar)
+    {
+        var loop = Def.GetVariables()[key];
+        Assert.Equal((lvar, SimVarType.LVar, UpdateFrequency.OnRequest), (loop.Name, loop.Type, loop.UpdateFrequency));
+        Assert.DoesNotContain(key, Services.MonitorRowBuilder.Build(Def.GetVariables()).Select(r => r.Key));
+    }
+
+    [Fact]
     public void Every_panel_has_a_controls_entry_and_every_display_sits_on_a_panel()
     {
         var panels = Def.GetPanelStructure().Values.SelectMany(p => p).ToHashSet();

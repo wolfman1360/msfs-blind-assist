@@ -358,7 +358,11 @@ Autopilot:
   Ctrl+P     Autopilot window (the glareshield windows, modes, engage switches, autothrottle)
   Shift+A    Autopilot A, Command or Off (read back)
   Ctrl+O     Autopilot B, Command or Off (read back)
-  Ctrl+J     Autothrottle on or off (read back)
+             With Shift+A or Ctrl+O, if the autopilot shows Command but the aircraft is not
+             flying it, the read-back adds "not flying pitch", "not flying roll" or "not flying
+             pitch or roll". The switch stays where you put it.
+  Ctrl+J     Autothrottle on or off (read back, with the speed it now holds: "Autothrottle on,
+             speed 250")
   Ctrl+L     Localizer on or off (read back)
   Shift+P    ILS on or off (read back)
 
@@ -415,7 +419,10 @@ BACKGROUND ANNOUNCEMENTS - Ctrl+M
 
 Warning and caution lights are announced when they come on and when they go out ("Engine 1 fire
 light on"), once they have stayed that way for about a second, so a flashing light is heard
-once. The annunciator light test, which lights every lamp at once, is silent.
+once. The annunciator light test, which lights every lamp at once, is silent. They include the
+engine start valve open lights, the APU's start and fault lights, the IDG low pressure lights,
+the standby power flowbar, the jettison dump lights, the autobrake armed and refuel power on
+lights, and the engine 2 fail light.
 
 The autopilot is announced when a switch moves other than by your own press in MSFS Blind
 Assist: an engage switch ("Autopilot A command", "Autopilot B off" - which is also how a
@@ -424,7 +431,9 @@ disconnect is heard), a flight director, the autothrottle or thrust management t
 the armed and captured modes as they come on ("Localizer armed", "Localizer captured", "VOR
 captured", "Glideslope armed", "Glideslope captured", "Altitude armed", "Flare", "Rollout").
 Your own press is not spoken back while the switch sits where you put it; if the aircraft moves
-it anywhere else - turning thrust management straight back off, say - you hear that.
+it anywhere else - turning thrust management straight back off, say - you hear that. The
+autothrottle's alpha mode is announced both ways: "Autothrottle alpha mode" while it holds angle
+of attack instead of speed, and "Autothrottle alpha mode off".
 
 The flap handle, the parking brake and the ground spoiler arm are announced when something
 other than MSFS Blind Assist moves them - a hardware lever, or the aircraft's own automation
