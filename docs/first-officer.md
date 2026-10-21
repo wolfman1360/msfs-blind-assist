@@ -567,7 +567,7 @@ Rules: `.claude/rules/first-officer-l1011.md` (FOL-1 to FOL-3); the aircraft's w
 [docs/l1011.md](l1011.md).
 
 Every write goes through the definition's First Officer entry (`IniL1011Definition.FirstOfficer.cs`:
-`FoSetAsync`, `FoSetAltimetersAsync`), built on the panels' own write core, so a flow step writes a
+`FoSetAsync`, `FoSetAltimetersAsync`), which share the panels' own write paths, so a flow step writes a
 control exactly as a panel pick does: the click replay (L1011-1), a toggle refused from an unknown
 position (L1011-4) and the engage paddle's CWS notch (L1011-21) included. The entry speaks nothing
 and returns `L1011FoResult`; the executor reads every readable write back before it counts as done
