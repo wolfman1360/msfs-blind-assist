@@ -21,8 +21,11 @@ namespace MSFSBlindAssist.FirstOfficer.L1011;
 /// transport's clock, and nothing blocks a thread on a transport call: a caller on the UI thread waiting
 /// on a held press would deadlock the post that runs it.
 ///
-/// Composites are pseudo-keys (<see cref="Pseudo"/>), run under the gate like any write. Nothing is held
-/// across a flow's Stop or the window's close in part 1, so <see cref="IFoActionExecutor.ReleaseHeldPresses"/>
+/// Composites are pseudo-keys (<see cref="Pseudo"/>), run under the gate like any write. A flow step hands
+/// the flow's Stop to every key; only a composite in <see cref="StopAware"/> reads it, its waits read-only
+/// and bounded on the transport's clock, held by the flow's Pause without counting it
+/// (<see cref="WaitUntilAsync"/>); a plain write and every other composite are atomic. Nothing is held
+/// across a flow's Stop or the window's close yet, so <see cref="IFoActionExecutor.ReleaseHeldPresses"/>
 /// and <see cref="IFoActionExecutor.OnFlowStoppedAsync"/> keep their defaults: a press still held when the
 /// definition goes away is released by the definition's own dispose, once. The engine start (part 2) is
 /// the first step a stopped flow must not leave half done, and brings its own.
@@ -71,6 +74,21 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     /// <summary>A switch reads a position within this of it.</summary>
     private const double PositionTolerance = 0.5;
 
+    /// <summary>The speed brake reads its target within this many percent (forward reads below 5).</summary>
+    internal const double SpeedBrakeTolerancePercent = 5;
+
+    /// <summary>The stabilizer trim reads its target within this many degrees (the evaluator's zero trim
+    /// test uses the same figure).</summary>
+    internal const double StabTrimToleranceDegrees = 0.2;
+
+    /// <summary>The write-only keys still verified, each on its readout: the stabilizer trim's typed entry
+    /// on ELEVATOR TRIM POSITION.</summary>
+    private static readonly IReadOnlyDictionary<string, string> ReadBackKeys =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [L1011Levers.StabTrimKey] = "L1011_RO_ELEVATOR_TRIM",
+        };
+
     // ---- the composites' pseudo-keys ----
 
     /// <summary>The standby power check (target ignored).</summary>
@@ -79,16 +97,33 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     /// <summary>External power on (1, with its ties) or off (0).</summary>
     public const string ExternalPower = "FO_EXTERNAL_POWER";
 
+    /// <summary>The three INS mode selectors to ALIGN, a unit at ALIGN or NAV left alone (target ignored).</summary>
+    public const string InsAlign = "FO_INS_ALIGN";
+
+    /// <summary>The three AC ties closed (target 1).</summary>
+    public const string AcTies = "FO_AC_TIES";
+
     /// <summary>
     /// The composites, by pseudo-key: each runs under the gate, writes through <see cref="WriteAsync"/>
     /// (never <see cref="Set"/>, which would wait on the gate it holds) and reads back what it changed.
+    /// Atomic: none reads the flow's Stop.
     /// </summary>
     private static readonly Dictionary<string, Func<L1011FoActionExecutor, IL1011FoTransport, int, Task<bool>>> Pseudo =
         new(StringComparer.Ordinal)
         {
             [StandbyPowerCheck] = (exec, io, _) => exec.StandbyPowerCheckAsync(io),
             [ExternalPower] = (exec, io, target) => exec.ExternalPowerAsync(io, target),
+            [InsAlign] = (exec, io, _) => exec.InsAlignAsync(io),
+            [AcTies] = (exec, io, target) => exec.AcTiesAsync(io, target),
         };
+
+    /// <summary>
+    /// The composites that read the flow's Stop (a wait that may end early in a safe state), as
+    /// <see cref="Pseudo"/> otherwise; looked up first. A checklist tick passes
+    /// <see cref="CancellationToken.None"/>.
+    /// </summary>
+    private static readonly Dictionary<string, Func<L1011FoActionExecutor, IL1011FoTransport, int, CancellationToken, Task<bool>>> StopAware =
+        new(StringComparer.Ordinal);
 
     // ---- the standby power check ----
 
@@ -168,14 +203,15 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     private static string TieClosePress(int n) => $"SWITCH_TIE_FLOW_{n.ToString(CultureInfo.InvariantCulture)}";
     private static string TieReadout(int n) => $"L1011_RO_AC_TIE_{n.ToString(CultureInfo.InvariantCulture)}";
 
-    /// <summary>True for a composite's key. A flow key is known when this or the definition's
-    /// <c>FoAcceptsKey</c> is true.</summary>
-    public static bool IsPseudoKey(string key) => Pseudo.ContainsKey(key);
+    /// <summary>True for a composite's key, Stop-aware or not. A flow key is known when this or the
+    /// definition's <c>FoAcceptsKey</c> is true.</summary>
+    public static bool IsPseudoKey(string key) => Pseudo.ContainsKey(key) || StopAware.ContainsKey(key);
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private IL1011FoTransport? _io;
     private Action<string>? _say;
     private Func<bool> _speaksFlowProgress = () => true;
+    private Func<CancellationToken, Task> _waitWhilePaused = _ => Task.CompletedTask;
 
     public void SetTransport(IL1011FoTransport? io) => _io = io;
 
@@ -201,29 +237,43 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
         _gate.Release();
     }
 
-    public async Task<bool> ExecuteStepAsync(IFlowStepDispatch step)
+    public Task<bool> ExecuteStepAsync(IFlowStepDispatch step) => ExecuteStepAsync(step, CancellationToken.None);
+
+    /// <summary>
+    /// The flow's entry point; <paramref name="stop"/> is the running flow's Stop. Every key goes through
+    /// <see cref="SetCoreAsync"/> with it, but only a composite in <see cref="StopAware"/> reads it: a plain
+    /// switch, a press and every other composite are atomic and ignore it.
+    /// </summary>
+    public async Task<bool> ExecuteStepAsync(IFlowStepDispatch step, CancellationToken stop)
     {
         if (!IsAvailable) return false;
         switch (step.ActionType)
         {
             case FlowStepActionType.SetSwitch:
                 if (step.EventName == null) return false;
-                return await Set(step.EventName, step.TargetValue ?? 1).ConfigureAwait(false);
+                return await SetCoreAsync(step.EventName, step.TargetValue ?? 1, stop).ConfigureAwait(false);
             case FlowStepActionType.SetSwitchMultiple:
                 if (step.MultiActions.Count == 0) return false;
                 // Every part is tried, in order, each under the gate: one that fails does not stop the rest.
                 bool ok = true;
                 foreach (var (key, target) in step.MultiActions)
-                    ok &= await Set(key, target ?? 1).ConfigureAwait(false);
+                    ok &= await SetCoreAsync(key, target ?? 1, stop).ConfigureAwait(false);
                 return ok;
             default:
                 return false;
         }
     }
 
+    /// <summary>The running flow's Pause (FlowManager hands it over once): a wait (<see cref="WaitUntilAsync"/>)
+    /// holds on it and does not count the time paused. Completes at once until a flow attaches it.</summary>
+    public void AttachFlowPause(Func<CancellationToken, Task> waitWhilePaused) => _waitWhilePaused = waitWhilePaused;
+
     /// <summary>One control, serialized with every other write. A checklist tick: never cut short.</summary>
-    public Task<bool> Set(string key, int target) =>
-        GatedAsync($"{key} -> {target.ToString(CultureInfo.InvariantCulture)}", io => DispatchAsync(io, key, target));
+    public Task<bool> Set(string key, int target) => SetCoreAsync(key, target, CancellationToken.None);
+
+    /// <summary>One control under the gate, with the flow's Stop for a composite that reads it.</summary>
+    private Task<bool> SetCoreAsync(string key, int target, CancellationToken stop) =>
+        GatedAsync($"{key} -> {target.ToString(CultureInfo.InvariantCulture)}", io => DispatchAsync(io, key, target, stop));
 
     public Task<bool> SetSeatbeltSign(bool on) => Set(SeatBelts, on ? 1 : 0);
 
@@ -274,14 +324,21 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
         }
     }
 
-    private Task<bool> DispatchAsync(IL1011FoTransport io, string key, int target) =>
-        Pseudo.TryGetValue(key, out var composite) ? composite(this, io, target) : WriteAsync(io, key, target);
+    /// <summary>A composite that reads the flow's Stop first, then any other composite, else a single write.</summary>
+    private Task<bool> DispatchAsync(IL1011FoTransport io, string key, int target, CancellationToken stop)
+    {
+        if (StopAware.TryGetValue(key, out var stopAware)) return stopAware(this, io, target, stop);
+        if (Pseudo.TryGetValue(key, out var composite)) return composite(this, io, target);
+        return WriteAsync(io, key, target);
+    }
 
     // ================= a single write =================
 
     /// <summary>
     /// One control to <paramref name="target"/>, under the gate: read first when its reading follows its
-    /// write, written, and read back; a press done once sent. For a composite's own writes too.
+    /// write, written, and read back on its own scale (<see cref="LeverReadsTarget"/>); the stabilizer trim,
+    /// write-only, read back on its readout (<see cref="ReadBackKeyFor"/>); a press done once sent. For a
+    /// composite's own writes too.
     /// </summary>
     private async Task<bool> WriteAsync(IL1011FoTransport io, string key, int target)
     {
@@ -298,13 +355,37 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
             case L1011FoOutcome.AlreadyThere:
                 return true;
             case L1011FoOutcome.Sent:
-                return !readable
-                    || await ReadsAsync(io, new[] { key }, v => Math.Abs(v - target) < PositionTolerance, what).ConfigureAwait(false);
+                string? readout = readable ? key : ReadBackKeyFor(key);
+                return readout is null
+                    || await ReadsAsync(io, new[] { readout }, v => LeverReadsTarget(key, v, target), what).ConfigureAwait(false);
             default:
                 Note($"{what}: not sent, {Describe(result)}");
                 return false;
         }
     }
+
+    /// <summary>
+    /// True when a reading of the key written (<paramref name="key"/>, or its readout) shows
+    /// <paramref name="target"/> on that control's own scale: the flap handle by detent, the gear lever by
+    /// band (it travels between down, off and up, <see cref="L1011Levers.GearDescriptionKey"/>), the speed
+    /// brake within <see cref="SpeedBrakeTolerancePercent"/> (both in percent; forward reads below 5), the
+    /// stabilizer trim within <see cref="StabTrimToleranceDegrees"/>, and anything else, the parking brake
+    /// and the ground spoilers included, within half a position.
+    /// </summary>
+    internal static bool LeverReadsTarget(string key, double read, double target) => key switch
+    {
+        L1011Levers.FlapHandleKey => Math.Round(read) == Math.Round(target),
+        L1011Levers.GearLeverKey => L1011Levers.GearDescriptionKey(read) == L1011Levers.GearDescriptionKey(target),
+        L1011Levers.SpeedBrakeKey => Math.Abs(read - target) <= SpeedBrakeTolerancePercent,
+        L1011Levers.ParkingBrakeKey or L1011Levers.GroundSpoilersKey => Math.Abs(read - target) < PositionTolerance,
+        L1011Levers.StabTrimKey => Math.Abs(read - target) < StabTrimToleranceDegrees,
+        _ => Math.Abs(read - target) < PositionTolerance,
+    };
+
+    /// <summary>The readout a write-only key is still verified on: the stabilizer trim's typed entry, on the
+    /// trim position (degrees, the 0 to 10 scale the entry takes). Null for every other key.</summary>
+    private static string? ReadBackKeyFor(string key) =>
+        ReadBackKeys.TryGetValue(key, out var readout) ? readout : null;
 
     private async Task<bool> AltimetersStandardAsync(IL1011FoTransport io)
     {
@@ -496,6 +577,38 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
 
         // From here external power is on, so the step is done whatever the ties do; a tie left open is a
         // failure of its own, spoken once ([FO-26]), naming the first (each is logged where it failed).
+        string? firstTieFailure = await CloseTiesAsync(io, what).ConfigureAwait(false);
+        if (firstTieFailure is not null)
+            _say?.Invoke($"External power on. {firstTieFailure}.");
+        return true;
+    }
+
+    // ================= the AC ties =================
+
+    /// <summary>
+    /// Target 1: <see cref="CloseTiesAsync"/>, done only when all three ties read closed. Unlike external
+    /// power it speaks nothing: a tie left open is this step's own failure, the flow's to say. Any other
+    /// target reads and writes nothing.
+    /// </summary>
+    private async Task<bool> AcTiesAsync(IL1011FoTransport io, int target)
+    {
+        string what = $"{AcTies} -> {target.ToString(CultureInfo.InvariantCulture)}";
+        if (target != 1)
+        {
+            Note($"{what}: not done, the AC ties are 1 (closed)");
+            return false;
+        }
+        return await CloseTiesAsync(io, what).ConfigureAwait(false) is null;
+    }
+
+    /// <summary>
+    /// Each AC tie read fresh, in order: closed, left alone; open, its close button pressed and the tie read
+    /// back closed (one not closing does not stop the next); unread, never pressed. Null when all three
+    /// read closed, else the first failure in words for a sentence ("AC tie 2 did not close", "AC tie 2
+    /// could not be read"); each failure is logged where it happened.
+    /// </summary>
+    private async Task<string?> CloseTiesAsync(IL1011FoTransport io, string what)
+    {
         string? firstTieFailure = null;
         for (int n = 1; n <= 3; n++)
         {
@@ -513,9 +626,116 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
                 || !await ReadsAsync(io, new[] { tie }, v => v >= RelayClosedAtOrAbove, $"{what}, {tieName}").ConfigureAwait(false))
                 firstTieFailure ??= $"{tieName} did not close";
         }
-        if (firstTieFailure is not null)
-            _say?.Invoke($"External power on. {firstTieFailure}.");
-        return true;
+        return firstTieFailure;
+    }
+
+    // ================= the INS align =================
+
+    /// <summary>The INS mode selector's positions (<c>ROTARY_INS_MODE_n</c>: 0 Off, 1 Standby, 2 Align,
+    /// 3 Nav, 4 Attitude).</summary>
+    private const int InsModeAlign = 2;
+    private const int InsModeNav = 3;
+
+    /// <summary>
+    /// Each unit's mode selector read fresh, in order: at ALIGN or NAV, left alone (never rewritten: a
+    /// unit navigating stays navigating); at OFF, STANDBY or ATTITUDE, turned to ALIGN and read back;
+    /// unread, never written, and the step not done. Every unit is tried whatever the others do. Done
+    /// when every unit ends at ALIGN or NAV. Speaks nothing.
+    /// </summary>
+    private async Task<bool> InsAlignAsync(IL1011FoTransport io)
+    {
+        bool done = true;
+        for (int n = 1; n <= 3; n++)
+        {
+            string key = L1011InsAlignmentAnnouncer.MsuKey(n);
+            var mode = await ReadAsync(io, key).ConfigureAwait(false);
+            if (mode is not double m)
+            {
+                Note($"{InsAlign}: {key} unread, INS {n.ToString(CultureInfo.InvariantCulture)} not turned");
+                done = false;
+                continue;
+            }
+            if (Math.Abs(m - InsModeAlign) < PositionTolerance || Math.Abs(m - InsModeNav) < PositionTolerance)
+                continue;
+            done &= await WriteAsync(io, key, InsModeAlign).ConfigureAwait(false);
+        }
+        return done;
+    }
+
+    // ================= relay presses =================
+
+    /// <summary>
+    /// How long a relay a press drives may take to read as wanted (ruling R21): live, a generator breaker
+    /// was still open on an immediate read after its press and closed within about 4 s.
+    /// </summary>
+    internal const int RelayVerifyTimeoutMs = 8_000;
+
+    /// <summary>
+    /// A press verified on the relay it drives, never on the button, which resets itself: the relay read
+    /// fresh first; already as wanted (an engine generator's field relay closes by itself once its engine
+    /// runs), done with no press; unread, not done and never pressed blind; else
+    /// <paramref name="pressKey"/> pressed once and the relay read back until it reads closed (or open,
+    /// <paramref name="closed"/> false) or <see cref="RelayVerifyTimeoutMs"/> passes. Under the caller's
+    /// gate; speaks nothing.
+    /// </summary>
+    internal async Task<bool> PressUntilRelayAsync(IL1011FoTransport io, string pressKey, string relayReadout, bool closed, string what)
+    {
+        var reading = await ReadAsync(io, relayReadout).ConfigureAwait(false);
+        if (reading is not double r)
+        {
+            Note($"{what}: not done, {relayReadout} unread, {pressKey} not pressed");
+            return false;
+        }
+        if (RelayReads(r, closed)) return true;
+        return await WriteAsync(io, pressKey, 1).ConfigureAwait(false)
+            && await ReadsAsync(io, new[] { relayReadout }, v => RelayReads(v, closed), what, RelayVerifyTimeoutMs).ConfigureAwait(false);
+    }
+
+    private static bool RelayReads(double reading, bool closed) =>
+        closed ? reading >= RelayClosedAtOrAbove : reading < RelayClosedAtOrAbove;
+
+    // ================= waits =================
+
+    /// <summary>
+    /// Read-only: polls <paramref name="satisfied"/> every <see cref="PollMs"/> until it is true (true), or
+    /// until <paramref name="limitMs"/> has passed on the transport's clock (false, logged with the limit).
+    /// The flow's Pause holds it, and the time paused is not counted (the MD-11's
+    /// <c>ApuStartToFinishAsync</c> shape); the flow's Stop ends it with false (logged
+    /// "<paramref name="what"/>: stopped") before the next ask, so within a poll, and at once while paused
+    /// or already stopped. Writes nothing and speaks nothing.
+    /// </summary>
+    internal async Task<bool> WaitUntilAsync(IL1011FoTransport io, Func<Task<bool>> satisfied, int limitMs, CancellationToken stop, string what)
+    {
+        long deadline = io.NowMs + limitMs;
+        while (true)
+        {
+            long pausedAt = io.NowMs;
+            try
+            {
+                await _waitWhilePaused(stop).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return Stopped(what);
+            }
+            deadline += io.NowMs - pausedAt;   // a Pause is not counted
+            if (stop.IsCancellationRequested)
+                return Stopped(what);
+            if (await satisfied().ConfigureAwait(false))
+                return true;
+            if (io.NowMs >= deadline)
+            {
+                Note($"{what}: not done within {limitMs.ToString(CultureInfo.InvariantCulture)} ms");
+                return false;
+            }
+            await io.DelayAsync(PollMs).ConfigureAwait(false);
+        }
+    }
+
+    private bool Stopped(string what)
+    {
+        Note($"{what}: stopped");
+        return false;
     }
 
     /// <summary>
@@ -551,12 +771,13 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
 
     /// <summary>
     /// Reads every key fresh, in order, until each satisfies <paramref name="ok"/>, or not done (logged,
-    /// naming the first key that did not) once <see cref="VerifyTimeoutMs"/> has passed on the transport's
-    /// clock.
+    /// naming the first key that did not) once <paramref name="timeoutMs"/> (by default
+    /// <see cref="VerifyTimeoutMs"/>) has passed on the transport's clock.
     /// </summary>
-    private async Task<bool> ReadsAsync(IL1011FoTransport io, IReadOnlyList<string> keys, Func<double, bool> ok, string what)
+    private async Task<bool> ReadsAsync(IL1011FoTransport io, IReadOnlyList<string> keys, Func<double, bool> ok, string what,
+        int timeoutMs = VerifyTimeoutMs)
     {
-        long deadline = io.NowMs + VerifyTimeoutMs;
+        long deadline = io.NowMs + timeoutMs;
         while (true)
         {
             string? notThere = null;
@@ -574,7 +795,7 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
             if (io.NowMs >= deadline)
             {
                 string read = reading is double r ? r.ToString(CultureInfo.InvariantCulture) : "unread";
-                Note($"{what}: not done, {notThere} reads {read} after {VerifyTimeoutMs.ToString(CultureInfo.InvariantCulture)} ms");
+                Note($"{what}: not done, {notThere} reads {read} after {timeoutMs.ToString(CultureInfo.InvariantCulture)} ms");
                 return false;
             }
             await io.DelayAsync(PollMs).ConfigureAwait(false);

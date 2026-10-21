@@ -1176,4 +1176,449 @@ public class L1011FoActionExecutorTests
 
         Assert.Empty(_ac.Io);
     }
+
+    // ================= Part 2 foundations ===========================================================================
+
+    // ---- The flow's Stop and Pause --------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task A_flow_step_takes_the_stop_token_and_a_plain_switch_ignores_it()
+    {
+        _ac.Set(ContinuousIgnition, 0);
+        foreach (var key in Galley)
+            _ac.Set(key, 1);
+        using var stop = new CancellationTokenSource();
+        stop.Cancel();
+
+        Assert.True(await _exec.ExecuteStepAsync(new Step { EventName = ContinuousIgnition, TargetValue = 1 }, stop.Token));
+        Assert.True(await _exec.ExecuteStepAsync(new Step
+        {
+            ActionType = FlowStepActionType.SetSwitchMultiple,
+            MultiActions = Galley.Select(k => (k, (int?)0)).ToArray(),
+        }, stop.Token));
+
+        Assert.Equal(new[] { (ContinuousIgnition, 1.0) }.Concat(Galley.Select(k => (k, 0.0))), _ac.Writes);
+        Assert.Equal(1, _ac.Get(ContinuousIgnition));   // read back as any write
+    }
+
+    [Fact]
+    public async Task WaitUntil_is_true_once_satisfied_and_false_at_its_limit()
+    {
+        int asked = 0;
+        Assert.True(await _exec.WaitUntilAsync(_ac, () => Task.FromResult(++asked == 3), 10_000, CancellationToken.None, "a wait"));
+        Assert.Equal(3, asked);
+        Assert.Equal(2 * L1011FoActionExecutor.PollMs, _ac.NowMs);   // polled, on the transport's clock
+
+        long start = _ac.NowMs;
+        Assert.False(await _exec.WaitUntilAsync(_ac, () => Task.FromResult(false), 1_000, CancellationToken.None, "a long wait"));
+        Assert.InRange(_ac.NowMs - start, 1_000, 1_000 + L1011FoActionExecutor.PollMs);
+        Assert.Contains(_logged, line => line.StartsWith("a long wait", StringComparison.Ordinal) && line.Contains("1000 ms"));
+        Assert.Empty(_ac.Io);   // read-only: it writes nothing of its own
+    }
+
+    [Fact]
+    public async Task WaitUntil_returns_false_on_stop_within_a_poll_and_counts_no_paused_time()
+    {
+        // Already stopped: false at once, nothing asked.
+        using (var stopped = new CancellationTokenSource())
+        {
+            stopped.Cancel();
+            int never = 0;
+            Assert.False(await _exec.WaitUntilAsync(_ac, () => Task.FromResult(++never > 0), 60_000, stopped.Token, "a stopped wait"));
+            Assert.Equal(0, never);
+            Assert.Contains("a stopped wait: stopped", _logged);
+        }
+
+        // A Stop arriving while it polls ends it within one poll.
+        using (var stop = new CancellationTokenSource())
+        {
+            int asked = 0;
+            long stoppedAt = -1;
+            bool done = await _exec.WaitUntilAsync(_ac, () =>
+            {
+                if (++asked == 3)
+                {
+                    stop.Cancel();
+                    stoppedAt = _ac.NowMs;
+                }
+                return Task.FromResult(false);
+            }, 60_000, stop.Token, "an engine wait");
+
+            Assert.False(done);
+            Assert.Equal(3, asked);   // never asked again after the Stop
+            Assert.InRange(_ac.NowMs - stoppedAt, 0, L1011FoActionExecutor.PollMs);
+            Assert.Contains("an engine wait: stopped", _logged);
+        }
+
+        // Paused from the start: the minute the pause lasts on the transport's clock is not counted, and
+        // nothing is asked while paused.
+        var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _exec.AttachFlowPause(ct => resume.Task.WaitAsync(ct));
+        int pausedAsks = 0;
+        long pausedFrom = _ac.NowMs;
+        var paused = _exec.WaitUntilAsync(_ac, () => Task.FromResult(++pausedAsks < 0), 1_000, CancellationToken.None, "a paused wait");
+        Assert.False(paused.IsCompleted);
+        Assert.Equal(0, pausedAsks);
+        await _ac.DelayAsync(60_000);
+        resume.SetResult();
+
+        Assert.False(await paused.WaitAsync(Hang));
+        Assert.True(pausedAsks > 1);
+        Assert.InRange(_ac.NowMs - pausedFrom, 61_000, 61_000 + L1011FoActionExecutor.PollMs);   // the limit runs from the resume
+
+        // A Stop while paused ends it at once.
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _exec.AttachFlowPause(ct => held.Task.WaitAsync(ct));
+        using var stopWhilePaused = new CancellationTokenSource();
+        var pausedThenStopped = _exec.WaitUntilAsync(_ac, () => Task.FromResult(true), 60_000, stopWhilePaused.Token, "a paused, stopped wait");
+        Assert.False(pausedThenStopped.IsCompleted);
+        stopWhilePaused.Cancel();
+
+        Assert.False(await pausedThenStopped.WaitAsync(Hang));
+        Assert.Contains("a paused, stopped wait: stopped", _logged);
+    }
+
+    // ---- Levers read back on their own scales ---------------------------------------------------------------------
+
+    private const string Flaps = L1011Levers.FlapHandleKey;
+    private const string Gear = L1011Levers.GearLeverKey;
+    private const string SpeedBrake = L1011Levers.SpeedBrakeKey;
+    private const string StabTrim = L1011Levers.StabTrimKey;
+    private const string ElevatorTrim = "L1011_RO_ELEVATOR_TRIM";
+
+    [Theory]
+    [InlineData(Flaps, 3.0, 3, true)]
+    [InlineData(Flaps, 3.4, 3, true)]
+    [InlineData(Flaps, 2.0, 3, false)]
+    [InlineData(Flaps, 4.0, 3, false)]
+    [InlineData(Gear, 100.0, 100, true)]
+    [InlineData(Gear, 80.0, 100, true)]     // past the up band's edge: up
+    [InlineData(Gear, 70.0, 100, false)]
+    [InlineData(Gear, 50.0, 100, false)]
+    [InlineData(Gear, 20.0, 0, true)]
+    [InlineData(Gear, 30.0, 0, false)]
+    [InlineData(Gear, 60.0, 50, true)]
+    [InlineData(SpeedBrake, 5.0, 0, true)]   // forward reads below 5
+    [InlineData(SpeedBrake, 5.5, 0, false)]
+    [InlineData(SpeedBrake, 96.0, 100, true)]
+    [InlineData(SpeedBrake, 44.0, 50, false)]
+    [InlineData(L1011Levers.ParkingBrakeKey, 0.4, 0, true)]
+    [InlineData(L1011Levers.ParkingBrakeKey, 0.5, 0, false)]
+    [InlineData(L1011Levers.GroundSpoilersKey, 1.0, 1, true)]
+    [InlineData(L1011Levers.GroundSpoilersKey, 0.5, 1, false)]
+    [InlineData(StabTrim, 0.19, 0, true)]
+    [InlineData(StabTrim, -0.19, 0, true)]
+    [InlineData(StabTrim, 0.2, 0, false)]
+    [InlineData(ContinuousIgnition, 1.4, 1, true)]   // any other key: a position within half a step
+    [InlineData(ContinuousIgnition, 1.5, 1, false)]
+    public void A_reading_meets_its_target_on_the_controls_own_scale(string key, double read, double target, bool meets)
+    {
+        Assert.Equal(meets, L1011FoActionExecutor.LeverReadsTarget(key, read, target));
+    }
+
+    [Theory]
+    [InlineData(3.0, true)]
+    [InlineData(2.0, false)]   // still at the old detent
+    public async Task A_flap_handle_write_reads_back_by_detent(double reads, bool done)
+    {
+        _ac.Set(Flaps, 2);
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        io.AfterWrite(Flaps, 3, () =>
+        {
+            _ac.NeverDeliver(Flaps);
+            _ac.Set(Flaps, reads);
+        });
+
+        Assert.Equal(done, await _exec.Set(Flaps, 3));
+
+        Assert.Equal(new[] { (Flaps, 3.0) }, _ac.Writes);
+        Assert.Equal(new[] { $"read {Flaps}", $"write {Flaps}=3", $"read {Flaps}" }, io.Events.Take(3));   // read first, written, read back
+    }
+
+    [Theory]
+    [InlineData(100.0, true)]
+    [InlineData(90.0, true)]    // travelling, already in the up band
+    [InlineData(50.0, false)]   // held at off
+    public async Task A_gear_lever_write_reads_back_by_band(double reads, bool done)
+    {
+        _ac.Set(Gear, 0);
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        io.AfterWrite(Gear, 100, () =>
+        {
+            _ac.NeverDeliver(Gear);
+            _ac.Set(Gear, reads);
+        });
+
+        Assert.Equal(done, await _exec.Set(Gear, 100));
+
+        Assert.Equal(new[] { (Gear, 100.0) }, _ac.Writes);
+        if (!done)
+        {
+            Assert.InRange(_ac.NowMs, L1011FoActionExecutor.VerifyTimeoutMs,
+                L1011FoActionExecutor.VerifyTimeoutMs + L1011FoActionExecutor.PollMs + L1011FoActionExecutor.ReadTimeoutMs);
+            Assert.Contains(_logged, line => line.Contains(Gear));
+        }
+    }
+
+    [Theory]
+    [InlineData(0, 0.0, true)]
+    [InlineData(0, 4.0, true)]
+    [InlineData(0, 6.0, false)]
+    [InlineData(50, 46.0, true)]
+    [InlineData(50, 44.0, false)]
+    public async Task A_speed_brake_write_tolerates_five_percent(int target, double reads, bool done)
+    {
+        _ac.Set(SpeedBrake, target == 0 ? 50 : 0);
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        io.AfterWrite(SpeedBrake, target, () =>
+        {
+            _ac.NeverDeliver(SpeedBrake);
+            _ac.Set(SpeedBrake, reads);
+        });
+
+        Assert.Equal(done, await _exec.Set(SpeedBrake, target));
+
+        Assert.Equal(new[] { (SpeedBrake, (double)target) }, _ac.Writes);
+    }
+
+    [Theory]
+    [InlineData(0.1, true)]
+    [InlineData(-0.15, true)]
+    [InlineData(0.25, false)]
+    public async Task A_stab_trim_write_is_verified_on_the_trim_readout(double reads, bool done)
+    {
+        _ac.Set(ElevatorTrim, 2.38);
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        io.AfterWrite(StabTrim, 0, () =>   // the trim moves the readout ELEVATOR TRIM POSITION reads
+        {
+            _ac.NeverDeliver(ElevatorTrim);
+            _ac.Set(ElevatorTrim, reads);
+        });
+
+        Assert.Equal(done, await _exec.Set(StabTrim, 0));
+
+        Assert.Equal(new[] { (StabTrim, 0.0) }, _ac.Writes);
+        Assert.DoesNotContain(StabTrim, _ac.FreshReads);   // the typed key is write-only: never read first
+        Assert.Contains(ElevatorTrim, _ac.FreshReads);
+    }
+
+    [Fact]
+    public async Task A_stab_trim_whose_readout_never_moves_is_not_done_after_the_verify_time_out()
+    {
+        _ac.NeverDeliver(ElevatorTrim);
+        _ac.Set(ElevatorTrim, 2.38);
+
+        Assert.False(await _exec.Set(StabTrim, 0));
+
+        Assert.Equal(new[] { (StabTrim, 0.0) }, _ac.Writes);   // sent once
+        Assert.InRange(_ac.NowMs, L1011FoActionExecutor.VerifyTimeoutMs,
+            L1011FoActionExecutor.VerifyTimeoutMs + L1011FoActionExecutor.PollMs + L1011FoActionExecutor.ReadTimeoutMs);
+        Assert.Contains(_logged, line => line.Contains(ElevatorTrim));
+        Assert.Empty(_spoken);
+    }
+
+    // ---- Relay presses (ruling R21: 8 s on the relay, never the press button's own state) ------------------------
+
+    private const string GenBreakerClose = "SWITCH_GEN_FLOW_1";
+    private const string GenBreakerTrip = "SWITCH_GEN_FLOW_OPEN_1";
+    private const string GenBreaker = "L1011_RO_GEN_1_BREAKER";
+    private const string GenFieldClose = "SWITCH_BRG_GEN_1";
+    private const string GenField = "L1011_RO_GEN_1_FIELD";
+
+    [Fact]
+    public async Task A_relay_closing_six_seconds_after_its_press_is_done()
+    {
+        _ac.Set(GenBreaker, 0);
+        long pressedAt = -1;
+        var io = new ScriptedTransport(_ac);
+        io.AfterWrite(GenBreakerClose, 1, () => pressedAt = _ac.NowMs);
+        _ac.OnClock = ac =>
+        {
+            if (pressedAt >= 0 && ac.NowMs >= pressedAt + 6_000)
+                ac.Set(GenBreaker, 1);
+        };
+
+        Assert.True(await _exec.PressUntilRelayAsync(io, GenBreakerClose, GenBreaker, closed: true, "generator 1 breaker"));
+
+        Assert.Equal(new[] { (GenBreakerClose, 1.0) }, _ac.Writes);   // pressed once
+        Assert.InRange(_ac.NowMs - pressedAt, 6_000, 6_000 + L1011FoActionExecutor.PollMs);
+        Assert.Equal(8_000, L1011FoActionExecutor.RelayVerifyTimeoutMs);
+    }
+
+    [Fact]
+    public async Task A_relay_that_never_closes_is_not_done_after_eight_seconds()
+    {
+        _ac.Set(GenBreaker, 0);
+        long pressedAt = -1;
+        var io = new ScriptedTransport(_ac);
+        io.AfterWrite(GenBreakerClose, 1, () => pressedAt = _ac.NowMs);
+
+        Assert.False(await _exec.PressUntilRelayAsync(io, GenBreakerClose, GenBreaker, closed: true, "generator 1 breaker"));
+
+        Assert.Equal(new[] { (GenBreakerClose, 1.0) }, _ac.Writes);   // never pressed again
+        Assert.InRange(_ac.NowMs - pressedAt, L1011FoActionExecutor.RelayVerifyTimeoutMs,
+            L1011FoActionExecutor.RelayVerifyTimeoutMs + L1011FoActionExecutor.PollMs + L1011FoActionExecutor.ReadTimeoutMs);
+        Assert.Contains(_logged, line => line.Contains(GenBreaker) && line.Contains("8000 ms"));
+        Assert.Empty(_spoken);
+    }
+
+    [Fact]
+    public async Task A_relay_trip_reads_its_relay_open()
+    {
+        _ac.Set(GenBreaker, 1);
+        var io = new ScriptedTransport(_ac);
+        io.AfterWrite(GenBreakerTrip, 1, () => _ac.Set(GenBreaker, 0));
+
+        Assert.True(await _exec.PressUntilRelayAsync(io, GenBreakerTrip, GenBreaker, closed: false, "generator 1 breaker trip"));
+
+        Assert.Equal(new[] { (GenBreakerTrip, 1.0) }, _ac.Writes);
+    }
+
+    [Theory]
+    [InlineData(1.0, true)]    // an engine generator's field relay closes by itself once its engine runs
+    [InlineData(0.0, false)]
+    public async Task A_relay_already_as_wanted_is_done_with_no_press(double reading, bool closed)
+    {
+        _ac.Set(GenField, reading);
+
+        Assert.True(await _exec.PressUntilRelayAsync(_ac, GenFieldClose, GenField, closed, "generator 1 field"));
+
+        Assert.Empty(_ac.Writes);
+        Assert.Equal(new[] { GenField }, _ac.FreshReads);   // read once, fresh
+    }
+
+    [Fact]
+    public async Task A_relay_that_cannot_be_read_is_never_pressed()
+    {
+        Assert.False(await _exec.PressUntilRelayAsync(_ac, GenFieldClose, GenField, closed: true, "generator 1 field"));
+
+        Assert.Empty(_ac.Writes);
+        Assert.Contains(_logged, line => line.Contains(GenField));
+        Assert.Empty(_spoken);
+    }
+
+    // ---- INS align, per unit --------------------------------------------------------------------------------------
+
+    private static string InsMode(int n) => $"ROTARY_INS_MODE_{n}";
+
+    [Fact]
+    public void The_ins_align_and_ac_ties_composites_are_pseudo_keys()
+    {
+        Assert.Equal("FO_INS_ALIGN", L1011FoActionExecutor.InsAlign);
+        Assert.Equal("FO_AC_TIES", L1011FoActionExecutor.AcTies);
+        Assert.True(L1011FoActionExecutor.IsPseudoKey(L1011FoActionExecutor.InsAlign));
+        Assert.True(L1011FoActionExecutor.IsPseudoKey(L1011FoActionExecutor.AcTies));
+    }
+
+    [Theory]
+    [InlineData(0, 2, 3, new[] { 1 })]          // off: aligned; align and nav left alone
+    [InlineData(4, 1, 2, new[] { 1, 2 })]       // attitude and standby: aligned
+    [InlineData(2, 3, 3, new int[0])]           // every unit at align or nav: nothing written
+    public async Task Ins_align_writes_only_units_at_off_standby_or_attitude(double mode1, double mode2, double mode3, int[] written)
+    {
+        double[] modes = { mode1, mode2, mode3 };
+        for (int n = 1; n <= 3; n++)
+            _ac.Set(InsMode(n), modes[n - 1]);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.InsAlign, 1));
+
+        Assert.Equal(written.Select(n => (InsMode(n), 2.0)), _ac.Writes);
+        for (int n = 1; n <= 3; n++)
+            Assert.Equal(written.Contains(n) ? 2 : modes[n - 1], _ac.Get(InsMode(n)));
+        Assert.Empty(_spoken);
+    }
+
+    [Fact]
+    public async Task Ins_align_never_writes_an_unread_unit_and_still_aligns_the_others()
+    {
+        _ac.Set(InsMode(1), 0);
+        _ac.Set(InsMode(3), 1);   // unit 2 unread
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.InsAlign, 1));
+
+        Assert.Equal(new[] { (InsMode(1), 2.0), (InsMode(3), 2.0) }, _ac.Writes);
+        Assert.Contains(_logged, line => line.Contains(InsMode(2)));
+        Assert.Empty(_spoken);   // not done is the flow's to say
+    }
+
+    [Fact]
+    public async Task Ins_align_with_a_unit_that_does_not_take_its_write_is_not_done()
+    {
+        for (int n = 1; n <= 3; n++)
+            _ac.Set(InsMode(n), 0);
+        _ac.NeverDeliver(InsMode(2));
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.InsAlign, 1));
+
+        Assert.Equal(new[] { 1, 2, 3 }.Select(n => (InsMode(n), 2.0)), _ac.Writes);   // the next unit still written
+    }
+
+    // ---- AC ties ----------------------------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Ac_ties_presses_only_open_ties_and_is_done_when_all_read_closed()
+    {
+        _ac.Set(ExtPowerBreaker, 1);   // a source on line: a press closes its tie
+        _ac.Set(Tie(1), 0);
+        _ac.Set(Tie(2), 1);
+        _ac.Set(Tie(3), 0);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.AcTies, 1));
+
+        Assert.Equal(new[] { (TieClose(1), 1.0), (TieClose(3), 1.0) }, _ac.Writes);
+        foreach (int n in new[] { 1, 2, 3 })
+            Assert.Equal(1, _ac.Get(Tie(n)));
+        Assert.Empty(_spoken);
+
+        // All three closed now: nothing more pressed, still done.
+        Assert.True(await _exec.Set(L1011FoActionExecutor.AcTies, 1));
+        Assert.Equal(2, _ac.Writes.Count);
+    }
+
+    [Fact]
+    public async Task Ac_ties_with_a_tie_that_does_not_close_is_not_done_and_still_presses_the_next()
+    {
+        _ac.Set(ExtPowerBreaker, 1);
+        foreach (int n in new[] { 1, 2, 3 })
+            _ac.Set(Tie(n), 0);
+        _ac.NeverDeliver(Tie(2));
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.AcTies, 1));
+
+        Assert.Equal(new[] { (TieClose(1), 1.0), (TieClose(2), 1.0), (TieClose(3), 1.0) }, _ac.Writes);
+        Assert.Contains(_logged, line => line.Contains(Tie(2)));
+        Assert.Empty(_spoken);   // unlike external power, the composite speaks nothing: the flow says it
+    }
+
+    [Fact]
+    public async Task Ac_ties_never_presses_an_unread_tie()
+    {
+        _ac.Set(ExtPowerBreaker, 1);
+        _ac.Set(Tie(1), 0);
+        _ac.Set(Tie(3), 1);   // tie 2 unread
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.AcTies, 1));
+
+        Assert.Equal(new[] { (TieClose(1), 1.0) }, _ac.Writes);
+        Assert.Contains(_logged, line => line.Contains(Tie(2)));
+        Assert.Empty(_spoken);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    public async Task Ac_ties_to_any_other_target_writes_nothing(int target)
+    {
+        _ac.Set(ExtPowerBreaker, 1);
+        foreach (int n in new[] { 1, 2, 3 })
+            _ac.Set(Tie(n), 0);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.AcTies, target));
+
+        Assert.Empty(_ac.Io);
+    }
 }
