@@ -1952,6 +1952,115 @@ public class L1011FoActionExecutorTests
         Assert.InRange(_ac.NowMs - pressedAt, 7_000, 7_000 + L1011FoActionExecutor.PollMs);   // it waited, unpaused
     }
 
+    // ---- Fix round 1: an APU start already pressed is never pressed again while it spins up ----------------------------
+    // R23 releases the gate before the spin-up wait, and the RPM reads 0 for about 7 s after the press while the inlet
+    // doors open: a call overlapping that window must not press again.
+
+    [Fact]
+    public void Pseudo_and_StopAware_share_no_key()
+    {
+        // The Stop-aware table is looked up first; sharing no key, the order can never pick the wrong composite.
+        var pseudo = L1011FoActionExecutor.PseudoKeys.ToList();
+        var stopAware = L1011FoActionExecutor.StopAwareKeys.ToList();
+
+        Assert.NotEmpty(pseudo);
+        Assert.NotEmpty(stopAware);
+        Assert.Empty(pseudo.Intersect(stopAware, StringComparer.Ordinal));
+        Assert.Contains(L1011FoActionExecutor.ApuStart, stopAware);
+        Assert.Contains(L1011FoActionExecutor.ApuGenerator, pseudo);
+    }
+
+    [Fact]
+    public async Task An_overlapping_apu_start_does_not_press_twice()
+    {
+        SeedApu(rpm: 0);
+        _ac.ApuRpmAfterStart = 0;   // the inlet doors: the RPM reads 0 for 7 s after the press
+        long pressedAt = -1;
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        io.AfterWrite(ApuStartPress, 1, () => pressedAt = _ac.NowMs);
+        _ac.OnClock = ac =>
+        {
+            if (pressedAt >= 0 && ac.NowMs >= pressedAt + 7_000)
+                ac.Set(ApuRpm, 5);
+        };
+        var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _exec.AttachFlowPause(ct => resume.Task.WaitAsync(ct));
+        using var stop = new CancellationTokenSource();
+
+        var start = _exec.ExecuteStepAsync(ApuStartStep, stop.Token);   // pressed, its wait paused
+        Assert.False(start.IsCompleted);
+
+        // A hand tick of "APU: start" meanwhile: the RPM still reads 0, the master on, and it is not pressed again.
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ApuStart, 1).WaitAsync(Hang));
+        Assert.InRange(_ac.NowMs - pressedAt, 7_000, 7_000 + L1011FoActionExecutor.PollMs);   // it waited for the rise
+        Assert.Contains(_logged, line => line.StartsWith(L1011FoActionExecutor.ApuStart, StringComparison.Ordinal)
+            && line.Contains("not pressed again"));
+
+        resume.SetResult();
+        Assert.True(await start.WaitAsync(Hang));
+        Assert.Equal(new[] { (ApuStartPress, 1.0) }, _ac.Writes);   // exactly one press
+    }
+
+    [Fact]
+    public async Task An_overlapping_apu_start_gives_up_when_the_first_press_does()
+    {
+        SeedApu(rpm: 0);
+        _ac.ApuRpmAfterStart = 0;   // the RPM never rises
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _exec.AttachFlowPause(ct => held.Task.WaitAsync(ct));
+        using var stop = new CancellationTokenSource();
+        var start = _exec.ExecuteStepAsync(ApuStartStep, stop.Token);   // pressed at 0, its wait paused
+        long pressedAt = _ac.NowMs;
+
+        await _ac.DelayAsync(5_000);   // five seconds into the spin-up
+        Assert.False(await _exec.Set(L1011FoActionExecutor.ApuStart, 1).WaitAsync(Hang));
+
+        // Its wait ended with the first press's 20 s, not 20 s from the second call.
+        Assert.InRange(_ac.NowMs - pressedAt, L1011FoActionExecutor.ApuSpinUpWaitMs,
+            L1011FoActionExecutor.ApuSpinUpWaitMs + L1011FoActionExecutor.PollMs);
+        Assert.Contains(_logged, line => line.Contains("15000 ms"));
+        Assert.Single(_ac.Writes);
+
+        stop.Cancel();
+        Assert.False(await start.WaitAsync(Hang));
+        Assert.Single(_ac.Writes);
+    }
+
+    [Theory]
+    [InlineData("after the spin-up window")]   // 20 s with no rise: a retry
+    [InlineData("on a new transport")]         // the window reopened: the press recorded on the old one does not count
+    public async Task An_apu_start_after_the_spin_up_window_may_press_again(string when)
+    {
+        SeedApu(rpm: 0);
+        _ac.ApuRpmAfterStart = 0;
+        using var stop = new CancellationTokenSource();
+        Task<bool>? first = null;
+        if (when == "after the spin-up window")
+        {
+            Assert.False(await _exec.Set(L1011FoActionExecutor.ApuStart, 1));   // 20 s, the RPM never rose
+        }
+        else
+        {
+            var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _exec.AttachFlowPause(ct => held.Task.WaitAsync(ct));
+            first = _exec.ExecuteStepAsync(ApuStartStep, stop.Token);   // pressed at 0, its wait paused
+            Assert.False(first.IsCompleted);
+            _exec.SetTransport(new ScriptedTransport(_ac));             // a new transport, the same aircraft
+        }
+        Assert.Single(_ac.Writes);
+
+        _ac.ApuRpmAfterStart = 100;   // this time it turns
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ApuStart, 1).WaitAsync(Hang));
+
+        Assert.Equal(new[] { (ApuStartPress, 1.0), (ApuStartPress, 1.0) }, _ac.Writes);
+        if (first is not null)
+        {
+            stop.Cancel();
+            await first.WaitAsync(Hang);
+        }
+    }
+
     // ---- The APU generator --------------------------------------------------------------------------------------------
 
     private void SeedApuGenerator(double rpm, double field, double breaker)

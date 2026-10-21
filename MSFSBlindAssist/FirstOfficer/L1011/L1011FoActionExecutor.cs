@@ -260,11 +260,20 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     /// definition's <c>FoAcceptsKey</c> is true.</summary>
     public static bool IsPseudoKey(string key) => Pseudo.ContainsKey(key) || StopAware.ContainsKey(key);
 
+    /// <summary>Tests only: the two tables' keys, which never overlap (<see cref="StopAware"/> is looked up first).</summary>
+    internal static IEnumerable<string> PseudoKeys => Pseudo.Keys;
+
+    internal static IEnumerable<string> StopAwareKeys => StopAware.Keys;
+
     private readonly SemaphoreSlim _gate = new(1, 1);
     private IL1011FoTransport? _io;
     private Action<string>? _say;
     private Func<bool> _speaksFlowProgress = () => true;
     private Func<CancellationToken, Task> _waitWhilePaused = _ => Task.CompletedTask;
+
+    /// <summary>The last APU start press still spinning up: the transport it went out on and that transport's
+    /// clock when it was sent. Read and written only under the gate (<see cref="ApuStartAsync"/>'s phase).</summary>
+    private (IL1011FoTransport Io, long AtMs)? _apuStartPressed;
 
     public void SetTransport(IL1011FoTransport? io) => _io = io;
 
@@ -1018,18 +1027,24 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     /// One write phase under the gate (<see cref="UnderGateAsync"/>, never begun after the flow's Stop): the
     /// RPM read fresh, unread, not done and nothing pressed; at or above
     /// <see cref="L1011FoStateEvaluator.ApuStartingRpm"/>, done with no press (starting or running: never a
-    /// second press). Then the master read fresh: not reading on, not done and logged (the flow sets the
-    /// master in its own step first). The Stop checked once more, then one press of the start button, the
-    /// panel row's press (<c>L:SWITCH_APU_START</c> 1 with <c>H:APU</c>, held 2 s, [L1011-22]). Then, the
-    /// gate released, done once the RPM reads at or above <see cref="L1011FoStateEvaluator.ApuStartingRpm"/>
-    /// within <see cref="ApuSpinUpWaitMs"/> (<see cref="WaitUntilAsync"/>, read-only: a flow's Pause holds it,
-    /// its Stop ends it). The wait to running is the flow's own step, as the MD-11's <c>BS_APU_RUNNING</c>.
-    /// Never presses twice; speaks nothing.
+    /// second press). Below it within <see cref="ApuSpinUpWaitMs"/> of a press this executor sent on the same
+    /// transport (<see cref="_apuStartPressed"/>), not pressed again (logged): the RPM reads 0 for about 7 s
+    /// while the inlet doors open, and a call overlapping that window (a hand tick while the flow's step waits,
+    /// a tick, untick and re-tick) waits for that press instead, ending when its 20 s end. Past them, or on
+    /// another transport (the window reopened), a new press is a retry. Then the master read fresh: not
+    /// reading on, not done and logged (the flow sets the master in its own step first). The Stop checked once
+    /// more, then one press of the start button, the panel row's press (<c>L:SWITCH_APU_START</c> 1 with
+    /// <c>H:APU</c>, held 2 s, [L1011-22]), recorded on the transport's clock. Then, the gate released, done
+    /// once the RPM reads at or above <see cref="L1011FoStateEvaluator.ApuStartingRpm"/> within
+    /// <see cref="ApuSpinUpWaitMs"/> of the press (<see cref="WaitUntilAsync"/>, read-only: a flow's Pause
+    /// holds it, its Stop ends it). The wait to running is the flow's own step, as the MD-11's
+    /// <c>BS_APU_RUNNING</c>. Never presses twice within a spin-up; speaks nothing.
     /// </summary>
     private async Task<bool> ApuStartAsync(CancellationToken stop)
     {
         const string what = ApuStart;
         IL1011FoTransport? pressedOn = null;
+        int waitMs = ApuSpinUpWaitMs;
         bool alreadyTurning = false;
         bool pressed = await UnderGateAsync(what, stop, async io =>
         {
@@ -1041,7 +1056,17 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
             }
             if (r >= L1011FoStateEvaluator.ApuStartingRpm)
             {
+                _apuStartPressed = null;   // turning: that press did its work
                 alreadyTurning = true;
+                return true;
+            }
+            if (_apuStartPressed is { } earlier && ReferenceEquals(earlier.Io, io)
+                && io.NowMs - earlier.AtMs < ApuSpinUpWaitMs)
+            {
+                long agoMs = io.NowMs - earlier.AtMs;
+                Note($"{what}: {ApuStartPress} pressed {agoMs.ToString(CultureInfo.InvariantCulture)} ms ago and the APU is still spinning up: not pressed again");
+                pressedOn = io;
+                waitMs = (int)(ApuSpinUpWaitMs - agoMs);   // ends with that press's wait
                 return true;
             }
             var master = await ReadAsync(io, ApuMaster).ConfigureAwait(false);
@@ -1054,6 +1079,7 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
                 return Stopped(what);
             if (!await WriteAsync(io, ApuStartPress, 1).ConfigureAwait(false))
                 return false;
+            _apuStartPressed = (io, io.NowMs);
             pressedOn = io;
             return true;
         }).ConfigureAwait(false);
@@ -1064,7 +1090,7 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
         var waitOn = pressedOn!;
         return await WaitUntilAsync(waitOn,
             async () => await ReadAsync(waitOn, ApuRpm).ConfigureAwait(false) is double v && v >= L1011FoStateEvaluator.ApuStartingRpm,
-            ApuSpinUpWaitMs, stop, $"{what}, {ApuRpm} rising").ConfigureAwait(false);
+            waitMs, stop, $"{what}, {ApuRpm} rising").ConfigureAwait(false);
     }
 
     /// <summary>
