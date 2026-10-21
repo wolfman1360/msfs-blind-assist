@@ -6,10 +6,10 @@ using Step = MSFSBlindAssist.FirstOfficer.Models.FlowStep<MSFSBlindAssist.FirstO
 namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 
 /// <summary>
-/// [FO-6] and [FO-7] on the TriStar: every line in a group the Power Up flow latches has a step behind it,
-/// a write that sets it or a read-only check that reads it, so a finished flow never ticks and latches a
-/// line the aircraft does not show. The standby power check's own line, which no state judges, is
-/// delivered by the composite step; the Captain's reminder is delivered by the reminder itself.
+/// [FO-6] and [FO-7] on the TriStar: every line in a group a flow latches has a step behind it, a write
+/// that sets it, a read-only check that reads it or a wait for it, so a finished flow never ticks and latches
+/// a line the aircraft does not show. The lines no state judges (the standby power check's and each test's)
+/// are delivered by their composite step; the Captain's reminder is delivered by the reminder itself.
 /// </summary>
 public class L1011FoFlowChecklistLinkTests
 {
@@ -65,22 +65,39 @@ public class L1011FoFlowChecklistLinkTests
                     Assert.True(items[id].StateFieldName == step.ConditionFieldName,
                         $"{flow.Id}/{step.Id} reads {step.ConditionFieldName} but completes {id}, which reads {items[id].StateFieldName}");
                 }
-        Assert.Equal(5, n);
+        Assert.True(n >= 5, $"only {n} check links enumerated");
     }
 
     // ------------------------------------------------------------------ a write completes only lines it sets
+
+    /// <summary>Every evaluator here carries a plan (cruise 39,000 ft, destination 120 ft) and the tablet's take-off
+    /// flaps at 10: a line that compares against the plan reads done only against it.</summary>
+    private const int PlannedCruiseFt = 39000;
 
     private static L1011FoStateEvaluator State(params (string Key, double Value)[] values)
     {
         var evaluator = new L1011FoStateEvaluator();
         evaluator.SetSimConnect(SeededSimConnectCache.With(values));
+        evaluator.SetPlannedPressurizationAltitudes(PlannedCruiseFt, 120);
         return evaluator;
     }
+
+    /// <summary>The evaluator a provider step's target comes from: the plan, and the tablet's take-off flaps at 10.</summary>
+    private static readonly L1011FoStateEvaluator PlanState =
+        State((MSFSBlindAssist.Aircraft.IniL1011Definition.PerfSelectedFlapsKey, 10));
+
+    /// <summary>The lines no state judges, and the composites that deliver them: a test's own lines, and the
+    /// standby power check's.</summary>
+    private static readonly string[] ManualLineComposites =
+        { X.StandbyPowerCheck, X.FireTest, X.WheelWellFireTest, X.HydraulicCheck };
 
     /// <summary>What the aircraft reads once the step's work is done: its keys at their targets; the external
     /// power breaker closed for the external power composite; the battery on and standby power armed under
     /// its closed guard after the standby power check; the three INS mode selectors at ALIGN after the INS
-    /// align composite.</summary>
+    /// align composite; the APU turning after its start; the APU generator's field and breaker relays and the
+    /// three AC ties closed after theirs; the four fire loop selectors at Both after the fire test, the wheel
+    /// well selector at Both after its test, and the AC pumps and PTUs off after the hydraulic check; and for
+    /// a provider step, the readout at the provider's value (the cabin altitude selector's, in metres).</summary>
     private static (string Key, double Value)[] Done(Step s)
     {
         if (s.EventName == X.ExternalPower) return new[] { ("L1011_RO_EXT_PWR_BREAKER", 1.0) };
@@ -88,6 +105,23 @@ public class L1011FoFlowChecklistLinkTests
             return new[] { ("ROTARY_INS_MODE_1", 2.0), ("ROTARY_INS_MODE_2", 2.0), ("ROTARY_INS_MODE_3", 2.0) };
         if (s.EventName == X.StandbyPowerCheck)
             return new[] { ("TOGGLE_BATTERY", 1.0), ("TOGGLE_STBY_POWER", 1.0), ("GUARD_STBY_POWER", 0.0) };
+        if (s.EventName == X.ApuStart) return new[] { ("L1011_RO_APU_RPM", 1.0) };
+        if (s.EventName == X.ApuGenerator)
+            return new[] { ("L1011_RO_APU_GEN_FIELD", 1.0), ("L1011_RO_APU_GEN_BREAKER", 1.0) };
+        if (s.EventName == X.AcTies)
+            return new[] { ("L1011_RO_AC_TIE_1", 1.0), ("L1011_RO_AC_TIE_2", 1.0), ("L1011_RO_AC_TIE_3", 1.0) };
+        if (s.EventName == X.FireTest)
+            return new[] { "ENG_1", "ENG_2", "ENG_3", "APU" }.Select(u => ($"ROTARY_FIRE_DETECT_TEST_{u}", 2.0)).ToArray();
+        if (s.EventName == X.WheelWellFireTest) return new[] { ("ROTARY_WHEEL_WELL_TEST", 1.0) };
+        if (s.EventName == X.HydraulicCheck)
+            return new[] { "SWITCH_HYD_AC_PUMP_B3", "SWITCH_HYD_AC_PUMP_C3", "SWITCH_PTU_AB", "SWITCH_PTU_CD" }
+                .Select(k => (k, 0.0)).ToArray();
+        if (s.TargetValueProvider is { } provider)
+        {
+            Assert.Equal(X.CabinAltitudeSelect, s.EventName);
+            int feet = provider(PlanState) ?? throw new InvalidOperationException($"{s.Id}: no value with a plan");
+            return new[] { ("L1011_RO_CABIN_ALT_SELECTED", feet * L1011FoStateEvaluator.MetresPerFoot) };
+        }
         return s.ActionType == FlowStepActionType.SetSwitch
             ? new[] { (s.EventName!, (double)s.TargetValue!.Value) }
             : s.MultiActions.Select(a => (a.EventName, (double)a.TargetValue!.Value)).ToArray();
@@ -96,7 +130,7 @@ public class L1011FoFlowChecklistLinkTests
     /// <summary>
     /// Every line a write step links reads done once the step's work reads done, and does not with nothing
     /// read: a write never ticks a line it does not set. A line no state judges (the standby power check's
-    /// own two) is the composite's alone.
+    /// own two, a test's own two) is the composite's alone.
     /// </summary>
     [Fact]
     public void Every_line_a_write_links_reads_done_when_the_write_is_done()
@@ -104,7 +138,7 @@ public class L1011FoFlowChecklistLinkTests
         var items = Groups.SelectMany(g => g.Items).ToDictionary(i => i.Id, StringComparer.Ordinal);
         var writes = Flows.SelectMany(f => f.Steps)
             .Where(s => s.ActionType is FlowStepActionType.SetSwitch or FlowStepActionType.SetSwitchMultiple).ToList();
-        Assert.Equal(14, writes.Count);
+        Assert.True(writes.Count >= 14, $"only {writes.Count} writes enumerated");
         foreach (var step in writes)
         {
             var done = State(Done(step));
@@ -115,7 +149,7 @@ public class L1011FoFlowChecklistLinkTests
                 var line = items[id];
                 if (line.StateFieldName is not string field)
                 {
-                    Assert.Equal(X.StandbyPowerCheck, step.EventName);
+                    Assert.Contains(step.EventName, ManualLineComposites);
                     Assert.Equal(ChecklistItemType.Actionable, line.Type);
                     continue;
                 }

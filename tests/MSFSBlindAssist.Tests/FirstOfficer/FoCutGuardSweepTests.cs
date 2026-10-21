@@ -44,7 +44,7 @@ public class FoCutGuardSweepTests
         + @"fuel control( switches)?: cutoff|fuel switches: off|fuel (and|&) ignition switches: off)", RegexOptions.IgnoreCase);
 
     private static readonly Regex PumpIrsBattery = new(
-        @"(fuel pumps?( switches)?: (all )?off|hydraulic.*pumps?( \w+)?: off|demand pump selectors: off|\b(electric|engine|demand) pumps: off|"
+        @"(fuel pumps?( switches)?: (all )?off|hydraulic.*pumps?( \w+)?: off|hydraulic pumps and ptus: off|demand pump selectors: off|\b(electric|engine|demand) pumps: off|"
         + @"primary pump switches: off|\birs\b.*: off|\badirs\b.*: off|\badiru\b.*: off|\bbatter(y|ies)\b.*: off)",
         RegexOptions.IgnoreCase);
 
@@ -326,6 +326,8 @@ public class FoCutGuardSweepTests
         AssertOpensWithGroundAndEnginesGuards(A380().Flows, "COCKPIT_PREP", "A380");
         AssertOpensWithGroundAndEnginesGuards(Md11().Flows, "POWER_UP", "MD-11");
         AssertOpensWithGroundAndEnginesGuards(L1011().Flows, "POWER_UP", "L-1011");
+        // The TriStar's Preflight switches the packs, the AC hydraulic pumps and the PTUs off.
+        AssertOpensWithGroundAndEnginesGuards(L1011().Flows, "PREFLIGHT", "L-1011");
         // The 737 Preflights switch the fuel pumps off: cold and dark only, like the 777's
         // Cockpit Preparation and Electrical Power Up (hydraulic pumps, fuel controls).
         AssertOpensWithGroundAndEnginesGuards(MSFSBlindAssist.FirstOfficer.PMDG737.PMDG737FlowDefinitions.Build(), "PREFLIGHT", "PMDG 737");
@@ -377,6 +379,8 @@ public class FoCutGuardSweepTests
     [InlineData("Engine 1 master: ON", "")]
     [InlineData("Engine hydraulic pumps: ON", "")]
     [InlineData("Electric hydraulic pumps: OFF", "Pumps")]
+    [InlineData("AC hydraulic pumps and PTUs: off", "Pumps")]
+    [InlineData("Engine hydraulic pumps: on and guarded", "")]
     [InlineData("Engine primary pump switches: OFF", "Pumps")]
     [InlineData("Electric pumps: OFF", "Pumps")]
     [InlineData("Demand pumps: OFF", "Pumps")]

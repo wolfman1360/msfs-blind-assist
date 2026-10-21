@@ -39,7 +39,11 @@ public class L1011FoChecklistStructureTests
 
     [Fact]
     public void GroupIds_InFlightOrder()
-        => Assert.Equal(new[] { "POWER_UP", "POWER_UP_CL" }, Groups.Select(g => g.Id));
+        => Assert.Equal(new[]
+        {
+            "POWER_UP", "POWER_UP_CL",
+            "PREFLIGHT", "PREFLIGHT_FE_CL", "PREFLIGHT_OVHD_CL", "PREFLIGHT_MAIN_CL", "PREFLIGHT_CONSOLE_CL",
+        }, Groups.Select(g => g.Id));
 
     [Fact]
     public void Groups_AreNamed()
@@ -361,7 +365,8 @@ public class L1011FoChecklistStructureTests
     [Fact]
     public void OnlyThePumpAndStandbyCheckLines_AreLeftAlone()
     {
-        var guarded = Groups.SelectMany(g => g.Items).Where(i => i.LeaveAloneWhen != null).Select(i => i.Id).ToArray();
+        // Power Up's own lines: Preflight's are pinned in L1011FoPreflightTests.
+        var guarded = Group("POWER_UP").Items.Where(i => i.LeaveAloneWhen != null).Select(i => i.Id).ToArray();
         Assert.Equal(new[] { "PU_ATMS", "PU_AC_PUMPS", "PU_FUEL_PUMPS", "PU_STBY_CHECK" }, guarded);
     }
 
@@ -503,8 +508,10 @@ public class L1011FoChecklistStructureTests
         return ac;
     }
 
+    /// <summary>Power Up's action lines: the cold aircraft above is Power Up's. Preflight's lines are pinned the
+    /// same way in L1011FoPreflightTests, each over an aircraft set up for its own step.</summary>
     public static IEnumerable<object[]> ActionLinesWithACheckAction()
-        => L1011FoChecklistDefinitions.Build().SelectMany(g => g.Items).Where(i => i.CheckAction != null)
+        => L1011FoChecklistDefinitions.Build().Single(g => g.Id == "POWER_UP").Items.Where(i => i.CheckAction != null)
             .Select(i => new object[] { i.Id });
 
     /// <summary>

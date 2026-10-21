@@ -14,10 +14,11 @@ public static class FoDepartureGroups
     public static readonly IReadOnlySet<string> Departure = new HashSet<string>(StringComparer.Ordinal)
     {
         "ELEC_POWER_UP", "POWER_UP", "POWER_UP_CL", "COCKPIT_PREP", "COCKPIT_PREP_CL", "COCKPIT_ENTRY_CL",
-        "PREFLIGHT", "PREFLIGHT_CL", "BEFORE_START", "BEFORE_START_CL", "ENGINE_START", "ENGINE_START_CL",
+        "PREFLIGHT", "PREFLIGHT_CL", "PREFLIGHT_FE_CL", "PREFLIGHT_OVHD_CL", "PREFLIGHT_MAIN_CL", "PREFLIGHT_CONSOLE_CL",
+        "BEFORE_START", "BEFORE_START_CL", "ENGINE_START", "ENGINE_START_CL",
         "AFTER_START", "AFTER_START_CL", "BEFORE_TAXI", "BEFORE_TAXI_CL", "TAXI", "TAXI_CL",
         "BEFORE_TAKEOFF", "BEFORE_TAKEOFF_CL", "BEFORE_TKOF_CL", "LINEUP", "LINEUP_CL",
-        "AFTER_TAKEOFF", "AFTER_TAKEOFF_CL", "AFTER_TKOF_CL",
+        "AFTER_TAKEOFF", "AFTER_TAKEOFF_CL", "AFTER_TKOF_CL", "CLIMB_CL",
     };
 
     public static readonly IReadOnlySet<string> Arrival = new HashSet<string>(StringComparer.Ordinal)

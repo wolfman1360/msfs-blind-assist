@@ -79,12 +79,14 @@ public class L1011FoProfileTests
         Assert.Equal(1, state.GetValue("SIM_ON_GROUND"));
     }
 
+    /// <summary>The profile builds what the definitions build: the flows so far and their checklists.</summary>
     [Fact]
-    public void Builds_the_Power_Up_flow_and_its_two_checklists()
+    public void Builds_the_flows_and_their_checklists()
     {
         var p = Profile();
-        Assert.Equal(new[] { "POWER_UP" }, p.BuildFlows().Select(f => f.Id));
-        Assert.Equal(new[] { "POWER_UP", "POWER_UP_CL" }, p.BuildChecklists().Select(g => g.Id));
+        Assert.Equal(L1011FoFlowDefinitions.Build().Select(f => f.Id), p.BuildFlows().Select(f => f.Id));
+        Assert.Equal(L1011FoChecklistDefinitions.Build().Select(g => g.Id), p.BuildChecklists().Select(g => g.Id));
+        Assert.Equal(new[] { "POWER_UP", "PREFLIGHT" }, p.BuildFlows().Select(f => f.Id));
     }
 
     [Theory]
