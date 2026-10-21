@@ -491,30 +491,44 @@ public class FakeL1011AircraftTests
         return ac;
     }
 
-    [Theory]
-    [InlineData(FireTestA)]
-    [InlineData(FireTestB)]
-    public async Task Either_fire_test_on_every_loop_on_both_lights_the_five_fire_lights_and_off_puts_them_out(string test)
+    [Fact]
+    public async Task Both_fire_tests_on_every_loop_on_both_light_the_five_fire_lights_and_off_puts_them_out()
     {
         var ac = FireLoopsAt(2);
         Assert.All(FireLamps, lamp => Assert.Equal(0, ac.Get(lamp)));
 
-        Assert.Equal(L1011FoResult.Sent, await ac.SetAsync(test, 1));
+        Assert.Equal(L1011FoResult.Sent, await ac.SetAsync(FireTestA, 1));
+        Assert.Equal(L1011FoResult.Sent, await ac.SetAsync(FireTestB, 1));
         Assert.All(FireLamps, lamp => Assert.Equal(1, ac.Get(lamp)));
 
-        Assert.Equal(L1011FoResult.Sent, await ac.SetAsync(test, 0));
+        Assert.Equal(L1011FoResult.Sent, await ac.SetAsync(FireTestA, 0));
+        Assert.All(FireLamps, lamp => Assert.Equal(0, ac.Get(lamp)));
+    }
+
+    /// <summary>Live, on APU and external power with the engines off, test A alone lit nothing. B alone lit all five
+    /// there, but the fake lights them only with both on, so an executor that turns on one switch fails.</summary>
+    [Theory]
+    [InlineData(FireTestA)]
+    [InlineData(FireTestB)]
+    public async Task One_fire_test_alone_lights_nothing(string test)
+    {
+        var ac = FireLoopsAt(2);
+
+        Assert.Equal(L1011FoResult.Sent, await ac.SetAsync(test, 1));
+
         Assert.All(FireLamps, lamp => Assert.Equal(0, ac.Get(lamp)));
     }
 
     [Theory]
     [InlineData(0)]
     [InlineData(1)]   // the single-loop positions do not match their labels live: the test runs on Both only
-    public async Task A_fire_test_with_a_loop_selector_off_both_lights_nothing(double position)
+    public async Task Both_fire_tests_with_a_loop_selector_off_both_light_nothing(double position)
     {
         var ac = FireLoopsAt(2);
         ac.Set(FireLoopSelectors[3], position);
 
         await ac.SetAsync(FireTestA, 1);
+        await ac.SetAsync(FireTestB, 1);
 
         Assert.All(FireLamps, lamp => Assert.Equal(0, ac.Get(lamp)));
     }
@@ -561,6 +575,7 @@ public class FakeL1011AircraftTests
         ac.NeverDeliver(FireLamps[1]);   // stuck out
 
         await ac.SetAsync(FireTestA, 1);
+        await ac.SetAsync(FireTestB, 1);
 
         Assert.Equal(0, ac.Get(FireLamps[1]));
         Assert.Equal(1, ac.Get(FireLamps[0]));

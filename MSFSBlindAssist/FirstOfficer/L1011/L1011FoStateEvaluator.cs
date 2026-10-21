@@ -513,7 +513,6 @@ public sealed class L1011FoStateEvaluator : LVarStateEvaluator, IFoEngine3N2Sink
         ["FO_LANDING_LIGHTS_OFF"] = AllAt(0, LandingLightKeys),
         ["FO_GROUND_LIGHTS_ON"] = AllAt(1, GroundLightKeys),
         ["FO_GROUND_LIGHTS_OFF"] = AllAt(0, GroundLightKeys),
-        ["FO_DRAIN_MAST_HEAT_ON"] = AllAt(1, "SWITCH_WASTE_WATER_MID", "SWITCH_WASTE_WATER_AFT"),
         ["FO_MOVIE_OFF"] = AllAt(0, "MOVIES_OFF", "GUARD_MOVIES_OFF"),
 
         // ---- main panel and console ----

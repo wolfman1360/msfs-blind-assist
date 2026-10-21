@@ -210,6 +210,9 @@ public static class L1011FoChecklistDefinitions
     /// labels: a single switch reads its key at the target (the ignition selector, A or B, as its step's
     /// "Already set" does), a multi-switch line its synthetic, a composite the state it delivers. The three
     /// tests have no state and run every tick; the cabin altitude writes the plan's value, or nothing without one.
+    /// The packs off, the hot air off and the APU's minimum compressor mode read no state either: the flow undoes
+    /// each later (packs on, hot air on, compressor mode normal), so a state line would untick itself after a good
+    /// run. Each is ticked when its step completes, and a hand tick does its step's write.
     /// </summary>
     private static Group Preflight()
     {
@@ -220,7 +223,7 @@ public static class L1011FoChecklistDefinitions
             Items = new()
             {
                 Auto("PF_APU_MASTER", G, "APU master: on", ApuMaster, v => Is(v, 1), Set(ApuMaster, 1)),
-                Auto("PF_APU_MODE_MIN", G, "APU compressor mode: minimum", ApuMode, v => Is(v, 0), Set(ApuMode, 0)),
+                ActionManual("PF_APU_MODE_MIN", G, "APU compressor mode: minimum", Set(ApuMode, 0)),
                 Auto("PF_APU_FUEL", G, "APU fuel: tank 2 left pump and engine 2 tank valve on", "FO_ENG2_FUEL_FEED", On,
                     SetAll(("SWITCH_FUEL_PUMP_2L_1", 1), ("SWITCH_ENG_2_TANK_VALVE", 1), ("GUARD_ENG_2_TANK_VALVE", 0))),
                 // The composite holds until the APU turns, a slow condition (FO-11): the 10 s grace would not cover it.
@@ -230,11 +233,11 @@ public static class L1011FoChecklistDefinitions
                 Auto("PF_APU_AIR", G, "Fuselage isolation and crossbleed valves: on", "FO_APU_AIR_ON", On,
                     SetAll(All(1, FuselageIsolation, "SWITCH_XBLEED_1", "SWITCH_XBLEED_3"))),
                 // Off in the air depressurizes the cabin: on the ground only (FO-25).
-                LeaveAlone(Auto("PF_PACKS_OFF", G, "Packs: off", "FO_PACKS_OFF", On, SetAll(All(0, PackKeys))),
+                LeaveAlone(ActionManual("PF_PACKS_OFF", G, "Packs: off", SetAll(All(0, PackKeys))),
                     NotOnGround, PacksStayText),
                 Auto("PF_PACKS_AUTO", G, "Pack control: auto", "FO_PACKS_AUTO", On,
                     SetAll(All(1, "SWITCH_BLEED_PLENUM_ENG_1", "SWITCH_BLEED_PLENUM_ENG_2", "SWITCH_BLEED_PLENUM_ENG_3"))),
-                Auto("PF_HOT_AIR_OFF", G, "Hot air and hot air isolation valves: off", "FO_HOT_AIR_OFF", On, SetAll(All(0, HotAirKeys))),
+                ActionManual("PF_HOT_AIR_OFF", G, "Hot air and hot air isolation valves: off", SetAll(All(0, HotAirKeys))),
                 Auto("PF_ZONE_TRIMS", G, "Zone trim switches: on", "FO_ZONE_TRIMS_ON", On,
                     SetAll(All(1, "SWITCH_FLT_STA_CLOSE", "SWITCH_FWD_CAB_CLOSE", "SWITCH_MID_CAB_CLOSE", "SWITCH_AFT_CAB_CLOSE"))),
                 Auto("PF_APU_BLEED", G, "APU bleed: on", ApuBleed, v => Is(v, 1), Set(ApuBleed, 1)),
@@ -268,8 +271,6 @@ public static class L1011FoChecklistDefinitions
                         .Concat(All(0, "GUARD_ENG_1_TANK_VALVE", "GUARD_ENG_2_TANK_VALVE", "GUARD_ENG_3_TANK_VALVE")).ToArray())),
                 Auto("PF_FUEL_CTRL", G, "Fuel control amplifier switches: off", "FO_FUEL_CTRL_OVRD_OFF", On,
                     SetAll(All(0, "SWITCH_FUEL_CTRL_OVRD_ENG_1", "SWITCH_FUEL_CTRL_OVRD_ENG_2", "SWITCH_FUEL_CTRL_OVRD_ENG_3"))),
-                Auto("PF_DRAIN_MAST", G, "Drain mast heaters: on", "FO_DRAIN_MAST_HEAT_ON", On,
-                    SetAll(All(1, "SWITCH_WASTE_WATER_MID", "SWITCH_WASTE_WATER_AFT"))),
                 Auto("PF_MOVIE", G, "Movie interrupt: off and guarded", "FO_MOVIE_OFF", On, SetAll(All(0, "MOVIES_OFF", "GUARD_MOVIES_OFF"))),
                 Auto("PF_SLAT_MONITOR", G, "Slat monitor: off", SlatMonitor, v => Is(v, 0), Set(SlatMonitor, 0)),
                 Auto("PF_HI_PRESS", G, "High pressure bleed valves: on", "FO_HI_PRESS_ON", On,
@@ -297,7 +298,7 @@ public static class L1011FoChecklistDefinitions
                 Auto("PF_MACH_FEEL", G, "Mach feel and rudder limiter: on", "FO_MACH_FEEL_RUDDER_ON", On,
                     SetAll(All(1, "SWITCH_MACH_FEEL_1", "SWITCH_MACH_FEEL_2", "SWITCH_RUDDER_LIMITER"))),
                 // A or B is done, as its step's "Already set": a tick turns the selector only off both systems.
-                Auto("PF_IGNITION", G, "Ignition selector: system A", "FO_IGNITION_SELECTED", On, Set("ROTARY_ENG_START_SEL", 0)),
+                Auto("PF_IGNITION", G, "Ignition selector: A or B", "FO_IGNITION_SELECTED", On, Set("ROTARY_ENG_START_SEL", 0)),
                 Auto("PF_STBY_LIGHTS", G, "Instrument standby lights: bright", StandbyLights, v => Is(v, 1), Set(StandbyLights, 1)),
                 Auto("PF_PFCS", G, "Primary flight control switches: on", "FO_PFCS_ON", On, SetAll(All(1, PfcsKeys))),
                 Auto("PF_FCES", G, "Flight control electronics switches: on", "FO_FCES_ON", On, SetAll(All(1, FcesKeys))),
@@ -339,7 +340,8 @@ public static class L1011FoChecklistDefinitions
     /// <summary>
     /// The flight engineer station preparation, opening with the cockpit safety inspection's APU start, air
     /// conditioning and fire test lines: Preflight delivers them, and Power Up's read-back holds only lines Power
-    /// Up delivers (FO-7). The tests' own lines are judged by no state; their composites deliver them.
+    /// Up delivers (FO-7). The tests' own lines are judged by no state; their composites deliver them. The page's
+    /// drain mast heater line is left out: the aircraft puts both switches back to off within seconds, by hand too.
     /// </summary>
     private static Group PreflightEngineerCL()
     {
@@ -379,7 +381,6 @@ public static class L1011FoChecklistDefinitions
                 Read("PFC_JETTISON", G, "Master and tank jettison switches: unlatched", "FO_JETTISON_SAFE", On),
                 Read("PFC_FUEL_CTRL", G, "Fuel control amplifier switches: unlatched", "FO_FUEL_CTRL_OVRD_OFF", On),
                 Read("PFC_MOVIE", G, "Movie interrupt switch: unlatched", "FO_MOVIE_OFF", On),
-                Read("PFC_DRAIN_MAST", G, "Drainmast heater switches: latched in", "FO_DRAIN_MAST_HEAT_ON", On),
                 Read("PFC_SLAT_MONITOR", G, "Slat monitor switch: unlatch", SlatMonitor, v => Is(v, 0)),
                 Read("PFC_HI_PRESS", G, "Hi pressure bleed switches: latched", "FO_HI_PRESS_ON", On),
                 Read("PFC_ISLN_VALVES", G, "Engine isolation valve switches: latched", "FO_ISLN_VALVES_ON", On),

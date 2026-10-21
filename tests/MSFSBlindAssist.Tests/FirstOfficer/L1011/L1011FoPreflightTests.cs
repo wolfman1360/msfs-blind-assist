@@ -87,7 +87,7 @@ public class L1011FoPreflightTests
         "PF_APU_AIR", "PF_PACKS_OFF", "PF_PACKS_AUTO", "PF_HOT_AIR_OFF", "PF_ZONE_TRIMS", "PF_APU_BLEED", "PF_PACKS_ON",
         "PF_APU_MODE_NORM", "PF_HOT_AIR_ON", "PF_FIRE_TEST", "PF_WHEEL_WELL_TEST", "PF_HYD_ENGINE_PUMPS", "PF_CHK_ATMS",
         "PF_AC_PUMPS_PTUS_OFF", "PF_HYD_CHECK", "PF_AC_METER", "PF_DC_METER", "PF_CHK_AC_ESS", "PF_TRANSFERS_OFF",
-        "PF_CROSSFEEDS", "PF_TANK_VALVES", "PF_CHK_APU_PUMP", "PF_CHK_JETTISON", "PF_FUEL_CTRL", "PF_DRAIN_MAST",
+        "PF_CROSSFEEDS", "PF_TANK_VALVES", "PF_CHK_APU_PUMP", "PF_CHK_JETTISON", "PF_FUEL_CTRL",
         "PF_MOVIE", "PF_SLAT_MONITOR", "PF_HI_PRESS", "PF_ISLN_VALVES", "PF_ECS", "PF_PRESS_MODE", "PF_CABIN_ALT",
         "PF_CABIN_ALT_CPT", "PF_COMPASSES", "PF_WIPERS", "PF_ANTI_ICE", "PF_WINDSHIELD", "PF_SIDE_WINDOWS", "PF_AIR_DATA",
         "PF_MACH_FEEL", "PF_IGNITION", "PF_STBY_LIGHTS", "PF_PFCS", "PF_FCES", "PF_BRAKE_SEL", "PF_ANTISKID_OFF",
@@ -178,7 +178,6 @@ public class L1011FoPreflightTests
                 .Concat(All(0, "GUARD_ENG_1_TANK_VALVE", "GUARD_ENG_2_TANK_VALVE", "GUARD_ENG_3_TANK_VALVE")).ToArray()),
         ("PF_FUEL_CTRL", "Fuel control amplifier switches: off",
             All(0, "SWITCH_FUEL_CTRL_OVRD_ENG_1", "SWITCH_FUEL_CTRL_OVRD_ENG_2", "SWITCH_FUEL_CTRL_OVRD_ENG_3")),
-        ("PF_DRAIN_MAST", "Drain mast heaters: on", All(1, "SWITCH_WASTE_WATER_MID", "SWITCH_WASTE_WATER_AFT")),
         ("PF_MOVIE", "Movie interrupt: off and guarded", All(0, "MOVIES_OFF", "GUARD_MOVIES_OFF")),
         ("PF_SLAT_MONITOR", "Slat monitor: off", All(0, "SWITCH_SLAT_MONITOR")),
         ("PF_HI_PRESS", "High pressure bleed valves: on", All(1, "SWITCH_HI_PRESS_ENG_1", "SWITCH_HI_PRESS_ENG_2", "SWITCH_HI_PRESS_ENG_3")),
@@ -198,7 +197,7 @@ public class L1011FoPreflightTests
             All(1, "SWITCH_ANTI_ICE_L_FWD", "SWITCH_ANTI_ICE_L_REAR", "SWITCH_ANTI_ICE_R_FWD", "SWITCH_ANTI_ICE_R_REAR")),
         ("PF_AIR_DATA", "Air data heat: off", All(0, "SWITCH_CPT_PITOT_HEAT", "SWITCH_FO_PITOT_HEAT", "SWITCH_PROBE_HEAT", "SWITCH_ALPHA_HEAT")),
         ("PF_MACH_FEEL", "Mach feel and rudder limiter: on", All(1, "SWITCH_MACH_FEEL_1", "SWITCH_MACH_FEEL_2", "SWITCH_RUDDER_LIMITER")),
-        ("PF_IGNITION", "Ignition selector: system A", All(0, "ROTARY_ENG_START_SEL")),
+        ("PF_IGNITION", "Ignition selector: A or B", All(0, "ROTARY_ENG_START_SEL")),
         ("PF_STBY_LIGHTS", "Instrument standby lights: bright", All(1, "TOGGLE_INSTR_STBY_LIGHTS")),
         ("PF_PFCS", "Primary flight control switches: on", All(1, PfcsKeys)),
         ("PF_FCES", "Flight control electronics switches: on", All(1, FcesKeys)),
@@ -304,7 +303,6 @@ public class L1011FoPreflightTests
         ["PF_CHK_APU_PUMP"] = new[] { "PFC_APU_PUMP_ONLY" },
         ["PF_CHK_JETTISON"] = new[] { "PFC_JETTISON" },
         ["PF_FUEL_CTRL"] = new[] { "PF_FUEL_CTRL", "PFC_FUEL_CTRL" },
-        ["PF_DRAIN_MAST"] = new[] { "PF_DRAIN_MAST", "PFC_DRAIN_MAST" },
         ["PF_MOVIE"] = new[] { "PF_MOVIE", "PFC_MOVIE" },
         ["PF_SLAT_MONITOR"] = new[] { "PF_SLAT_MONITOR", "PFC_SLAT_MONITOR" },
         ["PF_HI_PRESS"] = new[] { "PF_HI_PRESS", "PFC_HI_PRESS" },
@@ -759,7 +757,7 @@ public class L1011FoPreflightTests
         "PF_APU_MASTER", "PF_APU_MODE_MIN", "PF_APU_FUEL", "PF_APU_START", "PF_APU_GEN", "PF_AC_TIES", "PF_APU_AIR",
         "PF_PACKS_OFF", "PF_PACKS_AUTO", "PF_HOT_AIR_OFF", "PF_ZONE_TRIMS", "PF_APU_BLEED", "PF_PACKS_ON", "PF_APU_MODE_NORM",
         "PF_HOT_AIR_ON", "PF_FIRE_TEST", "PF_WHEEL_WELL_TEST", "PF_HYD_ENGINE_PUMPS", "PF_AC_PUMPS_PTUS_OFF", "PF_HYD_CHECK",
-        "PF_AC_METER", "PF_DC_METER", "PF_TRANSFERS_OFF", "PF_CROSSFEEDS", "PF_TANK_VALVES", "PF_FUEL_CTRL", "PF_DRAIN_MAST",
+        "PF_AC_METER", "PF_DC_METER", "PF_TRANSFERS_OFF", "PF_CROSSFEEDS", "PF_TANK_VALVES", "PF_FUEL_CTRL",
         "PF_MOVIE", "PF_SLAT_MONITOR", "PF_HI_PRESS", "PF_ISLN_VALVES", "PF_ECS", "PF_PRESS_MODE", "PF_CABIN_ALT",
         "PF_COMPASSES", "PF_WIPERS", "PF_ANTI_ICE", "PF_WINDSHIELD", "PF_SIDE_WINDOWS", "PF_AIR_DATA", "PF_MACH_FEEL",
         "PF_IGNITION", "PF_STBY_LIGHTS", "PF_PFCS", "PF_FCES", "PF_BRAKE_SEL", "PF_ANTISKID_OFF", "PF_PARKING_BRAKE",
@@ -790,9 +788,10 @@ public class L1011FoPreflightTests
     {
         foreach (var i in Group("PREFLIGHT").Items)
         {
-            if (Tests.Contains(i.Id))
+            if (Tests.Contains(i.Id) || UndoneLater.Contains(i.Id))
             {
-                // A test: a manual line that runs it, judged by no state, every tick.
+                // A test, or a position the flow later undoes: a manual line that runs its step's write, judged
+                // by no state, ticked when its step completes.
                 Assert.Equal(ChecklistItemType.Actionable, i.Type);
                 Assert.Null(i.StateFieldName);
                 Assert.NotNull(i.CheckAction);
@@ -818,15 +817,12 @@ public class L1011FoPreflightTests
     /// switch its synthetic, a composite the state it delivers.</summary>
     [Theory]
     [InlineData("PF_APU_MASTER", "TOGGLE_APU_POWER", 1)]
-    [InlineData("PF_APU_MODE_MIN", "SWITCH_APU_MODE", 0)]
     [InlineData("PF_APU_FUEL", "FO_ENG2_FUEL_FEED", 1)]
     [InlineData("PF_APU_START", "FO_APU_STARTING_OR_RUNNING", 1)]
     [InlineData("PF_APU_GEN", "FO_APU_GEN_CLOSED", 1)]
     [InlineData("PF_AC_TIES", "FO_AC_TIES_CLOSED", 1)]
     [InlineData("PF_APU_AIR", "FO_APU_AIR_ON", 1)]
-    [InlineData("PF_PACKS_OFF", "FO_PACKS_OFF", 1)]
     [InlineData("PF_PACKS_AUTO", "FO_PACKS_AUTO", 1)]
-    [InlineData("PF_HOT_AIR_OFF", "FO_HOT_AIR_OFF", 1)]
     [InlineData("PF_ZONE_TRIMS", "FO_ZONE_TRIMS_ON", 1)]
     [InlineData("PF_APU_BLEED", "SWITCH_APU_BLEED", 1)]
     [InlineData("PF_PACKS_ON", "FO_PACKS_ON", 1)]
@@ -840,7 +836,6 @@ public class L1011FoPreflightTests
     [InlineData("PF_CROSSFEEDS", "FO_CROSSFEEDS_CLOSED", 1)]
     [InlineData("PF_TANK_VALVES", "FO_TANK_VALVES_ON", 1)]
     [InlineData("PF_FUEL_CTRL", "FO_FUEL_CTRL_OVRD_OFF", 1)]
-    [InlineData("PF_DRAIN_MAST", "FO_DRAIN_MAST_HEAT_ON", 1)]
     [InlineData("PF_MOVIE", "FO_MOVIE_OFF", 1)]
     [InlineData("PF_SLAT_MONITOR", "SWITCH_SLAT_MONITOR", 0)]
     [InlineData("PF_HI_PRESS", "FO_HI_PRESS_ON", 1)]
@@ -902,6 +897,67 @@ public class L1011FoPreflightTests
         mgr = new ChecklistManager<X, L1011FoStateEvaluator>(Connected(ptuOn), new X(), groups);
         mgr.EvaluateAutoDetection();
         Assert.False(groups.SelectMany(g => g.Items).Single(i => i.Id == "PF_AC_PUMPS_PTUS_OFF").IsChecked);
+    }
+
+    // ---- the positions the flow later undoes -------------------------------------------------------------------
+
+    /// <summary>Set for a while and undone later in the same flow: the packs off (later on), the hot air off (later on),
+    /// the APU compressor mode at minimum (later normal), each paired with the step that undoes it.</summary>
+    private static readonly (string Line, string UndoneBy)[] UndoneLaterPairs =
+    {
+        ("PF_APU_MODE_MIN", "PF_APU_MODE_NORM"), ("PF_PACKS_OFF", "PF_PACKS_ON"), ("PF_HOT_AIR_OFF", "PF_HOT_AIR_ON"),
+    };
+
+    private static readonly string[] UndoneLater = UndoneLaterPairs.Select(p => p.Line).ToArray();
+
+    /// <summary>
+    /// A state line would untick itself once the flow undoes its position, so a good run would end with these three
+    /// unticked: each is a manual line ticked by its own step, and its tick still does its step's write. A later
+    /// step of the same flow writes each key the other way.
+    /// </summary>
+    [Fact]
+    public void The_positions_the_flow_later_undoes_are_ticked_by_their_step_not_by_state()
+    {
+        var ids = Preflight.Steps.Select(s => s.Id).ToList();
+        foreach (var (lineId, undoneBy) in UndoneLaterPairs)
+        {
+            var line = Line(lineId);
+            Assert.Equal(ChecklistItemType.Actionable, line.Type);
+            Assert.Null(line.StateFieldName);
+            Assert.NotNull(line.CheckAction);
+            Assert.Equal(lineId, Of(lineId).CompletesChecklistItemId);
+            Assert.True(ids.IndexOf(undoneBy) > ids.IndexOf(lineId), $"{undoneBy} must come after {lineId}");
+            Assert.Equal(Actions(Of(lineId)).Select(a => (a.Key, 1 - a.Target)), Actions(Of(undoneBy)));
+        }
+    }
+
+    /// <summary>Through the real checklist manager: ticked by their steps, the three stay ticked over the positions
+    /// the flow left at its end.</summary>
+    [Fact]
+    public void The_positions_the_flow_later_undoes_stay_ticked_at_the_end_of_the_flow()
+    {
+        var groups = L1011FoChecklistDefinitions.Build();
+        var endOfFlow = UndoneLaterPairs.SelectMany(p => Actions(Of(p.UndoneBy))).Select(a => (a.Key, (double)a.Target!.Value)).ToArray();
+        var mgr = new ChecklistManager<X, L1011FoStateEvaluator>(Connected(endOfFlow), new X(), groups);
+        foreach (var id in UndoneLater)
+            mgr.MarkComplete(id);
+
+        mgr.EvaluateAutoDetection();
+
+        Assert.All(UndoneLater, id => Assert.True(groups.SelectMany(g => g.Items).Single(i => i.Id == id).IsChecked, id));
+    }
+
+    // ---- the drain mast heaters ------------------------------------------------------------------------------------
+
+    /// <summary>The aircraft puts both drain mast heater switches back to 0 within seconds, by hand too, so no step
+    /// could ever be done: Preflight neither writes them nor holds a line for them.</summary>
+    [Fact]
+    public void The_drain_mast_heaters_are_left_to_the_aircraft()
+    {
+        Assert.DoesNotContain(EveryWrittenKey(), w => w.Key.StartsWith("SWITCH_WASTE_WATER", StringComparison.Ordinal));
+        Assert.DoesNotContain(Preflight.Steps, s => s.Id.Contains("DRAIN_MAST", StringComparison.Ordinal));
+        Assert.DoesNotContain(Groups.SelectMany(g => g.Items), i => i.Id.Contains("DRAIN_MAST", StringComparison.Ordinal));
+        Assert.DoesNotContain("FO_DRAIN_MAST_HEAT_ON", L1011FoStateEvaluator.SyntheticKeys);
     }
 
     // ---- the hand ticks left alone ([FO-25]) -------------------------------------------------------------------
@@ -1062,7 +1118,6 @@ public class L1011FoPreflightTests
         new("PFC_JETTISON", "Master and tank jettison switches: unlatched", "FO_JETTISON_SAFE"),
         new("PFC_FUEL_CTRL", "Fuel control amplifier switches: unlatched", "FO_FUEL_CTRL_OVRD_OFF"),
         new("PFC_MOVIE", "Movie interrupt switch: unlatched", "FO_MOVIE_OFF"),
-        new("PFC_DRAIN_MAST", "Drainmast heater switches: latched in", "FO_DRAIN_MAST_HEAT_ON"),
         new("PFC_SLAT_MONITOR", "Slat monitor switch: unlatch", "SWITCH_SLAT_MONITOR", 0),
         new("PFC_HI_PRESS", "Hi pressure bleed switches: latched", "FO_HI_PRESS_ON"),
         new("PFC_ISLN_VALVES", "Engine isolation valve switches: latched", "FO_ISLN_VALVES_ON"),

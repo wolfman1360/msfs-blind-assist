@@ -46,9 +46,10 @@ internal readonly record struct FakeL1011Io(FakeL1011IoKind Kind, string Key, do
 /// out, both essential bus fail lights lit unless the external power breaker reads closed. The battery
 /// changes none of them.</item>
 /// <item>The fire tests as the aircraft showed them: with all four fire loop selectors
-/// (<c>ROTARY_FIRE_DETECT_TEST_ENG_1..3</c>, <c>_APU</c>) at Both (2), either loop test switch
-/// (<c>SWITCH_FIRE_DETECT_TEST_A</c>, <c>_B</c>) on lights the three engine fire lights, the engine fire warning
-/// and the APU fire light; otherwise they read out. The wheel well fire light (<c>LAMP_FIRE_WHEEL_WELL</c>) lights
+/// (<c>ROTARY_FIRE_DETECT_TEST_ENG_1..3</c>, <c>_APU</c>) at Both (2), both loop test switches
+/// (<c>SWITCH_FIRE_DETECT_TEST_A</c> and <c>_B</c>) on together light the three engine fire lights, the engine fire
+/// warning and the APU fire light; otherwise they read out. Live, on APU and external power with the engines off,
+/// A alone lit nothing and B alone lit all five; the fake asks for both, so a test that turns on one switch fails. The wheel well fire light (<c>LAMP_FIRE_WHEEL_WELL</c>) lights
 /// only with its selector (<c>ROTARY_WHEEL_WELL_TEST</c>) at Both (1) and both its test switches on (A alone lit
 /// nothing). Each light stays unread until one of its own selectors or test switches reads.</item>
 /// <item>Hydraulics as on external power, but at once: system B (<c>L1011_RO_HYD_B</c>) reads
@@ -449,7 +450,7 @@ internal sealed class FakeL1011Aircraft : IL1011FoTransport
         if (FireLoopSelectors.Concat(FireTestSwitches).Any(k => Value(k) is not null))
         {
             bool fireLit = FireLoopSelectors.All(k => Value(k) is double v && Near(v, FireLoopsBoth))
-                && FireTestSwitches.Any(IsOn);
+                && FireTestSwitches.All(IsOn);
             foreach (var lamp in FireLamps)
                 Put(lamp, fireLit ? 1 : 0);
         }

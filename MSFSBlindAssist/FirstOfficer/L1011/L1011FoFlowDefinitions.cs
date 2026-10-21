@@ -196,7 +196,9 @@ public static class L1011FoFlowDefinitions
             Also(Done(Skip(SW("PF_AC_TIES", "AC bus ties: closed", X.AcTies, 1), s => s.IsOn("FO_AC_TIES_CLOSED")),
                 "PF_AC_TIES"), "PFC_AC_TIES"),
 
-            // ---- bleed air onto the APU: the packs off while the valves are set, then on ----
+            // ---- bleed air onto the APU: the packs off while the valves are set, then on. The packs off, the hot
+            // air off and the APU's minimum compressor mode are undone later in this flow, so their action lines are
+            // ticked by these steps and read no state.
             Also(Done(Skip(Multi("PF_APU_AIR", "Fuselage isolation and crossbleed valves: on",
                     ("SWITCH_APU_ISLN_VALVE", 1), ("SWITCH_XBLEED_1", 1), ("SWITCH_XBLEED_3", 1)),
                 s => s.IsOn("FO_APU_AIR_ON")), "PF_APU_AIR"), "PFC_FUSELAGE_ISLN", "PFC_XBLEEDS"),
@@ -268,9 +270,8 @@ public static class L1011FoFlowDefinitions
                     AllTo(0, "SWITCH_FUEL_CTRL_OVRD_ENG_1", "SWITCH_FUEL_CTRL_OVRD_ENG_2", "SWITCH_FUEL_CTRL_OVRD_ENG_3")),
                 s => s.IsOn("FO_FUEL_CTRL_OVRD_OFF")), "PF_FUEL_CTRL"), "PFC_FUEL_CTRL"),
 
-            // ---- the rest of the engineer's station ----
-            Also(Done(Skip(Multi("PF_DRAIN_MAST", "Drain mast heaters: on", AllTo(1, "SWITCH_WASTE_WATER_MID", "SWITCH_WASTE_WATER_AFT")),
-                s => s.IsOn("FO_DRAIN_MAST_HEAT_ON")), "PF_DRAIN_MAST"), "PFC_DRAIN_MAST"),
+            // ---- the rest of the engineer's station. The drain mast heaters are left to the aircraft: it puts both
+            // switches back to off within seconds, by hand too, so a step could never be done.
             Also(Done(Skip(Multi("PF_MOVIE", "Movie interrupt: off and guarded", AllTo(0, "MOVIES_OFF", "GUARD_MOVIES_OFF")),
                 s => s.IsOn("FO_MOVIE_OFF")), "PF_MOVIE"), "PFC_MOVIE"),
             Also(Done(Skip(SW("PF_SLAT_MONITOR", "Slat monitor: off", "SWITCH_SLAT_MONITOR", 0),
@@ -317,8 +318,8 @@ public static class L1011FoFlowDefinitions
             Also(Done(Skip(Multi("PF_MACH_FEEL", "Mach feel and rudder limiter: on",
                     AllTo(1, "SWITCH_MACH_FEEL_1", "SWITCH_MACH_FEEL_2", "SWITCH_RUDDER_LIMITER")),
                 s => s.IsOn("FO_MACH_FEEL_RUDDER_ON")), "PF_MACH_FEEL"), "PFO_MACH_FEEL"),
-            // System A or B is already set: the selector is turned only off both systems.
-            Also(Done(Skip(SW("PF_IGNITION", "Ignition selector: system A", "ROTARY_ENG_START_SEL", 0),
+            // System A or B is already set: the selector is turned to A only off both systems.
+            Also(Done(Skip(SW("PF_IGNITION", "Ignition selector: A or B", "ROTARY_ENG_START_SEL", 0),
                 s => s.IsOn("FO_IGNITION_SELECTED")), "PF_IGNITION"), "PFO_IGNITION"),
             Also(Done(Skip(SW("PF_STBY_LIGHTS", "Instrument standby lights: bright", "TOGGLE_INSTR_STBY_LIGHTS", 1),
                 s => s.IsPosition("TOGGLE_INSTR_STBY_LIGHTS", 1)), "PF_STBY_LIGHTS"), "PFO_STBY_LIGHTS"),

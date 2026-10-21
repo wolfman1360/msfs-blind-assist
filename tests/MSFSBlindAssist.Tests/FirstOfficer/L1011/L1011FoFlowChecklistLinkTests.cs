@@ -91,6 +91,10 @@ public class L1011FoFlowChecklistLinkTests
     private static readonly string[] ManualLineComposites =
         { X.StandbyPowerCheck, X.FireTest, X.WheelWellFireTest, X.HydraulicCheck };
 
+    /// <summary>The action lines no state judges because the flow later undoes their position (packs on, hot air on,
+    /// APU mode normal): each is its own step's line, ticked when the step completes.</summary>
+    private static readonly string[] UndoneLaterLines = { "PF_APU_MODE_MIN", "PF_PACKS_OFF", "PF_HOT_AIR_OFF" };
+
     /// <summary>What the aircraft reads once the step's work is done: its keys at their targets; the external
     /// power breaker closed for the external power composite; the battery on and standby power armed under
     /// its closed guard after the standby power check; the three INS mode selectors at ALIGN after the INS
@@ -149,8 +153,11 @@ public class L1011FoFlowChecklistLinkTests
                 var line = items[id];
                 if (line.StateFieldName is not string field)
                 {
-                    Assert.Contains(step.EventName, ManualLineComposites);
                     Assert.Equal(ChecklistItemType.Actionable, line.Type);
+                    if (UndoneLaterLines.Contains(id))
+                        Assert.Equal(id, step.CompletesChecklistItemId);
+                    else
+                        Assert.Contains(step.EventName, ManualLineComposites);
                     continue;
                 }
                 Assert.True(line.StateCondition!(done.GetValue(field)), $"{step.Id} done, but {id} ({field}) does not read done");

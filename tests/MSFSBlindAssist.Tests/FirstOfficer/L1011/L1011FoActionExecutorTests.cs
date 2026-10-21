@@ -2215,12 +2215,13 @@ public class L1011FoActionExecutorTests
     private const string WheelWellPass = "Wheel well fire test: pass";
     private const string HydraulicPass = "Hydraulic check: pass";
 
-    /// <summary>The fire test's writes: the four loops to Both, then A on and off, then B on and off.</summary>
+    /// <summary>The fire test's writes: the four loops to Both, then A and B on together, then both off. Live, on APU
+    /// and external power with the engines off, test A alone lit nothing.</summary>
     private static readonly (string, double)[] FireTestWrites =
     {
         ("ROTARY_FIRE_DETECT_TEST_ENG_1", 2), ("ROTARY_FIRE_DETECT_TEST_ENG_2", 2),
         ("ROTARY_FIRE_DETECT_TEST_ENG_3", 2), ("ROTARY_FIRE_DETECT_TEST_APU", 2),
-        (FireTestA, 1), (FireTestA, 0), (FireTestB, 1), (FireTestB, 0),
+        (FireTestA, 1), (FireTestB, 1), (FireTestA, 0), (FireTestB, 0),
     };
 
     /// <summary>The wheel well test's writes: the loops to Both, A and B on together, then both off.</summary>
@@ -2339,11 +2340,11 @@ public class L1011FoActionExecutorTests
 
         // Muted before anything is read or written, and re-armed before every phase, never cut short.
         Assert.Equal("mute 45000", io.Events[0]);
-        Assert.True(_ac.MuteRequests.Count >= 5);
+        Assert.Equal(3, _ac.MuteRequests.Count);
         Assert.All(_ac.MuteRequests, ms => Assert.Equal(L1011FoActionExecutor.FireTestMuteMs, ms));
 
-        // The loops read no light; each test on, then off, reads the five, in order; the loop light never.
-        Assert.Equal(new[] { Array.Empty<string>(), FireLights, FireLights, FireLights, FireLights },
+        // The loops read no light; both tests on, then both off, read the five, in order; the loop light never.
+        Assert.Equal(new[] { Array.Empty<string>(), FireLights, FireLights },
             ReadsByPhase(io, k => k.StartsWith("LAMP_", StringComparison.Ordinal)));
         Assert.DoesNotContain(FireLoopLight, _ac.FreshReads);
 
@@ -2364,7 +2365,7 @@ public class L1011FoActionExecutorTests
 
         Assert.False(await _exec.Set(L1011FoActionExecutor.FireTest, 1));
 
-        Assert.Equal(new[] { sentence }, _spoken);   // once, though test B finds it out again
+        Assert.Equal(new[] { sentence }, _spoken);   // once: the off phase finds it out, as it should be
         Assert.Equal(FireTestWrites, _ac.Writes);    // the test still ran to the end
         Assert.Equal(0, _ac.Get(FireTestA));
         Assert.Equal(0, _ac.Get(FireTestB));
@@ -2463,7 +2464,9 @@ public class L1011FoActionExecutorTests
 
         Assert.False(await _exec.Set(L1011FoActionExecutor.FireTest, 1));
 
-        Assert.Equal(FireTestWrites.Take(7), _ac.Writes);   // ended at B on
+        // Ended at B on, then the put-back turned A off (B never read on: nothing to turn off).
+        Assert.Equal(FireLoops.Select(l => (l, 2.0)).Concat(new[] { (FireTestA, 1.0), (FireTestB, 1.0), (FireTestA, 0.0) }),
+            _ac.Writes);
         Assert.Equal(0, _ac.Get(FireTestA));
         Assert.Equal(0, _ac.Get(FireTestB));
         Assert.Empty(_spoken);

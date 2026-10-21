@@ -724,7 +724,7 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
         "ROTARY_FIRE_DETECT_TEST_ENG_1", "ROTARY_FIRE_DETECT_TEST_ENG_2", "ROTARY_FIRE_DETECT_TEST_ENG_3", "ROTARY_FIRE_DETECT_TEST_APU",
     };
 
-    /// <summary>What either loop test lit on Both, live: the three engine fire lights, the engine fire warning and
+    /// <summary>What the loop tests lit on Both, live: the three engine fire lights, the engine fire warning and
     /// the APU fire light. The fire detection loop light (<c>LX_MIP_FIRE_LOOP</c>) never lit, so it is not read.</summary>
     private static readonly L1011Lamp[] FireTestLamps =
     {
@@ -758,16 +758,16 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     /// as no change.</summary>
     private static readonly (string Key, int Target)[] FireTestSwitchesOff = { (FireTestSwitchA, 0), (FireTestSwitchB, 0) };
 
-    /// <summary>Both switches off, then the loops to Both; test A on, the five lit; A off, the five out; then the
-    /// same with B.</summary>
+    /// <summary>Both switches off, then the loops to Both; tests A and B on together, the five lit; both off, the
+    /// five out. The two switches go on together because, live on APU and external power with the engines off, test
+    /// A alone lit nothing (held 8 s), while B alone, and A with B, lit all five: a test of A on its own would name
+    /// five lights that cannot come on.</summary>
     private static readonly LampTestPhase[] FireTestPhases =
     {
         new("the test switches off, the loops on both",
             FireTestSwitchesOff.Concat(FireLoopSelectors.Select(k => (k, FireLoopsBoth))).ToArray(), Array.Empty<LightCheck>()),
-        new("test A on", new[] { (FireTestSwitchA, 1) }, AllLit(FireTestLamps)),
-        new("test A off", new[] { (FireTestSwitchA, 0) }, AllOut(FireTestLamps)),
-        new("test B on", new[] { (FireTestSwitchB, 1) }, AllLit(FireTestLamps)),
-        new("test B off", new[] { (FireTestSwitchB, 0) }, AllOut(FireTestLamps)),
+        new("tests A and B on", new[] { (FireTestSwitchA, 1), (FireTestSwitchB, 1) }, AllLit(FireTestLamps)),
+        new("tests A and B off", new[] { (FireTestSwitchA, 0), (FireTestSwitchB, 0) }, AllOut(FireTestLamps)),
     };
 
     private static readonly (string Key, int Target)[] FireTestPutBack = FireTestSwitchesOff;
