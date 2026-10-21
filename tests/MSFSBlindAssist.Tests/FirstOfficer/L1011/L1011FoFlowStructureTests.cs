@@ -196,7 +196,8 @@ public class L1011FoFlowStructureTests
         ("PU_STBY_CHECK", "Standby power check", new[] { (X.StandbyPowerCheck, 1) }),
         ("PU_AC_ESS", "AC essential bus selector: bus 3, generator 1", new[] { ("ROTARY_AC_ESS_BUS", 4) }),
         ("PU_EXT_PWR", "External power: on", new[] { (X.ExternalPower, 1) }),
-        ("PU_INS_ALIGN", "INS 1, 2 and 3: align", new[] { ("ROTARY_INS_MODE_1", 2), ("ROTARY_INS_MODE_2", 2), ("ROTARY_INS_MODE_3", 2) }),
+        // One composite: it writes ALIGN to each unit not already at ALIGN or NAV.
+        ("PU_INS_ALIGN", "INS 1, 2 and 3: align", new[] { (X.InsAlign, 1) }),
     };
 
     [Fact]
@@ -251,7 +252,7 @@ public class L1011FoFlowStructureTests
 
     /// <summary>
     /// The aircraft's cockpit safety inspection has no galley line, so <c>POWER_UP_CL</c> has no
-    /// <c>PUC_GALLEY</c> (Ruling R3, overriding the brief): the galley step completes its action line only.
+    /// <c>PUC_GALLEY</c>: the galley step links only its action line.
     /// </summary>
     [Fact]
     public void TheGalleyStep_LinksOnlyItsActionLine()
@@ -272,6 +273,29 @@ public class L1011FoFlowStructureTests
         Assert.DoesNotContain(PowerUp.Steps.SelectMany(x => x.LinkedChecklistItemIds),
             id => id.Contains("METER", StringComparison.OrdinalIgnoreCase) || id.Contains("SELECTOR", StringComparison.OrdinalIgnoreCase));
     }
+
+    // The tank 2 left pump feeds the APU: a pilot who started it by hand and then runs Power Up must not
+    // have it cut. The APU reaches 100 % about 50 s after its start press.
+    private const string ApuRpm = "L1011_RO_APU_RPM";
+
+    [Fact]
+    public void The_fuel_pump_step_is_left_alone_while_the_APU_runs()
+    {
+        var s = Of("PU_FUEL_PUMPS");
+        Assert.NotNull(s.LeaveAloneWhen);
+        Assert.Equal("Fuel pumps left on: the APU is running.", s.LeaveAloneText);
+
+        Assert.True(s.LeaveAloneWhen!(State((ApuRpm, 100))), "RPM 100: running");
+        Assert.True(s.LeaveAloneWhen!(State((ApuRpm, 95))), "RPM 95: running");
+        Assert.False(s.LeaveAloneWhen!(State((ApuRpm, 94.9))), "RPM 94.9: still spinning up");
+        Assert.False(s.LeaveAloneWhen!(State((ApuRpm, 0))), "RPM 0: stopped");
+        Assert.False(s.LeaveAloneWhen!(State()), "unread: the guards already refuse an unread aircraft");
+    }
+
+    /// <summary>Nothing else in Power Up depends on the APU: only the pump step reads it.</summary>
+    [Fact]
+    public void OnlyTheFuelPumpStep_IsLeftAloneWhileTheApuRuns()
+        => Assert.Equal(new[] { "PU_FUEL_PUMPS" }, PowerUp.Steps.Where(s => s.LeaveAloneWhen != null).Select(s => s.Id));
 
     [Fact]
     public void TheAcEssentialBusSelector_LinksItsOwnLines()
@@ -317,11 +341,16 @@ public class L1011FoFlowStructureTests
         return evaluator;
     }
 
+    private static readonly string[] InsModeKeys = { "ROTARY_INS_MODE_1", "ROTARY_INS_MODE_2", "ROTARY_INS_MODE_3" };
+
     /// <summary>What the aircraft reads when the step's work is done. The external power step reads the
-    /// breaker, not the switch it pulses.</summary>
-    private static (string Key, double Value)[] Done(Step s) => s.EventName == X.ExternalPower
-        ? new[] { (ExtPowerBreaker, 1.0) }
-        : Actions(s).Select(a => (a.Key, (double)a.Target)).ToArray();
+    /// breaker, not the switch it pulses; the INS align step reads its three mode selectors at ALIGN.</summary>
+    private static (string Key, double Value)[] Done(Step s)
+    {
+        if (s.EventName == X.ExternalPower) return new[] { (ExtPowerBreaker, 1.0) };
+        if (s.EventName == X.InsAlign) return InsModeKeys.Select(k => (k, 2.0)).ToArray();
+        return Actions(s).Select(a => (a.Key, (double)a.Target)).ToArray();
+    }
 
     private static double Opposite(double value) => value == 0 ? 1 : 0;
 
@@ -395,9 +424,27 @@ public class L1011FoFlowStructureTests
     }
 
     [Fact]
-    public void OnlyTheTwoCompositesArePseudoKeys()
-        => Assert.Equal(new[] { X.StandbyPowerCheck, X.ExternalPower }.OrderBy(k => k, StringComparer.Ordinal),
+    public void OnlyTheCompositesArePseudoKeys()
+        => Assert.Equal(new[] { X.StandbyPowerCheck, X.ExternalPower, X.InsAlign }.OrderBy(k => k, StringComparer.Ordinal),
             EveryWrittenKey().Select(w => w.Key).Where(X.IsPseudoKey).Distinct().OrderBy(k => k, StringComparer.Ordinal));
+
+    /// <summary>
+    /// The INS align composite writes the three mode selectors itself, so no flow step names them any more:
+    /// they must still be plain switch rows that take a write from an unknown position ([L1011-4]).
+    /// </summary>
+    [Fact]
+    public void TheInsAlignComposite_WritesOnlyPlainSwitchRowsThatTakeAnUnknownPosition()
+    {
+        foreach (var key in InsModeKeys)
+        {
+            Assert.True(Rows.Value.TryGetValue(key, out var row), $"{key} is not a panel row");
+            Assert.Equal(L1011RowAction.Set, row!.Action);
+            Assert.Equal(L1011Kinds.Switch, row.Control!.Kind);
+
+            var plan = L1011WritePlan.ForSet(row.Control!, 2, current: null);
+            Assert.True(plan.Refusal is null, $"{key} -> 2 is refused from an unknown position ({plan.Refusal}): it carries a toggle");
+        }
+    }
 
     [Fact]
     public void NoStepWritesALever()

@@ -79,10 +79,13 @@ public class L1011FoFlowChecklistLinkTests
 
     /// <summary>What the aircraft reads once the step's work is done: its keys at their targets; the external
     /// power breaker closed for the external power composite; the battery on and standby power armed under
-    /// its closed guard after the standby power check.</summary>
+    /// its closed guard after the standby power check; the three INS mode selectors at ALIGN after the INS
+    /// align composite.</summary>
     private static (string Key, double Value)[] Done(Step s)
     {
         if (s.EventName == X.ExternalPower) return new[] { ("L1011_RO_EXT_PWR_BREAKER", 1.0) };
+        if (s.EventName == X.InsAlign)
+            return new[] { ("ROTARY_INS_MODE_1", 2.0), ("ROTARY_INS_MODE_2", 2.0), ("ROTARY_INS_MODE_3", 2.0) };
         if (s.EventName == X.StandbyPowerCheck)
             return new[] { ("TOGGLE_BATTERY", 1.0), ("TOGGLE_STBY_POWER", 1.0), ("GUARD_STBY_POWER", 0.0) };
         return s.ActionType == FlowStepActionType.SetSwitch

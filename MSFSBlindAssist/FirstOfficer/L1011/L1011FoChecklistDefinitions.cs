@@ -23,7 +23,8 @@ using CheckFn = System.Func<L1011FoActionExecutor, L1011FoStateEvaluator, System
 ///
 /// Four hand ticks are left alone unless the aircraft reads on the ground with every engine stopped
 /// ([FO-25]): the ATM switches, the AC hydraulic pumps and the fuel pumps off, and the standby power check,
-/// which turns the battery off for a moment. Unread refuses, as the flow's guards do.
+/// which turns the battery off for a moment. Unread refuses, as the flow's guards do. The fuel pump tick is
+/// also left alone while the APU runs, as its flow step is: the tank 2 left pump feeds the APU.
 /// </summary>
 public static class L1011FoChecklistDefinitions
 {
@@ -40,9 +41,6 @@ public static class L1011FoChecklistDefinitions
 
     /// <summary>The AC essential power selector's normal position: bus 3 (generator 1).</summary>
     private const int AcEssNormal = 4;
-
-    /// <summary>The ALIGN position of an INS mode selector.</summary>
-    private const int InsAlign = 2;
 
     private static readonly string[] FuelPumps =
     {
@@ -95,8 +93,10 @@ public static class L1011FoChecklistDefinitions
                 LeaveAlone(Auto("PU_AC_PUMPS", G, "AC hydraulic pumps: off", "FO_AC_PUMPS_OFF", On,
                     SetAll(("SWITCH_HYD_AC_PUMP_B3", 0), ("SWITCH_HYD_AC_PUMP_C3", 0))),
                     NotParked, ParkedOnlyText),
+                // Also left alone while the APU runs: the tank 2 left pump feeds it, and a pilot who started
+                // the APU by hand must not have it cut.
                 LeaveAlone(Auto("PU_FUEL_PUMPS", G, "Fuel pumps: all off", "FO_FUEL_PUMPS_OFF", On, SetAll(All(0, FuelPumps))),
-                    NotParked, ParkedOnlyText),
+                    s => NotParked(s) || s.IsOn("FO_APU_RUNNING"), ParkedApuOffText),
                 Auto("PU_JETTISON", G, "Jettison switches: off and guarded", "FO_JETTISON_SAFE", On, SetAll(All(0, Jettison))),
                 Auto("PU_PAX_OXY", G, "Passenger oxygen: off and guarded", "FO_PAX_OXY_SAFE", On,
                     SetAll(("SWITCH_PAX_OXY_MANUAL", 0), ("GUARD_PAX_OXY_MANUAL", 0))),
@@ -109,8 +109,8 @@ public static class L1011FoChecklistDefinitions
                 Auto("PU_AC_ESS", G, "AC essential bus selector: bus 3, generator 1", AcEssBus, v => Is(v, AcEssNormal),
                     Set(AcEssBus, AcEssNormal)),
                 Auto("PU_EXT_PWR", G, "External power: on", "FO_EXT_POWER_ON", On, Set(X.ExternalPower, 1)),
-                Auto("PU_INS_ALIGN", G, "INS 1, 2 and 3: align", "FO_INS_ALIGN_OR_NAV", On,
-                    SetAll(All(InsAlign, "ROTARY_INS_MODE_1", "ROTARY_INS_MODE_2", "ROTARY_INS_MODE_3"))),
+                // One composite, unit by unit: a unit already at ALIGN or NAV is left alone, never rewritten.
+                Auto("PU_INS_ALIGN", G, "INS 1, 2 and 3: align", "FO_INS_ALIGN_OR_NAV", On, Set(X.InsAlign, 1)),
                 Reminder("PU_INS_POSITION", G,
                     "Enter present position on INS 1, 2 and 3: input Shift+M, then Alt+P on each unit."),
             }
@@ -206,6 +206,9 @@ public static class L1011FoChecklistDefinitions
     }
 
     private const string ParkedOnlyText = "Left alone: the aircraft must be on the ground with the engines stopped.";
+
+    /// <summary>The fuel pump line's reason: it also keeps the pumps while the APU runs.</summary>
+    private const string ParkedApuOffText = "Left alone: the aircraft must be on the ground with the engines stopped and the APU shut down.";
 
     // On the ground (the stock SIM_ON_GROUND, the flow's PU_ON_GROUND) with every engine read stopped
     // (FO_ENGINES_STOPPED, the flow's PU_ENGINES_STOPPED); airborne, an engine turning, or either unread,

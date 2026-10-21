@@ -67,11 +67,14 @@ public static class L1011FoFlowDefinitions
                 s => s.IsOn("FO_ATMS_OFF")), "PU_ATMS"), "PUC_ATMS"),
             Also(Done(Skip(Multi("PU_AC_PUMPS", "AC hydraulic pumps: off", ("SWITCH_HYD_AC_PUMP_B3", 0), ("SWITCH_HYD_AC_PUMP_C3", 0)),
                 s => s.IsOn("FO_AC_PUMPS_OFF")), "PU_AC_PUMPS"), "PUC_AC_PUMPS"),
-            Also(Done(Skip(Multi("PU_FUEL_PUMPS", "Fuel pumps: all off",
-                    ("SWITCH_FUEL_PUMP_1_1", 0), ("SWITCH_FUEL_PUMP_1_2", 0),
-                    ("SWITCH_FUEL_PUMP_2L_1", 0), ("SWITCH_FUEL_PUMP_2L_2", 0),
-                    ("SWITCH_FUEL_PUMP_2R_1", 0), ("SWITCH_FUEL_PUMP_2R_2", 0),
-                    ("SWITCH_FUEL_PUMP_3_1", 0), ("SWITCH_FUEL_PUMP_3_2", 0)),
+            // The tank 2 left pump feeds the APU, so a running APU (one the pilot started by hand) keeps the
+            // pumps as they are: the step is left alone, aloud, and its lines stay out of the latch.
+            Also(Done(Skip(LeaveAlone(Multi("PU_FUEL_PUMPS", "Fuel pumps: all off",
+                        ("SWITCH_FUEL_PUMP_1_1", 0), ("SWITCH_FUEL_PUMP_1_2", 0),
+                        ("SWITCH_FUEL_PUMP_2L_1", 0), ("SWITCH_FUEL_PUMP_2L_2", 0),
+                        ("SWITCH_FUEL_PUMP_2R_1", 0), ("SWITCH_FUEL_PUMP_2R_2", 0),
+                        ("SWITCH_FUEL_PUMP_3_1", 0), ("SWITCH_FUEL_PUMP_3_2", 0)),
+                    s => s.IsOn("FO_APU_RUNNING"), "Fuel pumps left on: the APU is running."),
                 s => s.IsOn("FO_FUEL_PUMPS_OFF")), "PU_FUEL_PUMPS"), "PUC_FUEL_PUMPS"),
             // The master and the four dump switches off, then their five guards closed: the keys
             // FO_JETTISON_SAFE reads, in its order.
@@ -103,8 +106,8 @@ public static class L1011FoFlowDefinitions
             Skip(Captain("PU_EXT_PWR_CPT", "Ground power",
                     "Connect ground power on the tablet's Ground page, or the Preflight flow starts the APU."),
                 s => s.IsOn("FO_EXT_POWER_ON")),
-            Also(Done(Skip(Multi("PU_INS_ALIGN", "INS 1, 2 and 3: align",
-                    ("ROTARY_INS_MODE_1", 2), ("ROTARY_INS_MODE_2", 2), ("ROTARY_INS_MODE_3", 2)),
+            // One composite that goes unit by unit: a unit already at ALIGN or NAV is never rewritten.
+            Also(Done(Skip(SW("PU_INS_ALIGN", "INS 1, 2 and 3: align", X.InsAlign, 1),
                 s => s.IsOn("FO_INS_ALIGN_OR_NAV")), "PU_INS_ALIGN"), "PUC_INS_ALIGN"),
             Captain("PU_INS_POSITION", "Enter present position on INS 1, 2 and 3: input Shift+M, then Alt+P on each unit."),
         }
@@ -199,6 +202,15 @@ public static class L1011FoFlowDefinitions
     private static Step Stop(Step step)
     {
         step.FailurePolicy = FlowStepFailurePolicy.Stop;
+        return step;
+    }
+
+    /// <summary>A step the First Officer leaves alone while <paramref name="when"/> holds: nothing is sent,
+    /// <paramref name="text"/> is spoken (what stays as it is), and its lines stay out of the latch.</summary>
+    private static Step LeaveAlone(Step step, Func<L1011FoStateEvaluator, bool> when, string text)
+    {
+        step.LeaveAloneWhen = when;
+        step.LeaveAloneText = text;
         return step;
     }
 

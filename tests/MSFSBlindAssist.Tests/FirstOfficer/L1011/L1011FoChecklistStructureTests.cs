@@ -30,6 +30,10 @@ public class L1011FoChecklistStructureTests
     private static Step FlowStep(string id) => PowerUpFlow.Steps.Single(s => s.Id == id);
 
     private const string LeftAloneText = "Left alone: the aircraft must be on the ground with the engines stopped.";
+    private const string LeftAloneApuText = "Left alone: the aircraft must be on the ground with the engines stopped and the APU shut down.";
+
+    /// <summary>The fuel pump line also keeps its pumps while the APU runs, and says so; the other three guarded lines do not.</summary>
+    private static string LeftAloneTextOf(string id) => id == "PU_FUEL_PUMPS" ? LeftAloneApuText : LeftAloneText;
 
     // ------------------------------------------------------------------ the groups
 
@@ -364,7 +368,7 @@ public class L1011FoChecklistStructureTests
     [Theory]
     [MemberData(nameof(GuardedLines))]
     public void GuardedTick_SpeaksWhyItIsLeftAlone(string id)
-        => Assert.Equal(LeftAloneText, Line(id).LeaveAloneText);
+        => Assert.Equal(LeftAloneTextOf(id), Line(id).LeaveAloneText);
 
     [Theory]
     [MemberData(nameof(GuardedLines))]
@@ -412,10 +416,57 @@ public class L1011FoChecklistStructureTests
         var line = groups.SelectMany(g => g.Items).Single(i => i.Id == id);
 
         Assert.False(mgr.ToggleItem(line.GroupId, id, out var spoken));
-        Assert.Equal(LeftAloneText, spoken);
+        Assert.Equal(LeftAloneTextOf(id), spoken);
         Assert.False(line.IsChecked);
         Assert.False(line.AwaitingActionConfirmation);
     }
+
+    // ---- the APU keeps the fuel pumps ----------------------------------------------------------------------------
+
+    private const string ApuRpm = "L1011_RO_APU_RPM";
+
+    private static (string, double)[] ParkedWithTheApu(double? rpm)
+    {
+        var seeds = Engines(running: false).Append(Ground(true));
+        return (rpm is double r ? seeds.Append((ApuRpm, r)) : seeds).ToArray();
+    }
+
+    /// <summary>The tank 2 left pump feeds the APU: a pilot who started it by hand must not have it cut.</summary>
+    [Fact]
+    public void The_fuel_pump_tick_refuses_with_the_APU_running()
+    {
+        var pumps = Line("PU_FUEL_PUMPS");
+        Assert.True(pumps.LeaveAloneWhen!(State(ParkedWithTheApu(100))), "APU at 100: pumps stay");
+        Assert.True(pumps.LeaveAloneWhen!(State(ParkedWithTheApu(95))), "APU at 95: pumps stay");
+
+        Assert.False(pumps.LeaveAloneWhen!(State(ParkedWithTheApu(0))), "APU stopped: the tick goes ahead");
+        Assert.False(pumps.LeaveAloneWhen!(State(ParkedWithTheApu(94.9))), "APU still spinning up: the tick goes ahead");
+        Assert.False(pumps.LeaveAloneWhen!(State(ParkedWithTheApu(null))), "APU unread: the tick goes ahead");
+
+        // Not parked still refuses, with or without the APU.
+        Assert.True(pumps.LeaveAloneWhen!(State(Engines(running: false).Append(Ground(false)).Append((ApuRpm, 0.0)).ToArray())));
+    }
+
+    [Fact]
+    public void The_fuel_pump_tick_speaks_the_new_text_through_the_checklist_manager_with_the_APU_running()
+    {
+        var groups = L1011FoChecklistDefinitions.Build();
+        var mgr = new ChecklistManager<X, L1011FoStateEvaluator>(State(ParkedWithTheApu(100)), new X(), groups);
+        var line = groups.SelectMany(g => g.Items).Single(i => i.Id == "PU_FUEL_PUMPS");
+
+        Assert.False(mgr.ToggleItem(line.GroupId, line.Id, out var spoken));
+        Assert.Equal(LeftAloneApuText, spoken);
+        Assert.False(line.IsChecked);
+        Assert.False(line.AwaitingActionConfirmation);
+    }
+
+    /// <summary>The other three guarded lines stay on the parked-only rule: a running APU is not their business.</summary>
+    [Theory]
+    [InlineData("PU_ATMS")]
+    [InlineData("PU_AC_PUMPS")]
+    [InlineData("PU_STBY_CHECK")]
+    public void The_other_guarded_ticks_ignore_the_APU(string id)
+        => Assert.False(Line(id).LeaveAloneWhen!(State(ParkedWithTheApu(100))));
 
     // ------------------------------------------------------------------ a hand tick does what the flow step does
 
@@ -438,6 +489,9 @@ public class L1011FoChecklistStructureTests
             foreach (var (key, target) in actions.Where(a => !X.IsPseudoKey(a.Item1)))
                 ac.Set(key, target == 0 ? 1 : 0);
         }
+        // The INS align composite reads each mode selector itself: all three off.
+        foreach (int n in new[] { 1, 2, 3 })
+            ac.Set($"ROTARY_INS_MODE_{n}", 0);
         ac.Set("TOGGLE_BATTERY", 1);
         ac.Set("TOGGLE_STBY_POWER", 0);
         ac.Set("GUARD_STBY_POWER", 0);
@@ -474,5 +528,32 @@ public class L1011FoChecklistStructureTests
 
         Assert.NotEmpty(byStep.Writes);
         Assert.Equal(byStep.Writes, byTick.Writes);
+    }
+
+    /// <summary>
+    /// INS align goes unit by unit, in the step and in the tick: a unit already at ALIGN or NAV is never
+    /// rewritten (a unit navigating stays navigating), and only the others are turned to ALIGN.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task INS_align_writes_only_the_units_not_already_at_align_or_nav(bool byTick)
+    {
+        var ac = ColdAircraft();
+        ac.Set("ROTARY_INS_MODE_1", 1);   // standby
+        ac.Set("ROTARY_INS_MODE_2", 2);   // align
+        ac.Set("ROTARY_INS_MODE_3", 3);   // nav
+        var exec = new X();
+        exec.SetTransport(ac);
+
+        if (byTick)
+            await Line("PU_INS_ALIGN").CheckAction!(exec, new L1011FoStateEvaluator()).WaitAsync(TimeSpan.FromSeconds(10));
+        else
+            Assert.True(await exec.ExecuteStepAsync(FlowStep("PU_INS_ALIGN")).WaitAsync(TimeSpan.FromSeconds(10)));
+
+        Assert.Equal(new[] { ("ROTARY_INS_MODE_1", 2.0) }, ac.Writes);
+        Assert.Equal(2, ac.Get("ROTARY_INS_MODE_1"));
+        Assert.Equal(2, ac.Get("ROTARY_INS_MODE_2"));
+        Assert.Equal(3, ac.Get("ROTARY_INS_MODE_3"));
     }
 }
