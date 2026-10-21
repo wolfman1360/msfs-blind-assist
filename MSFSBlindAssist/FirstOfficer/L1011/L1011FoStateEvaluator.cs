@@ -11,7 +11,7 @@ namespace MSFSBlindAssist.FirstOfficer.L1011;
 /// ride the batch. NaN until every input of a field is read, never 0: a guessed 0 reads "engines
 /// stopped" or "switch off" and lets a guard or a line pass over a turning engine.
 ///
-/// The engine reads are the live findings of 2026-10-21. A cold engine's N3 gauge reads 1.4 to 1.9,
+/// The engine reads are what the live aircraft shows. A cold engine's N3 gauge reads 1.4 to 1.9,
 /// never 0, and idles near 59, so <see cref="EngineStoppedN3"/> and <see cref="EngineRunningN3"/> sit
 /// well clear of both. The fuel-and-ignition truth is the <c>TOGGLE_CUTOFF_ENG_n</c> row, which reads the
 /// stock fuel valve; the L:var of that name reads 1 on a cold aircraft and is never read. Engine 3's N2
@@ -401,7 +401,7 @@ public sealed class L1011FoStateEvaluator : LVarStateEvaluator, IFoEngine3N2Sink
         ["FO_EXT_POWER_AVAILABLE"] = Vars(v => L1011Annunciators.IsLit(ExternalPowerLamp, v[0]), ExtPowerAvailableKey),
         ["FO_INS_ALIGN_OR_NAV"] = Vars(v => v.All(m => At(m, InsAlign) || At(m, InsNav)), InsModeKeys),
 
-        // ================================================================ part 2: the flows' fields
+        // ================================================================ the flows' fields
 
         // ---- APU: its speed and its generator's field and breaker relays ----
         ["FO_APU_RUNNING"] = Vars(v => v[0] >= ApuRunningRpm, ApuRpmKey),
@@ -460,7 +460,7 @@ public sealed class L1011FoStateEvaluator : LVarStateEvaluator, IFoEngine3N2Sink
         ["FO_FUEL_PUMPS_ON"] = AllAt(1, FuelPumpKeys),
         ["FO_ANY_FUEL_PUMP_ON"] = Vars(v => v.Any(p => At(p, 1)), FuelPumpKeys),
         ["FO_ONLY_APU_PUMP_ON"] = AtEach(FuelPumpKeys.Select(k => (k, k == ApuFuelPumpKey ? 1.0 : 0.0)).ToArray()),
-        // A crossfeed reads 0 closed (spec 4.8, confirmed live).
+        // A crossfeed reads 0 closed (confirmed live).
         ["FO_CROSSFEEDS_CLOSED"] = AllAt(0, "SWITCH_FUEL_LEFT_XFEED", "SWITCH_FUEL_CTR_XFEED", "SWITCH_FUEL_RIGHT_XFEED"),
         ["FO_TRANSFERS_OFF"] = AllAt(0, TransferKeys),
         ["FO_TRANSFERS_ON"] = AllAt(1, TransferKeys),

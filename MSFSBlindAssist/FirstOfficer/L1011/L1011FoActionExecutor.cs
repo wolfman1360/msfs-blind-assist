@@ -23,12 +23,18 @@ namespace MSFSBlindAssist.FirstOfficer.L1011;
 ///
 /// Composites are pseudo-keys. One in <see cref="Pseudo"/> runs under the gate like any write and is atomic.
 /// A flow step hands the flow's Stop to every key, but only a composite in <see cref="StopAware"/> reads it,
-/// and no wait ever holds the gate (ruling R23): it runs outside the gate, takes it for each write phase
-/// (<see cref="UnderGateAsync"/>: the reads that decide a write and the write, never after the Stop) and
-/// releases it before every wait, which is read-only, bounded on the transport's clock and, for a flow step
-/// only, held by the flow's Pause without counting it (<see cref="WaitUntilAsync"/>). So a paused flow never
-/// queues a hand tick, the automation or the drain behind its wait. Nothing is held
-/// across a flow's Stop or the window's close yet, so <see cref="IFoActionExecutor.ReleaseHeldPresses"/>
+/// and a Stop-aware composite never holds the gate through a wait: it runs outside the gate, takes it for
+/// each write phase (<see cref="UnderGateAsync"/>: the reads that decide a write and the write, never after
+/// the Stop) and releases it before every wait, which is read-only, bounded on the transport's clock and,
+/// for a flow step only, held by the flow's Pause without counting it (<see cref="WaitUntilAsync"/>). So a
+/// paused flow never queues a hand tick, the automation or the drain behind its wait.
+///
+/// The exception is the audible tests (the fire, wheel well and hydraulic tests) and the standby power check:
+/// bounded <see cref="Pseudo"/> composites that keep the gate for their whole run, because a hand tick moving
+/// a test switch or a pump in the middle of a test would corrupt it. Every wait inside them is bounded on the
+/// transport's clock, and none waits on the flow's Pause.
+///
+/// Nothing is held across a flow's Stop or the window's close yet, so <see cref="IFoActionExecutor.ReleaseHeldPresses"/>
 /// and <see cref="IFoActionExecutor.OnFlowStoppedAsync"/> keep their defaults: a press still held when the
 /// definition goes away is released by the definition's own dispose, once. The engine start (part 2) is
 /// the first step a stopped flow must not leave half done, and brings its own.
@@ -143,7 +149,7 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
             [InsAlign] = (exec, io, _) => exec.InsAlignAsync(io),
             [AcTies] = (exec, io, target) => exec.AcTiesAsync(io, target),
             [ApuGenerator] = (exec, io, target) => exec.ApuGeneratorAsync(io, target),
-            // The audible tests (ruling R24): atomic, so no hand tick moves a test switch or pump mid-test.
+            // The audible tests: atomic, so no hand tick moves a test switch or pump mid-test.
             [FireTest] = (exec, io, _) => exec.FireTestAsync(io),
             [WheelWellFireTest] = (exec, io, _) => exec.WheelWellFireTestAsync(io),
             [HydraulicCheck] = (exec, io, _) => exec.HydraulicCheckAsync(io),
@@ -155,7 +161,7 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     /// The composites that read the flow's Stop (a wait that may end early in a safe state); looked up first,
     /// before the gate (<see cref="SetCoreAsync"/>). Each runs OUTSIDE the gate and takes it for each write
     /// phase through <see cref="UnderGateAsync"/>, so it is handed no transport: a phase gets the one read
-    /// under the gate (ruling R23). A checklist tick passes <see cref="CancellationToken.None"/>.
+    /// under the gate. A checklist tick passes <see cref="CancellationToken.None"/>.
     /// </summary>
     private static readonly Dictionary<string, Func<L1011FoActionExecutor, int, CancellationToken, Task<bool>>> StopAware =
         new(StringComparer.Ordinal)
@@ -210,7 +216,7 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     private static readonly L1011Lamp AcEssentialFailLamp = LampOf("AC_ESS_FAIL_LIGHT");
     private static readonly L1011Lamp DcEssentialFailLamp = LampOf("DC_ESS_FAIL_LIGHT");
 
-    /// <summary>Step 2, with standby power On, as this aircraft shows it (live, 2026-10-21): the flowbar lit,
+    /// <summary>Step 2, with standby power On, as this aircraft shows it (observed live): the flowbar lit,
     /// both standby bus fail lights out, and both essential bus fail lights lit unless external power is on
     /// line. The unarmed light means "switch Off" here, so it is not expected lit.</summary>
     private static readonly LightCheck[] StandbyOnLights =
@@ -315,7 +321,7 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     /// <summary>
     /// The flow's entry point; <paramref name="stop"/> is the running flow's Stop. Every key goes through
     /// <see cref="SetCoreAsync"/> with it, but only a composite in <see cref="StopAware"/> reads it (outside
-    /// the gate, ruling R23): a plain switch, a press and every other composite are atomic and ignore it.
+    /// the gate): a plain switch, a press and every other composite are atomic and ignore it.
     /// </summary>
     public async Task<bool> ExecuteStepAsync(IFlowStepDispatch step, CancellationToken stop)
     {
@@ -347,7 +353,7 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
 
     /// <summary>
     /// One control, with the flow's Stop for a composite that reads it: a <see cref="StopAware"/> composite
-    /// looked up first and run outside the gate (<see cref="StopAwareAsync"/>, ruling R23); anything else
+    /// looked up first and run outside the gate (<see cref="StopAwareAsync"/>); anything else
     /// under the gate.
     /// </summary>
     private Task<bool> SetCoreAsync(string key, int target, CancellationToken stop)
@@ -414,7 +420,7 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
         return WriteAsync(io, key, target);
     }
 
-    // ================= Stop-aware composites, outside the gate (ruling R23) =================
+    // ================= Stop-aware composites, outside the gate =================
 
     /// <summary>
     /// A <see cref="StopAware"/> composite, never under the gate: it takes the gate itself for each write
@@ -700,7 +706,7 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
         return name.EndsWith(" light", StringComparison.OrdinalIgnoreCase) ? name : name + " light";
     }
 
-    // ================= the audible tests (ruling R24) =================
+    // ================= the audible tests =================
 
     private const string FireTestName = "Engine and APU fire test";
     private const string WheelWellFireTestName = "Wheel well fire test";
@@ -746,17 +752,25 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     private static LightCheck[] AllOut(IEnumerable<L1011Lamp> lamps) =>
         lamps.Select(l => new LightCheck(l, Lit: false, DidNotGoOut)).ToArray();
 
-    /// <summary>The loops to Both; test A on, the five lit; A off, the five out; then the same with B.</summary>
+    /// <summary>Both loop test switches off: written before the test's first phase, and again as its put-back. A
+    /// switch left on (by an aborted run, or a saved state) would keep the lights lit after the other one went
+    /// off, and the test would name an engine fire light that did not go out. A switch already off is written
+    /// as no change.</summary>
+    private static readonly (string Key, int Target)[] FireTestSwitchesOff = { (FireTestSwitchA, 0), (FireTestSwitchB, 0) };
+
+    /// <summary>Both switches off, then the loops to Both; test A on, the five lit; A off, the five out; then the
+    /// same with B.</summary>
     private static readonly LampTestPhase[] FireTestPhases =
     {
-        new("the loops on both", FireLoopSelectors.Select(k => (k, FireLoopsBoth)).ToArray(), Array.Empty<LightCheck>()),
+        new("the test switches off, the loops on both",
+            FireTestSwitchesOff.Concat(FireLoopSelectors.Select(k => (k, FireLoopsBoth))).ToArray(), Array.Empty<LightCheck>()),
         new("test A on", new[] { (FireTestSwitchA, 1) }, AllLit(FireTestLamps)),
         new("test A off", new[] { (FireTestSwitchA, 0) }, AllOut(FireTestLamps)),
         new("test B on", new[] { (FireTestSwitchB, 1) }, AllLit(FireTestLamps)),
         new("test B off", new[] { (FireTestSwitchB, 0) }, AllOut(FireTestLamps)),
     };
 
-    private static readonly (string Key, int Target)[] FireTestPutBack = { (FireTestSwitchA, 0), (FireTestSwitchB, 0) };
+    private static readonly (string Key, int Target)[] FireTestPutBack = FireTestSwitchesOff;
 
     /// <summary>The loops to Both; tests A and B on together, the light lit; both off, the light out.</summary>
     private static readonly LampTestPhase[] WheelWellTestPhases =
@@ -776,7 +790,7 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
 
     /// <summary>
     /// A lamp test, the fire test's and the wheel well test's shared core: a <see cref="Pseudo"/> composite, atomic
-    /// under the gate (ruling R24: a hand tick moving a test switch mid-test would corrupt it), every wait bounded
+    /// under the gate (a hand tick moving a test switch mid-test would corrupt it), every wait bounded
     /// and none pause-aware. The lamp speech muted first (<paramref name="muteMs"/>) and re-armed before every phase
     /// (on the 1 Hz batch a test can outlast one window; the end is left to its time-out, never cut short); each
     /// phase's writes in order, then its lights read (<see cref="WrongLightAsync"/>). A wrong light does not stop
@@ -872,7 +886,7 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     };
 
     /// <summary>
-    /// The hydraulic check, a <see cref="Pseudo"/> composite, atomic under the gate (ruling R24: a hand tick moving
+    /// The hydraulic check, a <see cref="Pseudo"/> composite, atomic under the gate (a hand tick moving
     /// a pump mid-check would corrupt it), every wait bounded and none pause-aware. The lamp speech muted first
     /// (<see cref="HydraulicCheckMuteMs"/>: the brake accumulator lights change) and re-armed before every phase;
     /// each phase's writes in order (<see cref="HydraulicPhases"/>), then its pressures read fresh until they meet
@@ -1003,7 +1017,7 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
 
     /// <summary>
     /// Each AC tie read fresh, in order: closed, left alone; open, its close button pressed and the tie read
-    /// back closed within <see cref="RelayVerifyTimeoutMs"/>, a relay's 8 s (ruling R22), never the press
+    /// back closed within <see cref="RelayVerifyTimeoutMs"/>, a relay's 8 s, never the press
     /// button's own state (one not closing does not stop the next); unread, never pressed. Null when all
     /// three read closed, else the first failure in words for a sentence ("AC tie 2 did not close", "AC tie
     /// 2 could not be read"); each failure is logged where it happened.
@@ -1034,7 +1048,7 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     // ================= the APU =================
 
     /// <summary>
-    /// The APU started, target ignored; a <see cref="StopAware"/> composite, outside the gate (ruling R23).
+    /// The APU started, target ignored; a <see cref="StopAware"/> composite, outside the gate.
     /// One write phase under the gate (<see cref="UnderGateAsync"/>, never begun after the flow's Stop): the
     /// RPM read fresh, unread, not done and nothing pressed; at or above
     /// <see cref="L1011FoStateEvaluator.ApuStartingRpm"/>, done with no press (starting or running: never a
@@ -1097,7 +1111,7 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
         if (!pressed) return false;
         if (alreadyTurning) return true;
 
-        // The gate is released: the spin-up wait is read-only and holds nothing (R23).
+        // The gate is released: the spin-up wait is read-only and holds nothing.
         var waitOn = pressedOn!;
         return await WaitUntilAsync(waitOn,
             async () => await ReadAsync(waitOn, ApuRpm).ConfigureAwait(false) is double v && v >= L1011FoStateEvaluator.ApuStartingRpm,
@@ -1229,8 +1243,8 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     // ================= relay presses =================
 
     /// <summary>
-    /// How long a relay a press drives may take to read as wanted (ruling R21): live, a generator breaker
-    /// was still open on an immediate read after its press and closed within about 4 s.
+    /// How long a relay a press drives may take to read as wanted: the aircraft's breaker relay can take about
+    /// 4 s to close (a generator breaker was still open on an immediate read after its press).
     /// </summary>
     internal const int RelayVerifyTimeoutMs = 8_000;
 
@@ -1261,7 +1275,7 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     // ================= waits =================
 
     /// <summary>
-    /// Read-only, and never under the gate (ruling R23): polls <paramref name="satisfied"/> every
+    /// Read-only, and never under the gate: polls <paramref name="satisfied"/> every
     /// <see cref="PollMs"/> until it is true (true), or until <paramref name="limitMs"/> has passed on the
     /// transport's clock (false, logged with the limit). For a flow step (a <paramref name="stop"/> that can
     /// be cancelled) the flow's Pause holds it, and the time paused is not counted (the MD-11's

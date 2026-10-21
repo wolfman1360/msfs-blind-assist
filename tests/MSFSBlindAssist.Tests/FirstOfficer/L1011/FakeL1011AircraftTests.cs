@@ -6,7 +6,7 @@ namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 /// <summary>
 /// The fake TriStar reproduces what the executor tests rely on: the definition's own answers (unknown
 /// keys, read-back, a toggle refused from an unknown position, a control already there), the aircraft
-/// semantics seen live on 2026-10-21, failure injection, and a clock that moves only when asked.
+/// semantics seen on the live aircraft, failure injection, and a clock that moves only when asked.
 /// </summary>
 public class FakeL1011AircraftTests
 {
@@ -350,7 +350,7 @@ public class FakeL1011AircraftTests
 
     [Theory]
     [InlineData(0)]
-    [InlineData(1)]   // the ties read closed on a cold aircraft (live, 2026-10-21)
+    [InlineData(1)]   // the ties read closed on a cold aircraft (seen on the live aircraft)
     public void A_tie_relay_reads_however_a_test_seeds_it(double seeded)
     {
         var ac = new FakeL1011Aircraft();
@@ -464,7 +464,7 @@ public class FakeL1011AircraftTests
         Assert.Equal(1, ac.Get(ApuGenField));            // the field stays closed
     }
 
-    // ---- The fire tests (live, 2026-10-21) ---------------------------------------------------------------
+    // ---- The fire tests (as the live aircraft behaves) ---------------------------------------------------
 
     private static readonly string[] FireLoopSelectors =
     {
@@ -566,7 +566,7 @@ public class FakeL1011AircraftTests
         Assert.Equal(1, ac.Get(FireLamps[0]));
     }
 
-    // ---- Hydraulics (live, on external power, 2026-10-21) --------------------------------------------------
+    // ---- Hydraulics (as the live aircraft behaves on external power) ---------------------------------------
 
     private const string PumpB = "SWITCH_HYD_AC_PUMP_B3";
     private const string PumpC = "SWITCH_HYD_AC_PUMP_C3";

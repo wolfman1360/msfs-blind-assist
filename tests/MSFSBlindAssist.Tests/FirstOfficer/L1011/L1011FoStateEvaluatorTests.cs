@@ -10,7 +10,7 @@ namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 /// <summary>
 /// The TriStar First Officer's state evaluator: every synthetic field is NaN until all of its inputs are
 /// read (never 0 for unread), and each field's true and false case through the pure <c>Compute</c>.
-/// The live findings of 2026-10-21 pin the engine reads: a cold engine's N3 gauge reads 1.4 to 1.9
+/// What the live aircraft shows pins the engine reads: a cold engine's N3 gauge reads 1.4 to 1.9
 /// (never 0) and idles near 59, and the fuel-and-ignition truth is the stock fuel valve behind the
 /// <c>TOGGLE_CUTOFF_ENG_n</c> row, never the L:var of that name (it reads 1 on a cold aircraft).
 /// </summary>
@@ -74,7 +74,7 @@ public class L1011FoStateEvaluatorTests
     public void EnginesStopped_ReadsTrueWhenEveryN3IsLowAndEveryFuelSwitchIsOff()
         => Assert.Equal(1, Compute("FO_ENGINES_STOPPED", Engines(n3: 0.5)));
 
-    /// <summary>Live 2026-10-21: a cold TriStar's N3 gauge reads 1.4 to 1.9, never 0; that is stopped.</summary>
+    /// <summary>On the live aircraft a cold TriStar's N3 gauge reads 1.4 to 1.9, never 0; that is stopped.</summary>
     [Theory]
     [InlineData(1.4)]
     [InlineData(1.9)]
@@ -391,7 +391,7 @@ public class L1011FoStateEvaluatorTests
 
     /// <summary>
     /// The engines' fuel-and-ignition truth is the stock fuel valve behind the row, never the L:var of
-    /// the same name (live 2026-10-21: the L:var reads 1 on a cold aircraft).
+    /// the same name (the L:var reads 1 on a cold aircraft).
     /// </summary>
     [Fact]
     public void The_fuel_and_ignition_input_is_the_stock_fuel_valve()
@@ -479,7 +479,7 @@ public class L1011FoStateEvaluatorTests
         Assert.Null(e.TakeoffStabTrimUnits());   // connected, the trim never delivered
     }
 
-    // ================================================================== part 2: the flows' fields
+    // ================================================================== the flows' fields
 
     /// <summary>A NaN want reads unknown; any other want is that value.</summary>
     private static void AssertReads(double want, double actual, string because)
@@ -596,7 +596,7 @@ public class L1011FoStateEvaluatorTests
         Row("FO_ATMS_AUTO", 1, 0, "ROTARY_HYD_B2_MODE", "ROTARY_HYD_C2_MODE"),
         Row("FO_ATMS_AC_PUMPS_OFF", 0, 1, "ROTARY_HYD_B2_MODE", "ROTARY_HYD_C2_MODE", "SWITCH_HYD_AC_PUMP_B3", "SWITCH_HYD_AC_PUMP_C3"),
 
-        // Fuel: a crossfeed reads 0 closed (spec 4.8, confirmed live).
+        // Fuel: a crossfeed reads 0 closed (confirmed live).
         Row("FO_FUEL_PUMPS_ON", 1, 0, FuelPumps),
         Row("FO_CROSSFEEDS_CLOSED", 0, 1, "SWITCH_FUEL_LEFT_XFEED", "SWITCH_FUEL_CTR_XFEED", "SWITCH_FUEL_RIGHT_XFEED"),
         Row("FO_TRANSFERS_OFF", 0, 1, "SWITCH_FUEL_XFR_1A", "SWITCH_FUEL_XFR_3A"),
@@ -743,7 +743,7 @@ public class L1011FoStateEvaluatorTests
         Assert.Equal(new[] { key }, InputsOf(field));
     }
 
-    // ------------------------------------------------------------------ the brief's named cases
+    // ------------------------------------------------------------------ named cases
 
     [Theory]
     [InlineData(1.0, double.NaN, 1)]
@@ -997,7 +997,7 @@ public class L1011FoStateEvaluatorTests
         Assert.Equal(3, Evaluator((L1011InsAlignmentAnnouncer.StatusKey(3), 2)).InsNavTarget(3));
     }
 
-    /// <summary>The readouts part 2's fields read, polled each second; never the total fuel, which the
+    /// <summary>The readouts the flows' fields read, polled each second; never the total fuel, which the
     /// fuel hotkey's readout speaks on every delivery.</summary>
     [Fact]
     public void The_poll_list_covers_the_part_2_readouts()

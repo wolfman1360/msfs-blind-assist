@@ -1177,7 +1177,7 @@ public class L1011FoActionExecutorTests
         Assert.Empty(_ac.Io);
     }
 
-    // ================= Part 2 foundations ===========================================================================
+    // ================= Waits, relay presses and the Stop-aware composites ===========================================
 
     // ---- The flow's Stop and Pause --------------------------------------------------------------------------------
 
@@ -1278,7 +1278,7 @@ public class L1011FoActionExecutorTests
         Assert.False(await pausedThenStopped.WaitAsync(Hang));
         Assert.Contains("a paused, stopped wait: stopped", _logged);
 
-        // Ruling R23: a hand tick (CancellationToken.None) never waits on a flow's Pause, held or not.
+        // A hand tick (CancellationToken.None) never waits on a flow's Pause, held or not.
         int tickAsks = 0;
         var tick = _exec.WaitUntilAsync(_ac, () => Task.FromResult(++tickAsks == 2), 10_000, CancellationToken.None, "a hand tick's wait");
         Assert.True(tick.IsCompleted);
@@ -1429,7 +1429,7 @@ public class L1011FoActionExecutorTests
         Assert.Empty(_spoken);
     }
 
-    // ---- Relay presses (ruling R21: 8 s on the relay, never the press button's own state) ------------------------
+    // ---- Relay presses (8 s on the relay, never the press button's own state) ------------------------------------
 
     private const string GenBreakerClose = "SWITCH_GEN_FLOW_1";
     private const string GenBreakerTrip = "SWITCH_GEN_FLOW_OPEN_1";
@@ -1630,8 +1630,8 @@ public class L1011FoActionExecutorTests
         Assert.Empty(_ac.Io);
     }
 
-    // Ruling R22: an AC tie is a relay a press drives, read back for the relay's 8 s ([R21]), in the AC ties
-    // composite and in external power's tie loop alike.
+    // An AC tie is a relay a press drives, read back for the relay's 8 s, in the AC ties composite and in
+    // external power's tie loop alike.
 
     /// <summary>Tie 1 open with nothing on line, so its press closes nothing by itself; the script closes it
     /// six seconds after the press. Returns the press time's holder.</summary>
@@ -1855,7 +1855,7 @@ public class L1011FoActionExecutorTests
         Assert.Empty(_spoken);
     }
 
-    // ---- Ruling R23: no wait holds the gate; the Pause is a flow step's; no write after the Stop -------------------
+    // ---- A Stop-aware composite never holds the gate through a wait; the Pause is a flow step's; no write after the Stop
 
     [Theory]
     [InlineData("before the step")]          // the Stop already pressed when the step runs
@@ -1952,9 +1952,9 @@ public class L1011FoActionExecutorTests
         Assert.InRange(_ac.NowMs - pressedAt, 7_000, 7_000 + L1011FoActionExecutor.PollMs);   // it waited, unpaused
     }
 
-    // ---- Fix round 1: an APU start already pressed is never pressed again while it spins up ----------------------------
-    // R23 releases the gate before the spin-up wait, and the RPM reads 0 for about 7 s after the press while the inlet
-    // doors open: a call overlapping that window must not press again.
+    // ---- An APU start already pressed is never pressed again while it spins up ---------------------------------------
+    // The start releases the gate before the spin-up wait, and the RPM reads 0 for about 7 s after the press while the
+    // inlet doors open: a call overlapping that window must not press again.
 
     [Fact]
     public void Pseudo_and_StopAware_share_no_key()
@@ -2187,7 +2187,7 @@ public class L1011FoActionExecutorTests
         Assert.Contains(_logged, line => line.Contains(L1011FoActionExecutor.ApuGenerator));
     }
 
-    // ================= The audible tests (ruling R24: atomic Pseudo composites, one verdict each) ==================
+    // ================= The audible tests (atomic Pseudo composites, one verdict each) ===============================
 
     private static readonly string[] FireLoops =
     {
@@ -2383,11 +2383,61 @@ public class L1011FoActionExecutorTests
         Assert.Equal(FireTestWrites, _ac.Writes);
     }
 
+    [Theory]
+    [InlineData(FireTestA)]
+    [InlineData(FireTestB)]
+    public async Task Fire_test_clears_a_test_switch_left_on_before_its_first_phase_and_passes(string leftOn)
+    {
+        // A leftover test switch (an aborted run, a saved state) keeps the lights lit after the other one goes
+        // off, which read as "engine 1 fire light did not go out". Both are written off before anything else.
+        SeedFireTest();
+        _ac.Set(leftOn, 1);
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        _exec.AttachFlowProgressSpeech(() => true);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.FireTest, 1));
+
+        Assert.Equal(new[] { (leftOn, 0.0) }.Concat(FireTestWrites), _ac.Writes);   // cleared first, then the usual run
+        Assert.Equal(0, _ac.Get(FireTestA));
+        Assert.Equal(0, _ac.Get(FireTestB));
+        Assert.Equal(new[] { FirePass }, _spoken);   // no light named
+    }
+
+    [Fact]
+    public async Task Fire_test_switches_already_off_are_not_written_first()
+    {
+        SeedFireTest();
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.FireTest, 1));
+
+        Assert.Equal(FireTestWrites, _ac.Writes);   // the clearing writes are AlreadyThere: nothing sent
+        Assert.Equal(new[] { FireTestA, FireTestB }, _ac.FreshReads.Take(2));   // but each is read first
+    }
+
+    [Fact]
+    public async Task Fire_test_switch_that_cannot_be_cleared_ends_the_test_before_any_loop_moves()
+    {
+        SeedFireTest();
+        _ac.Set(FireTestB, 1);
+        _ac.Refuse(FireTestB);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.FireTest, 1));
+
+        Assert.Empty(_ac.Writes);   // no selector touched
+        Assert.Contains(_logged, line => line.Contains($"{FireTestB} -> 0") && line.Contains(FakeL1011Aircraft.RefusalReason));
+        Assert.DoesNotContain(_ac.FreshReads, k => k.StartsWith("LAMP_", StringComparison.Ordinal));
+        Assert.Empty(_spoken);
+    }
+
     [Fact]
     public async Task Fire_test_refused_switch_ends_the_test_with_the_switches_back()
     {
         SeedFireTest();
-        _ac.Refuse(FireTestA);
+        // Refused once the loops are on Both, so the test gets as far as turning test A on.
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        io.AfterWrite("ROTARY_FIRE_DETECT_TEST_APU", 2, () => _ac.Refuse(FireTestA));
 
         Assert.False(await _exec.Set(L1011FoActionExecutor.FireTest, 1));
 
@@ -2561,6 +2611,25 @@ public class L1011FoActionExecutorTests
     }
 
     [Fact]
+    public async Task System_A_short_of_900_is_named()
+    {
+        SeedHydraulicCheck();
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        io.AfterWrite(PtuCd, 1, () =>
+        {
+            _ac.NeverDeliver(Hyd('A'));
+            _ac.Set(Hyd('A'), 14.5);   // never rises; below 100, so it still reads out once everything is off
+        });
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.HydraulicCheck, 1));
+
+        Assert.Equal(new[] { "Hydraulic check: system A pressure did not reach 900 psi" }, _spoken);
+        Assert.Equal(HydraulicCheckWrites, _ac.Writes);
+        AssertHydraulicsOff();
+    }
+
+    [Fact]
     public async Task Hydraulic_system_that_does_not_bleed_down_is_named()
     {
         SeedHydraulicCheck();
@@ -2657,7 +2726,7 @@ public class L1011FoActionExecutorTests
     [Fact]
     public async Task A_flow_step_runs_the_hydraulic_check_to_the_end_through_a_pause_and_a_stop()
     {
-        // Atomic and not pause-aware (ruling R24): a Stop or Pause mid-check never leaves a pump on.
+        // Atomic and not pause-aware: a Stop or Pause mid-check never leaves a pump on.
         SeedHydraulicCheck();
         _ac.NeverDeliver(Hyd('B'));
         _ac.Set(Hyd('B'), 14.5);   // the B phase waits its full 20 s

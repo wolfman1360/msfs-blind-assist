@@ -15,7 +15,7 @@ internal readonly record struct FakeL1011Io(FakeL1011IoKind Kind, string Key, do
 
 /// <summary>
 /// A fake TriStar for the First Officer's executor tests: the definition's answers over a dictionary of
-/// readings, and the aircraft semantics seen live on 2026-10-21.
+/// readings, and the aircraft semantics seen on the live aircraft.
 /// <list type="bullet">
 /// <item>The definition's answers come from the definition's own code: a key it does not take is
 /// <see cref="L1011FoOutcome.UnknownKey"/> and <see cref="CanReadBack"/> is its answer
