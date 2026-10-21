@@ -92,6 +92,30 @@ public class L1011DefinitionFoTransportTests
     }
 
     [Fact]
+    public async Task Cabin_entries_pass_through()
+    {
+        var unattached = new L1011DefinitionFoTransport(Build(), SeededSimConnectCache.With());
+        Assert.Equal(L1011FoResult.Unavailable, await unattached.SetCabinBaroAsync(1002.0));
+        Assert.Equal(L1011FoResult.Unavailable, await unattached.SetCabinAltitudeSelectorAsync(49));
+        Assert.Empty(_sent);
+
+        var def = Build();
+        var sim = SeededSimConnectCache.With();
+        AttachWithoutContext(def, sim);
+        var io = new L1011DefinitionFoTransport(def, sim);
+
+        Assert.Equal(L1011FoResult.Sent, await io.SetCabinBaroAsync(1002.0));
+        Assert.Equal(L1011FoResult.Sent, await io.SetCabinAltitudeSelectorAsync(49));
+        Assert.Equal(L1011FoResult.Refused(IniL1011Definition.CabinAltitudeSelectorRangeError),
+            await io.SetCabinAltitudeSelectorAsync(101));
+        Assert.Equal(new[]
+        {
+            L1011Levers.AltimeterRpn(4, 1002.0),
+            "50 (>L:FLT_CAB) (>H:ROTARY_FLT_CAB_DEC)",
+        }, _sent);
+    }
+
+    [Fact]
     public async Task A_toggle_from_an_unread_position_is_refused_through_the_transport()
     {
         var def = Build();

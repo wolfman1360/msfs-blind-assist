@@ -91,6 +91,8 @@ public class L1011FoActionExecutorTests
         }
 
         public Task<L1011FoResult> SetAltimetersAsync(double millibars) => _ac.SetAltimetersAsync(millibars);
+        public Task<L1011FoResult> SetCabinBaroAsync(double millibars) => _ac.SetCabinBaroAsync(millibars);
+        public Task<L1011FoResult> SetCabinAltitudeSelectorAsync(int step) => _ac.SetCabinAltitudeSelectorAsync(step);
         public bool CanReadBack(string key) => _ac.CanReadBack(key);
         public Task<double?> ReadFreshAsync(string key, int timeoutMs) => _ac.ReadFreshAsync(key, timeoutMs);
         public double? ReadCached(string key) => _ac.ReadCached(key);
@@ -617,6 +619,8 @@ public class L1011FoActionExecutorTests
         }
 
         public Task<L1011FoResult> SetAltimetersAsync(double millibars) => _ac.SetAltimetersAsync(millibars);
+        public Task<L1011FoResult> SetCabinBaroAsync(double millibars) => _ac.SetCabinBaroAsync(millibars);
+        public Task<L1011FoResult> SetCabinAltitudeSelectorAsync(int step) => _ac.SetCabinAltitudeSelectorAsync(step);
         public bool CanReadBack(string key) => _ac.CanReadBack(key);
         public double? ReadCached(string key) => _ac.ReadCached(key);
 

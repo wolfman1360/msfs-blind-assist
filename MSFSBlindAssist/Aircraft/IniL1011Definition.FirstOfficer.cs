@@ -1,3 +1,4 @@
+using System.Globalization;
 using MSFSBlindAssist.Aircraft.L1011;
 using MSFSBlindAssist.SimConnect;
 using MSFSBlindAssist.Utils.Logging;
@@ -12,7 +13,9 @@ namespace MSFSBlindAssist.Aircraft;
 /// (<see cref="L1011FoResult"/>), and it completes only once the plan has run, a button's hold
 /// included. A press still held when the definition goes away is released by <see cref="Dispose"/>,
 /// once. The hand-written levers and the stabilizer trim are sent as the panel rows send them
-/// (<see cref="L1011Levers"/>), and the altimeters in one string. The First Officer's executor calls in
+/// (<see cref="L1011Levers"/>), and the altimeters, the cabin baro and the cabin altitude selector each
+/// in one string. The tablet's take-off exports are registered here for the First Officer to read
+/// (<see cref="AddFirstOfficerVariables"/>). The First Officer's executor calls in
 /// from pool threads, so every write (and the lamp mute) hops onto the UI thread captured at
 /// <see cref="Attach"/> first (<see cref="OnUiThreadAsync{T}"/>). The universal autopilot engage
 /// (<see cref="EngageAutopilot"/>) presses paddle A through the same entry.
@@ -103,16 +106,118 @@ public partial class IniL1011Definition
         OnUiThreadAsync(() => Task.FromResult(FoSetAltimetersOnUiThread(millibars)), L1011FoResult.Unavailable);
 
     /// <summary>The body of <see cref="FoSetAltimetersAsync"/>, run on the UI thread.</summary>
-    private L1011FoResult FoSetAltimetersOnUiThread(double millibars)
+    private L1011FoResult FoSetAltimetersOnUiThread(double millibars) =>
+        FoSendQuietly(L1011Levers.AltimeterMillibars(millibars) is double setting ? L1011Levers.AllAltimetersRpn(setting) : null,
+            L1011Levers.AltimeterRangeError);
+
+    // ---- The cabin baro and the cabin altitude selector ----------------------------------------------
+
+    /// <summary>The cabin barometric setting's Kohlsman index (the readout's <c>KOHLSMAN SETTING MB:4</c>).</summary>
+    internal const int CabinBaroIndex = 4;
+
+    /// <summary>The cabin altitude selector's own state variable (the knob's step, 0 to 100) and the
+    /// control map's <c>ROTARY_FLT_CAB</c> row's dec and inc events.</summary>
+    internal const string CabinAltitudeSelectorStateVar = "FLT_CAB";
+    internal const string CabinAltitudeSelectorDecEvent = "ROTARY_FLT_CAB_DEC";
+    internal const string CabinAltitudeSelectorIncEvent = "ROTARY_FLT_CAB_INC";
+
+    /// <summary>The selector's last step (its first is 0).</summary>
+    internal const int CabinAltitudeSelectorMaxStep = 100;
+
+    internal const string CabinAltitudeSelectorRangeError = "cabin altitude selector step must be 0 to 100";
+
+    /// <summary>
+    /// Sets the cabin barometric setting (Kohlsman setting 4) in one string, the index first (live, the
+    /// other order did nothing), and says nothing. Read and refused as <see cref="FoSetAltimetersAsync"/>
+    /// reads a setting (<see cref="L1011Levers.AltimeterMillibars"/>, inches taken too);
+    /// <see cref="L1011FoOutcome.Unavailable"/> when the definition is not attached, has gone away, or
+    /// the write cannot land. Marshals onto the UI thread captured at <see cref="Attach"/> as the
+    /// altimeters do; <see cref="L1011FoOutcome.Unavailable"/> when that thread can no longer take the call.
+    /// </summary>
+    internal Task<L1011FoResult> FoSetCabinBaroAsync(double millibars) =>
+        OnUiThreadAsync(() => Task.FromResult(FoSendQuietly(
+            L1011Levers.AltimeterMillibars(millibars) is double setting ? L1011Levers.AltimeterRpn(CabinBaroIndex, setting) : null,
+            L1011Levers.AltimeterRangeError)), L1011FoResult.Unavailable);
+
+    /// <summary>
+    /// Turns the cabin altitude selector to <paramref name="step"/> (0 to 100) in one string and says
+    /// nothing; the aircraft then computes the cabin altitude the step commands
+    /// (<c>L:TARGET_CABIN_ALTITUDE</c>). <see cref="L1011FoOutcome.Refused"/> with
+    /// <see cref="CabinAltitudeSelectorRangeError"/> outside 0 to 100,
+    /// <see cref="L1011FoOutcome.Unavailable"/> as <see cref="FoSetCabinBaroAsync"/>. Marshals onto the UI
+    /// thread captured at <see cref="Attach"/>.
+    /// </summary>
+    internal Task<L1011FoResult> FoSetCabinAltitudeSelectorAsync(int step) =>
+        OnUiThreadAsync(() => Task.FromResult(FoSendQuietly(CabinAltitudeSelectorRpn(step), CabinAltitudeSelectorRangeError)),
+            L1011FoResult.Unavailable);
+
+    /// <summary>
+    /// The selector's write for <paramref name="step"/>, or null outside its travel. It replays the
+    /// knob's click ([L1011-1]): it seeds ONLY the knob's own state variable one step past the target,
+    /// then sends ONE real click of the knob's own H: event toward it, and the aircraft's gauge does the
+    /// rest. Never more clicks in the string: live, several H: events in one string moved one step. The
+    /// top step is seeded one below and clicked up.
+    /// </summary>
+    private static string? CabinAltitudeSelectorRpn(int step)
+    {
+        if (step < 0 || step > CabinAltitudeSelectorMaxStep)
+            return null;
+        return step == CabinAltitudeSelectorMaxStep
+            ? $"{Invariant(step - 1)} (>L:{CabinAltitudeSelectorStateVar}) (>H:{CabinAltitudeSelectorIncEvent})"
+            : $"{Invariant(step + 1)} (>L:{CabinAltitudeSelectorStateVar}) (>H:{CabinAltitudeSelectorDecEvent})";
+    }
+
+    private static string Invariant(int value) => value.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Sends one hand-written string, quietly, on the UI thread: <see cref="L1011FoOutcome.Unavailable"/>
+    /// when the definition is not attached or has gone away, <see cref="L1011FoOutcome.Refused"/> with
+    /// <paramref name="refusal"/> when there is no string (the value was out of range),
+    /// <see cref="L1011FoOutcome.Unavailable"/> when the write cannot land, else sent.
+    /// </summary>
+    private L1011FoResult FoSendQuietly(string? rpn, string refusal)
     {
         if (_disposed || _sim is not { } sim)
             return L1011FoResult.Unavailable;
-        if (L1011Levers.AltimeterMillibars(millibars) is not double setting)
-            return L1011FoResult.Refused(L1011Levers.AltimeterRangeError);
+        if (rpn is null)
+            return L1011FoResult.Refused(refusal);
         if (!CanLand(sim))
             return L1011FoResult.Unavailable;
-        SendCalc(sim, L1011Levers.AllAltimetersRpn(setting));
+        SendCalc(sim, rpn);
         return L1011FoResult.Sent;
+    }
+
+    // ---- The tablet's take-off exports ----------------------------------------------------------------
+
+    /// <summary>The take-off flaps the tablet's "Set bugs and EPR" exports, in degrees (0 before any export).</summary>
+    internal const string PerfSelectedFlapsKey = "L1011_FO_PERF_SELECTED_FLAPS";
+
+    /// <summary>The take-off stabilizer trim the tablet's "Set bugs and EPR" exports (0 before any export).</summary>
+    internal const string PerfStabTrimKey = "L1011_FO_PERF_STAB_TRIM";
+
+    /// <summary>
+    /// The variables only the First Officer reads: the tablet's take-off exports, plain numbers read on
+    /// request (the First Officer window polls them) and never written. Never spoken, so no Ctrl+M row
+    /// ([VAR-9]).
+    /// </summary>
+    private static void AddFirstOfficerVariables(Dictionary<string, SimVarDefinition> vars)
+    {
+        foreach (var (key, lvar, name) in new[]
+        {
+            (PerfSelectedFlapsKey, "PERF_SELECTED_FLAPS", "Tablet selected take-off flaps"),
+            (PerfStabTrimKey, "PERF_STAB_TRIM", "Tablet take-off stabilizer trim"),
+        })
+        {
+            vars[key] = new SimVarDefinition
+            {
+                Name = lvar,
+                DisplayName = name,
+                Type = SimVarType.LVar,
+                Units = "number",
+                UpdateFrequency = UpdateFrequency.OnRequest,
+                ExcludeFromMonitorManager = true,
+            };
+        }
     }
 
     /// <summary>

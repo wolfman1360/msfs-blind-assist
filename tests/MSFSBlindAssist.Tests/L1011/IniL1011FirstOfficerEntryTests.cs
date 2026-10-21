@@ -594,6 +594,162 @@ public class IniL1011FirstOfficerEntryTests
         }
     }
 
+    // ---- The cabin baro and the cabin altitude selector --------------------------------------------
+
+    [Fact]
+    public async Task Cabin_baro_sends_index_four_first()
+    {
+        // Live: "4 16212 (>K:2:KOHLSMAN_SET)" set KOHLSMAN SETTING MB:4 to exactly 1013.25; the index
+        // second did nothing.
+        var result = await _def.FoSetCabinBaroAsync(1002.0);
+
+        Assert.Equal(L1011FoResult.Sent, result);
+        Assert.Equal(new[] { L1011Levers.AltimeterRpn(4, 1002.0) }, _sent);
+        Assert.Equal(new[] { "4 16032 (>K:2:KOHLSMAN_SET)" }, _sent);
+        Assert.Empty(_speech.All);
+    }
+
+    [Fact]
+    public async Task Cabin_baro_accepts_inches_and_refuses_out_of_range()
+    {
+        // 29.92 inches is 1013.21 hectopascals, as the typed altimeter fields read it.
+        Assert.Equal(L1011FoResult.Sent, await _def.FoSetCabinBaroAsync(29.92));
+        Assert.Equal(new[] { L1011Levers.AltimeterRpn(4, L1011Levers.AltimeterMillibars(29.92)!.Value) }, _sent);
+        Assert.Equal(new[] { "4 16211 (>K:2:KOHLSMAN_SET)" }, _sent);
+
+        _sent.Clear();
+        foreach (double outside in new[] { 2000, 900, 50, double.NaN })
+            Assert.Equal(L1011FoResult.Refused(L1011Levers.AltimeterRangeError), await _def.FoSetCabinBaroAsync(outside));
+        Assert.Empty(_sent);
+        Assert.Empty(_speech.All);
+    }
+
+    [Fact]
+    public async Task Cabin_baro_is_unavailable_when_the_path_cannot_land()
+    {
+        var unattached = Build(_sent);
+        Assert.Equal(L1011FoResult.Unavailable, await unattached.FoSetCabinBaroAsync(1002.0));
+
+        _def.CanLand = _ => false;
+        Assert.Equal(L1011FoResult.Unavailable, await _def.FoSetCabinBaroAsync(1002.0));
+
+        _def.CanLand = _ => true;
+        _def.Dispose();
+        Assert.Equal(L1011FoResult.Unavailable, await _def.FoSetCabinBaroAsync(1002.0));
+        Assert.Empty(_sent);
+    }
+
+    [Theory]
+    [InlineData(49, "50 (>L:FLT_CAB) (>H:ROTARY_FLT_CAB_DEC)")]   // live: L:FLT_CAB 49, L:TARGET_CABIN_ALTITUDE 4,500 ft
+    [InlineData(0, "1 (>L:FLT_CAB) (>H:ROTARY_FLT_CAB_DEC)")]
+    [InlineData(99, "100 (>L:FLT_CAB) (>H:ROTARY_FLT_CAB_DEC)")]
+    [InlineData(100, "99 (>L:FLT_CAB) (>H:ROTARY_FLT_CAB_INC)")]   // the top: seeded one below, clicked up
+    public async Task Cabin_altitude_selector_seeds_then_clicks_once(int step, string rpn)
+    {
+        var result = await _def.FoSetCabinAltitudeSelectorAsync(step);
+
+        Assert.Equal(L1011FoResult.Sent, result);
+        Assert.Equal(new[] { rpn }, _sent);
+        Assert.Empty(_speech.All);
+    }
+
+    [Theory]
+    [InlineData(101)]
+    [InlineData(-1)]
+    [InlineData(int.MaxValue)]
+    [InlineData(int.MinValue)]
+    public async Task Cabin_altitude_selector_refuses_a_step_outside_its_travel(int step)
+    {
+        var result = await _def.FoSetCabinAltitudeSelectorAsync(step);
+
+        Assert.Equal(L1011FoResult.Refused("cabin altitude selector step must be 0 to 100"), result);
+        Assert.Equal(IniL1011Definition.CabinAltitudeSelectorRangeError, result.Reason);
+        Assert.Empty(_sent);
+        Assert.Empty(_speech.All);
+    }
+
+    [Fact]
+    public async Task Cabin_altitude_selector_is_unavailable_when_the_path_cannot_land()
+    {
+        var unattached = Build(_sent);
+        Assert.Equal(L1011FoResult.Unavailable, await unattached.FoSetCabinAltitudeSelectorAsync(49));
+
+        _def.CanLand = _ => false;
+        Assert.Equal(L1011FoResult.Unavailable, await _def.FoSetCabinAltitudeSelectorAsync(49));
+
+        _def.CanLand = _ => true;
+        _def.Dispose();
+        Assert.Equal(L1011FoResult.Unavailable, await _def.FoSetCabinAltitudeSelectorAsync(49));
+        Assert.Empty(_sent);
+    }
+
+    [Fact]
+    public void Cabin_altitude_selector_constants_are_the_control_maps_knob()
+    {
+        // The knob's own state variable and the map's ROTARY_FLT_CAB row's dec and inc events.
+        var knob = L1011ControlMap.Load().Find("ROTARY_FLT_CAB");
+        Assert.NotNull(knob);
+        Assert.Equal(new[] { "H:" + IniL1011Definition.CabinAltitudeSelectorDecEvent }, knob!.Dec);
+        Assert.Equal(new[] { "H:" + IniL1011Definition.CabinAltitudeSelectorIncEvent }, knob.Inc);
+        Assert.Equal("FLT_CAB", IniL1011Definition.CabinAltitudeSelectorStateVar);
+        Assert.Equal("ROTARY_FLT_CAB_DEC", IniL1011Definition.CabinAltitudeSelectorDecEvent);
+        Assert.Equal("ROTARY_FLT_CAB_INC", IniL1011Definition.CabinAltitudeSelectorIncEvent);
+    }
+
+    [Fact]
+    public async Task Cabin_strings_are_invariant_under_de_DE()
+    {
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+
+            await _def.FoSetCabinBaroAsync(1002.37);
+            await _def.FoSetCabinAltitudeSelectorAsync(49);
+
+            Assert.Equal(new[]
+            {
+                "4 16038 (>K:2:KOHLSMAN_SET)",
+                "50 (>L:FLT_CAB) (>H:ROTARY_FLT_CAB_DEC)",
+            }, _sent);
+            Assert.All(_sent, s => Assert.DoesNotContain('.', s));
+            Assert.All(_sent, s => Assert.DoesNotContain(',', s));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
+    }
+
+    // ---- The tablet's take-off exports ---------------------------------------------------------------
+
+    /// <summary>
+    /// Live: after the tablet's "Calculate" and "Set bugs and EPR" with flaps 10 chosen,
+    /// <c>L:PERF_SELECTED_FLAPS</c> read 10 (0 before the export) and <c>L:PERF_STAB_TRIM</c> 2.38, both
+    /// plain numbers. Read on request, never spoken, so no Ctrl+M row ([VAR-9]).
+    /// </summary>
+    [Theory]
+    [InlineData(IniL1011Definition.PerfSelectedFlapsKey, "L1011_FO_PERF_SELECTED_FLAPS", "PERF_SELECTED_FLAPS", "Tablet selected take-off flaps")]
+    [InlineData(IniL1011Definition.PerfStabTrimKey, "L1011_FO_PERF_STAB_TRIM", "PERF_STAB_TRIM", "Tablet take-off stabilizer trim")]
+    public void The_tablets_selected_flaps_are_registered_on_request_and_excluded_from_the_monitor(
+        string key, string expectedKey, string name, string displayName)
+    {
+        Assert.Equal(expectedKey, key);
+        var vars = new IniL1011Definition().GetVariables();
+        var def = vars[key];
+
+        Assert.Equal(name, def.Name);
+        Assert.Equal(SimVarType.LVar, def.Type);
+        Assert.Equal("number", def.Units);
+        Assert.Equal(UpdateFrequency.OnRequest, def.UpdateFrequency);
+        Assert.True(def.ExcludeFromMonitorManager);
+        Assert.False(def.IsAnnounced);
+        Assert.Equal(displayName, def.DisplayName);
+        Assert.DoesNotContain(key, Services.MonitorRowBuilder.Build(vars).Select(r => r.Key));
+        Assert.Single(vars.Values, d => d.Name == name);   // one data definition, no second key on it
+        Assert.False(_def.FoAcceptsKey(key));               // read, never written
+    }
+
     // ---- The entry runs on the UI thread from any caller -----------------------------------------
     //
     // The executor calls the entry from pool threads (it awaits with ConfigureAwait(false)), and its
@@ -822,6 +978,30 @@ public class IniL1011FirstOfficerEntryTests
         Assert.Equal(ui.ThreadId, send.Thread);
         Assert.Equal(L1011Levers.AllAltimetersRpn(1013.25), send.Rpn);
         Assert.Equal(posts + 1, ui.Posts);
+    }
+
+    [Fact]
+    public async Task Both_entries_run_on_the_captured_context()
+    {
+        using var ui = new UiThreadContext();
+        var sends = new ConcurrentQueue<(int Thread, string Rpn)>();
+        var def = BuildAttachedUnder(ui, sends);
+
+        int posts = ui.Posts;
+        var baro = await Task.Run(() => def.FoSetCabinBaroAsync(1002.0)).WaitAsync(Bound);
+        Assert.Equal(L1011FoResult.Sent, baro);
+        Assert.Equal(posts + 1, ui.Posts);
+
+        posts = ui.Posts;
+        var selector = await Task.Run(() => def.FoSetCabinAltitudeSelectorAsync(49)).WaitAsync(Bound);
+        Assert.Equal(L1011FoResult.Sent, selector);
+        Assert.Equal(posts + 1, ui.Posts);
+
+        Assert.Equal(new[]
+        {
+            (ui.ThreadId, "4 16032 (>K:2:KOHLSMAN_SET)"),
+            (ui.ThreadId, "50 (>L:FLT_CAB) (>H:ROTARY_FLT_CAB_DEC)"),
+        }, sends);
     }
 
     [Fact]

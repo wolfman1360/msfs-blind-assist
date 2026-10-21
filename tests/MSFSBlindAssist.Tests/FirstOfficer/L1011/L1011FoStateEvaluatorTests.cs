@@ -419,4 +419,42 @@ public class L1011FoStateEvaluatorTests
             Assert.Contains(k, polled);
         Assert.Equal(polled.Count, polled.Distinct().Count());
     }
+
+    // ------------------------------------------------------------------ the tablet's take-off exports
+
+    /// <summary>The tablet's "Set bugs and EPR" exports, polled with the readouts: the selected take-off
+    /// flaps and the take-off stabilizer trim.</summary>
+    [Fact]
+    public void The_poll_list_covers_the_tablets_take_off_exports()
+    {
+        var polled = new L1011FoStateEvaluator().OnRequestPollFields;
+
+        Assert.Contains(IniL1011Definition.PerfSelectedFlapsKey, polled);
+        Assert.Contains(IniL1011Definition.PerfStabTrimKey, polled);
+        Assert.Equal(polled.Count, polled.Distinct().Count());
+    }
+
+    /// <summary>Live: the tablet's export read 2.38; it reads 0 before any export.</summary>
+    [Theory]
+    [InlineData(2.38, 2.38)]
+    [InlineData(0.0, null)]
+    [InlineData(-1.0, null)]
+    [InlineData(double.NaN, null)]
+    public void Takeoff_stab_trim_units_is_the_tablets_export_above_zero(double cached, double? want)
+    {
+        var e = new L1011FoStateEvaluator();
+        e.SetSimConnect(SeededSimConnectCache.With((IniL1011Definition.PerfStabTrimKey, cached)));
+
+        Assert.Equal(want, e.TakeoffStabTrimUnits());
+    }
+
+    [Fact]
+    public void Takeoff_stab_trim_units_is_null_unread()
+    {
+        var e = new L1011FoStateEvaluator();
+        Assert.Null(e.TakeoffStabTrimUnits());   // no connection at all
+
+        e.SetSimConnect(SeededSimConnectCache.With((IniL1011Definition.PerfSelectedFlapsKey, 10)));
+        Assert.Null(e.TakeoffStabTrimUnits());   // connected, the trim never delivered
+    }
 }

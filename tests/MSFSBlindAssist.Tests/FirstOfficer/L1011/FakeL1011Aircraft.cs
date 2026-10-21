@@ -5,11 +5,12 @@ using MSFSBlindAssist.FirstOfficer.L1011;
 namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 
 /// <summary>What reached the fake TriStar.</summary>
-internal enum FakeL1011IoKind { Write, Altimeters, FreshRead }
+internal enum FakeL1011IoKind { Write, Altimeters, FreshRead, CabinBaro, CabinAltitudeStep }
 
 /// <summary>One thing that reached the fake, in order. <see cref="Value"/>: a write's value, the altimeter
-/// setting in hectopascals, or what a fresh read delivered (null when nothing was). <see cref="AtMs"/>: the
-/// fake's clock when it happened (a fresh read: when it was answered).</summary>
+/// or cabin baro setting in hectopascals, the cabin altitude selector's step, or what a fresh read
+/// delivered (null when nothing was). <see cref="AtMs"/>: the fake's clock when it happened (a fresh read:
+/// when it was answered).</summary>
 internal readonly record struct FakeL1011Io(FakeL1011IoKind Kind, string Key, double? Value, long AtMs);
 
 /// <summary>
@@ -38,10 +39,16 @@ internal readonly record struct FakeL1011Io(FakeL1011IoKind Kind, string Key, do
 /// out, both essential bus fail lights lit unless the external power breaker reads closed. The battery
 /// changes none of them.</item>
 /// <item>The altimeters set together set the three altimeter readouts, the setting read as the definition
-/// reads it (inches taken too; out of range refused).</item>
+/// reads it (inches taken too; out of range refused). The cabin baro sets its own readout
+/// (<c>L1011_RO_CABIN_BARO</c>), read the same way.</item>
+/// <item>The cabin altitude selector turned to a step (0 to 100, else refused as the definition refuses it)
+/// sets the selected cabin altitude readout to the step's altitude (the knob table,
+/// <see cref="L1011Pressurization.CabinAltitudeForStep"/>) in METRES, as SimConnect delivers
+/// <c>L:TARGET_CABIN_ALTITUDE</c>.</item>
 /// </list>
 /// Failure injection: <see cref="Refuse"/> and <see cref="NeverDeliver"/>. Time moves only through
-/// <see cref="DelayAsync"/>, which a fresh read also waits through. Every member is safe from any thread.
+/// <see cref="DelayAsync"/>, which a fresh read also waits through; a test scripts what the aircraft does
+/// as time passes with <see cref="OnClock"/>. Every member is safe from any thread.
 /// </summary>
 internal sealed class FakeL1011Aircraft : IL1011FoTransport
 {
@@ -50,6 +57,14 @@ internal sealed class FakeL1011Aircraft : IL1011FoTransport
 
     /// <summary>The key the altimeter writes are logged under.</summary>
     public const string AltimetersIoKey = "ALTIMETERS";
+
+    /// <summary>The keys the cabin baro and cabin altitude selector writes are logged under.</summary>
+    public const string CabinBaroIoKey = "CABIN_BARO";
+    public const string CabinAltitudeIoKey = "CABIN_ALTITUDE_SELECTOR";
+
+    private const string CabinBaroReadout = "L1011_RO_CABIN_BARO";
+    private const string CabinAltitudeReadout = "L1011_RO_CABIN_ALT_SELECTED";
+    private const double MetresPerFoot = 0.3048;
 
     private const string StandbyPower = "TOGGLE_STBY_POWER";
     private const string StandbyGuard = "GUARD_STBY_POWER";
@@ -106,8 +121,16 @@ internal sealed class FakeL1011Aircraft : IL1011FoTransport
     /// <summary>The readings, by key; a key absent is unread. Seed through <see cref="Set"/>.</summary>
     public Dictionary<string, double> Vars { get; } = new(StringComparer.Ordinal);
 
-    /// <summary>Every write sent, altimeter write and fresh read, in order.</summary>
+    /// <summary>Every write sent, altimeter, cabin baro and cabin altitude selector write, and fresh read, in order.</summary>
     public List<FakeL1011Io> Io { get; } = new();
+
+    /// <summary>
+    /// A test-only script of what the aircraft does as time passes (an engine's N3 rising): run inside
+    /// every <see cref="DelayAsync"/>, a fresh read's wait included, once the clock has moved, with the
+    /// fake, whose <see cref="NowMs"/> is the new time. It runs under the fake's lock: seed through
+    /// <see cref="Set"/>, never wait on another thread.
+    /// </summary>
+    public Action<FakeL1011Aircraft>? OnClock { get; set; }
 
     /// <summary>Every lamp mute asked for, in milliseconds.</summary>
     public List<int> MuteRequests { get; } = new();
@@ -203,6 +226,36 @@ internal sealed class FakeL1011Aircraft : IL1011FoTransport
         }
     }
 
+    public Task<L1011FoResult> SetCabinBaroAsync(double millibars)
+    {
+        lock (_sync)
+        {
+            if (!Ready)
+                return Task.FromResult(L1011FoResult.Unavailable);
+            if (L1011Levers.AltimeterMillibars(millibars) is not double setting)
+                return Task.FromResult(L1011FoResult.Refused(L1011Levers.AltimeterRangeError));
+            Io.Add(new(FakeL1011IoKind.CabinBaro, CabinBaroIoKey, setting, _clock));
+            Put(CabinBaroReadout, setting);
+            Recompute();
+            return Task.FromResult(L1011FoResult.Sent);
+        }
+    }
+
+    public Task<L1011FoResult> SetCabinAltitudeSelectorAsync(int step)
+    {
+        lock (_sync)
+        {
+            if (!Ready)
+                return Task.FromResult(L1011FoResult.Unavailable);
+            if (step < 0 || step > IniL1011Definition.CabinAltitudeSelectorMaxStep)
+                return Task.FromResult(L1011FoResult.Refused(IniL1011Definition.CabinAltitudeSelectorRangeError));
+            Io.Add(new(FakeL1011IoKind.CabinAltitudeStep, CabinAltitudeIoKey, step, _clock));
+            Put(CabinAltitudeReadout, L1011Pressurization.CabinAltitudeForStep(step) * MetresPerFoot);
+            Recompute();
+            return Task.FromResult(L1011FoResult.Sent);
+        }
+    }
+
     public bool CanReadBack(string key) => Definition.Value.FoCanReadBack(key);
 
     /// <summary>The reading after <see cref="DeliveryLagMs"/>; for an unread key, or a lag past
@@ -233,7 +286,11 @@ internal sealed class FakeL1011Aircraft : IL1011FoTransport
 
     public Task DelayAsync(int ms)
     {
-        lock (_sync) _clock += Math.Max(0, ms);
+        lock (_sync)
+        {
+            _clock += Math.Max(0, ms);
+            OnClock?.Invoke(this);
+        }
         return Task.CompletedTask;
     }
 

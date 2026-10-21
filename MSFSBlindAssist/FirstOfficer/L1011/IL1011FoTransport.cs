@@ -24,6 +24,13 @@ public interface IL1011FoTransport
     /// <summary>Sets the captain's, first officer's and standby altimeters together, saying nothing.</summary>
     Task<L1011FoResult> SetAltimetersAsync(double millibars);
 
+    /// <summary>Sets the cabin barometric setting (read as the altimeters read a setting), saying nothing.</summary>
+    Task<L1011FoResult> SetCabinBaroAsync(double millibars);
+
+    /// <summary>Turns the cabin altitude selector to a knob step (0 to 100), saying nothing; the aircraft
+    /// computes the cabin altitude the step commands.</summary>
+    Task<L1011FoResult> SetCabinAltitudeSelectorAsync(int step);
+
     /// <summary>True when the key's reading follows its write (a switch row, a lever, a lamp, a readout):
     /// never a press, a spring switch, a knob or a typed entry.</summary>
     bool CanReadBack(string key);

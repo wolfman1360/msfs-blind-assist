@@ -194,6 +194,8 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
             };
         }
 
+        AddFirstOfficerVariables(vars);
+
         // The autopilot's armed and captured flags and the autothrottle's alpha mode: announced
         // (L1011AfcsAnnouncer), listed in the Autopilot panel's status display, muteable in Ctrl+M.
         foreach (var state in L1011AfcsModes.AircraftStates)

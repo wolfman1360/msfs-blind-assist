@@ -1,3 +1,4 @@
+using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.L1011;
 using MSFSBlindAssist.FirstOfficer.Generic;
 
@@ -5,10 +6,10 @@ namespace MSFSBlindAssist.FirstOfficer.L1011;
 
 /// <summary>
 /// The iniBuilds L-1011 TriStar First Officer's state evaluator. Reads the SimConnect cache by the
-/// definition's own variable keys: switch rows and levers ride the batches, gauge readouts are
-/// OnRequest (polled here each second by the First Officer window), lamps ride the batch. NaN until
-/// every input of a field is read, never 0: a guessed 0 reads "engines stopped" or "switch off" and
-/// lets a guard or a line pass over a turning engine.
+/// definition's own variable keys: switch rows and levers ride the batches, gauge readouts and the
+/// tablet's take-off exports are OnRequest (polled here each second by the First Officer window), lamps
+/// ride the batch. NaN until every input of a field is read, never 0: a guessed 0 reads "engines
+/// stopped" or "switch off" and lets a guard or a line pass over a turning engine.
 ///
 /// The engine reads are the live findings of 2026-10-21. A cold engine's N3 gauge reads 1.4 to 1.9,
 /// never 0, and idles near 59, so <see cref="EngineStoppedN3"/> and <see cref="EngineRunningN3"/> sit
@@ -52,9 +53,18 @@ public sealed class L1011FoStateEvaluator : LVarStateEvaluator, IFoEngine3N2Sink
         FlapsAngleKey, ExtPowerBreakerKey,
         // Read by the executor's closed-loop external power (ties pressed only when open, verified closed).
         "L1011_RO_AC_TIE_1", "L1011_RO_AC_TIE_2", "L1011_RO_AC_TIE_3",
+        // The tablet's take-off exports ("Set bugs and EPR"): the selected flaps and the stabilizer trim.
+        IniL1011Definition.PerfSelectedFlapsKey, IniL1011Definition.PerfStabTrimKey,
     };
 
     public override IReadOnlyList<string> OnRequestPollFields => PollFields;
+
+    // ------------------------------------------------------------------ plan values
+
+    /// <summary>The take-off stabilizer trim the tablet exported, in its own units (live: 2.38): null
+    /// while unread, and while it reads 0 or below (0 before any export).</summary>
+    public double? TakeoffStabTrimUnits() =>
+        Raw(IniL1011Definition.PerfStabTrimKey) is var units && units > 0 ? units : null;
 
     // ------------------------------------------------------------------ synthetic fields
 

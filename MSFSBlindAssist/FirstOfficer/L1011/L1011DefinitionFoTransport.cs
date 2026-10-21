@@ -28,6 +28,8 @@ public sealed class L1011DefinitionFoTransport : IL1011FoTransport
 
     public Task<L1011FoResult> SetAsync(string key, double value) => _def.FoSetAsync(key, value);
     public Task<L1011FoResult> SetAltimetersAsync(double millibars) => _def.FoSetAltimetersAsync(millibars);
+    public Task<L1011FoResult> SetCabinBaroAsync(double millibars) => _def.FoSetCabinBaroAsync(millibars);
+    public Task<L1011FoResult> SetCabinAltitudeSelectorAsync(int step) => _def.FoSetCabinAltitudeSelectorAsync(step);
     public bool CanReadBack(string key) => _def.FoCanReadBack(key);
 
     public Task<double?> ReadFreshAsync(string key, int timeoutMs) => _sim.ReadFreshAsync(key, timeoutMs);

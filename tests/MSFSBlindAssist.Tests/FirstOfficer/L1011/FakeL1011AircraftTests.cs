@@ -1,3 +1,4 @@
+using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.L1011;
 
 namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
@@ -392,6 +393,102 @@ public class FakeL1011AircraftTests
         Assert.Equal(L1011FoResult.Refused(L1011Levers.AltimeterRangeError), await ac.SetAltimetersAsync(900));
         Assert.Empty(ac.AltimeterWrites);
         Assert.Null(ac.Get("L1011_RO_ALTIMETER_1"));
+    }
+
+    // ---- The cabin baro and the cabin altitude selector -------------------------------------------------
+
+    private const string CabinBaro = "L1011_RO_CABIN_BARO";
+    private const string CabinAltitudeSelected = "L1011_RO_CABIN_ALT_SELECTED";
+
+    [Fact]
+    public async Task A_cabin_baro_write_sets_the_readout()
+    {
+        var ac = new FakeL1011Aircraft();
+
+        Assert.Equal(L1011FoResult.Sent, await ac.SetCabinBaroAsync(1002.0));
+
+        Assert.Equal(1002.0, ac.Get(CabinBaro));
+        var io = Assert.Single(ac.Io);
+        Assert.Equal((FakeL1011IoKind.CabinBaro, FakeL1011Aircraft.CabinBaroIoKey, (double?)1002.0), (io.Kind, io.Key, io.Value));
+        Assert.Empty(ac.Writes);
+        Assert.Empty(ac.AltimeterWrites);
+        Assert.Null(ac.Get("L1011_RO_ALTIMETER_1"));   // the cabin's setting is its own
+    }
+
+    [Fact]
+    public async Task A_cabin_baro_write_reads_the_setting_as_the_definition_does()
+    {
+        var ac = new FakeL1011Aircraft();
+
+        Assert.Equal(L1011FoResult.Sent, await ac.SetCabinBaroAsync(29.92));
+        Assert.Equal(L1011Levers.AltimeterMillibars(29.92), ac.Get(CabinBaro));
+
+        Assert.Equal(L1011FoResult.Refused(L1011Levers.AltimeterRangeError), await ac.SetCabinBaroAsync(2000));
+        Assert.Single(ac.Io);
+
+        ac.Ready = false;
+        Assert.Equal(L1011FoResult.Unavailable, await ac.SetCabinBaroAsync(1002.0));
+        Assert.Single(ac.Io);
+    }
+
+    [Fact]
+    public async Task A_cabin_altitude_step_sets_the_readout_in_metres()
+    {
+        // SimConnect delivers L:TARGET_CABIN_ALTITUDE in metres (L1011Readouts scales it to feet).
+        var ac = new FakeL1011Aircraft();
+
+        Assert.Equal(L1011FoResult.Sent, await ac.SetCabinAltitudeSelectorAsync(49));
+
+        Assert.InRange(ac.Get(CabinAltitudeSelected)!.Value, 4500 * 0.3048 - 0.01, 4500 * 0.3048 + 0.01);
+        var io = Assert.Single(ac.Io);
+        Assert.Equal((FakeL1011IoKind.CabinAltitudeStep, FakeL1011Aircraft.CabinAltitudeIoKey, (double?)49), (io.Kind, io.Key, io.Value));
+        Assert.Empty(ac.Writes);
+    }
+
+    [Fact]
+    public async Task A_cabin_altitude_step_outside_its_travel_is_refused_as_the_definition_refuses_it()
+    {
+        var ac = new FakeL1011Aircraft();
+
+        Assert.Equal(L1011FoResult.Refused(IniL1011Definition.CabinAltitudeSelectorRangeError), await ac.SetCabinAltitudeSelectorAsync(101));
+        Assert.Equal(L1011FoResult.Refused(IniL1011Definition.CabinAltitudeSelectorRangeError), await ac.SetCabinAltitudeSelectorAsync(-1));
+        ac.Ready = false;
+        Assert.Equal(L1011FoResult.Unavailable, await ac.SetCabinAltitudeSelectorAsync(49));
+
+        Assert.Empty(ac.Io);
+        Assert.Null(ac.Get(CabinAltitudeSelected));
+    }
+
+    [Fact]
+    public async Task The_tablets_take_off_exports_read_fresh_like_any_key()
+    {
+        var ac = new FakeL1011Aircraft();
+        ac.Set(IniL1011Definition.PerfSelectedFlapsKey, 10);
+        ac.Set(IniL1011Definition.PerfStabTrimKey, 2.38);
+
+        Assert.Equal(10, await ac.ReadFreshAsync(IniL1011Definition.PerfSelectedFlapsKey, 2500));
+        Assert.Equal(2.38, ac.ReadCached(IniL1011Definition.PerfStabTrimKey));
+    }
+
+    [Fact]
+    public async Task OnClock_runs_after_each_delay_with_the_new_time()
+    {
+        var ac = new FakeL1011Aircraft { DeliveryLagMs = 300 };
+        var seen = new List<long>();
+        ac.OnClock = fake =>
+        {
+            seen.Add(fake.NowMs);
+            fake.Set("L1011_RO_N3_2", fake.NowMs / 100.0);   // a script: N3 rises with time
+        };
+
+        await ac.DelayAsync(1500);
+        await ac.DelayAsync(500);
+        Assert.Equal(new long[] { 1500, 2000 }, seen);
+        Assert.Equal(20, ac.Get("L1011_RO_N3_2"));
+
+        // A fresh read waits through the clock too, and delivers what the script made of the new time.
+        Assert.Equal(23, await ac.ReadFreshAsync("L1011_RO_N3_2", 2500));
+        Assert.Equal(new long[] { 1500, 2000, 2300 }, seen);
     }
 
     [Fact]
