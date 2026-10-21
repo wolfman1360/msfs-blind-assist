@@ -45,23 +45,28 @@ public partial class IniL1011Definition
             return true;
         }
 
+        Execute(row, PlanFor(row, value, simConnect), value, simConnect, announcer);
+        return true;
+    }
+
+    /// <summary>
+    /// What a map row's write is (<see cref="L1011WritePlan"/>): the click replay for a Set, Press,
+    /// Increase or Decrease row, or why it must not be sent, the autopilot's own refusal
+    /// (<see cref="AfcsRefusal"/>) first. Increase and Decrease ignore <paramref name="value"/>.
+    /// </summary>
+    private L1011Plan PlanFor(L1011PlacedRow row, double value, SimConnectManager sim)
+    {
+        if (AfcsRefusal(row, value, sim) is string afcsRefusal)
+            return L1011Plan.Refused(afcsRefusal);
         var control = row.Control!;
-        if (AfcsRefusal(row, value, simConnect) is string afcsRefusal)
+        return row.Action switch
         {
-            announcer.Announce($"{row.Name}: {afcsRefusal}");
-            SnapBack(row.Key, simConnect);
-            return true;
-        }
-        var plan = row.Action switch
-        {
-            L1011RowAction.Set => L1011WritePlan.ForSet(control, value, PlanFrom(row, simConnect)),
+            L1011RowAction.Set => L1011WritePlan.ForSet(control, value, PlanFrom(row, sim)),
             L1011RowAction.Press => L1011WritePlan.ForPress(control, row.HoldMs),
             L1011RowAction.Increase => L1011WritePlan.ForStep(control, increase: true),
             L1011RowAction.Decrease => L1011WritePlan.ForStep(control, increase: false),
             _ => L1011Plan.Refused(L1011WritePlan.NotSettableRefusal),
         };
-        Execute(row, plan, simConnect, announcer, commandedValue: row.Action == L1011RowAction.Set ? value : null);
-        return true;
     }
 
     /// <summary>The cache a write plans from (<see cref="SimConnectManager.GetCachedVariableValue"/>); tests replace it.</summary>
@@ -79,37 +84,60 @@ public partial class IniL1011Definition
             ? _commanded.Resolve(row.Key, cached: null, Clock())
             : CurrentPosition(row.Key, sim);
 
-    private void Execute(L1011PlacedRow row, L1011Plan plan, SimConnectManager sim, ScreenReaderAnnouncer announcer,
-        double? commandedValue)
+    /// <summary>A panel pick: the write core (<see cref="ApplyPlan"/>), then what the screen reader cannot
+    /// say. A refusal is spoken with its reason and a write that cannot land as unavailable, each snapping
+    /// the combo back; a write sent, or a control already there, says nothing.</summary>
+    private void Execute(L1011PlacedRow row, L1011Plan plan, double value, SimConnectManager sim,
+        ScreenReaderAnnouncer announcer)
+    {
+        var (result, _) = ApplyPlan(row, plan, value, sim);
+        switch (result.Outcome)
+        {
+            case L1011FoOutcome.Refused:
+                announcer.Announce($"{row.Name}: {result.Reason}");
+                SnapBack(row.Key, sim);
+                break;
+            case L1011FoOutcome.Unavailable:
+                announcer.Announce($"{row.Name} unavailable");
+                SnapBack(row.Key, sim);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// The ONE write core of a map row, shared by the panels (<see cref="Execute"/>) and the First
+    /// Officer (<see cref="FoSetAsync"/>), so the two can never write a control differently. Speaks
+    /// nothing and snaps nothing back: each caller does what its outcome needs. A refused plan, a
+    /// control already there, or a write that cannot land sends nothing. Otherwise a Set row's target
+    /// (and the positions it passes through, <see cref="L1011Plan.Via"/>) is recorded as commanded, the
+    /// plan runs, and a Set row is read again once it has settled. The task is the plan's run, holds and
+    /// the paddle notch included; it is already complete for anything not sent.
+    /// </summary>
+    private (L1011FoResult Result, Task Run) ApplyPlan(L1011PlacedRow row, L1011Plan plan, double value,
+        SimConnectManager sim)
     {
         if (plan.Refusal != null)
-        {
-            announcer.Announce($"{row.Name}: {plan.Refusal}");
-            SnapBack(row.Key, sim);
-            return;
-        }
+            return (L1011FoResult.Refused(plan.Refusal), Task.CompletedTask);
         if (plan.IsEmpty)
-            return;   // already there; the screen reader has said so
+            return (L1011FoResult.AlreadyThere, Task.CompletedTask);   // a panel's screen reader has said so
         if (!CanLand(sim))
-        {
-            announcer.Announce($"{row.Name} unavailable");
-            SnapBack(row.Key, sim);
-            return;
-        }
-        if (commandedValue is double target)
-            _commanded.Record(row.Key, target, Clock(), plan.Via);
+            return (L1011FoResult.Unavailable, Task.CompletedTask);
+        bool setRow = row.Action == L1011RowAction.Set;
+        if (setRow)
+            _commanded.Record(row.Key, value, Clock(), plan.Via);
         var run = RunAsync(plan.Steps, sim);
         // A Set row is read again once its write has landed, so its combo or slider shows what the
         // aircraft did: a gauge can put a switch straight back without the variable changing (no
         // delivery comes), and a knob is never refreshed by the batch. Only the LAST write of a burst
         // is read again: a slider swept by a held key writes every step, and an earlier step's answer
         // would pull the thumb, and the next write, back behind where the pilot has got to.
-        if (commandedValue != null)
+        if (setRow)
         {
             int generation = _setGeneration[row.Key] = _setGeneration.GetValueOrDefault(row.Key) + 1;
             _ = ReReadAfterSettleAsync(row.Key, L1011WritePlan.ReReadSettleMs, sim, run,
                 stillLatest: () => _setGeneration.GetValueOrDefault(row.Key) == generation);
         }
+        return (L1011FoResult.Sent, run);
     }
 
     /// <summary>A refused pick must not leave the combo on a position the aircraft never took: ask
