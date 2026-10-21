@@ -34,6 +34,13 @@ internal readonly record struct FakeL1011Io(FakeL1011IoKind Kind, string Key, do
 /// test seeds the ties either way (they read closed on a cold aircraft).</item>
 /// <item>External power on (<c>TOGGLE_EXT_PWR</c> 1) with its available light lit closes its breaker
 /// (<c>L1011_RO_EXT_PWR_BREAKER</c> 1); external power off opens it.</item>
+/// <item>The APU: a start press (<c>SWITCH_APU_START</c>) with the master (<c>TOGGLE_APU_POWER</c>) reading 1
+/// sets its RPM (<c>L1011_RO_APU_RPM</c>) to <see cref="ApuRpmAfterStart"/>, with the master off or unread
+/// nothing; the stop press (<c>APU_STOP</c>) sets the RPM to 0. The generator field press
+/// (<c>SWITCH_APU_BRG</c>) closes its relay (<c>L1011_RO_APU_GEN_FIELD</c>) only with the APU running (95 %);
+/// the breaker press (<c>SWITCH_GND_FLOW</c>) closes the breaker relay (<c>L1011_RO_APU_GEN_BREAKER</c>) only
+/// over a closed field, whatever external power does (no interlock); the trip (<c>SWITCH_GND_FLOW_OPEN</c>)
+/// opens it. The buttons hold no position.</item>
 /// <item>The standby lights as the aircraft showed them: the unarmed light lit only with the switch Off, the
 /// flowbar lit only with it On (neither read while the switch is unread), both standby bus fail lights always
 /// out, both essential bus fail lights lit unless the external power breaker reads closed. The battery
@@ -78,6 +85,15 @@ internal sealed class FakeL1011Aircraft : IL1011FoTransport
     private const string AcEssentialFail = "LAMP_AC_ESS_FAIL_LIGHT";
     private const string DcEssentialFail = "LAMP_DC_ESS_FAIL_LIGHT";
     private const string TieClosePrefix = "SWITCH_TIE_FLOW_";
+    private const string ApuMaster = "TOGGLE_APU_POWER";
+    private const string ApuStartPress = "SWITCH_APU_START";
+    private const string ApuStopPress = "APU_STOP";
+    private const string ApuRpm = "L1011_RO_APU_RPM";
+    private const string ApuGenFieldPress = "SWITCH_APU_BRG";
+    private const string ApuGenBreakerPress = "SWITCH_GND_FLOW";
+    private const string ApuGenBreakerTrip = "SWITCH_GND_FLOW_OPEN";
+    private const string ApuGenField = "L1011_RO_APU_GEN_FIELD";
+    private const string ApuGenBreaker = "L1011_RO_APU_GEN_BREAKER";
 
     private const double StandbyOff = 0, StandbyArm = 1, StandbyOn = 2;
 
@@ -117,6 +133,10 @@ internal sealed class FakeL1011Aircraft : IL1011FoTransport
 
     /// <summary>How long a fresh read takes to be answered; past its time-out it is answered with nothing.</summary>
     public int DeliveryLagMs { get; set; }
+
+    /// <summary>The APU's RPM right after a start press with the master on: running (100) by default; a test
+    /// scripting the spool-up sets 0 and drives the RPM through <see cref="OnClock"/>.</summary>
+    public double ApuRpmAfterStart { get; set; } = 100;
 
     /// <summary>The readings, by key; a key absent is unread. Seed through <see cref="Set"/>.</summary>
     public Dictionary<string, double> Vars { get; } = new(StringComparer.Ordinal);
@@ -342,6 +362,25 @@ internal sealed class FakeL1011Aircraft : IL1011FoTransport
             else if (IsLit(ExternalPowerAvailable))
                 Put(ExternalPowerBreaker, 1);
         }
+        else if (key == ApuStartPress)
+        {
+            if (Value(ApuMaster) is double master && Near(master, 1))
+                Put(ApuRpm, ApuRpmAfterStart);
+        }
+        else if (key == ApuStopPress)
+            Put(ApuRpm, 0);
+        else if (key == ApuGenFieldPress)
+        {
+            if (Value(ApuRpm) is double rpm && rpm >= L1011FoStateEvaluator.ApuRunningRpm)
+                Put(ApuGenField, 1);
+        }
+        else if (key == ApuGenBreakerPress)
+        {
+            if (IsOn(ApuGenField))
+                Put(ApuGenBreaker, 1);
+        }
+        else if (key == ApuGenBreakerTrip)
+            Put(ApuGenBreaker, 0);
         else if (TieNumber(key) is int tie && SourceOnLine())
             Put($"L1011_RO_AC_TIE_{tie}", 1);
     }

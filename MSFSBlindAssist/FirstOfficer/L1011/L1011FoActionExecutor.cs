@@ -21,10 +21,13 @@ namespace MSFSBlindAssist.FirstOfficer.L1011;
 /// transport's clock, and nothing blocks a thread on a transport call: a caller on the UI thread waiting
 /// on a held press would deadlock the post that runs it.
 ///
-/// Composites are pseudo-keys (<see cref="Pseudo"/>), run under the gate like any write. A flow step hands
-/// the flow's Stop to every key; only a composite in <see cref="StopAware"/> reads it, its waits read-only
-/// and bounded on the transport's clock, held by the flow's Pause without counting it
-/// (<see cref="WaitUntilAsync"/>); a plain write and every other composite are atomic. Nothing is held
+/// Composites are pseudo-keys. One in <see cref="Pseudo"/> runs under the gate like any write and is atomic.
+/// A flow step hands the flow's Stop to every key, but only a composite in <see cref="StopAware"/> reads it,
+/// and no wait ever holds the gate (ruling R23): it runs outside the gate, takes it for each write phase
+/// (<see cref="UnderGateAsync"/>: the reads that decide a write and the write, never after the Stop) and
+/// releases it before every wait, which is read-only, bounded on the transport's clock and, for a flow step
+/// only, held by the flow's Pause without counting it (<see cref="WaitUntilAsync"/>). So a paused flow never
+/// queues a hand tick, the automation or the drain behind its wait. Nothing is held
 /// across a flow's Stop or the window's close yet, so <see cref="IFoActionExecutor.ReleaseHeldPresses"/>
 /// and <see cref="IFoActionExecutor.OnFlowStoppedAsync"/> keep their defaults: a press still held when the
 /// definition goes away is released by the definition's own dispose, once. The engine start (part 2) is
@@ -103,6 +106,12 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     /// <summary>The three AC ties closed (target 1).</summary>
     public const string AcTies = "FO_AC_TIES";
 
+    /// <summary>The APU started (target ignored): one press, done once the RPM rises; reads the flow's Stop.</summary>
+    public const string ApuStart = "FO_APU_START";
+
+    /// <summary>The APU generator on line (1: field, then breaker) or off line (0: the breaker tripped).</summary>
+    public const string ApuGenerator = "FO_APU_GENERATOR";
+
     /// <summary>
     /// The composites, by pseudo-key: each runs under the gate, writes through <see cref="WriteAsync"/>
     /// (never <see cref="Set"/>, which would wait on the gate it holds) and reads back what it changed.
@@ -115,15 +124,20 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
             [ExternalPower] = (exec, io, target) => exec.ExternalPowerAsync(io, target),
             [InsAlign] = (exec, io, _) => exec.InsAlignAsync(io),
             [AcTies] = (exec, io, target) => exec.AcTiesAsync(io, target),
+            [ApuGenerator] = (exec, io, target) => exec.ApuGeneratorAsync(io, target),
         };
 
     /// <summary>
-    /// The composites that read the flow's Stop (a wait that may end early in a safe state), as
-    /// <see cref="Pseudo"/> otherwise; looked up first. A checklist tick passes
-    /// <see cref="CancellationToken.None"/>.
+    /// The composites that read the flow's Stop (a wait that may end early in a safe state); looked up first,
+    /// before the gate (<see cref="SetCoreAsync"/>). Each runs OUTSIDE the gate and takes it for each write
+    /// phase through <see cref="UnderGateAsync"/>, so it is handed no transport: a phase gets the one read
+    /// under the gate (ruling R23). A checklist tick passes <see cref="CancellationToken.None"/>.
     /// </summary>
-    private static readonly Dictionary<string, Func<L1011FoActionExecutor, IL1011FoTransport, int, CancellationToken, Task<bool>>> StopAware =
-        new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, Func<L1011FoActionExecutor, int, CancellationToken, Task<bool>>> StopAware =
+        new(StringComparer.Ordinal)
+        {
+            [ApuStart] = (exec, _, stop) => exec.ApuStartAsync(stop),
+        };
 
     // ---- the standby power check ----
 
@@ -203,6 +217,21 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     private static string TieClosePress(int n) => $"SWITCH_TIE_FLOW_{n.ToString(CultureInfo.InvariantCulture)}";
     private static string TieReadout(int n) => $"L1011_RO_AC_TIE_{n.ToString(CultureInfo.InvariantCulture)}";
 
+    // ---- the APU ----
+
+    internal const string ApuMaster = "TOGGLE_APU_POWER";
+    internal const string ApuStartPress = "SWITCH_APU_START";
+    internal const string ApuRpm = "L1011_RO_APU_RPM";
+    internal const string ApuGenFieldPress = "SWITCH_APU_BRG";
+    internal const string ApuGenBreakerPress = "SWITCH_GND_FLOW";
+    internal const string ApuGenBreakerTrip = "SWITCH_GND_FLOW_OPEN";
+    internal const string ApuGenFieldRelay = "L1011_RO_APU_GEN_FIELD";
+    internal const string ApuGenBreakerRelay = "L1011_RO_APU_GEN_BREAKER";
+
+    /// <summary>How long the APU's RPM may read 0 after its start press: live, it read 0 for about 7 s while
+    /// the inlet doors opened, then rose about 3 %/s.</summary>
+    internal const int ApuSpinUpWaitMs = 20_000;
+
     /// <summary>True for a composite's key, Stop-aware or not. A flow key is known when this or the
     /// definition's <c>FoAcceptsKey</c> is true.</summary>
     public static bool IsPseudoKey(string key) => Pseudo.ContainsKey(key) || StopAware.ContainsKey(key);
@@ -241,8 +270,8 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
 
     /// <summary>
     /// The flow's entry point; <paramref name="stop"/> is the running flow's Stop. Every key goes through
-    /// <see cref="SetCoreAsync"/> with it, but only a composite in <see cref="StopAware"/> reads it: a plain
-    /// switch, a press and every other composite are atomic and ignore it.
+    /// <see cref="SetCoreAsync"/> with it, but only a composite in <see cref="StopAware"/> reads it (outside
+    /// the gate, ruling R23): a plain switch, a press and every other composite are atomic and ignore it.
     /// </summary>
     public async Task<bool> ExecuteStepAsync(IFlowStepDispatch step, CancellationToken stop)
     {
@@ -264,16 +293,26 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
         }
     }
 
-    /// <summary>The running flow's Pause (FlowManager hands it over once): a wait (<see cref="WaitUntilAsync"/>)
-    /// holds on it and does not count the time paused. Completes at once until a flow attaches it.</summary>
+    /// <summary>The running flow's Pause (FlowManager hands it over once): a flow step's wait
+    /// (<see cref="WaitUntilAsync"/>) holds on it and does not count the time paused; a hand tick's never
+    /// does. Completes at once until a flow attaches it.</summary>
     public void AttachFlowPause(Func<CancellationToken, Task> waitWhilePaused) => _waitWhilePaused = waitWhilePaused;
 
     /// <summary>One control, serialized with every other write. A checklist tick: never cut short.</summary>
     public Task<bool> Set(string key, int target) => SetCoreAsync(key, target, CancellationToken.None);
 
-    /// <summary>One control under the gate, with the flow's Stop for a composite that reads it.</summary>
-    private Task<bool> SetCoreAsync(string key, int target, CancellationToken stop) =>
-        GatedAsync($"{key} -> {target.ToString(CultureInfo.InvariantCulture)}", io => DispatchAsync(io, key, target, stop));
+    /// <summary>
+    /// One control, with the flow's Stop for a composite that reads it: a <see cref="StopAware"/> composite
+    /// looked up first and run outside the gate (<see cref="StopAwareAsync"/>, ruling R23); anything else
+    /// under the gate.
+    /// </summary>
+    private Task<bool> SetCoreAsync(string key, int target, CancellationToken stop)
+    {
+        string what = $"{key} -> {target.ToString(CultureInfo.InvariantCulture)}";
+        if (StopAware.TryGetValue(key, out var stopAware))
+            return StopAwareAsync(what, stopAware, target, stop);
+        return GatedAsync(what, io => DispatchAsync(io, key, target));
+    }
 
     public Task<bool> SetSeatbeltSign(bool on) => Set(SeatBelts, on ? 1 : 0);
 
@@ -324,12 +363,70 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
         }
     }
 
-    /// <summary>A composite that reads the flow's Stop first, then any other composite, else a single write.</summary>
-    private Task<bool> DispatchAsync(IL1011FoTransport io, string key, int target, CancellationToken stop)
+    /// <summary>Under the gate: a <see cref="Pseudo"/> composite, else a single write.</summary>
+    private Task<bool> DispatchAsync(IL1011FoTransport io, string key, int target)
     {
-        if (StopAware.TryGetValue(key, out var stopAware)) return stopAware(this, io, target, stop);
         if (Pseudo.TryGetValue(key, out var composite)) return composite(this, io, target);
         return WriteAsync(io, key, target);
+    }
+
+    // ================= Stop-aware composites, outside the gate (ruling R23) =================
+
+    /// <summary>
+    /// A <see cref="StopAware"/> composite, never under the gate: it takes the gate itself for each write
+    /// phase (<see cref="UnderGateAsync"/>) and holds none across a wait. Refuses at once, without waiting
+    /// for anything, when the aircraft cannot be reached; a throw is not done, logged.
+    /// </summary>
+    private async Task<bool> StopAwareAsync(string what, Func<L1011FoActionExecutor, int, CancellationToken, Task<bool>> composite,
+        int target, CancellationToken stop)
+    {
+        if (_io is not { Ready: true }) return false;
+        try
+        {
+            bool done = await composite(this, target, stop).ConfigureAwait(false);
+            Log.Debug(LogCategory, $"{what}: {(done ? "done" : "not done")}");
+            return done;
+        }
+        catch (Exception ex)
+        {
+            Note($"{what}: not done, it threw: {ex.Message}", warn: true);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// One write phase of a <see cref="StopAware"/> composite: the reads that decide a write and the write,
+    /// under the gate, on the transport read again there (detached or not ready: not done, logged). Never
+    /// after the flow's Stop: one arriving while the phase queues for the gate, or found once it has it, is
+    /// not done, logged "<paramref name="what"/>: stopped", with nothing read or written. The gate is always
+    /// released before the caller's next wait.
+    /// </summary>
+    private async Task<bool> UnderGateAsync(string what, CancellationToken stop, Func<IL1011FoTransport, Task<bool>> phase)
+    {
+        try
+        {
+            await _gate.WaitAsync(stop).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return Stopped(what);
+        }
+        try
+        {
+            var io = _io;
+            if (io is not { Ready: true })
+            {
+                Note($"{what}: not done, the aircraft can no longer be reached");
+                return false;
+            }
+            if (stop.IsCancellationRequested)
+                return Stopped(what);
+            return await phase(io).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     // ================= a single write =================
@@ -603,9 +700,10 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
 
     /// <summary>
     /// Each AC tie read fresh, in order: closed, left alone; open, its close button pressed and the tie read
-    /// back closed (one not closing does not stop the next); unread, never pressed. Null when all three
-    /// read closed, else the first failure in words for a sentence ("AC tie 2 did not close", "AC tie 2
-    /// could not be read"); each failure is logged where it happened.
+    /// back closed within <see cref="RelayVerifyTimeoutMs"/>, a relay's 8 s (ruling R22), never the press
+    /// button's own state (one not closing does not stop the next); unread, never pressed. Null when all
+    /// three read closed, else the first failure in words for a sentence ("AC tie 2 did not close", "AC tie
+    /// 2 could not be read"); each failure is logged where it happened.
     /// </summary>
     private async Task<string?> CloseTiesAsync(IL1011FoTransport io, string what)
     {
@@ -623,10 +721,91 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
             }
             if (t >= RelayClosedAtOrAbove) continue;   // closed already
             if (!await WriteAsync(io, TieClosePress(n), 1).ConfigureAwait(false)
-                || !await ReadsAsync(io, new[] { tie }, v => v >= RelayClosedAtOrAbove, $"{what}, {tieName}").ConfigureAwait(false))
+                || !await ReadsAsync(io, new[] { tie }, v => v >= RelayClosedAtOrAbove, $"{what}, {tieName}",
+                    RelayVerifyTimeoutMs).ConfigureAwait(false))
                 firstTieFailure ??= $"{tieName} did not close";
         }
         return firstTieFailure;
+    }
+
+    // ================= the APU =================
+
+    /// <summary>
+    /// The APU started, target ignored; a <see cref="StopAware"/> composite, outside the gate (ruling R23).
+    /// One write phase under the gate (<see cref="UnderGateAsync"/>, never begun after the flow's Stop): the
+    /// RPM read fresh, unread, not done and nothing pressed; at or above
+    /// <see cref="L1011FoStateEvaluator.ApuStartingRpm"/>, done with no press (starting or running: never a
+    /// second press). Then the master read fresh: not reading on, not done and logged (the flow sets the
+    /// master in its own step first). The Stop checked once more, then one press of the start button, the
+    /// panel row's press (<c>L:SWITCH_APU_START</c> 1 with <c>H:APU</c>, held 2 s, [L1011-22]). Then, the
+    /// gate released, done once the RPM reads at or above <see cref="L1011FoStateEvaluator.ApuStartingRpm"/>
+    /// within <see cref="ApuSpinUpWaitMs"/> (<see cref="WaitUntilAsync"/>, read-only: a flow's Pause holds it,
+    /// its Stop ends it). The wait to running is the flow's own step, as the MD-11's <c>BS_APU_RUNNING</c>.
+    /// Never presses twice; speaks nothing.
+    /// </summary>
+    private async Task<bool> ApuStartAsync(CancellationToken stop)
+    {
+        const string what = ApuStart;
+        IL1011FoTransport? pressedOn = null;
+        bool alreadyTurning = false;
+        bool pressed = await UnderGateAsync(what, stop, async io =>
+        {
+            var rpm = await ReadAsync(io, ApuRpm).ConfigureAwait(false);
+            if (rpm is not double r)
+            {
+                Note($"{what}: not done, {ApuRpm} unread, {ApuStartPress} not pressed");
+                return false;
+            }
+            if (r >= L1011FoStateEvaluator.ApuStartingRpm)
+            {
+                alreadyTurning = true;
+                return true;
+            }
+            var master = await ReadAsync(io, ApuMaster).ConfigureAwait(false);
+            if (master is not double m || Math.Abs(m - 1) >= PositionTolerance)
+            {
+                Note("APU not started: the master switch does not read on");
+                return false;
+            }
+            if (stop.IsCancellationRequested)   // a Stop while the reads above decided: no press
+                return Stopped(what);
+            if (!await WriteAsync(io, ApuStartPress, 1).ConfigureAwait(false))
+                return false;
+            pressedOn = io;
+            return true;
+        }).ConfigureAwait(false);
+        if (!pressed) return false;
+        if (alreadyTurning) return true;
+
+        // The gate is released: the spin-up wait is read-only and holds nothing (R23).
+        var waitOn = pressedOn!;
+        return await WaitUntilAsync(waitOn,
+            async () => await ReadAsync(waitOn, ApuRpm).ConfigureAwait(false) is double v && v >= L1011FoStateEvaluator.ApuStartingRpm,
+            ApuSpinUpWaitMs, stop, $"{what}, {ApuRpm} rising").ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Target 1, on line: the field relay closed, then the breaker relay, each through
+    /// <see cref="PressUntilRelayAsync"/> (a relay already closed is not pressed; an unread relay is never
+    /// pressed; the breaker is not tried when the field did not close). Live, the field relay closed about a
+    /// second after its press and the button reset itself; the breaker may close with external power still
+    /// on (no interlock). Target 0, off line: the breaker tripped and read open; the field is left alone. Any
+    /// other target reads and writes nothing. Speaks nothing.
+    /// </summary>
+    private async Task<bool> ApuGeneratorAsync(IL1011FoTransport io, int target)
+    {
+        string what = $"{ApuGenerator} -> {target.ToString(CultureInfo.InvariantCulture)}";
+        switch (target)
+        {
+            case 1:
+                return await PressUntilRelayAsync(io, ApuGenFieldPress, ApuGenFieldRelay, closed: true, $"{what}, the field").ConfigureAwait(false)
+                    && await PressUntilRelayAsync(io, ApuGenBreakerPress, ApuGenBreakerRelay, closed: true, $"{what}, the breaker").ConfigureAwait(false);
+            case 0:
+                return await PressUntilRelayAsync(io, ApuGenBreakerTrip, ApuGenBreakerRelay, closed: false, $"{what}, the breaker trip").ConfigureAwait(false);
+            default:
+                Note($"{what}: not done, the APU generator is 0 (off line) or 1 (on line)");
+                return false;
+        }
     }
 
     // ================= the INS align =================
@@ -697,28 +876,34 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     // ================= waits =================
 
     /// <summary>
-    /// Read-only: polls <paramref name="satisfied"/> every <see cref="PollMs"/> until it is true (true), or
-    /// until <paramref name="limitMs"/> has passed on the transport's clock (false, logged with the limit).
-    /// The flow's Pause holds it, and the time paused is not counted (the MD-11's
-    /// <c>ApuStartToFinishAsync</c> shape); the flow's Stop ends it with false (logged
-    /// "<paramref name="what"/>: stopped") before the next ask, so within a poll, and at once while paused
-    /// or already stopped. Writes nothing and speaks nothing.
+    /// Read-only, and never under the gate (ruling R23): polls <paramref name="satisfied"/> every
+    /// <see cref="PollMs"/> until it is true (true), or until <paramref name="limitMs"/> has passed on the
+    /// transport's clock (false, logged with the limit). For a flow step (a <paramref name="stop"/> that can
+    /// be cancelled) the flow's Pause holds it, and the time paused is not counted (the MD-11's
+    /// <c>ApuStartToFinishAsync</c> shape); a hand tick (<see cref="CancellationToken.None"/>) never waits on
+    /// a flow's Pause. The flow's Stop ends it with false (logged "<paramref name="what"/>: stopped") before
+    /// the next ask: within a poll plus the time of one <paramref name="satisfied"/> call, which may be a
+    /// fresh read of up to <see cref="ReadTimeoutMs"/>; at once while paused or already stopped. Writes
+    /// nothing and speaks nothing.
     /// </summary>
     internal async Task<bool> WaitUntilAsync(IL1011FoTransport io, Func<Task<bool>> satisfied, int limitMs, CancellationToken stop, string what)
     {
         long deadline = io.NowMs + limitMs;
         while (true)
         {
-            long pausedAt = io.NowMs;
-            try
+            if (stop.CanBeCanceled)   // a flow step: its Pause holds the wait; a hand tick's never does
             {
-                await _waitWhilePaused(stop).ConfigureAwait(false);
+                long pausedAt = io.NowMs;
+                try
+                {
+                    await _waitWhilePaused(stop).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return Stopped(what);
+                }
+                deadline += io.NowMs - pausedAt;   // a Pause is not counted
             }
-            catch (OperationCanceledException)
-            {
-                return Stopped(what);
-            }
-            deadline += io.NowMs - pausedAt;   // a Pause is not counted
             if (stop.IsCancellationRequested)
                 return Stopped(what);
             if (await satisfied().ConfigureAwait(false))

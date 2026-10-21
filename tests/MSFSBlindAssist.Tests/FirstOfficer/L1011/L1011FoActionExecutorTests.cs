@@ -1250,13 +1250,14 @@ public class L1011FoActionExecutorTests
             Assert.Contains("an engine wait: stopped", _logged);
         }
 
-        // Paused from the start: the minute the pause lasts on the transport's clock is not counted, and
-        // nothing is asked while paused.
+        // Paused from the start (a flow step: its token can be cancelled): the minute the pause lasts on the
+        // transport's clock is not counted, and nothing is asked while paused.
         var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _exec.AttachFlowPause(ct => resume.Task.WaitAsync(ct));
+        using var flow = new CancellationTokenSource();
         int pausedAsks = 0;
         long pausedFrom = _ac.NowMs;
-        var paused = _exec.WaitUntilAsync(_ac, () => Task.FromResult(++pausedAsks < 0), 1_000, CancellationToken.None, "a paused wait");
+        var paused = _exec.WaitUntilAsync(_ac, () => Task.FromResult(++pausedAsks < 0), 1_000, flow.Token, "a paused wait");
         Assert.False(paused.IsCompleted);
         Assert.Equal(0, pausedAsks);
         await _ac.DelayAsync(60_000);
@@ -1276,6 +1277,13 @@ public class L1011FoActionExecutorTests
 
         Assert.False(await pausedThenStopped.WaitAsync(Hang));
         Assert.Contains("a paused, stopped wait: stopped", _logged);
+
+        // Ruling R23: a hand tick (CancellationToken.None) never waits on a flow's Pause, held or not.
+        int tickAsks = 0;
+        var tick = _exec.WaitUntilAsync(_ac, () => Task.FromResult(++tickAsks == 2), 10_000, CancellationToken.None, "a hand tick's wait");
+        Assert.True(tick.IsCompleted);
+        Assert.True(await tick);
+        Assert.Equal(2, tickAsks);
     }
 
     // ---- Levers read back on their own scales ---------------------------------------------------------------------
@@ -1620,5 +1628,453 @@ public class L1011FoActionExecutorTests
         Assert.False(await _exec.Set(L1011FoActionExecutor.AcTies, target));
 
         Assert.Empty(_ac.Io);
+    }
+
+    // Ruling R22: an AC tie is a relay a press drives, read back for the relay's 8 s ([R21]), in the AC ties
+    // composite and in external power's tie loop alike.
+
+    /// <summary>Tie 1 open with nothing on line, so its press closes nothing by itself; the script closes it
+    /// six seconds after the press. Returns the press time's holder.</summary>
+    private Func<long> TieOneClosesSixSecondsAfterItsPress(ScriptedTransport io)
+    {
+        long pressedAt = -1;
+        io.AfterWrite(TieClose(1), 1, () => pressedAt = _ac.NowMs);
+        _ac.OnClock = ac =>
+        {
+            if (pressedAt >= 0 && ac.NowMs >= pressedAt + 6_000)
+                ac.Set(Tie(1), 1);
+        };
+        return () => pressedAt;
+    }
+
+    [Fact]
+    public async Task Ac_ties_counts_a_tie_closing_six_seconds_after_its_press_as_done()
+    {
+        _ac.Set(ExtPowerBreaker, 0);
+        _ac.Set(Tie(1), 0);
+        _ac.Set(Tie(2), 1);
+        _ac.Set(Tie(3), 1);
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        var pressedAt = TieOneClosesSixSecondsAfterItsPress(io);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.AcTies, 1));
+
+        Assert.Equal(new[] { (TieClose(1), 1.0) }, _ac.Writes);   // pressed once
+        Assert.InRange(_ac.NowMs - pressedAt(), 6_000, 6_000 + L1011FoActionExecutor.PollMs);
+        Assert.Empty(_spoken);
+    }
+
+    [Fact]
+    public async Task External_power_counts_a_tie_closing_six_seconds_after_its_press_as_closed()
+    {
+        SeedExternalPower(available: 1);
+        _ac.Set(Tie(1), 0);
+        _ac.NeverDeliver(Tie(1));   // the press closes nothing: the script does, late
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        var pressedAt = TieOneClosesSixSecondsAfterItsPress(io);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ExternalPower, 1));
+
+        Assert.Equal(new[] { (ExtPower, 1.0), (TieClose(1), 1.0) }, _ac.Writes);
+        Assert.InRange(_ac.NowMs - pressedAt(), 6_000, 6_000 + L1011FoActionExecutor.PollMs);
+        Assert.Empty(_spoken);   // the tie closed: no failure to speak
+    }
+
+    // ================= The APU ==========================================================================================
+
+    private const string ApuMaster = "TOGGLE_APU_POWER";
+    private const string ApuStartPress = "SWITCH_APU_START";
+    private const string ApuRpm = "L1011_RO_APU_RPM";
+    private const string ApuGenFieldPress = "SWITCH_APU_BRG";
+    private const string ApuGenBreakerPress = "SWITCH_GND_FLOW";
+    private const string ApuGenBreakerTrip = "SWITCH_GND_FLOW_OPEN";
+    private const string ApuGenField = "L1011_RO_APU_GEN_FIELD";
+    private const string ApuGenBreaker = "L1011_RO_APU_GEN_BREAKER";
+    private const string MasterNotOn = "APU not started: the master switch does not read on";
+
+    private void SeedApu(double rpm, double master = 1)
+    {
+        _ac.Set(ApuMaster, master);
+        _ac.Set(ApuRpm, rpm);
+    }
+
+    [Fact]
+    public void The_apu_composites_are_pseudo_keys_on_the_aircrafts_own_keys()
+    {
+        Assert.Equal("FO_APU_START", L1011FoActionExecutor.ApuStart);
+        Assert.Equal("FO_APU_GENERATOR", L1011FoActionExecutor.ApuGenerator);
+        Assert.True(L1011FoActionExecutor.IsPseudoKey(L1011FoActionExecutor.ApuStart));
+        Assert.True(L1011FoActionExecutor.IsPseudoKey(L1011FoActionExecutor.ApuGenerator));
+
+        Assert.Equal(ApuMaster, L1011FoActionExecutor.ApuMaster);
+        Assert.Equal(ApuStartPress, L1011FoActionExecutor.ApuStartPress);
+        Assert.Equal(ApuRpm, L1011FoActionExecutor.ApuRpm);
+        Assert.Equal(ApuGenFieldPress, L1011FoActionExecutor.ApuGenFieldPress);
+        Assert.Equal(ApuGenBreakerPress, L1011FoActionExecutor.ApuGenBreakerPress);
+        Assert.Equal(ApuGenBreakerTrip, L1011FoActionExecutor.ApuGenBreakerTrip);
+        Assert.Equal(ApuGenField, L1011FoActionExecutor.ApuGenFieldRelay);
+        Assert.Equal(ApuGenBreaker, L1011FoActionExecutor.ApuGenBreakerRelay);
+        Assert.Equal(20_000, L1011FoActionExecutor.ApuSpinUpWaitMs);
+
+        // The presses are the definition's own rows; the master, the RPM and the relays read fresh.
+        foreach (var press in new[] { ApuStartPress, ApuGenFieldPress, ApuGenBreakerPress, ApuGenBreakerTrip })
+            Assert.False(_ac.CanReadBack(press), press);
+        foreach (var read in new[] { ApuMaster, ApuRpm, ApuGenField, ApuGenBreaker })
+            Assert.True(_ac.CanReadBack(read), read);
+    }
+
+    // ---- The APU start ------------------------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Apu_start_presses_once_and_is_done_when_rpm_rises()
+    {
+        SeedApu(rpm: 0);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ApuStart, 1));
+
+        Assert.Equal(new[] { (ApuStartPress, 1.0) }, _ac.Writes);
+        Assert.Equal(new[]
+        {
+            (FakeL1011IoKind.FreshRead, ApuRpm),      // the RPM first
+            (FakeL1011IoKind.FreshRead, ApuMaster),   // then the master
+            (FakeL1011IoKind.Write, ApuStartPress),   // one press
+            (FakeL1011IoKind.FreshRead, ApuRpm),      // then the RPM until it rises
+        }, IoKinds());
+        Assert.Empty(_spoken);
+    }
+
+    [Theory]
+    [InlineData(1.0, 1)]
+    [InlineData(3.0, 1)]
+    [InlineData(100.0, 1)]
+    [InlineData(3.0, 0)]   // starting with the master since turned off: still never a second press
+    public async Task Apu_start_is_already_done_at_or_above_one_percent(double rpm, double master)
+    {
+        SeedApu(rpm, master);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ApuStart, 1));
+
+        Assert.Empty(_ac.Writes);
+        Assert.Equal(new[] { ApuRpm }, _ac.FreshReads);
+    }
+
+    [Theory]
+    [InlineData(false)]   // the master off
+    [InlineData(true)]    // the master unread
+    public async Task Apu_start_refuses_with_the_master_off(bool unread)
+    {
+        SeedApu(rpm: 0, master: 0);
+        if (unread)
+            _ac.Unset(ApuMaster);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.ApuStart, 1));
+
+        Assert.Empty(_ac.Writes);
+        Assert.Contains(MasterNotOn, _logged);
+        Assert.Empty(_spoken);   // not done is the flow's to say
+    }
+
+    [Fact]
+    public async Task Apu_start_with_its_rpm_unread_is_not_done_and_presses_nothing()
+    {
+        _ac.Set(ApuMaster, 1);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.ApuStart, 1));
+
+        Assert.Empty(_ac.Writes);
+        Assert.Contains(_logged, line => line.Contains(ApuRpm));
+        Assert.Empty(_spoken);
+    }
+
+    [Fact]
+    public async Task Apu_start_waits_through_the_inlet_doors()
+    {
+        // Live: the RPM read 0 for about 7 s while the inlet doors opened, then rose about 3 %/s.
+        SeedApu(rpm: 0);
+        _ac.ApuRpmAfterStart = 0;
+        long pressedAt = -1;
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        io.AfterWrite(ApuStartPress, 1, () => pressedAt = _ac.NowMs);
+        _ac.OnClock = ac =>
+        {
+            if (pressedAt >= 0 && ac.NowMs >= pressedAt + 7_000)
+                ac.Set(ApuRpm, 5);
+        };
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ApuStart, 1));
+
+        Assert.Equal(new[] { (ApuStartPress, 1.0) }, _ac.Writes);   // pressed once, never again while it waited
+        Assert.InRange(_ac.NowMs - pressedAt, 7_000, 7_000 + L1011FoActionExecutor.PollMs);
+        Assert.Empty(_spoken);
+    }
+
+    private static Step ApuStartStep => new() { EventName = L1011FoActionExecutor.ApuStart, TargetValue = 1 };
+
+    [Theory]
+    [InlineData("never rises")]
+    [InlineData("stopped while waiting")]
+    public async Task Apu_start_gives_up_after_twenty_seconds_or_on_stop(string how)
+    {
+        SeedApu(rpm: 0);
+        _ac.ApuRpmAfterStart = 0;   // the RPM stays 0
+        long pressedAt = -1, stoppedAt = -1;
+        using var stop = new CancellationTokenSource();
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        io.AfterWrite(ApuStartPress, 1, () => pressedAt = _ac.NowMs);
+        if (how == "stopped while waiting")
+        {
+            _ac.OnClock = ac =>
+            {
+                if (pressedAt >= 0 && stoppedAt < 0 && ac.NowMs >= pressedAt + 3_000)
+                {
+                    stop.Cancel();
+                    stoppedAt = ac.NowMs;
+                }
+            };
+        }
+
+        // A flow step: the composite takes the flow's Stop.
+        Assert.False(await _exec.ExecuteStepAsync(ApuStartStep, stop.Token));
+
+        Assert.Equal(new[] { (ApuStartPress, 1.0) }, _ac.Writes);   // one press, never a second
+        if (how == "never rises")
+        {
+            Assert.InRange(_ac.NowMs - pressedAt, L1011FoActionExecutor.ApuSpinUpWaitMs,
+                L1011FoActionExecutor.ApuSpinUpWaitMs + L1011FoActionExecutor.PollMs);
+            Assert.Contains(_logged, line => line.Contains("20000 ms"));
+        }
+        else
+        {
+            Assert.InRange(_ac.NowMs - stoppedAt, 0, L1011FoActionExecutor.PollMs);   // within one poll
+            Assert.Contains(_logged, line => line.EndsWith(": stopped", StringComparison.Ordinal));
+        }
+        Assert.Empty(_spoken);
+    }
+
+    // ---- Ruling R23: no wait holds the gate; the Pause is a flow step's; no write after the Stop -------------------
+
+    [Theory]
+    [InlineData("before the step")]          // the Stop already pressed when the step runs
+    [InlineData("after the master read")]    // the Stop pressed while the start decides
+    public async Task A_stop_before_the_press_presses_nothing(string when)
+    {
+        SeedApu(rpm: 0);
+        using var stop = new CancellationTokenSource();
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        if (when == "before the step")
+            stop.Cancel();
+        else
+            io.AfterRead(ApuMaster, 1, stop.Cancel);
+
+        Assert.False(await _exec.ExecuteStepAsync(ApuStartStep, stop.Token).WaitAsync(Hang));
+
+        Assert.Empty(_ac.Writes);
+        if (when == "before the step")
+            Assert.Empty(_ac.Io);   // nothing read either
+        Assert.Contains(_logged, line => line.StartsWith(L1011FoActionExecutor.ApuStart, StringComparison.Ordinal)
+            && line.EndsWith(": stopped", StringComparison.Ordinal));
+        Assert.Empty(_spoken);
+    }
+
+    [Fact]
+    public async Task A_StopAware_key_receives_the_flow_token_and_is_found_before_Pseudo()
+    {
+        // Found first, outside the gate: while its wait holds on the flow's Pause the gate is free (a Pseudo
+        // composite or a plain write would hold it), and the flow's Stop reaches it and ends it.
+        SeedApu(rpm: 0);
+        _ac.ApuRpmAfterStart = 0;
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _exec.AttachFlowPause(ct => held.Task.WaitAsync(ct));
+        using var stop = new CancellationTokenSource();
+
+        var start = _exec.ExecuteStepAsync(ApuStartStep, stop.Token);
+
+        Assert.False(start.IsCompleted);                          // waiting, paused
+        Assert.Equal(new[] { (ApuStartPress, 1.0) }, _ac.Writes);  // pressed before the wait
+        Assert.True(_exec.WaitForDispatchDrainAsync().IsCompleted);   // the gate is free
+
+        stop.Cancel();
+        Assert.False(await start.WaitAsync(Hang));
+        Assert.Contains(_logged, line => line.StartsWith(L1011FoActionExecutor.ApuStart, StringComparison.Ordinal)
+            && line.EndsWith(": stopped", StringComparison.Ordinal));
+        Assert.Single(_ac.Writes);
+    }
+
+    [Fact]
+    public async Task A_paused_apu_spin_up_wait_does_not_block_a_hand_tick()
+    {
+        SeedApu(rpm: 0);
+        _ac.ApuRpmAfterStart = 0;   // the RPM stays 0 while paused
+        _ac.Set(ContinuousIgnition, 0);
+        var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _exec.AttachFlowPause(ct => resume.Task.WaitAsync(ct));
+        using var stop = new CancellationTokenSource();
+
+        var start = _exec.ExecuteStepAsync(ApuStartStep, stop.Token);
+        Assert.False(start.IsCompleted);
+
+        // A hand tick meanwhile: written and read back, not queued behind the paused wait.
+        Assert.True(await _exec.Set(ContinuousIgnition, 1).WaitAsync(Hang));
+        Assert.Equal(new[] { (ApuStartPress, 1.0), (ContinuousIgnition, 1.0) }, _ac.Writes);
+        Assert.False(start.IsCompleted);
+
+        // Resumed, the APU turns: the step is done.
+        _ac.Set(ApuRpm, 5);
+        resume.SetResult();
+        Assert.True(await start.WaitAsync(Hang));
+    }
+
+    [Fact]
+    public async Task A_hand_tick_of_the_apu_start_ignores_a_flow_pause()
+    {
+        SeedApu(rpm: 0);
+        _ac.ApuRpmAfterStart = 0;
+        long pressedAt = -1;
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        io.AfterWrite(ApuStartPress, 1, () => pressedAt = _ac.NowMs);
+        _ac.OnClock = ac =>
+        {
+            if (pressedAt >= 0 && ac.NowMs >= pressedAt + 7_000)
+                ac.Set(ApuRpm, 5);
+        };
+        var never = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _exec.AttachFlowPause(ct => never.Task.WaitAsync(ct));   // a flow paused, never resumed
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ApuStart, 1).WaitAsync(Hang));
+
+        Assert.Equal(new[] { (ApuStartPress, 1.0) }, _ac.Writes);
+        Assert.InRange(_ac.NowMs - pressedAt, 7_000, 7_000 + L1011FoActionExecutor.PollMs);   // it waited, unpaused
+    }
+
+    // ---- The APU generator --------------------------------------------------------------------------------------------
+
+    private void SeedApuGenerator(double rpm, double field, double breaker)
+    {
+        _ac.Set(ApuRpm, rpm);
+        _ac.Set(ApuGenField, field);
+        _ac.Set(ApuGenBreaker, breaker);
+    }
+
+    [Fact]
+    public async Task Apu_generator_on_closes_field_then_breaker_and_reads_both()
+    {
+        SeedApuGenerator(rpm: 100, field: 0, breaker: 0);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ApuGenerator, 1));
+
+        Assert.Equal(new[] { (ApuGenFieldPress, 1.0), (ApuGenBreakerPress, 1.0) }, _ac.Writes);
+        Assert.Equal(new[]
+        {
+            (FakeL1011IoKind.FreshRead, ApuGenField),
+            (FakeL1011IoKind.Write, ApuGenFieldPress),
+            (FakeL1011IoKind.FreshRead, ApuGenField),     // the field read back closed
+            (FakeL1011IoKind.FreshRead, ApuGenBreaker),   // only then the breaker
+            (FakeL1011IoKind.Write, ApuGenBreakerPress),
+            (FakeL1011IoKind.FreshRead, ApuGenBreaker),
+        }, IoKinds());
+        Assert.Equal(1, _ac.Get(ApuGenField));
+        Assert.Equal(1, _ac.Get(ApuGenBreaker));
+        Assert.Empty(_spoken);
+    }
+
+    [Theory]
+    [InlineData(1.0, 0.0, new[] { ApuGenBreakerPress })]   // the field closed already
+    [InlineData(0.0, 1.0, new[] { ApuGenFieldPress })]     // the breaker closed already
+    [InlineData(1.0, 1.0, new string[0])]                  // on line: nothing pressed
+    public async Task Apu_generator_on_skips_a_relay_already_closed(double field, double breaker, string[] pressed)
+    {
+        SeedApuGenerator(rpm: 100, field, breaker);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ApuGenerator, 1));
+
+        Assert.Equal(pressed.Select(k => (k, 1.0)), _ac.Writes);
+        Assert.Equal(1, _ac.Get(ApuGenField));
+        Assert.Equal(1, _ac.Get(ApuGenBreaker));
+    }
+
+    [Fact]
+    public async Task Apu_generator_on_fails_when_the_field_never_closes()
+    {
+        SeedApuGenerator(rpm: 50, field: 0, breaker: 0);   // not running: the field will not close
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.ApuGenerator, 1));
+
+        Assert.Equal(new[] { (ApuGenFieldPress, 1.0) }, _ac.Writes);   // no breaker press
+        Assert.True(_ac.NowMs >= L1011FoActionExecutor.RelayVerifyTimeoutMs);   // the relay's 8 s
+        Assert.Contains(_logged, line => line.Contains(ApuGenField) && line.Contains("8000 ms"));
+        Assert.Equal(0, _ac.Get(ApuGenBreaker));
+        Assert.Empty(_spoken);
+    }
+
+    [Theory]
+    [InlineData(1, ApuGenField)]     // on: the field unread
+    [InlineData(1, ApuGenBreaker)]   // on: the field closed, the breaker unread
+    [InlineData(0, ApuGenBreaker)]   // off: the breaker unread
+    public async Task Apu_generator_never_presses_on_an_unread_relay(int target, string unread)
+    {
+        SeedApuGenerator(rpm: 100, field: 1, breaker: target == 1 ? 0 : 1);
+        _ac.Unset(unread);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.ApuGenerator, target));
+
+        Assert.Empty(_ac.Writes);
+        Assert.Contains(_logged, line => line.Contains(unread));
+        Assert.Empty(_spoken);
+    }
+
+    [Fact]
+    public async Task Apu_generator_off_trips_the_breaker_and_reads_it_open()
+    {
+        SeedApuGenerator(rpm: 100, field: 1, breaker: 1);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ApuGenerator, 0));
+
+        Assert.Equal(new[] { (ApuGenBreakerTrip, 1.0) }, _ac.Writes);
+        Assert.Equal(new[] { ApuGenBreaker, ApuGenBreaker }, _ac.FreshReads);   // read first, read back open
+        Assert.Equal(0, _ac.Get(ApuGenBreaker));
+        Assert.Equal(1, _ac.Get(ApuGenField));   // the field is left alone
+        Assert.Empty(_spoken);
+    }
+
+    [Fact]
+    public async Task Apu_generator_off_whose_breaker_stays_closed_is_not_done()
+    {
+        SeedApuGenerator(rpm: 100, field: 1, breaker: 1);
+        _ac.NeverDeliver(ApuGenBreaker);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.ApuGenerator, 0));
+
+        Assert.Equal(new[] { (ApuGenBreakerTrip, 1.0) }, _ac.Writes);   // tripped once
+        Assert.Contains(_logged, line => line.Contains(ApuGenBreaker) && line.Contains("8000 ms"));
+    }
+
+    [Fact]
+    public async Task Apu_generator_off_is_done_when_already_open()
+    {
+        SeedApuGenerator(rpm: 100, field: 1, breaker: 0);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ApuGenerator, 0));
+
+        Assert.Empty(_ac.Writes);
+        Assert.Equal(new[] { ApuGenBreaker }, _ac.FreshReads);
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(-1)]
+    public async Task Apu_generator_to_any_other_target_writes_nothing(int target)
+    {
+        SeedApuGenerator(rpm: 100, field: 0, breaker: 0);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.ApuGenerator, target));
+
+        Assert.Empty(_ac.Io);
+        Assert.Contains(_logged, line => line.Contains(L1011FoActionExecutor.ApuGenerator));
     }
 }

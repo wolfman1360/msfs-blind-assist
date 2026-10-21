@@ -361,6 +361,109 @@ public class FakeL1011AircraftTests
             Assert.Equal(seeded, ac.ReadCached($"L1011_RO_AC_TIE_{n}"));
     }
 
+    // ---- The APU -------------------------------------------------------------------------------------------
+
+    private const string ApuMaster = "TOGGLE_APU_POWER";
+    private const string ApuStartPress = "SWITCH_APU_START";
+    private const string ApuStopPress = "APU_STOP";
+    private const string ApuRpm = "L1011_RO_APU_RPM";
+    private const string ApuGenFieldPress = "SWITCH_APU_BRG";
+    private const string ApuGenBreakerPress = "SWITCH_GND_FLOW";
+    private const string ApuGenBreakerTrip = "SWITCH_GND_FLOW_OPEN";
+    private const string ApuGenField = "L1011_RO_APU_GEN_FIELD";
+    private const string ApuGenBreaker = "L1011_RO_APU_GEN_BREAKER";
+
+    [Fact]
+    public async Task A_start_press_with_the_master_on_spins_the_apu()
+    {
+        var ac = new FakeL1011Aircraft();
+        ac.Set(ApuMaster, 1);
+        ac.Set(ApuRpm, 0);
+        Assert.Equal(100, ac.ApuRpmAfterStart);   // running, by default
+
+        Assert.Equal(L1011FoResult.Sent, await ac.SetAsync(ApuStartPress, 1));
+
+        Assert.Equal(100, ac.Get(ApuRpm));
+        Assert.Equal(new[] { (ApuStartPress, 1.0) }, ac.Writes);
+        Assert.Null(ac.Get(ApuStartPress));   // a press holds no position
+
+        // A test scripting the spool-up starts it from 0 and drives the RPM itself.
+        var scripted = new FakeL1011Aircraft { ApuRpmAfterStart = 0 };
+        scripted.Set(ApuMaster, 1);
+        scripted.Set(ApuRpm, 0);
+
+        await scripted.SetAsync(ApuStartPress, 1);
+
+        Assert.Equal(0, scripted.Get(ApuRpm));
+    }
+
+    [Theory]
+    [InlineData(false)]   // the master off
+    [InlineData(true)]    // the master unread
+    public async Task A_start_press_with_the_master_off_does_nothing(bool unread)
+    {
+        var ac = new FakeL1011Aircraft();
+        if (!unread)
+            ac.Set(ApuMaster, 0);
+        ac.Set(ApuRpm, 0);
+
+        Assert.Equal(L1011FoResult.Sent, await ac.SetAsync(ApuStartPress, 1));
+
+        Assert.Equal(0, ac.Get(ApuRpm));
+    }
+
+    [Fact]
+    public async Task The_stop_press_stops_the_apu()
+    {
+        var ac = new FakeL1011Aircraft();
+        ac.Set(ApuMaster, 1);
+        ac.Set(ApuRpm, 100);
+
+        Assert.Equal(L1011FoResult.Sent, await ac.SetAsync(ApuStopPress, 1));
+
+        Assert.Equal(0, ac.Get(ApuRpm));
+        Assert.Equal(new[] { (ApuStopPress, 1.0) }, ac.Writes);
+    }
+
+    [Fact]
+    public async Task Field_then_breaker_close_only_in_order_and_only_running()
+    {
+        var ac = new FakeL1011Aircraft();
+        ac.Set(ApuRpm, 50);   // starting, not running
+        ac.Set(ApuGenField, 0);
+        ac.Set(ApuGenBreaker, 0);
+
+        await ac.SetAsync(ApuGenFieldPress, 1);
+        Assert.Equal(0, ac.Get(ApuGenField));            // the field closes only with the APU running
+
+        ac.Set(ApuRpm, 100);
+        await ac.SetAsync(ApuGenBreakerPress, 1);
+        Assert.Equal(0, ac.Get(ApuGenBreaker));          // the breaker closes only over a closed field
+
+        await ac.SetAsync(ApuGenFieldPress, 1);
+        Assert.Equal(1, ac.Get(ApuGenField));
+        Assert.Equal(0, ac.Get(ApuGenBreaker));          // the field press closes the field alone
+
+        await ac.SetAsync(ApuGenBreakerPress, 1);
+        Assert.Equal(1, ac.Get(ApuGenBreaker));
+        Assert.Null(ac.Get(ApuGenFieldPress));           // the buttons hold no position
+        Assert.Null(ac.Get(ApuGenBreakerPress));
+    }
+
+    [Fact]
+    public async Task The_trip_opens_the_breaker()
+    {
+        var ac = new FakeL1011Aircraft();
+        ac.Set(ApuRpm, 100);
+        ac.Set(ApuGenField, 1);
+        ac.Set(ApuGenBreaker, 1);
+
+        Assert.Equal(L1011FoResult.Sent, await ac.SetAsync(ApuGenBreakerTrip, 1));
+
+        Assert.Equal(0, ac.Get(ApuGenBreaker));
+        Assert.Equal(1, ac.Get(ApuGenField));            // the field stays closed
+    }
+
     // ---- Altimeters and the lamp mute ------------------------------------------------------------------
 
     [Fact]
