@@ -275,12 +275,13 @@ public class L1011FoFlowStructureTests
             id => id.Contains("METER", StringComparison.OrdinalIgnoreCase) || id.Contains("SELECTOR", StringComparison.OrdinalIgnoreCase));
     }
 
-    // The tank 2 left pump feeds the APU: a pilot who started it by hand and then runs Power Up must not
-    // have it cut. The APU reaches 100 % about 50 s after its start press.
+    // The tank 2 left pump feeds the APU from the moment it starts turning, not only once it is up to speed.
+    // A pilot who started it by hand and then runs Power Up must not have that pump cut, whether the APU has
+    // reached 100 % (about 50 s after the start press) or is still spooling up on the way there.
     private const string ApuRpm = "L1011_RO_APU_RPM";
 
     [Fact]
-    public void The_fuel_pump_step_is_left_alone_while_the_APU_runs()
+    public void The_fuel_pump_step_is_left_alone_while_the_APU_runs_or_spools_up()
     {
         var s = Of("PU_FUEL_PUMPS");
         Assert.NotNull(s.LeaveAloneWhen);
@@ -288,7 +289,10 @@ public class L1011FoFlowStructureTests
 
         Assert.True(s.LeaveAloneWhen!(State((ApuRpm, 100))), "RPM 100: running");
         Assert.True(s.LeaveAloneWhen!(State((ApuRpm, 95))), "RPM 95: running");
-        Assert.False(s.LeaveAloneWhen!(State((ApuRpm, 94.9))), "RPM 94.9: still spinning up");
+        Assert.True(s.LeaveAloneWhen!(State((ApuRpm, 94.9))), "RPM 94.9: still spooling up");
+        Assert.True(s.LeaveAloneWhen!(State((ApuRpm, 3))), "RPM 3: just started turning");
+        Assert.True(s.LeaveAloneWhen!(State((ApuRpm, 1))), "RPM 1: turning");
+        Assert.False(s.LeaveAloneWhen!(State((ApuRpm, 0.9))), "RPM 0.9: not turning");
         Assert.False(s.LeaveAloneWhen!(State((ApuRpm, 0))), "RPM 0: stopped");
         Assert.False(s.LeaveAloneWhen!(State()), "unread: the guards already refuse an unread aircraft");
     }

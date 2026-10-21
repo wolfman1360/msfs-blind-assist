@@ -31,7 +31,8 @@ using CheckFn = System.Func<L1011FoActionExecutor, L1011FoStateEvaluator, System
 /// Four hand ticks are left alone unless the aircraft reads on the ground with every engine stopped
 /// ([FO-25]): the ATM switches, the AC hydraulic pumps and the fuel pumps off, and the standby power check,
 /// which turns the battery off for a moment. Unread refuses, as the flow's guards do. The fuel pump tick is
-/// also left alone while the APU runs, as its flow step is: the tank 2 left pump feeds the APU.
+/// also left alone while the APU runs or is still spooling up, as its flow step is: the tank 2 left pump
+/// feeds the APU from the moment it starts turning.
 /// </summary>
 public static class L1011FoChecklistDefinitions
 {
@@ -101,10 +102,10 @@ public static class L1011FoChecklistDefinitions
                 LeaveAlone(Auto("PU_AC_PUMPS", G, "AC hydraulic pumps: off", "FO_AC_PUMPS_OFF", On,
                     SetAll(("SWITCH_HYD_AC_PUMP_B3", 0), ("SWITCH_HYD_AC_PUMP_C3", 0))),
                     NotParked, ParkedOnlyText),
-                // Also left alone while the APU runs: the tank 2 left pump feeds it, and a pilot who started
-                // the APU by hand must not have it cut.
+                // Also left alone while the APU runs or is still spooling up: the tank 2 left pump feeds it
+                // from the moment it starts turning, and a pilot who started the APU by hand must not have it cut.
                 LeaveAlone(Auto("PU_FUEL_PUMPS", G, "Fuel pumps: all off", "FO_FUEL_PUMPS_OFF", On, SetAll(All(0, FuelPumps))),
-                    s => NotParked(s) || s.IsOn("FO_APU_RUNNING"), ParkedApuOffText),
+                    s => NotParked(s) || s.IsOn("FO_APU_STARTING_OR_RUNNING"), ParkedApuOffText),
                 Auto("PU_JETTISON", G, "Jettison switches: off and guarded", "FO_JETTISON_SAFE", On, SetAll(All(0, Jettison))),
                 Auto("PU_PAX_OXY", G, "Passenger oxygen: off and guarded", "FO_PAX_OXY_SAFE", On,
                     SetAll(("SWITCH_PAX_OXY_MANUAL", 0), ("GUARD_PAX_OXY_MANUAL", 0))),

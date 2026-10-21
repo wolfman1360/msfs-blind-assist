@@ -76,14 +76,16 @@ public static class L1011FoFlowDefinitions
                 s => s.IsOn("FO_ATMS_OFF")), "PU_ATMS"), "PUC_ATMS"),
             Also(Done(Skip(Multi("PU_AC_PUMPS", "AC hydraulic pumps: off", ("SWITCH_HYD_AC_PUMP_B3", 0), ("SWITCH_HYD_AC_PUMP_C3", 0)),
                 s => s.IsOn("FO_AC_PUMPS_OFF")), "PU_AC_PUMPS"), "PUC_AC_PUMPS"),
-            // The tank 2 left pump feeds the APU, so a running APU (one the pilot started by hand) keeps the
-            // pumps as they are: the step is left alone, aloud, and its lines stay out of the latch.
+            // The tank 2 left pump feeds the APU from the moment it starts turning, not only once it is up to
+            // speed (about 50 s after the start press). An APU the pilot started by hand, running or still
+            // spooling up, keeps the pumps as they are: the step is left alone, aloud, and its lines stay
+            // out of the latch. An unread APU speed does not hold the step back.
             Also(Done(Skip(LeaveAlone(Multi("PU_FUEL_PUMPS", "Fuel pumps: all off",
                         ("SWITCH_FUEL_PUMP_1_1", 0), ("SWITCH_FUEL_PUMP_1_2", 0),
                         ("SWITCH_FUEL_PUMP_2L_1", 0), ("SWITCH_FUEL_PUMP_2L_2", 0),
                         ("SWITCH_FUEL_PUMP_2R_1", 0), ("SWITCH_FUEL_PUMP_2R_2", 0),
                         ("SWITCH_FUEL_PUMP_3_1", 0), ("SWITCH_FUEL_PUMP_3_2", 0)),
-                    s => s.IsOn("FO_APU_RUNNING"), "Fuel pumps left on: the APU is running."),
+                    s => s.IsOn("FO_APU_STARTING_OR_RUNNING"), "Fuel pumps left on: the APU is running."),
                 s => s.IsOn("FO_FUEL_PUMPS_OFF")), "PU_FUEL_PUMPS"), "PUC_FUEL_PUMPS"),
             // The master and the four dump switches off, then their five guards closed: the keys
             // FO_JETTISON_SAFE reads, in its order.

@@ -32,7 +32,7 @@ public class L1011FoChecklistStructureTests
     private const string LeftAloneText = "Left alone: the aircraft must be on the ground with the engines stopped.";
     private const string LeftAloneApuText = "Left alone: the aircraft must be on the ground with the engines stopped and the APU shut down.";
 
-    /// <summary>The fuel pump line also keeps its pumps while the APU runs, and says so; the other three guarded lines do not.</summary>
+    /// <summary>The fuel pump line also keeps its pumps while the APU runs or spools up, and says so; the other three guarded lines do not.</summary>
     private static string LeftAloneTextOf(string id) => id == "PU_FUEL_PUMPS" ? LeftAloneApuText : LeftAloneText;
 
     // ------------------------------------------------------------------ the groups
@@ -436,16 +436,22 @@ public class L1011FoChecklistStructureTests
         return (rpm is double r ? seeds.Append((ApuRpm, r)) : seeds).ToArray();
     }
 
-    /// <summary>The tank 2 left pump feeds the APU: a pilot who started it by hand must not have it cut.</summary>
+    /// <summary>
+    /// The tank 2 left pump feeds the APU from the moment it starts turning, not only once it is up to speed:
+    /// a pilot who started it by hand must not have that pump cut while it runs or is still spooling up.
+    /// </summary>
     [Fact]
-    public void The_fuel_pump_tick_refuses_with_the_APU_running()
+    public void The_fuel_pump_tick_refuses_with_the_APU_running_or_spooling_up()
     {
         var pumps = Line("PU_FUEL_PUMPS");
         Assert.True(pumps.LeaveAloneWhen!(State(ParkedWithTheApu(100))), "APU at 100: pumps stay");
         Assert.True(pumps.LeaveAloneWhen!(State(ParkedWithTheApu(95))), "APU at 95: pumps stay");
+        Assert.True(pumps.LeaveAloneWhen!(State(ParkedWithTheApu(94.9))), "APU still spooling up: pumps stay");
+        Assert.True(pumps.LeaveAloneWhen!(State(ParkedWithTheApu(3))), "APU just started turning: pumps stay");
+        Assert.True(pumps.LeaveAloneWhen!(State(ParkedWithTheApu(1))), "APU at 1: pumps stay");
 
+        Assert.False(pumps.LeaveAloneWhen!(State(ParkedWithTheApu(0.9))), "APU not turning: the tick goes ahead");
         Assert.False(pumps.LeaveAloneWhen!(State(ParkedWithTheApu(0))), "APU stopped: the tick goes ahead");
-        Assert.False(pumps.LeaveAloneWhen!(State(ParkedWithTheApu(94.9))), "APU still spinning up: the tick goes ahead");
         Assert.False(pumps.LeaveAloneWhen!(State(ParkedWithTheApu(null))), "APU unread: the tick goes ahead");
 
         // Not parked still refuses, with or without the APU.
@@ -455,23 +461,29 @@ public class L1011FoChecklistStructureTests
     [Fact]
     public void The_fuel_pump_tick_speaks_the_new_text_through_the_checklist_manager_with_the_APU_running()
     {
-        var groups = L1011FoChecklistDefinitions.Build();
-        var mgr = new ChecklistManager<X, L1011FoStateEvaluator>(State(ParkedWithTheApu(100)), new X(), groups);
-        var line = groups.SelectMany(g => g.Items).Single(i => i.Id == "PU_FUEL_PUMPS");
+        foreach (double rpm in new[] { 100.0, 3.0 })
+        {
+            var groups = L1011FoChecklistDefinitions.Build();
+            var mgr = new ChecklistManager<X, L1011FoStateEvaluator>(State(ParkedWithTheApu(rpm)), new X(), groups);
+            var line = groups.SelectMany(g => g.Items).Single(i => i.Id == "PU_FUEL_PUMPS");
 
-        Assert.False(mgr.ToggleItem(line.GroupId, line.Id, out var spoken));
-        Assert.Equal(LeftAloneApuText, spoken);
-        Assert.False(line.IsChecked);
-        Assert.False(line.AwaitingActionConfirmation);
+            Assert.False(mgr.ToggleItem(line.GroupId, line.Id, out var spoken), $"APU at {rpm}");
+            Assert.Equal(LeftAloneApuText, spoken);
+            Assert.False(line.IsChecked);
+            Assert.False(line.AwaitingActionConfirmation);
+        }
     }
 
-    /// <summary>The other three guarded lines stay on the parked-only rule: a running APU is not their business.</summary>
+    /// <summary>The other three guarded lines stay on the parked-only rule: a running or spooling APU is not their business.</summary>
     [Theory]
     [InlineData("PU_ATMS")]
     [InlineData("PU_AC_PUMPS")]
     [InlineData("PU_STBY_CHECK")]
     public void The_other_guarded_ticks_ignore_the_APU(string id)
-        => Assert.False(Line(id).LeaveAloneWhen!(State(ParkedWithTheApu(100))));
+    {
+        Assert.False(Line(id).LeaveAloneWhen!(State(ParkedWithTheApu(100))));
+        Assert.False(Line(id).LeaveAloneWhen!(State(ParkedWithTheApu(3))));
+    }
 
     // ------------------------------------------------------------------ a hand tick does what the flow step does
 
