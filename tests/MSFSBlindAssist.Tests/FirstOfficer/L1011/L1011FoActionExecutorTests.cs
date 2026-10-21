@@ -2077,4 +2077,496 @@ public class L1011FoActionExecutorTests
         Assert.Empty(_ac.Io);
         Assert.Contains(_logged, line => line.Contains(L1011FoActionExecutor.ApuGenerator));
     }
+
+    // ================= The audible tests (ruling R24: atomic Pseudo composites, one verdict each) ==================
+
+    private static readonly string[] FireLoops =
+    {
+        "ROTARY_FIRE_DETECT_TEST_ENG_1", "ROTARY_FIRE_DETECT_TEST_ENG_2", "ROTARY_FIRE_DETECT_TEST_ENG_3", "ROTARY_FIRE_DETECT_TEST_APU",
+    };
+    private const string FireTestA = "SWITCH_FIRE_DETECT_TEST_A";
+    private const string FireTestB = "SWITCH_FIRE_DETECT_TEST_B";
+    private static readonly string[] FireLights =
+    {
+        "LAMP_ENG_FIRE_1", "LAMP_ENG_FIRE_2", "LAMP_ENG_FIRE_3", "LAMP_ENG_FIRE", "LAMP_FIRE_APU",
+    };
+    private const string FireLoopLight = "LAMP_LX_MIP_FIRE_LOOP";   // never lit live: never read
+    private const string WheelWellLoops = "ROTARY_WHEEL_WELL_TEST";
+    private const string WheelWellA = "SWITCH_WHEEL_WELL_TEST_A";
+    private const string WheelWellB = "SWITCH_WHEEL_WELL_TEST_B";
+    private const string WheelWellLight = "LAMP_FIRE_WHEEL_WELL";
+    private const string MainPanelWheelWellLight = "LAMP_LX_MIP_WHEEL_WELL_FIRE";   // stayed out live: never read
+    private const string PumpB = "SWITCH_HYD_AC_PUMP_B3";
+    private const string PumpC = "SWITCH_HYD_AC_PUMP_C3";
+    private const string PtuAb = "SWITCH_PTU_AB";
+    private const string PtuCd = "SWITCH_PTU_CD";
+    private static string Hyd(char system) => $"L1011_RO_HYD_{system}";
+
+    private const string FirePass = "Engine and APU fire test: pass";
+    private const string WheelWellPass = "Wheel well fire test: pass";
+    private const string HydraulicPass = "Hydraulic check: pass";
+
+    /// <summary>The fire test's writes: the four loops to Both, then A on and off, then B on and off.</summary>
+    private static readonly (string, double)[] FireTestWrites =
+    {
+        ("ROTARY_FIRE_DETECT_TEST_ENG_1", 2), ("ROTARY_FIRE_DETECT_TEST_ENG_2", 2),
+        ("ROTARY_FIRE_DETECT_TEST_ENG_3", 2), ("ROTARY_FIRE_DETECT_TEST_APU", 2),
+        (FireTestA, 1), (FireTestA, 0), (FireTestB, 1), (FireTestB, 0),
+    };
+
+    /// <summary>The wheel well test's writes: the loops to Both, A and B on together, then both off.</summary>
+    private static readonly (string, double)[] WheelWellTestWrites =
+    {
+        (WheelWellLoops, 1), (WheelWellA, 1), (WheelWellB, 1), (WheelWellA, 0), (WheelWellB, 0),
+    };
+
+    /// <summary>The hydraulic check's writes: the manual's order on, then everything off, the transfer units first.</summary>
+    private static readonly (string, double)[] HydraulicCheckWrites =
+    {
+        (PumpB, 1), (PumpC, 1), (PtuAb, 1), (PtuCd, 1),
+        (PtuAb, 0), (PtuCd, 0), (PumpB, 0), (PumpC, 0),
+    };
+
+    /// <summary>The loops on Loop A (0, as a cold aircraft may leave them), both loop tests off.</summary>
+    private void SeedFireTest()
+    {
+        foreach (var loop in FireLoops)
+            _ac.Set(loop, 0);
+        _ac.Set(FireTestA, 0);
+        _ac.Set(FireTestB, 0);
+    }
+
+    private void SeedWheelWellTest()
+    {
+        _ac.Set(WheelWellLoops, 0);
+        _ac.Set(WheelWellA, 0);
+        _ac.Set(WheelWellB, 0);
+    }
+
+    private void SeedHydraulicCheck()
+    {
+        foreach (var key in new[] { PumpB, PumpC, PtuAb, PtuCd })
+            _ac.Set(key, 0);
+    }
+
+    private void AssertHydraulicsOff()
+    {
+        foreach (var key in new[] { PumpB, PumpC, PtuAb, PtuCd })
+            Assert.Equal(0, _ac.Get(key));
+    }
+
+    /// <summary>The keys read fresh in each phase, chosen by <paramref name="which"/>: the events split at each
+    /// lamp mute, since every phase begins with its (re-)armed mute.</summary>
+    private static List<string[]> ReadsByPhase(ScriptedTransport io, Func<string, bool> which)
+    {
+        var phases = new List<string[]>();
+        List<string>? current = null;
+        foreach (var e in io.Events)
+        {
+            if (e.StartsWith("mute ", StringComparison.Ordinal))
+            {
+                if (current != null)
+                    phases.Add(current.ToArray());
+                current = new List<string>();
+            }
+            else if (current != null && e.StartsWith("read ", StringComparison.Ordinal) && which(e["read ".Length..]))
+                current.Add(e["read ".Length..]);
+        }
+        if (current != null)
+            phases.Add(current.ToArray());
+        return phases;
+    }
+
+    [Fact]
+    public void The_audible_tests_are_pseudo_keys_on_registered_lights_switches_and_readouts()
+    {
+        Assert.Equal("FO_FIRE_TEST", L1011FoActionExecutor.FireTest);
+        Assert.Equal("FO_WHEEL_WELL_FIRE_TEST", L1011FoActionExecutor.WheelWellFireTest);
+        Assert.Equal("FO_HYDRAULIC_CHECK", L1011FoActionExecutor.HydraulicCheck);
+        foreach (var key in new[] { L1011FoActionExecutor.FireTest, L1011FoActionExecutor.WheelWellFireTest, L1011FoActionExecutor.HydraulicCheck })
+            Assert.True(L1011FoActionExecutor.IsPseudoKey(key), key);
+
+        Assert.Equal(45_000, L1011FoActionExecutor.FireTestMuteMs);
+        Assert.Equal(60_000, L1011FoActionExecutor.HydraulicCheckMuteMs);
+        Assert.Equal(2000, L1011FoActionExecutor.HydraulicNormalPsi);
+        Assert.Equal(900, L1011FoActionExecutor.HydraulicAMinPsi);
+        Assert.Equal(1400, L1011FoActionExecutor.HydraulicDMinPsi);
+        Assert.Equal(100, L1011FoActionExecutor.HydraulicZeroPsi);
+        Assert.Equal(20_000, L1011FoActionExecutor.HydraulicRiseWaitMs);
+        Assert.Equal(30_000, L1011FoActionExecutor.HydraulicBleedWaitMs);
+
+        // Every light read is a registered annunciator lamp the definition reads.
+        var lamps = L1011Annunciators.All.Select(L1011Annunciators.KeyFor).ToHashSet(StringComparer.Ordinal);
+        foreach (var key in FireLights.Append(WheelWellLight))
+        {
+            Assert.Contains(key, lamps);
+            Assert.True(_ac.CanReadBack(key), key);
+        }
+        // Every switch is a row the definition reads back, and every pressure a registered readout.
+        foreach (var key in FireLoops.Concat(new[] { FireTestA, FireTestB, WheelWellLoops, WheelWellA, WheelWellB, PumpB, PumpC, PtuAb, PtuCd }))
+            Assert.True(_ac.CanReadBack(key), key);
+        foreach (char system in "ABCD")
+            Assert.True(_ac.CanReadBack(Hyd(system)), Hyd(system));
+    }
+
+    // ---- The engine and APU fire test ---------------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Fire_test_pass_writes_in_order_and_leaves_the_selectors_on_both(bool progress)
+    {
+        SeedFireTest();
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        _exec.AttachFlowProgressSpeech(() => progress);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.FireTest, 1));
+
+        Assert.Equal(FireTestWrites, _ac.Writes);
+        Assert.Equal(0, _ac.Get(FireTestA));
+        Assert.Equal(0, _ac.Get(FireTestB));
+        Assert.All(FireLoops, loop => Assert.Equal(2, _ac.Get(loop)));   // left on Both
+
+        // Muted before anything is read or written, and re-armed before every phase, never cut short.
+        Assert.Equal("mute 45000", io.Events[0]);
+        Assert.True(_ac.MuteRequests.Count >= 5);
+        Assert.All(_ac.MuteRequests, ms => Assert.Equal(L1011FoActionExecutor.FireTestMuteMs, ms));
+
+        // The loops read no light; each test on, then off, reads the five, in order; the loop light never.
+        Assert.Equal(new[] { Array.Empty<string>(), FireLights, FireLights, FireLights, FireLights },
+            ReadsByPhase(io, k => k.StartsWith("LAMP_", StringComparison.Ordinal)));
+        Assert.DoesNotContain(FireLoopLight, _ac.FreshReads);
+
+        Assert.Equal(progress ? new[] { FirePass } : Array.Empty<string>(), _spoken);
+    }
+
+    [Theory]
+    [InlineData("LAMP_ENG_FIRE_1", "Engine and APU fire test: engine 1 fire light did not come on")]
+    [InlineData("LAMP_ENG_FIRE_2", "Engine and APU fire test: engine 2 fire light did not come on")]
+    [InlineData("LAMP_ENG_FIRE_3", "Engine and APU fire test: engine 3 fire light did not come on")]
+    [InlineData("LAMP_ENG_FIRE", "Engine and APU fire test: engine fire warning light did not come on")]
+    [InlineData("LAMP_FIRE_APU", "Engine and APU fire test: APU fire light did not come on")]
+    public async Task Each_fire_light_that_fails_is_named_once(string lamp, string sentence)
+    {
+        SeedFireTest();
+        _ac.NeverDeliver(lamp);
+        _ac.Set(lamp, 0);   // stays out whatever the tests do
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.FireTest, 1));
+
+        Assert.Equal(new[] { sentence }, _spoken);   // once, though test B finds it out again
+        Assert.Equal(FireTestWrites, _ac.Writes);    // the test still ran to the end
+        Assert.Equal(0, _ac.Get(FireTestA));
+        Assert.Equal(0, _ac.Get(FireTestB));
+    }
+
+    [Fact]
+    public async Task Fire_test_light_that_stays_lit_is_named_did_not_go_out()
+    {
+        SeedFireTest();
+        _ac.NeverDeliver("LAMP_ENG_FIRE_2");
+        _ac.Set("LAMP_ENG_FIRE_2", 1);   // stays lit whatever the tests do
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.FireTest, 1));
+
+        Assert.Equal(new[] { "Engine and APU fire test: engine 2 fire light did not go out" }, _spoken);
+        Assert.Equal(FireTestWrites, _ac.Writes);
+    }
+
+    [Fact]
+    public async Task Fire_test_refused_switch_ends_the_test_with_the_switches_back()
+    {
+        SeedFireTest();
+        _ac.Refuse(FireTestA);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.FireTest, 1));
+
+        Assert.Equal(FireTestWrites.Take(4), _ac.Writes);   // the loops only: B never written
+        Assert.Contains(_logged, line => line.Contains($"{FireTestA} -> 1") && line.Contains(FakeL1011Aircraft.RefusalReason));
+        Assert.Contains(_logged, line => line.Contains($"{FireTestA} -> 0"));   // the put-back tried A
+        Assert.Contains(FireTestB, _ac.FreshReads);                              // and B (already off)
+        Assert.DoesNotContain(_ac.FreshReads, k => k.StartsWith("LAMP_", StringComparison.Ordinal));
+        Assert.Equal(0, _ac.Get(FireTestA));
+        Assert.Equal(0, _ac.Get(FireTestB));
+        Assert.Empty(_spoken);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Fire_test_speaks_nothing_for_a_failed_write(bool progress)
+    {
+        // The flow's "Skipping" is the failed write's only speech: the executor stays silent.
+        SeedFireTest();
+        _ac.NeverDeliver(FireTestB);   // sent, never reads on: not done after the verify time-out
+        _exec.AttachFlowProgressSpeech(() => progress);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.FireTest, 1));
+
+        Assert.Equal(FireTestWrites.Take(7), _ac.Writes);   // ended at B on
+        Assert.Equal(0, _ac.Get(FireTestA));
+        Assert.Equal(0, _ac.Get(FireTestB));
+        Assert.Empty(_spoken);
+    }
+
+    // ---- The wheel well fire test ---------------------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Wheel_well_test_pass_writes_selector_then_both_tests_and_reads_the_light(bool progress)
+    {
+        SeedWheelWellTest();
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        _exec.AttachFlowProgressSpeech(() => progress);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.WheelWellFireTest, 1));
+
+        Assert.Equal(WheelWellTestWrites, _ac.Writes);
+        Assert.Equal(1, _ac.Get(WheelWellLoops));   // left on Both
+        Assert.Equal("mute 45000", io.Events[0]);
+        Assert.All(_ac.MuteRequests, ms => Assert.Equal(L1011FoActionExecutor.FireTestMuteMs, ms));
+        Assert.Equal(new[] { Array.Empty<string>(), new[] { WheelWellLight }, new[] { WheelWellLight } },
+            ReadsByPhase(io, k => k.StartsWith("LAMP_", StringComparison.Ordinal)));
+        Assert.DoesNotContain(MainPanelWheelWellLight, _ac.FreshReads);
+        Assert.Equal(progress ? new[] { WheelWellPass } : Array.Empty<string>(), _spoken);
+    }
+
+    [Fact]
+    public async Task The_wheel_well_light_not_coming_on_is_named()
+    {
+        SeedWheelWellTest();
+        _ac.NeverDeliver(WheelWellLight);
+        _ac.Set(WheelWellLight, 0);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.WheelWellFireTest, 1));
+
+        Assert.Equal(new[] { "Wheel well fire test: wheel well fire light did not come on" }, _spoken);
+        Assert.Equal(WheelWellTestWrites, _ac.Writes);
+        Assert.Equal(0, _ac.Get(WheelWellA));
+        Assert.Equal(0, _ac.Get(WheelWellB));
+    }
+
+    [Fact]
+    public async Task Wheel_well_light_unread_is_said_could_not_be_read()
+    {
+        SeedWheelWellTest();
+        _ac.NeverDeliver(WheelWellLight);
+        _ac.Unset(WheelWellLight);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.WheelWellFireTest, 1));
+
+        Assert.Equal(new[] { "Wheel well fire test: wheel well fire light could not be read" }, _spoken);
+        Assert.Equal(WheelWellTestWrites, _ac.Writes);
+    }
+
+    [Fact]
+    public async Task Wheel_well_test_refused_switch_puts_both_tests_back()
+    {
+        SeedWheelWellTest();
+        _ac.Refuse(WheelWellB);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.WheelWellFireTest, 1));
+
+        Assert.Equal(new[] { (WheelWellLoops, 1.0), (WheelWellA, 1.0), (WheelWellA, 0.0) }, _ac.Writes);
+        Assert.Equal(0, _ac.Get(WheelWellA));
+        Assert.DoesNotContain(WheelWellLight, _ac.FreshReads);
+        Assert.Empty(_spoken);
+    }
+
+    // ---- The hydraulic check ------------------------------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Hydraulic_check_pass_runs_the_manuals_order_and_ends_with_everything_off(bool progress)
+    {
+        SeedHydraulicCheck();
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        _exec.AttachFlowProgressSpeech(() => progress);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.HydraulicCheck, 1));
+
+        Assert.Equal(HydraulicCheckWrites, _ac.Writes);
+        AssertHydraulicsOff();
+
+        // Muted first and re-armed before each phase's first write.
+        Assert.Equal(new[]
+        {
+            "mute 60000", $"write {PumpB}=1",
+            "mute 60000", $"write {PumpC}=1",
+            "mute 60000", $"write {PtuAb}=1", $"write {PtuCd}=1",
+            "mute 60000", $"write {PtuAb}=0", $"write {PtuCd}=0", $"write {PumpB}=0", $"write {PumpC}=0",
+        }, io.Events.Where(e => !e.StartsWith("read ", StringComparison.Ordinal)));
+        Assert.Equal("mute 60000", io.Events[0]);
+
+        // Each phase reads its own pressures fresh, in A, B, C, D order.
+        Assert.Equal(new[]
+        {
+            new[] { Hyd('B') }, new[] { Hyd('C') }, new[] { Hyd('A'), Hyd('D') }, new[] { Hyd('A'), Hyd('B'), Hyd('C'), Hyd('D') },
+        }, ReadsByPhase(io, k => k.StartsWith("L1011_RO_HYD_", StringComparison.Ordinal)));
+
+        Assert.Equal(progress ? new[] { HydraulicPass } : Array.Empty<string>(), _spoken);
+    }
+
+    [Fact]
+    public async Task System_B_not_rising_is_named_with_an_invariant_number()
+    {
+        SeedHydraulicCheck();
+        _ac.NeverDeliver(Hyd('B'));
+        _ac.Set(Hyd('B'), 14.5);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.HydraulicCheck, 1));
+
+        Assert.Equal(new[] { "Hydraulic check: system B pressure did not reach 2,000 psi" }, _spoken);
+        // The B phase waited its 20 s on the transport's clock, then the check carried on.
+        long bOn = _ac.Io.Single(e => e is { Kind: FakeL1011IoKind.Write, Key: PumpB, Value: 1 }).AtMs;
+        long cOn = _ac.Io.Single(e => e is { Kind: FakeL1011IoKind.Write, Key: PumpC, Value: 1 }).AtMs;
+        Assert.InRange(cOn - bOn, L1011FoActionExecutor.HydraulicRiseWaitMs,
+            L1011FoActionExecutor.HydraulicRiseWaitMs + L1011FoActionExecutor.PollMs);
+        Assert.Equal(HydraulicCheckWrites, _ac.Writes);
+        AssertHydraulicsOff();
+    }
+
+    [Fact]
+    public async Task System_D_short_of_1400_is_named()
+    {
+        SeedHydraulicCheck();
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        io.AfterWrite(PtuCd, 1, () =>
+        {
+            _ac.NeverDeliver(Hyd('D'));
+            _ac.Set(Hyd('D'), 1200);   // rises short of 1,400
+        });
+        io.AfterWrite(PtuCd, 0, () => _ac.Set(Hyd('D'), 14.5));   // and bleeds down once off
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.HydraulicCheck, 1));
+
+        Assert.Equal(new[] { "Hydraulic check: system D pressure did not reach 1,400 psi" }, _spoken);
+        Assert.Equal(HydraulicCheckWrites, _ac.Writes);
+        AssertHydraulicsOff();
+    }
+
+    [Fact]
+    public async Task Hydraulic_system_that_does_not_bleed_down_is_named()
+    {
+        SeedHydraulicCheck();
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        io.AfterWrite(PumpC, 1, () => _ac.NeverDeliver(Hyd('C')));   // stuck at 2,650 from the C phase on
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.HydraulicCheck, 1));
+
+        Assert.Equal(new[] { "Hydraulic check: system C pressure did not fall below 100 psi" }, _spoken);
+        long lastOff = _ac.Io.Single(e => e is { Kind: FakeL1011IoKind.Write, Key: PumpC, Value: 0 }).AtMs;
+        Assert.InRange(_ac.NowMs - lastOff, L1011FoActionExecutor.HydraulicBleedWaitMs,
+            L1011FoActionExecutor.HydraulicBleedWaitMs + L1011FoActionExecutor.PollMs);
+        Assert.Equal(HydraulicCheckWrites, _ac.Writes);
+        AssertHydraulicsOff();
+    }
+
+    [Fact]
+    public async Task Hydraulic_system_unread_is_said_could_not_be_read()
+    {
+        SeedHydraulicCheck();
+        _ac.NeverDeliver(Hyd('B'));
+        _ac.Unset(Hyd('B'));
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.HydraulicCheck, 1));
+
+        Assert.Equal(new[] { "Hydraulic check: system B pressure could not be read" }, _spoken);
+        Assert.Equal(HydraulicCheckWrites, _ac.Writes);
+        AssertHydraulicsOff();
+    }
+
+    [Fact]
+    public async Task Hydraulic_sentences_use_a_dot_and_a_comma_group_under_de_DE()
+    {
+        SeedHydraulicCheck();
+        _ac.NeverDeliver(Hyd('B'));
+        _ac.Set(Hyd('B'), 14.5);
+        var previous = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
+
+            Assert.False(await _exec.Set(L1011FoActionExecutor.HydraulicCheck, 1));
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = previous;
+        }
+
+        Assert.Equal(new[] { "Hydraulic check: system B pressure did not reach 2,000 psi" }, _spoken);   // never "2.000"
+        Assert.Contains(_logged, line => line.Contains($"{Hyd('B')} reads 14.5"));                         // never "14,5"
+    }
+
+    [Fact]
+    public async Task Hydraulic_check_write_not_done_ends_at_once_with_everything_off()
+    {
+        SeedHydraulicCheck();
+        _ac.Refuse(PtuAb);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.HydraulicCheck, 1));
+
+        // B and C on, the refused transfer unit ends the check: no D write, no wait; the put-back turns the pumps off.
+        Assert.Equal(new[] { (PumpB, 1.0), (PumpC, 1.0), (PumpB, 0.0), (PumpC, 0.0) }, _ac.Writes);
+        Assert.Contains(_logged, line => line.Contains($"{PtuAb} -> 1") && line.Contains(FakeL1011Aircraft.RefusalReason));
+        Assert.DoesNotContain(Hyd('A'), _ac.FreshReads);
+        AssertHydraulicsOff();
+        Assert.Empty(_spoken);
+    }
+
+    [Fact]
+    public async Task The_hydraulic_check_runs_under_the_one_gate()
+    {
+        SeedHydraulicCheck();
+        _ac.Set(ContinuousIgnition, 0);
+        var io = new HoldingTransport(_ac) { TimeStandsStill = true };
+        _exec.SetTransport(io);
+        var door = io.Hold(PtuCd);
+
+        var check = _exec.Set(L1011FoActionExecutor.HydraulicCheck, 1);
+        var tick = _exec.Set(ContinuousIgnition, 1);
+
+        Assert.Equal(new[] { PumpB, PumpC, PtuAb, PtuCd }, io.Started);   // the check is in flight
+        Assert.False(tick.IsCompleted);
+        Assert.DoesNotContain(_ac.Io, e => e.Key == ContinuousIgnition);
+
+        door.SetResult();
+        Assert.Equal(new[] { true, true }, await Task.WhenAll(check, tick).WaitAsync(Hang));
+
+        int lastOfCheck = _ac.Io.FindLastIndex(e => e.Key != ContinuousIgnition);
+        int firstOfTick = _ac.Io.FindIndex(e => e.Key == ContinuousIgnition);
+        Assert.True(firstOfTick > lastOfCheck);   // the tick only after the whole check, the bleed-down included
+    }
+
+    [Fact]
+    public async Task A_flow_step_runs_the_hydraulic_check_to_the_end_through_a_pause_and_a_stop()
+    {
+        // Atomic and not pause-aware (ruling R24): a Stop or Pause mid-check never leaves a pump on.
+        SeedHydraulicCheck();
+        _ac.NeverDeliver(Hyd('B'));
+        _ac.Set(Hyd('B'), 14.5);   // the B phase waits its full 20 s
+        var never = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _exec.AttachFlowPause(ct => never.Task.WaitAsync(ct));   // a flow paused, never resumed
+        using var stop = new CancellationTokenSource();
+        _ac.OnClock = ac =>
+        {
+            if (ac.NowMs >= 5_000 && !stop.IsCancellationRequested)
+                stop.Cancel();
+        };
+
+        bool done = await _exec.ExecuteStepAsync(new Step { EventName = L1011FoActionExecutor.HydraulicCheck }, stop.Token).WaitAsync(Hang);
+
+        Assert.False(done);
+        Assert.True(stop.IsCancellationRequested);
+        Assert.Equal(HydraulicCheckWrites, _ac.Writes);
+        AssertHydraulicsOff();
+        Assert.Equal(new[] { "Hydraulic check: system B pressure did not reach 2,000 psi" }, _spoken);
+    }
 }

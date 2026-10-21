@@ -464,6 +464,199 @@ public class FakeL1011AircraftTests
         Assert.Equal(1, ac.Get(ApuGenField));            // the field stays closed
     }
 
+    // ---- The fire tests (live, 2026-10-21) ---------------------------------------------------------------
+
+    private static readonly string[] FireLoopSelectors =
+    {
+        "ROTARY_FIRE_DETECT_TEST_ENG_1", "ROTARY_FIRE_DETECT_TEST_ENG_2", "ROTARY_FIRE_DETECT_TEST_ENG_3", "ROTARY_FIRE_DETECT_TEST_APU",
+    };
+    private const string FireTestA = "SWITCH_FIRE_DETECT_TEST_A";
+    private const string FireTestB = "SWITCH_FIRE_DETECT_TEST_B";
+    private static readonly string[] FireLamps =
+    {
+        "LAMP_ENG_FIRE_1", "LAMP_ENG_FIRE_2", "LAMP_ENG_FIRE_3", "LAMP_ENG_FIRE", "LAMP_FIRE_APU",
+    };
+    private const string WheelWellSelector = "ROTARY_WHEEL_WELL_TEST";
+    private const string WheelWellTestA = "SWITCH_WHEEL_WELL_TEST_A";
+    private const string WheelWellTestB = "SWITCH_WHEEL_WELL_TEST_B";
+    private const string WheelWellFire = "LAMP_FIRE_WHEEL_WELL";
+
+    private static FakeL1011Aircraft FireLoopsAt(double position)
+    {
+        var ac = new FakeL1011Aircraft();
+        foreach (var selector in FireLoopSelectors)
+            ac.Set(selector, position);
+        ac.Set(FireTestA, 0);
+        ac.Set(FireTestB, 0);
+        return ac;
+    }
+
+    [Theory]
+    [InlineData(FireTestA)]
+    [InlineData(FireTestB)]
+    public async Task Either_fire_test_on_every_loop_on_both_lights_the_five_fire_lights_and_off_puts_them_out(string test)
+    {
+        var ac = FireLoopsAt(2);
+        Assert.All(FireLamps, lamp => Assert.Equal(0, ac.Get(lamp)));
+
+        Assert.Equal(L1011FoResult.Sent, await ac.SetAsync(test, 1));
+        Assert.All(FireLamps, lamp => Assert.Equal(1, ac.Get(lamp)));
+
+        Assert.Equal(L1011FoResult.Sent, await ac.SetAsync(test, 0));
+        Assert.All(FireLamps, lamp => Assert.Equal(0, ac.Get(lamp)));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]   // the single-loop positions do not match their labels live: the test runs on Both only
+    public async Task A_fire_test_with_a_loop_selector_off_both_lights_nothing(double position)
+    {
+        var ac = FireLoopsAt(2);
+        ac.Set(FireLoopSelectors[3], position);
+
+        await ac.SetAsync(FireTestA, 1);
+
+        Assert.All(FireLamps, lamp => Assert.Equal(0, ac.Get(lamp)));
+    }
+
+    [Fact]
+    public void The_fire_lights_are_unread_until_a_loop_selector_or_test_switch_reads()
+    {
+        var ac = new FakeL1011Aircraft();
+        Assert.All(FireLamps, lamp => Assert.Null(ac.Get(lamp)));
+        Assert.Null(ac.Get(WheelWellFire));
+
+        ac.Set(FireTestB, 0);
+        Assert.All(FireLamps, lamp => Assert.Equal(0, ac.Get(lamp)));
+        Assert.Null(ac.Get(WheelWellFire));   // the wheel well light follows its own switches
+
+        ac.Set(WheelWellSelector, 0);
+        Assert.Equal(0, ac.Get(WheelWellFire));
+    }
+
+    [Theory]
+    [InlineData(1, 1, 1, 1)]   // Both, A and B on: lit
+    [InlineData(1, 1, 0, 0)]   // A alone lit nothing live
+    [InlineData(1, 0, 1, 0)]
+    [InlineData(0, 1, 1, 0)]   // Loop A
+    [InlineData(2, 1, 1, 0)]   // Loop B
+    public async Task The_wheel_well_light_lights_only_with_both_tests_on_the_both_selector(double selector, double a, double b, double lit)
+    {
+        var ac = new FakeL1011Aircraft();
+        ac.Set(WheelWellSelector, selector);
+        ac.Set(WheelWellTestA, 0);
+        ac.Set(WheelWellTestB, 0);
+
+        if (a == 1) Assert.Equal(L1011FoResult.Sent, await ac.SetAsync(WheelWellTestA, 1));
+        if (b == 1) Assert.Equal(L1011FoResult.Sent, await ac.SetAsync(WheelWellTestB, 1));
+
+        Assert.Equal(lit, ac.Get(WheelWellFire));
+        Assert.All(FireLamps, lamp => Assert.Null(ac.Get(lamp)));   // the engine fire lights are not the wheel well's
+    }
+
+    [Fact]
+    public async Task A_fire_light_never_delivered_holds_its_reading()
+    {
+        var ac = FireLoopsAt(2);
+        ac.NeverDeliver(FireLamps[1]);   // stuck out
+
+        await ac.SetAsync(FireTestA, 1);
+
+        Assert.Equal(0, ac.Get(FireLamps[1]));
+        Assert.Equal(1, ac.Get(FireLamps[0]));
+    }
+
+    // ---- Hydraulics (live, on external power, 2026-10-21) --------------------------------------------------
+
+    private const string PumpB = "SWITCH_HYD_AC_PUMP_B3";
+    private const string PumpC = "SWITCH_HYD_AC_PUMP_C3";
+    private const string PtuAb = "SWITCH_PTU_AB";
+    private const string PtuCd = "SWITCH_PTU_CD";
+    private static string Hyd(char system) => $"L1011_RO_HYD_{system}";
+
+    private static FakeL1011Aircraft HydraulicsOff()
+    {
+        var ac = new FakeL1011Aircraft();
+        foreach (var key in new[] { PumpB, PumpC, PtuAb, PtuCd })
+            ac.Set(key, 0);
+        return ac;
+    }
+
+    [Fact]
+    public void Every_system_reads_depressurized_with_nothing_on()
+    {
+        var ac = new FakeL1011Aircraft();
+
+        foreach (char system in "ABCD")
+            Assert.Equal(14.5, ac.Get(Hyd(system)));
+    }
+
+    [Theory]
+    [InlineData(PumpB, 'B', 'C')]
+    [InlineData(PumpC, 'C', 'B')]
+    public async Task An_ac_pump_pressurizes_its_own_system_alone(string pump, char own, char other)
+    {
+        var ac = HydraulicsOff();
+
+        Assert.Equal(L1011FoResult.Sent, await ac.SetAsync(pump, 1));
+        Assert.Equal(2650, ac.Get(Hyd(own)));
+        Assert.Equal(14.5, ac.Get(Hyd(other)));
+        Assert.Equal(14.5, ac.Get(Hyd('A')));
+        Assert.Equal(14.5, ac.Get(Hyd('D')));
+
+        Assert.Equal(L1011FoResult.Sent, await ac.SetAsync(pump, 0));
+        Assert.Equal(14.5, ac.Get(Hyd(own)));
+    }
+
+    [Theory]
+    [InlineData(1, 1, 1, 1, 2600)]   // both pumps and both PTUs: A and D pressurized
+    [InlineData(1, 1, 1, 0, 14.5)]   // one PTU off
+    [InlineData(1, 1, 0, 1, 14.5)]
+    [InlineData(1, 0, 1, 1, 14.5)]   // system C not pressurized
+    [InlineData(0, 1, 1, 1, 14.5)]   // system B not pressurized
+    public async Task The_ptus_pressurize_a_and_d_only_with_both_on_over_b_and_c_pressurized(
+        double b, double c, double ab, double cd, double ad)
+    {
+        var ac = HydraulicsOff();
+
+        foreach (var (key, on) in new[] { (PumpB, b), (PumpC, c), (PtuAb, ab), (PtuCd, cd) })
+            if (on == 1)
+                Assert.Equal(L1011FoResult.Sent, await ac.SetAsync(key, 1));
+
+        Assert.Equal(ad, ac.Get(Hyd('A')));
+        Assert.Equal(ad, ac.Get(Hyd('D')));
+    }
+
+    [Fact]
+    public async Task Everything_off_bleeds_every_system_down_at_once()
+    {
+        var ac = HydraulicsOff();
+        foreach (var key in new[] { PumpB, PumpC, PtuAb, PtuCd })
+            await ac.SetAsync(key, 1);
+        Assert.Equal(2600, ac.Get(Hyd('A')));
+
+        foreach (var key in new[] { PtuAb, PtuCd, PumpB, PumpC })
+            await ac.SetAsync(key, 0);
+
+        foreach (char system in "ABCD")
+            Assert.Equal(14.5, ac.Get(Hyd(system)));
+    }
+
+    [Fact]
+    public async Task A_stuck_system_b_keeps_a_from_pressurizing()
+    {
+        var ac = HydraulicsOff();
+        ac.NeverDeliver(Hyd('B'));   // stuck at 14.5
+
+        foreach (var key in new[] { PumpB, PumpC, PtuAb, PtuCd })
+            await ac.SetAsync(key, 1);
+
+        Assert.Equal(14.5, ac.Get(Hyd('B')));
+        Assert.Equal(2650, ac.Get(Hyd('C')));
+        Assert.Equal(14.5, ac.Get(Hyd('A')));
+        Assert.Equal(14.5, ac.Get(Hyd('D')));
+    }
+
     // ---- Altimeters and the lamp mute ------------------------------------------------------------------
 
     [Fact]

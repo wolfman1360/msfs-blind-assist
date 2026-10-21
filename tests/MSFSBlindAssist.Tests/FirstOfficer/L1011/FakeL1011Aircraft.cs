@@ -45,6 +45,18 @@ internal readonly record struct FakeL1011Io(FakeL1011IoKind Kind, string Key, do
 /// flowbar lit only with it On (neither read while the switch is unread), both standby bus fail lights always
 /// out, both essential bus fail lights lit unless the external power breaker reads closed. The battery
 /// changes none of them.</item>
+/// <item>The fire tests as the aircraft showed them: with all four fire loop selectors
+/// (<c>ROTARY_FIRE_DETECT_TEST_ENG_1..3</c>, <c>_APU</c>) at Both (2), either loop test switch
+/// (<c>SWITCH_FIRE_DETECT_TEST_A</c>, <c>_B</c>) on lights the three engine fire lights, the engine fire warning
+/// and the APU fire light; otherwise they read out. The wheel well fire light (<c>LAMP_FIRE_WHEEL_WELL</c>) lights
+/// only with its selector (<c>ROTARY_WHEEL_WELL_TEST</c>) at Both (1) and both its test switches on (A alone lit
+/// nothing). Each light stays unread until one of its own selectors or test switches reads.</item>
+/// <item>Hydraulics as on external power, but at once: system B (<c>L1011_RO_HYD_B</c>) reads
+/// <see cref="PumpPsi"/> while its AC pump (<c>SWITCH_HYD_AC_PUMP_B3</c>) is on, system C likewise from
+/// <c>_C3</c>; systems A and D read <see cref="PtuPsi"/> while both power transfer units (<c>SWITCH_PTU_AB</c>,
+/// <c>_CD</c>) are on and systems B and C read at least <see cref="PressurizedPsi"/>; anything else reads
+/// <see cref="DepressurizedPsi"/>. A test wanting a slow rise or a stuck pressure uses <see cref="NeverDeliver"/>
+/// then <see cref="Set"/>.</item>
 /// <item>The altimeters set together set the three altimeter readouts, the setting read as the definition
 /// reads it (inches taken too; out of range refused). The cabin baro sets its own readout
 /// (<c>L1011_RO_CABIN_BARO</c>), read the same way.</item>
@@ -96,6 +108,40 @@ internal sealed class FakeL1011Aircraft : IL1011FoTransport
     private const string ApuGenBreaker = "L1011_RO_APU_GEN_BREAKER";
 
     private const double StandbyOff = 0, StandbyArm = 1, StandbyOn = 2;
+
+    private static readonly string[] FireLoopSelectors =
+    {
+        "ROTARY_FIRE_DETECT_TEST_ENG_1", "ROTARY_FIRE_DETECT_TEST_ENG_2", "ROTARY_FIRE_DETECT_TEST_ENG_3", "ROTARY_FIRE_DETECT_TEST_APU",
+    };
+    private static readonly string[] FireTestSwitches = { "SWITCH_FIRE_DETECT_TEST_A", "SWITCH_FIRE_DETECT_TEST_B" };
+    private static readonly string[] FireLamps =
+    {
+        "LAMP_ENG_FIRE_1", "LAMP_ENG_FIRE_2", "LAMP_ENG_FIRE_3", "LAMP_ENG_FIRE", "LAMP_FIRE_APU",
+    };
+    private const double FireLoopsBoth = 2;
+
+    private const string WheelWellSelector = "ROTARY_WHEEL_WELL_TEST";
+    private static readonly string[] WheelWellTestSwitches = { "SWITCH_WHEEL_WELL_TEST_A", "SWITCH_WHEEL_WELL_TEST_B" };
+    private const string WheelWellFire = "LAMP_FIRE_WHEEL_WELL";
+    private const double WheelWellBoth = 1;
+
+    private const string HydPumpB = "SWITCH_HYD_AC_PUMP_B3";
+    private const string HydPumpC = "SWITCH_HYD_AC_PUMP_C3";
+    private const string PtuAb = "SWITCH_PTU_AB";
+    private const string PtuCd = "SWITCH_PTU_CD";
+    private const string HydA = "L1011_RO_HYD_A", HydB = "L1011_RO_HYD_B", HydC = "L1011_RO_HYD_C", HydD = "L1011_RO_HYD_D";
+
+    /// <summary>System B or C with its AC pump on (live: about 2,650 psi a few seconds after the switch).</summary>
+    public const double PumpPsi = 2650;
+
+    /// <summary>Systems A and D with both power transfer units on over B and C pressurized (live: past 2,600 in 10 s).</summary>
+    public const double PtuPsi = 2600;
+
+    /// <summary>A system depressurized (live: every system back to 14.5 psi within 8 s of everything off).</summary>
+    public const double DepressurizedPsi = 14.5;
+
+    /// <summary>System B or C drives its power transfer unit at or above this.</summary>
+    public const double PressurizedPsi = 2000;
 
     /// <summary>A generator is on line when its breaker relay reads closed.</summary>
     private static readonly string[] GeneratorBreakers =
@@ -398,6 +444,29 @@ internal sealed class FakeL1011Aircraft : IL1011FoTransport
         double essentialFail = IsOn(ExternalPowerBreaker) ? 0 : 1;
         Put(AcEssentialFail, essentialFail);
         Put(DcEssentialFail, essentialFail);
+
+        // The fire tests: a light reads once any of its own selectors or test switches does.
+        if (FireLoopSelectors.Concat(FireTestSwitches).Any(k => Value(k) is not null))
+        {
+            bool fireLit = FireLoopSelectors.All(k => Value(k) is double v && Near(v, FireLoopsBoth))
+                && FireTestSwitches.Any(IsOn);
+            foreach (var lamp in FireLamps)
+                Put(lamp, fireLit ? 1 : 0);
+        }
+        if (WheelWellTestSwitches.Append(WheelWellSelector).Any(k => Value(k) is not null))
+        {
+            bool wheelWellLit = Value(WheelWellSelector) is double s && Near(s, WheelWellBoth)
+                && WheelWellTestSwitches.All(IsOn);
+            Put(WheelWellFire, wheelWellLit ? 1 : 0);
+        }
+
+        // Hydraulics: B and C from their own pumps first, then A and D from what B and C read.
+        Put(HydB, IsOn(HydPumpB) ? PumpPsi : DepressurizedPsi);
+        Put(HydC, IsOn(HydPumpC) ? PumpPsi : DepressurizedPsi);
+        bool ptusDriven = IsOn(PtuAb) && IsOn(PtuCd)
+            && Value(HydB) >= PressurizedPsi && Value(HydC) >= PressurizedPsi;
+        Put(HydA, ptusDriven ? PtuPsi : DepressurizedPsi);
+        Put(HydD, ptusDriven ? PtuPsi : DepressurizedPsi);
     }
 
     private bool SourceOnLine() => IsOn(ExternalPowerBreaker) || GeneratorBreakers.Any(IsOn);

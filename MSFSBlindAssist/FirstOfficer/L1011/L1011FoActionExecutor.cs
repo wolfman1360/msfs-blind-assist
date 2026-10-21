@@ -112,6 +112,15 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     /// <summary>The APU generator on line (1: field, then breaker) or off line (0: the breaker tripped).</summary>
     public const string ApuGenerator = "FO_APU_GENERATOR";
 
+    /// <summary>The engine and APU fire test (target ignored): one spoken verdict.</summary>
+    public const string FireTest = "FO_FIRE_TEST";
+
+    /// <summary>The wheel well fire test (target ignored): one spoken verdict.</summary>
+    public const string WheelWellFireTest = "FO_WHEEL_WELL_FIRE_TEST";
+
+    /// <summary>The hydraulic check (target ignored): one spoken verdict.</summary>
+    public const string HydraulicCheck = "FO_HYDRAULIC_CHECK";
+
     /// <summary>
     /// The composites, by pseudo-key: each runs under the gate, writes through <see cref="WriteAsync"/>
     /// (never <see cref="Set"/>, which would wait on the gate it holds) and reads back what it changed.
@@ -125,6 +134,10 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
             [InsAlign] = (exec, io, _) => exec.InsAlignAsync(io),
             [AcTies] = (exec, io, target) => exec.AcTiesAsync(io, target),
             [ApuGenerator] = (exec, io, target) => exec.ApuGeneratorAsync(io, target),
+            // The audible tests (ruling R24): atomic, so no hand tick moves a test switch or pump mid-test.
+            [FireTest] = (exec, io, _) => exec.FireTestAsync(io),
+            [WheelWellFireTest] = (exec, io, _) => exec.WheelWellFireTestAsync(io),
+            [HydraulicCheck] = (exec, io, _) => exec.HydraulicCheckAsync(io),
         };
 
     /// <summary>
@@ -231,6 +244,17 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     /// <summary>How long the APU's RPM may read 0 after its start press: live, it read 0 for about 7 s while
     /// the inlet doors opened, then rose about 3 %/s.</summary>
     internal const int ApuSpinUpWaitMs = 20_000;
+
+    // ---- the audible tests ----
+
+    internal const int FireTestMuteMs = 45_000;
+    internal const int HydraulicCheckMuteMs = 60_000;
+    internal const double HydraulicNormalPsi = 2000;
+    internal const double HydraulicAMinPsi = 900;
+    internal const double HydraulicDMinPsi = 1400;
+    internal const double HydraulicZeroPsi = 100;
+    internal const int HydraulicRiseWaitMs = 20_000;
+    internal const int HydraulicBleedWaitMs = 30_000;
 
     /// <summary>True for a composite's key, Stop-aware or not. A flow key is known when this or the
     /// definition's <c>FoAcceptsKey</c> is true.</summary>
@@ -526,7 +550,7 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
                 await PutStandbyBackAsync(io).ConfigureAwait(false);
                 return false;
             }
-            wrongLight = await WrongLightAsync(io, StandbyOnLights, "standby power on").ConfigureAwait(false);
+            wrongLight = await WrongLightAsync(io, StandbyCheckName, StandbyOnLights, "standby power on").ConfigureAwait(false);
             // Re-armed: on the 1 Hz batch the check can outlast one window.
             io.MuteLampSpeech(StandbyCheckMuteMs);
             if (!await WriteEachAsync(io, StandbyArmWrites).ConfigureAwait(false))
@@ -536,7 +560,7 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
             }
             io.MuteLampSpeech(StandbyCheckMuteMs);
             // Read even after a wrong light, for the log; only the first is spoken.
-            string? armedWrong = await WrongLightAsync(io, StandbyArmedLights, "standby power armed").ConfigureAwait(false);
+            string? armedWrong = await WrongLightAsync(io, StandbyCheckName, StandbyArmedLights, "standby power armed").ConfigureAwait(false);
             wrongLight ??= armedWrong;
             passed = wrongLight is null;
             return passed;
@@ -548,11 +572,21 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
         }
         finally
         {
-            if (wrongLight is not null)
-                _say?.Invoke(wrongLight);
-            else if (passed && SpeaksFlowProgress)
-                _say?.Invoke($"{StandbyCheckName}: pass");
+            SpeakVerdict(StandbyCheckName, wrongLight, passed);
         }
+    }
+
+    /// <summary>
+    /// A test's one verdict, through the announcer ([FO-26], [FOL-2]): the sentence naming the first failure,
+    /// always; "<paramref name="name"/>: pass" only while flow progress speech is on; nothing for a test ended by a
+    /// write not done (the flow says "Skipping").
+    /// </summary>
+    private void SpeakVerdict(string name, string? firstFailure, bool passed)
+    {
+        if (firstFailure is not null)
+            _say?.Invoke(firstFailure);
+        else if (passed && SpeaksFlowProgress)
+            _say?.Invoke($"{name}: pass");
     }
 
     /// <summary>Each write in order; stops at the first not done (it was logged).</summary>
@@ -568,7 +602,14 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     private async Task PutStandbyBackAsync(IL1011FoTransport io)
     {
         Note($"{StandbyCheckName}: not done, putting the battery back on and standby power back to Arm");
-        foreach (var (key, target) in StandbyArmWrites)
+        await TryEachAsync(io, StandbyCheckName, StandbyArmWrites).ConfigureAwait(false);
+    }
+
+    /// <summary>A test's put-back, best effort: each write tried, whatever the others do; a throw is logged
+    /// and the next still tried.</summary>
+    private async Task TryEachAsync(IL1011FoTransport io, string name, IReadOnlyList<(string Key, int Target)> writes)
+    {
+        foreach (var (key, target) in writes)
         {
             try
             {
@@ -576,17 +617,18 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
             }
             catch (Exception ex)
             {
-                Note($"{StandbyCheckName}: {key} -> {target.ToString(CultureInfo.InvariantCulture)} threw putting it back: {ex.Message}", warn: true);
+                Note($"{name}: {key} -> {target.ToString(CultureInfo.InvariantCulture)} threw putting it back: {ex.Message}", warn: true);
             }
         }
     }
 
     /// <summary>
     /// Reads the lights fresh, in order, until each reads as expected, or, once <see cref="VerifyTimeoutMs"/>
-    /// has passed on the transport's clock, the sentence naming the first that did not (logged). Null when
-    /// all matched. A light expected only off external power is skipped unless the breaker reads open.
+    /// has passed on the transport's clock, the sentence naming the first that did not, as
+    /// "<paramref name="testName"/>: <c>light</c> did not come on" (logged). Null when all matched. A light
+    /// expected only off external power is skipped unless the breaker reads open.
     /// </summary>
-    private async Task<string?> WrongLightAsync(IL1011FoTransport io, IReadOnlyList<LightCheck> lights, string what)
+    private async Task<string?> WrongLightAsync(IL1011FoTransport io, string testName, IReadOnlyList<LightCheck> lights, string what)
     {
         long deadline = io.NowMs + VerifyTimeoutMs;
         while (true)
@@ -596,9 +638,9 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
             if (io.NowMs >= deadline)
             {
                 string read = w.Reading is double r ? r.ToString(CultureInfo.InvariantCulture) : "unread";
-                Note($"{StandbyCheckName}, {what}: {w.Check.Key} reads {read} after {VerifyTimeoutMs.ToString(CultureInfo.InvariantCulture)} ms, expected {(w.Check.Lit ? "lit" : "out")}");
+                Note($"{testName}, {what}: {w.Check.Key} reads {read} after {VerifyTimeoutMs.ToString(CultureInfo.InvariantCulture)} ms, expected {(w.Check.Lit ? "lit" : "out")}");
                 string did = w.Reading is null ? "could not be read" : w.Check.WhenWrong;
-                return $"{StandbyCheckName}: {SpokenLightName(w.Check.Lamp)} {did}";
+                return $"{testName}: {SpokenLightName(w.Check.Lamp)} {did}";
             }
             await io.DelayAsync(PollMs).ConfigureAwait(false);
         }
@@ -636,6 +678,247 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
         if (!firstWord.All(char.IsUpper))
             name = char.ToLowerInvariant(name[0]) + name[1..];
         return name.EndsWith(" light", StringComparison.OrdinalIgnoreCase) ? name : name + " light";
+    }
+
+    // ================= the audible tests (ruling R24) =================
+
+    private const string FireTestName = "Engine and APU fire test";
+    private const string WheelWellFireTestName = "Wheel well fire test";
+    private const string HydraulicCheckName = "Hydraulic check";
+
+    private const string FireTestSwitchA = "SWITCH_FIRE_DETECT_TEST_A";
+    private const string FireTestSwitchB = "SWITCH_FIRE_DETECT_TEST_B";
+
+    /// <summary>The fire loop selectors' Both position. Live, the single-loop positions do not match their
+    /// labels, so the test runs on Both only, and leaves the selectors there.</summary>
+    private const int FireLoopsBoth = 2;
+
+    private static readonly string[] FireLoopSelectors =
+    {
+        "ROTARY_FIRE_DETECT_TEST_ENG_1", "ROTARY_FIRE_DETECT_TEST_ENG_2", "ROTARY_FIRE_DETECT_TEST_ENG_3", "ROTARY_FIRE_DETECT_TEST_APU",
+    };
+
+    /// <summary>What either loop test lit on Both, live: the three engine fire lights, the engine fire warning and
+    /// the APU fire light. The fire detection loop light (<c>LX_MIP_FIRE_LOOP</c>) never lit, so it is not read.</summary>
+    private static readonly L1011Lamp[] FireTestLamps =
+    {
+        LampOf("ENG_FIRE_1"), LampOf("ENG_FIRE_2"), LampOf("ENG_FIRE_3"), LampOf("ENG_FIRE"), LampOf("FIRE_APU"),
+    };
+
+    private const string WheelWellLoopSelector = "ROTARY_WHEEL_WELL_TEST";
+    private const string WheelWellTestSwitchA = "SWITCH_WHEEL_WELL_TEST_A";
+    private const string WheelWellTestSwitchB = "SWITCH_WHEEL_WELL_TEST_B";
+
+    /// <summary>The wheel well loop selector's Both position.</summary>
+    private const int WheelWellLoopsBoth = 1;
+
+    /// <summary>What the wheel well test lit, live, with A and B on together (A alone lit nothing): the engineer
+    /// panel's light. The main panel's (<c>LX_MIP_WHEEL_WELL_FIRE</c>) stayed out, so it is not read.</summary>
+    private static readonly L1011Lamp[] WheelWellTestLamps = { LampOf("FIRE_WHEEL_WELL") };
+
+    /// <summary>One phase of a lamp test: its writes, in order, then its lights read until they match (none for a
+    /// phase that only sets the loops). <paramref name="What"/> names it in the log.</summary>
+    private sealed record LampTestPhase(string What, (string Key, int Target)[] Writes, LightCheck[] Lights);
+
+    private static LightCheck[] AllLit(IEnumerable<L1011Lamp> lamps) =>
+        lamps.Select(l => new LightCheck(l, Lit: true, DidNotComeOn)).ToArray();
+
+    private static LightCheck[] AllOut(IEnumerable<L1011Lamp> lamps) =>
+        lamps.Select(l => new LightCheck(l, Lit: false, DidNotGoOut)).ToArray();
+
+    /// <summary>The loops to Both; test A on, the five lit; A off, the five out; then the same with B.</summary>
+    private static readonly LampTestPhase[] FireTestPhases =
+    {
+        new("the loops on both", FireLoopSelectors.Select(k => (k, FireLoopsBoth)).ToArray(), Array.Empty<LightCheck>()),
+        new("test A on", new[] { (FireTestSwitchA, 1) }, AllLit(FireTestLamps)),
+        new("test A off", new[] { (FireTestSwitchA, 0) }, AllOut(FireTestLamps)),
+        new("test B on", new[] { (FireTestSwitchB, 1) }, AllLit(FireTestLamps)),
+        new("test B off", new[] { (FireTestSwitchB, 0) }, AllOut(FireTestLamps)),
+    };
+
+    private static readonly (string Key, int Target)[] FireTestPutBack = { (FireTestSwitchA, 0), (FireTestSwitchB, 0) };
+
+    /// <summary>The loops to Both; tests A and B on together, the light lit; both off, the light out.</summary>
+    private static readonly LampTestPhase[] WheelWellTestPhases =
+    {
+        new("the loops on both", new[] { (WheelWellLoopSelector, WheelWellLoopsBoth) }, Array.Empty<LightCheck>()),
+        new("tests A and B on", new[] { (WheelWellTestSwitchA, 1), (WheelWellTestSwitchB, 1) }, AllLit(WheelWellTestLamps)),
+        new("tests A and B off", new[] { (WheelWellTestSwitchA, 0), (WheelWellTestSwitchB, 0) }, AllOut(WheelWellTestLamps)),
+    };
+
+    private static readonly (string Key, int Target)[] WheelWellTestPutBack = { (WheelWellTestSwitchA, 0), (WheelWellTestSwitchB, 0) };
+
+    private Task<bool> FireTestAsync(IL1011FoTransport io) =>
+        RunLampTestAsync(io, FireTestName, FireTestMuteMs, FireTestPhases, FireTestPutBack, "both loop tests off");
+
+    private Task<bool> WheelWellFireTestAsync(IL1011FoTransport io) =>
+        RunLampTestAsync(io, WheelWellFireTestName, FireTestMuteMs, WheelWellTestPhases, WheelWellTestPutBack, "both wheel well loop tests off");
+
+    /// <summary>
+    /// A lamp test, the fire test's and the wheel well test's shared core: a <see cref="Pseudo"/> composite, atomic
+    /// under the gate (ruling R24: a hand tick moving a test switch mid-test would corrupt it), every wait bounded
+    /// and none pause-aware. The lamp speech muted first (<paramref name="muteMs"/>) and re-armed before every phase
+    /// (on the 1 Hz batch a test can outlast one window; the end is left to its time-out, never cut short); each
+    /// phase's writes in order, then its lights read (<see cref="WrongLightAsync"/>). A wrong light does not stop
+    /// the phases, so the test switches still end off; a write not done (or a throw) ends the test at once with
+    /// <paramref name="putBack"/>, each write tried. Done when every write was done and every light matched. One
+    /// verdict (<see cref="SpeakVerdict"/>): the first wrong light always, the pass only with progress speech on.
+    /// </summary>
+    private async Task<bool> RunLampTestAsync(IL1011FoTransport io, string name, int muteMs,
+        IReadOnlyList<LampTestPhase> phases, IReadOnlyList<(string Key, int Target)> putBack, string turning)
+    {
+        string? wrongLight = null;
+        bool finished = false;
+        try
+        {
+            foreach (var phase in phases)
+            {
+                io.MuteLampSpeech(muteMs);
+                if (!await WriteEachAsync(io, phase.Writes).ConfigureAwait(false))
+                    return false;
+                if (phase.Lights.Length == 0)
+                    continue;
+                // Read even after a wrong light, for the log; only the first is spoken.
+                string? wrong = await WrongLightAsync(io, name, phase.Lights, phase.What).ConfigureAwait(false);
+                wrongLight ??= wrong;
+            }
+            finished = true;
+            return wrongLight is null;
+        }
+        finally
+        {
+            if (!finished)
+                await PutBackAsync(io, name, muteMs, putBack, turning).ConfigureAwait(false);
+            SpeakVerdict(name, wrongLight, passed: finished && wrongLight is null);
+        }
+    }
+
+    /// <summary>A test ended early (a write not done, or a throw): logged, the lamp mute re-armed (the put-back
+    /// changes the lights too), then every switch back, each tried (<see cref="TryEachAsync"/>). Never spoken.</summary>
+    private async Task PutBackAsync(IL1011FoTransport io, string name, int muteMs, IReadOnlyList<(string Key, int Target)> writes, string turning)
+    {
+        Note($"{name}: not done, turning {turning}");
+        io.MuteLampSpeech(muteMs);
+        await TryEachAsync(io, name, writes).ConfigureAwait(false);
+    }
+
+    // ---- the hydraulic check ----
+
+    private const string HydPumpB = "SWITCH_HYD_AC_PUMP_B3";
+    private const string HydPumpC = "SWITCH_HYD_AC_PUMP_C3";
+    private const string PtuAb = "SWITCH_PTU_AB";
+    private const string PtuCd = "SWITCH_PTU_CD";
+
+    /// <summary>A system's pressure (<c>HYDRAULIC ACTUATOR PRESSURE:7..10</c>, psi), read fresh.</summary>
+    private static string HydraulicPressure(char system) => $"L1011_RO_HYD_{system}";
+
+    /// <summary>One system's pressure a phase waits for: at least <paramref name="Psi"/> (rising), or below it
+    /// (bleeding down).</summary>
+    private sealed record PressureCheck(char System, double Psi, bool Rising)
+    {
+        public string Readout => HydraulicPressure(System);
+
+        public bool Meets(double psi) => Rising ? psi >= Psi : psi < Psi;
+
+        /// <summary>"did not reach 2,000 psi": spoken, so the number is invariant (never "2.000" under de-DE).</summary>
+        public string WhenWrong =>
+            $"{(Rising ? "did not reach" : "did not fall below")} {Psi.ToString("#,##0", CultureInfo.InvariantCulture)} psi";
+    }
+
+    /// <summary>One phase of the hydraulic check: its writes, in order, then its pressures, A to D, waited for
+    /// up to <paramref name="WaitMs"/>.</summary>
+    private sealed record HydraulicPhase(string What, (string Key, int Target)[] Writes, PressureCheck[] Pressures, int WaitMs);
+
+    /// <summary>Everything off, the power transfer units before the pumps that drive them; also the put-back.</summary>
+    private static readonly (string Key, int Target)[] HydraulicOffWrites =
+    {
+        (PtuAb, 0), (PtuCd, 0), (HydPumpB, 0), (HydPumpC, 0),
+    };
+
+    /// <summary>The manual's order: B's AC pump, C's, both power transfer units, then everything off. Live, on
+    /// external power: B and C past 1,500 psi in 2 s and about 2,650 shortly after; A and D past 2,600 within
+    /// 10 s; every system back to 14.5 psi within 8 s of everything off.</summary>
+    private static readonly HydraulicPhase[] HydraulicPhases =
+    {
+        new("system B AC pump on", new[] { (HydPumpB, 1) },
+            new[] { new PressureCheck('B', HydraulicNormalPsi, Rising: true) }, HydraulicRiseWaitMs),
+        new("system C AC pump on", new[] { (HydPumpC, 1) },
+            new[] { new PressureCheck('C', HydraulicNormalPsi, Rising: true) }, HydraulicRiseWaitMs),
+        new("power transfer units on", new[] { (PtuAb, 1), (PtuCd, 1) },
+            new[] { new PressureCheck('A', HydraulicAMinPsi, Rising: true), new PressureCheck('D', HydraulicDMinPsi, Rising: true) },
+            HydraulicRiseWaitMs),
+        new("everything off", HydraulicOffWrites,
+            "ABCD".Select(s => new PressureCheck(s, HydraulicZeroPsi, Rising: false)).ToArray(), HydraulicBleedWaitMs),
+    };
+
+    /// <summary>
+    /// The hydraulic check, a <see cref="Pseudo"/> composite, atomic under the gate (ruling R24: a hand tick moving
+    /// a pump mid-check would corrupt it), every wait bounded and none pause-aware. The lamp speech muted first
+    /// (<see cref="HydraulicCheckMuteMs"/>: the brake accumulator lights change) and re-armed before every phase;
+    /// each phase's writes in order (<see cref="HydraulicPhases"/>), then its pressures read fresh until they meet
+    /// their thresholds (<see cref="WrongPressureAsync"/>). A wait that times out is recorded and the check carries
+    /// on, since the pumps must still come off; a write not done (or a throw) ends it at once with everything off
+    /// (<see cref="HydraulicOffWrites"/>, each tried). Done when every write was done and every pressure met. One
+    /// verdict (<see cref="SpeakVerdict"/>): the first failing pressure always, the pass only with progress speech on.
+    /// </summary>
+    private async Task<bool> HydraulicCheckAsync(IL1011FoTransport io)
+    {
+        string? firstFailure = null;
+        bool finished = false;
+        try
+        {
+            foreach (var phase in HydraulicPhases)
+            {
+                io.MuteLampSpeech(HydraulicCheckMuteMs);
+                if (!await WriteEachAsync(io, phase.Writes).ConfigureAwait(false))
+                    return false;
+                string? failure = await WrongPressureAsync(io, phase.Pressures, phase.WaitMs, phase.What).ConfigureAwait(false);
+                firstFailure ??= failure;
+            }
+            finished = true;
+            return firstFailure is null;
+        }
+        finally
+        {
+            if (!finished)
+                await PutBackAsync(io, HydraulicCheckName, HydraulicCheckMuteMs, HydraulicOffWrites,
+                    "the AC pumps and power transfer units off").ConfigureAwait(false);
+            SpeakVerdict(HydraulicCheckName, firstFailure, passed: finished && firstFailure is null);
+        }
+    }
+
+    /// <summary>
+    /// Reads the pressures fresh, in order (A to D), until each meets its threshold, or, once
+    /// <paramref name="limitMs"/> has passed on the transport's clock, the sentence naming the first that did not
+    /// ("Hydraulic check: system B pressure did not reach 2,000 psi", "… could not be read"; logged). Null when all
+    /// met. Read-only; not pause-aware.
+    /// </summary>
+    private async Task<string?> WrongPressureAsync(IL1011FoTransport io, IReadOnlyList<PressureCheck> pressures, int limitMs, string what)
+    {
+        long deadline = io.NowMs + limitMs;
+        while (true)
+        {
+            PressureCheck? wrong = null;
+            double? reading = null;
+            foreach (var check in pressures)
+            {
+                reading = await ReadAsync(io, check.Readout).ConfigureAwait(false);
+                if (reading is not double psi || !check.Meets(psi))
+                {
+                    wrong = check;
+                    break;
+                }
+            }
+            if (wrong is null) return null;
+            if (io.NowMs >= deadline)
+            {
+                string read = reading is double r ? r.ToString(CultureInfo.InvariantCulture) : "unread";
+                Note($"{HydraulicCheckName}, {what}: {wrong.Readout} reads {read} after {limitMs.ToString(CultureInfo.InvariantCulture)} ms, expected {(wrong.Rising ? "at least" : "below")} {wrong.Psi.ToString(CultureInfo.InvariantCulture)} psi");
+                string did = reading is null ? "could not be read" : wrong.WhenWrong;
+                return $"{HydraulicCheckName}: system {wrong.System} pressure {did}";
+            }
+            await io.DelayAsync(PollMs).ConfigureAwait(false);
+        }
     }
 
     // ================= external power =================
