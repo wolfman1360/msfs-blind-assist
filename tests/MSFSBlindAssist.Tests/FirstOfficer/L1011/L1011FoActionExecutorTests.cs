@@ -2678,4 +2678,251 @@ public class L1011FoActionExecutorTests
         AssertHydraulicsOff();
         Assert.Equal(new[] { "Hydraulic check: system B pressure did not reach 2,000 psi" }, _spoken);
     }
+
+    // ================= The cabin pressurization composites ========================================================
+    // One write through the transport's own entry and a bounded read-back, under the gate (Pseudo, atomic), as the
+    // external power composite is. Nothing is spoken: a pass is the flow's line, a failure the flow's "Skipping".
+
+    private const string CabinBaroReadout = "L1011_RO_CABIN_BARO";
+    private const string CabinAltitudeReadout = "L1011_RO_CABIN_ALT_SELECTED";
+    private const double MetresPerFoot = 0.3048;
+
+    /// <summary>
+    /// The fake with <see cref="IL1011FoTransport.Ready"/> true but both cabin writes
+    /// <see cref="L1011FoOutcome.Unavailable"/>, as the definition answers when its UI thread can no longer take
+    /// the call. Everything else is the fake's.
+    /// </summary>
+    private sealed class CabinWritesUnavailableTransport : IL1011FoTransport
+    {
+        private readonly FakeL1011Aircraft _ac;
+
+        public CabinWritesUnavailableTransport(FakeL1011Aircraft ac) => _ac = ac;
+
+        public bool Ready => _ac.Ready;
+        public long NowMs => _ac.NowMs;
+        public Task<L1011FoResult> SetAsync(string key, double value) => _ac.SetAsync(key, value);
+        public Task<L1011FoResult> SetAltimetersAsync(double millibars) => _ac.SetAltimetersAsync(millibars);
+        public Task<L1011FoResult> SetCabinBaroAsync(double millibars) => Task.FromResult(L1011FoResult.Unavailable);
+        public Task<L1011FoResult> SetCabinAltitudeSelectorAsync(int step) => Task.FromResult(L1011FoResult.Unavailable);
+        public bool CanReadBack(string key) => _ac.CanReadBack(key);
+        public Task<double?> ReadFreshAsync(string key, int timeoutMs) => _ac.ReadFreshAsync(key, timeoutMs);
+        public double? ReadCached(string key) => _ac.ReadCached(key);
+        public void MuteLampSpeech(int ms) => _ac.MuteLampSpeech(ms);
+        public Task DelayAsync(int ms) => _ac.DelayAsync(ms);
+    }
+
+    private IEnumerable<FakeL1011Io> CabinBaroWrites() => _ac.Io.Where(e => e.Kind == FakeL1011IoKind.CabinBaro);
+
+    private IEnumerable<FakeL1011Io> CabinAltitudeWrites() => _ac.Io.Where(e => e.Kind == FakeL1011IoKind.CabinAltitudeStep);
+
+    [Fact]
+    public void Cabin_composites_are_pseudo_keys()
+    {
+        Assert.Equal("FO_CABIN_BARO", L1011FoActionExecutor.CabinBaro);
+        Assert.Equal("FO_CABIN_ALT_SELECT", L1011FoActionExecutor.CabinAltitudeSelect);
+        foreach (var key in new[] { L1011FoActionExecutor.CabinBaro, L1011FoActionExecutor.CabinAltitudeSelect })
+        {
+            Assert.True(L1011FoActionExecutor.IsPseudoKey(key), key);
+            Assert.Contains(key, L1011FoActionExecutor.PseudoKeys);           // under the gate, atomic
+            Assert.DoesNotContain(key, L1011FoActionExecutor.StopAwareKeys);
+        }
+    }
+
+    // ---- The cabin barometric setting --------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Cabin_baro_writes_hundredths_as_hectopascals_and_reads_back()
+    {
+        Assert.True(await _exec.Set(L1011FoActionExecutor.CabinBaro, 100237));
+
+        var write = Assert.Single(CabinBaroWrites());
+        Assert.Equal(FakeL1011Aircraft.CabinBaroIoKey, write.Key);
+        Assert.Equal(1002.37, write.Value!.Value, 6);
+        Assert.Equal(1002.37, _ac.Get(CabinBaroReadout)!.Value, 6);
+        Assert.Empty(_ac.Writes);                                      // no panel row written
+        Assert.Equal(new[] { CabinBaroReadout }, _ac.FreshReads);      // read back fresh, no read first
+        Assert.Empty(_spoken);
+    }
+
+    [Fact]
+    public async Task Cabin_baro_not_delivered_is_not_done()
+    {
+        _ac.NeverDeliver(CabinBaroReadout);
+        _ac.Set(CabinBaroReadout, 1013.25);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.CabinBaro, 100237));
+
+        Assert.Single(CabinBaroWrites());                              // written once, never repeated
+        Assert.InRange(_ac.NowMs, L1011FoActionExecutor.VerifyTimeoutMs,
+            L1011FoActionExecutor.VerifyTimeoutMs + L1011FoActionExecutor.PollMs + L1011FoActionExecutor.ReadTimeoutMs);
+        Assert.True(_ac.FreshReads.Count > 2);                         // polled, not read once
+        Assert.Contains(_logged, line => line.Contains(CabinBaroReadout) && line.Contains("1013.25"));
+        Assert.Empty(_spoken);
+    }
+
+    [Fact]
+    public async Task Cabin_baro_never_set_is_not_done_and_logged_unread()
+    {
+        _ac.NeverDeliver(CabinBaroReadout);   // never read at all
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.CabinBaro, 100237));
+
+        Assert.Single(CabinBaroWrites());
+        Assert.Contains(_logged, line => line.Contains(CabinBaroReadout) && line.Contains("unread"));
+        Assert.Empty(_spoken);
+    }
+
+    [Theory]
+    [InlineData(200000)]
+    [InlineData(110000)]
+    [InlineData(90000)]
+    [InlineData(0)]
+    public async Task Cabin_baro_out_of_range_is_not_done_and_writes_nothing(int target)
+    {
+        Assert.False(await _exec.Set(L1011FoActionExecutor.CabinBaro, target));
+
+        Assert.Empty(CabinBaroWrites());
+        Assert.Empty(_ac.Writes);
+        Assert.Empty(_ac.FreshReads);     // nothing was sent, so nothing to read back and no wait
+        Assert.Equal(0, _ac.NowMs);
+        Assert.Contains(_logged, line => line.Contains(L1011FoActionExecutor.CabinBaro) && line.Contains(L1011Levers.AltimeterRangeError));
+        Assert.Empty(_spoken);
+    }
+
+    [Theory]
+    [InlineData(0.4, true)]
+    [InlineData(-0.4, true)]
+    [InlineData(0.6, false)]
+    [InlineData(-0.6, false)]
+    public async Task Cabin_baro_reads_its_target_within_half_a_hectopascal(double offset, bool done)
+    {
+        _ac.NeverDeliver(CabinBaroReadout);
+        _ac.Set(CabinBaroReadout, 1002.37 + offset);
+
+        Assert.Equal(done, await _exec.Set(L1011FoActionExecutor.CabinBaro, 100237));
+    }
+
+    [Fact]
+    public async Task Cabin_baro_the_aircraft_cannot_take_is_not_done_and_logged()
+    {
+        _exec.SetTransport(new CabinWritesUnavailableTransport(_ac));
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.CabinBaro, 100237));
+
+        Assert.Empty(_ac.FreshReads);
+        Assert.Contains(_logged, line => line.Contains(L1011FoActionExecutor.CabinBaro) && line.Contains(nameof(L1011FoOutcome.Unavailable)));
+        Assert.Empty(_spoken);
+    }
+
+    // ---- The cabin altitude selector -----------------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData(4500, 49)]
+    [InlineData(8000, 100)]
+    [InlineData(-250, 0)]
+    public async Task Cabin_altitude_select_writes_the_knob_step_and_reads_back_in_feet(int feet, int step)
+    {
+        Assert.True(await _exec.Set(L1011FoActionExecutor.CabinAltitudeSelect, feet));
+
+        var write = Assert.Single(CabinAltitudeWrites());
+        Assert.Equal(FakeL1011Aircraft.CabinAltitudeIoKey, write.Key);
+        Assert.Equal(step, write.Value!.Value);
+        // The aircraft delivers metres: the step's altitude in feet, times 0.3048.
+        Assert.Equal(L1011Pressurization.CabinAltitudeForStep(step) * MetresPerFoot, _ac.Get(CabinAltitudeReadout)!.Value, 6);
+        Assert.Empty(_ac.Writes);                                          // no panel row written
+        Assert.Equal(new[] { CabinAltitudeReadout }, _ac.FreshReads);      // read back fresh, no read first
+        Assert.Empty(_spoken);
+        // Logged with the step and the target.
+        Assert.Contains(_logged, line => line.Contains($"step {step}") && line.Contains($"-> {feet}"));
+    }
+
+    [Fact]
+    public async Task Cabin_altitude_select_fails_when_the_readout_stays()
+    {
+        _ac.NeverDeliver(CabinAltitudeReadout);
+        _ac.Set(CabinAltitudeReadout, 7549 * MetresPerFoot);   // where the selector was left
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.CabinAltitudeSelect, 4500));
+
+        var write = Assert.Single(CabinAltitudeWrites());                  // written once, never repeated
+        Assert.Equal(49, write.Value!.Value);
+        Assert.InRange(_ac.NowMs, L1011FoActionExecutor.VerifyTimeoutMs,
+            L1011FoActionExecutor.VerifyTimeoutMs + L1011FoActionExecutor.PollMs + L1011FoActionExecutor.ReadTimeoutMs);
+        Assert.True(_ac.FreshReads.Count > 2);                             // polled, not read once
+        Assert.Contains(_logged, line => line.Contains(CabinAltitudeReadout) && line.Contains("step 49") && line.Contains("-> 4500"));
+        Assert.Empty(_spoken);
+    }
+
+    [Theory]
+    [InlineData(149, true)]
+    [InlineData(-149, true)]
+    [InlineData(151, false)]
+    [InlineData(-151, false)]
+    public async Task Cabin_altitude_select_reads_its_target_within_150_feet(int offsetFeet, bool done)
+    {
+        _ac.NeverDeliver(CabinAltitudeReadout);
+        _ac.Set(CabinAltitudeReadout, (4500 + offsetFeet) * MetresPerFoot);
+
+        Assert.Equal(done, await _exec.Set(L1011FoActionExecutor.CabinAltitudeSelect, 4500));
+    }
+
+    [Fact]
+    public async Task Cabin_altitude_select_the_aircraft_cannot_take_is_not_done_and_logged()
+    {
+        _exec.SetTransport(new CabinWritesUnavailableTransport(_ac));
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.CabinAltitudeSelect, 4500));
+
+        Assert.Empty(_ac.FreshReads);
+        Assert.Contains(_logged, line => line.Contains(L1011FoActionExecutor.CabinAltitudeSelect) && line.Contains(nameof(L1011FoOutcome.Unavailable)));
+        Assert.Empty(_spoken);
+    }
+
+    // ---- Both -------------------------------------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Cabin_composites_run_to_the_end_through_a_flow_step_whose_stop_has_been_asked_for()
+    {
+        // Pseudo, not StopAware: each is one write and a bounded read-back, atomic, so a Stop already asked for
+        // neither skips the write nor cuts the read-back short.
+        using var stop = new CancellationTokenSource();
+        stop.Cancel();
+
+        Assert.True(await _exec.ExecuteStepAsync(new Step { EventName = L1011FoActionExecutor.CabinBaro, TargetValue = 100237 }, stop.Token));
+        Assert.True(await _exec.ExecuteStepAsync(new Step { EventName = L1011FoActionExecutor.CabinAltitudeSelect, TargetValue = 4500 }, stop.Token));
+
+        Assert.Single(CabinBaroWrites());
+        Assert.Single(CabinAltitudeWrites());
+    }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public async Task Cabin_composites_log_their_numbers_invariantly_under_a_comma_decimal_culture(string culture)
+    {
+        // Nothing here is spoken; the numbers are in debug.log, and a de-DE or sv-SE log would read "1002,37"
+        // (and an sv-SE minus sign is not "-").
+        _ac.NeverDeliver(CabinBaroReadout);
+        _ac.Set(CabinBaroReadout, 1013.25);
+        _ac.NeverDeliver(CabinAltitudeReadout);
+        _ac.Set(CabinAltitudeReadout, 7549 * MetresPerFoot);
+        var previous = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo(culture);
+
+            Assert.False(await _exec.Set(L1011FoActionExecutor.CabinBaro, 100237));
+            Assert.False(await _exec.Set(L1011FoActionExecutor.CabinAltitudeSelect, -250));
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = previous;
+        }
+
+        Assert.Equal(1002.37, Assert.Single(CabinBaroWrites()).Value!.Value, 6);
+        Assert.Equal(0, Assert.Single(CabinAltitudeWrites()).Value!.Value);
+        Assert.Contains(_logged, line => line.Contains(CabinBaroReadout) && line.Contains("1002.37 hPa") && line.Contains("1013.25"));
+        Assert.Contains(_logged, line => line.Contains(CabinAltitudeReadout) && line.Contains("-> -250") && line.Contains("step 0"));
+        Assert.DoesNotContain(_logged, line => line.Contains("1002,37") || line.Contains("1013,25"));
+    }
 }

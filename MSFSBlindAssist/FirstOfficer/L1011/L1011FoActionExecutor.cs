@@ -121,9 +121,18 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     /// <summary>The hydraulic check (target ignored): one spoken verdict.</summary>
     public const string HydraulicCheck = "FO_HYDRAULIC_CHECK";
 
+    /// <summary>The cabin barometric setting; the target is hectopascals × 100 (1002.37 is 100237), an integer
+    /// as every flow target is.</summary>
+    public const string CabinBaro = "FO_CABIN_BARO";
+
+    /// <summary>The cabin altitude selector turned to the knob step that commands a cabin altitude; the
+    /// target is that altitude in feet.</summary>
+    public const string CabinAltitudeSelect = "FO_CABIN_ALT_SELECT";
+
     /// <summary>
     /// The composites, by pseudo-key: each runs under the gate, writes through <see cref="WriteAsync"/>
-    /// (never <see cref="Set"/>, which would wait on the gate it holds) and reads back what it changed.
+    /// (never <see cref="Set"/>, which would wait on the gate it holds), or for a typed or knob entry through
+    /// the transport's own (<see cref="SendAndReadBackAsync"/>), and reads back what it changed.
     /// Atomic: none reads the flow's Stop.
     /// </summary>
     private static readonly Dictionary<string, Func<L1011FoActionExecutor, IL1011FoTransport, int, Task<bool>>> Pseudo =
@@ -138,6 +147,8 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
             [FireTest] = (exec, io, _) => exec.FireTestAsync(io),
             [WheelWellFireTest] = (exec, io, _) => exec.WheelWellFireTestAsync(io),
             [HydraulicCheck] = (exec, io, _) => exec.HydraulicCheckAsync(io),
+            [CabinBaro] = (exec, io, target) => exec.CabinBaroAsync(io, target),
+            [CabinAltitudeSelect] = (exec, io, target) => exec.CabinAltitudeSelectAsync(io, target),
         };
 
     /// <summary>
@@ -1150,6 +1161,71 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
         return done;
     }
 
+    // ================= the cabin pressurization =================
+
+    /// <summary>The cabin barometric setting's readout (<c>KOHLSMAN SETTING MB:4</c>, hectopascals).</summary>
+    internal const string CabinBaroReadout = "L1011_RO_CABIN_BARO";
+
+    /// <summary>The selected cabin altitude's readout (<c>L:TARGET_CABIN_ALTITUDE</c>): delivered in METRES,
+    /// written in feet.</summary>
+    internal const string CabinAltitudeSelectedReadout = "L1011_RO_CABIN_ALT_SELECTED";
+
+    /// <summary>
+    /// The cabin barometric setting, target hectopascals × 100 as an int (the flow's provider gives it): one
+    /// typed set through the transport's own entry (<see cref="IL1011FoTransport.SetCabinBaroAsync"/>, which
+    /// refuses a setting outside its range, so nothing is written), then the readout read fresh until it reads
+    /// the setting within <see cref="L1011FoStateEvaluator.CabinBaroToleranceHpa"/> or
+    /// <see cref="VerifyTimeoutMs"/> passes. A <see cref="Pseudo"/> composite: no read first (the entry holds
+    /// no position to plan from), atomic. Speaks nothing.
+    /// </summary>
+    private Task<bool> CabinBaroAsync(IL1011FoTransport io, int target)
+    {
+        double hectopascals = target / 100.0;
+        string what = $"{CabinBaro} -> {target.ToString(CultureInfo.InvariantCulture)} ({hectopascals.ToString("0.00", CultureInfo.InvariantCulture)} hPa)";
+        return SendAndReadBackAsync(io, what, io.SetCabinBaroAsync(hectopascals), CabinBaroReadout,
+            v => Math.Abs(v - hectopascals) < L1011FoStateEvaluator.CabinBaroToleranceHpa);
+    }
+
+    /// <summary>
+    /// The cabin altitude selector turned to a cabin altitude, target feet: the knob step that commands it
+    /// (<see cref="L1011Pressurization.KnobStep"/>, clamped to the knob's travel) turned through the transport's
+    /// own entry (<see cref="IL1011FoTransport.SetCabinAltitudeSelectorAsync"/>: it seeds the knob's step and
+    /// clicks it, the aircraft computes the altitude), then the readout read fresh until it reads the target
+    /// within <see cref="L1011FoStateEvaluator.CabinAltitudeToleranceFt"/> (it arrives in metres,
+    /// <see cref="L1011FoStateEvaluator.MetresPerFoot"/>) or <see cref="VerifyTimeoutMs"/> passes. A
+    /// <see cref="Pseudo"/> composite, atomic. Logged with the step and the target; speaks nothing.
+    /// </summary>
+    private Task<bool> CabinAltitudeSelectAsync(IL1011FoTransport io, int target)
+    {
+        int step = L1011Pressurization.KnobStep(target);
+        string what = $"{CabinAltitudeSelect} -> {target.ToString(CultureInfo.InvariantCulture)} ft (knob step {step.ToString(CultureInfo.InvariantCulture)})";
+        Note($"{what}: turning the cabin altitude selector");
+        return SendAndReadBackAsync(io, what, io.SetCabinAltitudeSelectorAsync(step), CabinAltitudeSelectedReadout,
+            metres => Math.Abs(metres / L1011FoStateEvaluator.MetresPerFoot - target) <= L1011FoStateEvaluator.CabinAltitudeToleranceFt);
+    }
+
+    /// <summary>
+    /// One write that holds no position the executor could read first, then its readout read back: the write
+    /// awaited for <see cref="WriteGraceMs"/> at most (<see cref="SendAsync"/>), a refusal or an unreachable
+    /// aircraft not done and logged with the reason, a sent write done once <paramref name="readout"/> reads
+    /// as <paramref name="ok"/> says (<see cref="ReadsAsync"/>).
+    /// </summary>
+    private async Task<bool> SendAndReadBackAsync(IL1011FoTransport io, string what, Task<L1011FoResult> write, string readout, Func<double, bool> ok)
+    {
+        if (await SendAsync(io, what, write, holdMs: 0).ConfigureAwait(false) is not { } result)
+            return false;
+        switch (result.Outcome)
+        {
+            case L1011FoOutcome.AlreadyThere:
+                return true;
+            case L1011FoOutcome.Sent:
+                return await ReadsAsync(io, new[] { readout }, ok, what).ConfigureAwait(false);
+            default:
+                Note($"{what}: not sent, {Describe(result)}");
+                return false;
+        }
+    }
+
     // ================= relay presses =================
 
     /// <summary>
@@ -1301,7 +1377,8 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     private static string Describe(L1011FoResult result) =>
         result.Reason is { } why ? $"{result.Outcome}: {why}" : result.Outcome.ToString();
 
-    /// <summary>A not-done line for debug.log ([CORE-15]); never spoken.</summary>
+    /// <summary>A line for debug.log ([CORE-15]), a not-done one or a composite's account of what it is about to
+    /// do (<see cref="CabinAltitudeSelectAsync"/>); never spoken.</summary>
     private void Note(string line, bool warn = false)
     {
         if (warn) Log.Warn(LogCategory, line);
