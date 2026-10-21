@@ -565,8 +565,8 @@ public class L1011FoActionExecutorTests
     /// <summary>
     /// The fake behind a script: <see cref="AfterWrite"/> runs an action once, right after a given write has
     /// reached the fake (so a light can go wrong between the check's steps), <see cref="AfterRead"/> once after
-    /// the nth fresh read of a key, and <see cref="Events"/> lists the lamp mutes and writes in the order they
-    /// arrived. Everything else is the fake's.
+    /// the nth fresh read of a key, and <see cref="Events"/> lists the lamp mutes, fresh reads and writes in the
+    /// order they arrived. Everything else is the fake's.
     /// </summary>
     private sealed class ScriptedTransport : IL1011FoTransport
     {
@@ -586,6 +586,7 @@ public class L1011FoActionExecutorTests
 
         public async Task<double?> ReadFreshAsync(string key, int timeoutMs)
         {
+            _events.Enqueue($"read {key}");
             var value = await _ac.ReadFreshAsync(key, timeoutMs).ConfigureAwait(false);
             int count = _reads[key] = _reads.GetValueOrDefault(key) + 1;
             int i = _afterRead.FindIndex(a => a.Key == key && a.Nth == count);
@@ -698,7 +699,7 @@ public class L1011FoActionExecutorTests
     }
 
     [Fact]
-    public async Task The_check_mutes_the_lamp_speech_first_and_leaves_the_mute_to_end_by_itself()
+    public async Task The_check_mutes_the_lamp_speech_before_its_first_read_or_write()
     {
         SeedStandbyCheck();
         var io = new ScriptedTransport(_ac);
@@ -707,7 +708,34 @@ public class L1011FoActionExecutorTests
         Assert.True(await _exec.Set(L1011FoActionExecutor.StandbyPowerCheck, 1));
 
         Assert.Equal("mute 20000", io.Events[0]);
-        Assert.Equal(new[] { 20_000 }, _ac.MuteRequests);   // asked once, never cut short
+        Assert.StartsWith("read ", io.Events[1]);   // the battery's read-first comes after it
+    }
+
+    [Fact]
+    public async Task The_check_re_arms_the_mute_before_step_3_and_step_4_and_leaves_it_to_end_by_itself()
+    {
+        // On the 1 Hz batch the check can outlast one 20 s window, and a lamp change that begins after the
+        // window is spoken. Each re-arm only ever moves the end later (L1011LampGate.MuteUntil keeps the max).
+        SeedStandbyCheck();
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.StandbyPowerCheck, 1));
+
+        var events = io.Events.ToList();
+        Assert.Equal(new[]
+        {
+            "mute 20000",
+            "write TOGGLE_BATTERY=0", "write GUARD_STBY_POWER=1", "write TOGGLE_STBY_POWER=2",   // step 1
+            "mute 20000",                                                                         // re-armed for step 3
+            "write TOGGLE_BATTERY=1", "write TOGGLE_STBY_POWER=1", "write GUARD_STBY_POWER=0",   // step 3
+            "mute 20000",                                                                         // re-armed for step 4
+        }, events.Where(e => !e.StartsWith("read ", StringComparison.Ordinal)));
+        int[] mutes = events.Select((e, i) => (e, i)).Where(x => x.e.StartsWith("mute ", StringComparison.Ordinal)).Select(x => x.i).ToArray();
+        // Step 3's re-arm after step 2's light round; step 4's before its first light read.
+        Assert.True(mutes[1] > events.LastIndexOf($"read {DcEssentialFail}"));
+        Assert.True(mutes[2] < events.IndexOf($"read {Unarmed}"));
+        Assert.Equal(new[] { 20_000, 20_000, 20_000 }, _ac.MuteRequests);   // never cut short
     }
 
     [Fact]
@@ -1001,6 +1029,7 @@ public class L1011FoActionExecutorTests
         int breakerRead = _ac.Io.FindLastIndex(e => e.Kind == FakeL1011IoKind.FreshRead && e.Key == ExtPowerBreaker);
         int firstTieRead = _ac.Io.FindIndex(e => e.Kind == FakeL1011IoKind.FreshRead && e.Key.StartsWith("L1011_RO_AC_TIE_", StringComparison.Ordinal));
         Assert.True(breakerRead < firstTieRead);
+        Assert.Empty(_spoken);   // a pass is the flow's line alone
     }
 
     [Fact]
@@ -1011,6 +1040,7 @@ public class L1011FoActionExecutorTests
         Assert.True(await _exec.Set(L1011FoActionExecutor.ExternalPower, 1));
 
         Assert.Equal(new[] { (ExtPower, 1.0) }, _ac.Writes);
+        Assert.Empty(_spoken);
     }
 
     [Fact]
@@ -1024,32 +1054,83 @@ public class L1011FoActionExecutorTests
 
         Assert.Equal(new[] { (ExtPower, 1.0) }, _ac.Writes);
         Assert.Contains(_logged, line => line.Contains(ExtPowerBreaker));
+        Assert.Empty(_spoken);   // not on: the flow's "Skipping" says it
     }
 
-    [Fact]
-    public async Task A_tie_that_does_not_close_is_not_done_and_the_next_tie_is_still_pressed()
+    // A tie left open once the breaker reads closed: external power IS on (the step's line is true), so the
+    // step is done, and the open tie is a failure of its own, spoken once whatever the progress setting.
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_tie_that_does_not_close_is_spoken_once_the_next_tie_is_still_pressed_and_external_power_is_on(bool progress)
     {
         SeedExternalPower(available: 1);
         foreach (int n in new[] { 1, 2, 3 })
             _ac.Set(Tie(n), 0);
         _ac.NeverDeliver(Tie(2));
+        _exec.AttachFlowProgressSpeech(() => progress);
 
-        Assert.False(await _exec.Set(L1011FoActionExecutor.ExternalPower, 1));
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ExternalPower, 1));
 
         Assert.Equal(new[] { (ExtPower, 1.0), (TieClose(1), 1.0), (TieClose(2), 1.0), (TieClose(3), 1.0) }, _ac.Writes);
+        Assert.Equal(new[] { "External power on. AC tie 2 did not close." }, _spoken);
+        Assert.Contains(_logged, line => line.Contains(Tie(2)));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task An_unread_tie_is_never_pressed_spoken_once_and_external_power_is_on(bool progress)
+    {
+        SeedExternalPower(available: 1);
+        _ac.Unset(Tie(2));
+        _exec.AttachFlowProgressSpeech(() => progress);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ExternalPower, 1));
+
+        Assert.Equal(new[] { (ExtPower, 1.0) }, _ac.Writes);
+        Assert.Equal(new[] { "External power on. AC tie 2 could not be read." }, _spoken);
         Assert.Contains(_logged, line => line.Contains(Tie(2)));
     }
 
     [Fact]
-    public async Task An_unread_tie_is_never_pressed_and_external_power_is_not_done()
+    public async Task Only_the_first_tie_that_failed_is_spoken_and_the_others_are_logged()
     {
         SeedExternalPower(available: 1);
-        _ac.Unset(Tie(2));
+        _ac.Unset(Tie(1));             // unread: never pressed
+        _ac.Set(Tie(3), 0);
+        _ac.NeverDeliver(Tie(3));      // pressed, never closes
 
-        Assert.False(await _exec.Set(L1011FoActionExecutor.ExternalPower, 1));
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ExternalPower, 1));
 
-        Assert.Equal(new[] { (ExtPower, 1.0) }, _ac.Writes);
-        Assert.Contains(_logged, line => line.Contains(Tie(2)));
+        Assert.Equal(new[] { (ExtPower, 1.0), (TieClose(3), 1.0) }, _ac.Writes);
+        Assert.Equal(new[] { "External power on. AC tie 1 could not be read." }, _spoken);
+        Assert.Contains(_logged, line => line.Contains(Tie(1)));
+        Assert.Contains(_logged, line => line.Contains(Tie(3)));
+    }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public async Task The_tie_sentence_is_invariant_under_a_comma_decimal_culture(string culture)
+    {
+        SeedExternalPower(available: 1);
+        _ac.Set(Tie(2), 0);
+        _ac.NeverDeliver(Tie(2));
+        var previous = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo(culture);
+
+            Assert.True(await _exec.Set(L1011FoActionExecutor.ExternalPower, 1));
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = previous;
+        }
+
+        Assert.Equal(new[] { "External power on. AC tie 2 did not close." }, _spoken);
     }
 
     [Fact]

@@ -192,6 +192,35 @@ public class IniL1011AutopilotEngageTests
     }
 
     [Fact]
+    public void A_press_that_is_not_sent_is_logged_for_debugging()
+    {
+        // The service's own log cannot see the entry's outcome: this line tells a live "did not engage"
+        // apart from a press that never landed.
+        var logged = new List<string>();
+        _def.FoDebugLog = logged.Add;
+        _def.CanLand = _ => false;
+
+        _def.EngageAutopilot(Sim(2.0, 2.0));
+
+        Assert.Empty(_sent);
+        var line = Assert.Single(logged);
+        Assert.Contains(PaddleA, line);
+        Assert.Contains(nameof(L1011FoOutcome.Unavailable), line);
+    }
+
+    [Fact]
+    public void A_press_that_is_sent_logs_nothing()
+    {
+        var logged = new List<string>();
+        _def.FoDebugLog = logged.Add;
+
+        _def.EngageAutopilot(Sim(2.0, 2.0));
+
+        Assert.NotEmpty(_sent);
+        Assert.Empty(logged);
+    }
+
+    [Fact]
     public void It_attaches_the_definition_to_the_manager_it_was_given()
     {
         Assert.False(_def.FoReady);

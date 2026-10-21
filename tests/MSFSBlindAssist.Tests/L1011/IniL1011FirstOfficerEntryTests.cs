@@ -90,6 +90,22 @@ public class IniL1011FirstOfficerEntryTests
     }
 
     [Fact]
+    public async Task A_first_officer_switch_write_is_not_announced_back()
+    {
+        // The lever and paddle twins below: a switch's new position, delivered after the write, is not
+        // spoken on top of the flow's own line.
+        Deliver(ContinuousIgnitionKey, 0);   // the switch's first delivery
+        _cache[ContinuousIgnitionKey] = 0;
+
+        var result = await _def.FoSetAsync(ContinuousIgnitionKey, 1);
+        _now += 1_000;
+        Deliver(ContinuousIgnitionKey, 1);   // the batch that catches the write
+
+        Assert.Equal(L1011FoResult.Sent, result);
+        Assert.Empty(_speech.All);
+    }
+
+    [Fact]
     public async Task A_set_already_in_place_sends_nothing()
     {
         _cache[ContinuousIgnitionKey] = 1;

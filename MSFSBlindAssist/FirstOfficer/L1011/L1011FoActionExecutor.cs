@@ -100,7 +100,9 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     /// <summary>A breaker or tie relay reads closed at or above this (1 closed, 0 open).</summary>
     private const double RelayClosedAtOrAbove = 0.5;
 
-    /// <summary>The check's lamp mute: its end is left to this time-out, never cut short.</summary>
+    /// <summary>The check's lamp mute, asked for at its start and again before steps 3 and 4: on the 1 Hz
+    /// batch the check can outlast one window. A re-arm only moves the end later (the lamp gate keeps the
+    /// later end); the end is left to this time-out, never cut short.</summary>
     internal const int StandbyCheckMuteMs = 20_000;
 
     private const string StandbyCheckName = "Standby power check";
@@ -326,9 +328,9 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
 
     /// <summary>
     /// The aircraft's checklist lines 18 to 32 with the lamp speech muted (<see cref="StandbyCheckMuteMs"/>,
-    /// its end left to its time-out): battery off, the guard open, standby power On; the lights read
-    /// (<see cref="StandbyOnLights"/>); battery on, standby power Arm, the guard closed; the lights read
-    /// again (<see cref="StandbyArmedLights"/>). Done when every write was done and every light matched.
+    /// re-armed before steps 3 and 4, its end left to its time-out): battery off, the guard open, standby
+    /// power On; the lights read (<see cref="StandbyOnLights"/>); battery on, standby power Arm, the guard
+    /// closed; the lights read again (<see cref="StandbyArmedLights"/>). Done when every write was done and every light matched.
     /// A wrong light does not stop the check, so the aircraft still ends with the battery on and standby
     /// power armed. A write not done (or a throw) ends it at once with those three put back, best effort.
     /// Speech, through the announcer ([FO-26]): one sentence naming the first wrong light, always; "pass"
@@ -347,11 +349,14 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
                 return false;
             }
             wrongLight = await WrongLightAsync(io, StandbyOnLights, "standby power on").ConfigureAwait(false);
+            // Re-armed: on the 1 Hz batch the check can outlast one window.
+            io.MuteLampSpeech(StandbyCheckMuteMs);
             if (!await WriteEachAsync(io, StandbyArmWrites).ConfigureAwait(false))
             {
                 await PutStandbyBackAsync(io).ConfigureAwait(false);
                 return false;
             }
+            io.MuteLampSpeech(StandbyCheckMuteMs);
             // Read even after a wrong light, for the log; only the first is spoken.
             string? armedWrong = await WrongLightAsync(io, StandbyArmedLights, "standby power armed").ConfigureAwait(false);
             wrongLight ??= armedWrong;
@@ -459,10 +464,12 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
 
     /// <summary>
     /// Target 1: refused, nothing written, unless the external power available light reads lit; the switch
-    /// on, verified on its breaker reading closed; then each AC tie that reads open pressed closed and
-    /// verified (one not closing does not stop the next; an unread tie is never pressed and is not done).
-    /// Target 0: the switch off, verified on the breaker reading open; the ties are left alone. Any other
-    /// target writes nothing.
+    /// on, verified on its breaker reading closed (not done otherwise); then each AC tie that reads open
+    /// pressed closed and verified (one not closing does not stop the next; an unread tie is never pressed).
+    /// Once the breaker reads closed the step is done, external power being on: a tie that did not close or
+    /// could not be read is spoken in one sentence through the announcer, always ([FO-26]), naming the first
+    /// ("External power on. AC tie 2 did not close."); the others are logged. Target 0: the switch off,
+    /// verified on the breaker reading open; the ties are left alone. Any other target writes nothing.
     /// </summary>
     private async Task<bool> ExternalPowerAsync(IL1011FoTransport io, int target)
     {
@@ -487,22 +494,28 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
             || !await ReadsAsync(io, new[] { ExternalPowerBreaker }, v => v >= RelayClosedAtOrAbove, what).ConfigureAwait(false))
             return false;
 
-        bool tiesClosed = true;
+        // From here external power is on, so the step is done whatever the ties do; a tie left open is a
+        // failure of its own, spoken once ([FO-26]), naming the first (each is logged where it failed).
+        string? firstTieFailure = null;
         for (int n = 1; n <= 3; n++)
         {
             string tie = TieReadout(n);
+            string tieName = $"AC tie {n.ToString(CultureInfo.InvariantCulture)}";
             var reading = await ReadAsync(io, tie).ConfigureAwait(false);
             if (reading is not double t)
             {
                 Note($"{what}: {tie} unread, its tie not pressed");
-                tiesClosed = false;
+                firstTieFailure ??= $"{tieName} could not be read";
                 continue;
             }
             if (t >= RelayClosedAtOrAbove) continue;   // closed already
-            tiesClosed &= await WriteAsync(io, TieClosePress(n), 1).ConfigureAwait(false)
-                && await ReadsAsync(io, new[] { tie }, v => v >= RelayClosedAtOrAbove, $"{what}, AC tie {n.ToString(CultureInfo.InvariantCulture)}").ConfigureAwait(false);
+            if (!await WriteAsync(io, TieClosePress(n), 1).ConfigureAwait(false)
+                || !await ReadsAsync(io, new[] { tie }, v => v >= RelayClosedAtOrAbove, $"{what}, {tieName}").ConfigureAwait(false))
+                firstTieFailure ??= $"{tieName} did not close";
         }
-        return tiesClosed;
+        if (firstTieFailure is not null)
+            _say?.Invoke($"External power on. {firstTieFailure}.");
+        return true;
     }
 
     /// <summary>

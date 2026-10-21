@@ -255,6 +255,10 @@ public partial class IniL1011Definition
 
     private static bool AtCommand(double? paddle) => paddle is double v && Math.Abs(v) < 0.5;
 
+    /// <summary>Where the auto-engage logs a press that was not sent: debug.log ([CORE-15]), never spoken;
+    /// tests replace it.</summary>
+    internal Action<string> FoDebugLog { get; set; } = line => Log.Debug("L1011 FO", line);
+
     /// <summary>The paddle's reading comes with the 1 Hz batch, after the CWS notch and the settle: presses
     /// 3 s apart, so a retry never lands on a press that is still settling.</summary>
     public override int AutopilotEngageRetryIntervalMs => ToggleAutopilotEngageRetryIntervalMs;
@@ -269,13 +273,30 @@ public partial class IniL1011Definition
     /// click replay, with the CWS notch from Off ([L1011-21]), its paddle moves recorded as ours (the
     /// service's confirmation is the one line) and nothing spoken. Never the stock AUTOPILOT_ON. Called on
     /// the UI thread, so the write runs inline; a write that cannot land sends nothing and the service
-    /// retries, then reports a Captain action. No engage floor: the manual gives none.
+    /// retries, then reports a Captain action. A press not sent is logged (<see cref="FoDebugLog"/>), so a
+    /// live "did not engage" can be told from a press that never landed. No engage floor: the manual
+    /// gives none.
     /// </summary>
     public override void EngageAutopilot(SimConnectManager simConnect)
     {
         if (IsAutopilotEngaged(simConnect) != false)
             return;
         Attach(simConnect);
-        _ = FoSetAsync(EngagePaddleAKey, 0);
+        _ = LogEngageUnlessSentAsync(FoSetAsync(EngagePaddleAKey, 0));
+    }
+
+    /// <summary>Logs the engage press's outcome when it was not sent, or its failure; says nothing.</summary>
+    private async Task LogEngageUnlessSentAsync(Task<L1011FoResult> press)
+    {
+        try
+        {
+            var result = await press.ConfigureAwait(false);
+            if (result.Outcome != L1011FoOutcome.Sent)
+                FoDebugLog($"Autopilot engage: {EngagePaddleAKey} -> 0 not sent, {result.Outcome}{(result.Reason is { } why ? $": {why}" : "")}");
+        }
+        catch (Exception ex)
+        {
+            FoDebugLog($"Autopilot engage: {EngagePaddleAKey} -> 0 threw: {ex.Message}");
+        }
     }
 }
