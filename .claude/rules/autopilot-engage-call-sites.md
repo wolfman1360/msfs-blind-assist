@@ -11,7 +11,7 @@ paths:
 ---
 # Auto-autopilot engage rules for the aircraft definitions
 
-MIRRORS: copied word for word from first-officer-automation.md, whose globs leave these files out; they declare or override `MinimumAutopilotEngageAltitudeAgl` and `IsAutopilotEngaged` (the MD-11's FirstOfficer partial loads first-officer-automation.md itself). Change both together (ClaudeContextBudgetTests checks).
+MIRRORS: copied word for word from first-officer-automation.md, whose globs leave these files out; they declare or override `MinimumAutopilotEngageAltitudeAgl` and `IsAutopilotEngaged` (the MD-11's and the L-1011's FirstOfficer partials load first-officer-automation.md themselves). Change both together (ClaudeContextBudgetTests checks).
 
 - [FO-17] Auto-AP-engage is floored by `IAircraftDefinition.MinimumAutopilotEngageAltitudeAgl` (PMDG 737 = 400 ft, its AFDS inhibits CMD below 400 ft RA; 777 = 200): never let the user setting press below an aircraft's own limit, and never lower the 737's floor, or the press is silently rejected while success is announced. Full: docs/invariants/first-officer-automation.md#fo-17
 - [FO-18] Auto-AP-engage is CLOSED-LOOP wherever `IAircraftDefinition.IsAutopilotEngaged` is non-null: announce only a CONFIRMED engagement, retry a rejected press (`MaxApEngageAttempts`), report a Captain action if it never takes. Unread is null, never false: a toggle waits on it and presses 3 s apart. Full: docs/invariants/first-officer-automation.md#fo-18

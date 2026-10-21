@@ -3,12 +3,13 @@ paths:
   - "MSFSBlindAssist/FirstOfficer/**"
   - "MSFSBlindAssist/Forms/FirstOfficer/**"
   - "MSFSBlindAssist/Aircraft/TFDiMD11Definition.FirstOfficer.cs"
+  - "MSFSBlindAssist/Aircraft/IniL1011Definition.FirstOfficer.cs"
   - "tests/MSFSBlindAssist.Tests/FirstOfficer/**"
   - "tests/MSFSBlindAssist.Tests/Fo*.cs"
 ---
 # First Officer rules
 
-Loaded when Claude reads matching code. Background: docs/first-officer.md. Full text of each rule: docs/invariants/first-officer.md. Per-family rules: first-officer-boeing.md, first-officer-airbus.md; the automation beside the flows (auto-flaps, auto-AP, 10k lights, altimeters): first-officer-automation.md.
+Loaded when Claude reads matching code. Background: docs/first-officer.md. Full text of each rule: docs/invariants/first-officer.md. Per-family rules: first-officer-boeing.md, first-officer-airbus.md, first-officer-l1011.md; the automation beside the flows (auto-flaps, auto-AP, 10k lights, altimeters): first-officer-automation.md.
 
 - [FO-1] One First Officer form for every aircraft via `IFoProfile<TExec,TState>`: the profile injects executor, evaluator and data. Full: docs/invariants/first-officer.md#fo-1
 - [FO-2] No FMC programming, ever (owner decision): keep checklist text, V-speed reads and SimBrief load-only; never reintroduce CDU-keystroke automation. Full: docs/invariants/first-officer.md#fo-2

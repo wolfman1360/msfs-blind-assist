@@ -154,7 +154,7 @@ Each area's rules load automatically when Claude reads its code; their full text
 | [hs787.md](docs/hs787.md) | HorizonSim 787-9: CDU, IRS, EICAS over the Coherent debugger | hs787 |
 | [md11.md](docs/md11.md) | TFDi MD-11: CEVENT transport, control state, layout, the control-map generator | md11, md11-controls |
 | [l1011.md](docs/l1011.md) | iniBuilds L-1011 TriStar: the generated control map, click-replay writes, panel layout, warning-light gate, circuit breakers | l1011 |
-| [first-officer.md](docs/first-officer.md) | The screen-reader First Officer: flows, checklists, auto managers, per-aircraft profiles (PMDG 777/737, iFly 737, Fenix, FBW A32NX/A380, Headwind A330, MD-11) | first-officer, first-officer-automation, first-officer-boeing, first-officer-airbus |
+| [first-officer.md](docs/first-officer.md) | The screen-reader First Officer: flows, checklists, auto managers, per-aircraft profiles (PMDG 777/737, iFly 737, Fenix, FBW A32NX/A380, Headwind A330, MD-11, L-1011) | first-officer, first-officer-automation, first-officer-boeing, first-officer-airbus, first-officer-l1011 |
 | [gemini.md](docs/gemini.md) | AI providers (Gemini or Claude): display reads, scene and route description, route briefing | ai-display, route-briefing |
 | [location-data.md](docs/location-data.md) | Output C and Location Info (Shift+L): the offline GeoNames + Natural Earth download, its database and lookups | location-data |
 | [user-guide.md](docs/user-guide.md) | The pilot's user guide in `guide/`: writing it, how the website and the Help menu publish it, the one-page build, the PR line (CORE-19) | user-guide |

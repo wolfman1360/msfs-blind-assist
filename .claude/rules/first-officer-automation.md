@@ -11,6 +11,7 @@ paths:
   - "MSFSBlindAssist/MainForm.UniversalAutomation.cs"
   - "MSFSBlindAssist/Aircraft/FbwAutopilotEngage.cs"
   - "MSFSBlindAssist/Aircraft/TFDiMD11Definition.FirstOfficer.cs"
+  - "MSFSBlindAssist/Aircraft/IniL1011Definition.FirstOfficer.cs"
   - "tests/MSFSBlindAssist.Tests/FirstOfficer/**/*AutoManager*Tests.cs"
   - "tests/MSFSBlindAssist.Tests/FirstOfficer/**/*PhaseMonitor*Tests.cs"
   - "tests/MSFSBlindAssist.Tests/FirstOfficer/Transition*Tests.cs"

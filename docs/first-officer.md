@@ -1,6 +1,6 @@
 # First Officer Automation
 
-Screen-reader First Officer (flows + checklists) for the PMDG 777, PMDG 737 NG3, Fenix A320, FlyByWire A380, FlyByWire A32NX, iFly 737 MAX8, HeadwindSim A330-900neo and TFDi MD-11. This is the detailed reference. Its rules load with the code from `.claude/rules/first-officer.md` (shared: flows, checklists, the window), `first-officer-automation.md` (auto-flaps, the auto-autopilot, the 10,000 ft lights, the transition altimeters; split out 2026-10-18), `first-officer-boeing.md` (PMDG 777/737, iFly 737 MAX8, centre fuel pumps) and `first-officer-airbus.md` (Fenix, FBW A32NX/A380, Headwind A330); their full texts are in `docs/invariants/` under the same names. The per-aircraft in-sim test plans (`docs/*-first-officer-test-plan.md`) were removed before merge, once the owner had passed every check in them (2026-10-20); a test plan or one of its Parts named in an older comment, design note or commit message is in those files, last present at commit `411f157cf`.
+Screen-reader First Officer (flows + checklists) for the PMDG 777, PMDG 737 NG3, Fenix A320, FlyByWire A380, FlyByWire A32NX, iFly 737 MAX8, HeadwindSim A330-900neo, TFDi MD-11 and iniBuilds L-1011 TriStar. This is the detailed reference. Its rules load with the code from `.claude/rules/first-officer.md` (shared: flows, checklists, the window), `first-officer-automation.md` (auto-flaps, the auto-autopilot, the 10,000 ft lights, the transition altimeters; split out 2026-10-18), `first-officer-boeing.md` (PMDG 777/737, iFly 737 MAX8, centre fuel pumps), `first-officer-airbus.md` (Fenix, FBW A32NX/A380, Headwind A330) and `first-officer-l1011.md` (iniBuilds L-1011 TriStar); their full texts are in `docs/invariants/` under the same names. The per-aircraft in-sim test plans (`docs/*-first-officer-test-plan.md`) were removed before merge, once the owner had passed every check in them (2026-10-20); a test plan or one of its Parts named in an older comment, design note or commit message is in those files, last present at commit `411f157cf`.
 
 ## Overview
 
@@ -554,6 +554,57 @@ Takeoff, both cold-and-dark guards, and most Shutdown steps (from an accidental 
 engines turning, before the guards existed). Not yet flown then: After Takeoff, Descent, Before
 Landing, After Landing (the spoiler stow), Parking, and the automatic modes; those were checked
 in the sim with the rest of PR #160 (owner, 2026-10-20).
+
+**iniBuilds L-1011 TriStar First Officer:** a ninth profile, `FirstOfficer/L1011/`, in the MD-11's
+shape: `L1011FoProfile`, `L1011FoActionExecutor`, `L1011FoStateEvaluator`, the flow and checklist
+definitions, `L1011FoFlightPhaseMonitor`, and an `L1011FoAutoManager` that stores the auto-flaps
+setting and ignores it. Its window is "First Officer — iniBuilds L-1011", and the File menu item
+"iniBuilds L-1011 First Officer" (`FirstOfficerWindows`, `INI_L1011`). So far it has one flow,
+**Power Up**, and its two checklists: the **Power Up** action group, in the flow's order and words,
+and the **Cockpit Safety Inspection** read-back, the aircraft's own page condensed to the lines BA
+can read. Preflight to Shutdown, the other audible tests and the engine start are still to come.
+Rules: `.claude/rules/first-officer-l1011.md` (FOL-1 to FOL-3); the aircraft's write rules are in
+[docs/l1011.md](l1011.md).
+
+Every write goes through the definition's First Officer entry (`IniL1011Definition.FirstOfficer.cs`:
+`FoSetAsync`, `FoSetAltimetersAsync`), built on the panels' own write core, so a flow step writes a
+control exactly as a panel pick does: the click replay (L1011-1), a toggle refused from an unknown
+position (L1011-4) and the engage paddle's CWS notch (L1011-21) included. The entry speaks nothing
+and returns `L1011FoResult`; the executor reads every readable write back before it counts as done
+(FOL-1). A lever the First Officer moves is recorded as its own, so the aircraft's lever call-out
+does not speak it on top of the flow's line, while a lever the pilot moves is still spoken; the
+standby power check mutes the warning-light call-outs while it runs (FOL-2).
+
+Power Up opens with two read-only guards, engines stopped and on the ground, each a Stop that fails
+when unread (FO-25). The engines are read on N3, never the window's N2 feed (FOL-3): running at 50 %
+or above, stopped when every N3 is below 5 % and every fuel and ignition switch reads off. Then it
+checks, without moving anything, that the fire handles are in, the gear lever is down, the speed
+brake is forward, the flaps agree with their handle and the fuel and ignition switches are off. It
+sets continuous ignition off, the essential and no. 2 radio masters on, the transponder to standby, the weather radar
+off, both ATM switches and both AC hydraulic pumps off, all eight fuel pumps off, the jettison master
+and dump switches off with their guards closed, passenger oxygen off and guarded, and galley power
+off. It runs the standby power check, sets the AC essential bus selector to bus 3 (generator 1),
+connects external power and closes any AC tie that reads open when the external power available
+light is lit (otherwise the Captain hears "Connect ground power on the tablet's Ground page, or the Preflight flow
+starts the APU."), turns the three INS mode selectors to Align, and reminds the Captain to enter
+present position on each unit (input Shift+M, then Alt+P).
+
+The standby power check is the aircraft's own check as one step: battery off, the guard open,
+standby power On; the lights read (the flowbar lit, both standby bus fail lights out, and both
+essential bus fail lights lit unless external power is on line); then battery on, standby power Arm,
+the guard closed; and the lights read again (the standby power unarmed light, the flowbar and both
+standby bus fail lights out). The unarmed light means the switch is Off, so it is not expected lit
+with standby power On. A light that reads wrong is spoken in one sentence naming it, and the check
+carries on, so it always ends with the battery on and standby power armed; a write that is not done
+ends it at once with those three put back. "Standby power check: pass" is spoken only with flow
+progress on.
+
+Power Up writes no lever, no typed value and no control whose click carries a toggle K: event. A hand
+tick on an action line runs the same write as its flow step; the ATM, AC hydraulic pump and fuel pump
+lines and the standby power check are left alone unless the aircraft reads on the ground with every
+engine stopped (FO-25). The universal autopilot engage presses engage paddle A to Command through the
+same entry, CWS notch included, and works closed loop on the two paddles (`IsAutopilotEngaged`,
+FO-18); it never sends the stock `AUTOPILOT_ON`, which the paddle-driven autopilot ignores.
 
 **Architecture — everything aircraft-specific is injected via `IFoProfile<TExec,TState>`.** The form is identical across aircraft; the profile (`FirstOfficer/Pmdg777FoProfile.cs`, `FirstOfficer/PMDG737/Pmdg737FoProfile.cs`) supplies the executor, state evaluator, checklist + flow data, auto/phase managers, window title, and the data-manager binding. Generic engine pieces: `ChecklistManager` (toggle / auto-detect / revert), `FlowManager` (step runner + events), `FlightPhaseMonitor`, `FOAutoManager`; per-aircraft: `AircraftActionExecutor` (PMDG switch dispatch), `AircraftStateEvaluator` (reads PMDG data fields), `PMDG7x7ChecklistDefinitions`, `PMDG7x7FlowDefinitions`. Interfaces live in `FirstOfficer/IFo*.cs`; models in `FirstOfficer/Models/` (`ChecklistItem`, `ChecklistGroup`, `FlowDefinition`, `FlowStep`).
 
