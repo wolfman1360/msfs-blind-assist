@@ -239,6 +239,24 @@ public class L1011FoStateEvaluatorTests
     public void FuelPumpsOff_NeedsAllEightPumpsReadAndOff()
         => AssertAllOf("FO_FUEL_PUMPS_OFF", good: 0, bad: 1, FuelPumps);
 
+    /// <summary>One of the eight tank pumps on is enough; every pump must be read, so one unread is unknown even with
+    /// another reading on.</summary>
+    [Theory]
+    [InlineData("SWITCH_FUEL_PUMP_2L_1", null, 1.0)]                    // one pump on, the rest off
+    [InlineData(null, null, 0.0)]                                       // all eight off
+    [InlineData("SWITCH_FUEL_PUMP_2L_1", "SWITCH_FUEL_PUMP_3_2", double.NaN)] // one on, another unread
+    public void AnyFuelPumpOn_IsOnePumpOn_AndUnknownWithAnyPumpUnread(string? on, string? unread, double want)
+    {
+        var d = All(0, FuelPumps);
+        if (on is not null) d[on] = 1;
+        if (unread is not null) d.Remove(unread);
+        double got = Compute("FO_ANY_FUEL_PUMP_ON", d);
+        if (double.IsNaN(want))
+            Assert.True(double.IsNaN(got), $"{unread} unread must read unknown, read {got}");
+        else
+            Assert.Equal(want, got);
+    }
+
     [Fact]
     public void JettisonSafe_NeedsTheMasterAndFourDumpSwitchesOffAndTheirFiveGuardsClosed()
     {

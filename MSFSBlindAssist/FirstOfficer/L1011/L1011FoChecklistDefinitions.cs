@@ -1,3 +1,4 @@
+using System.Globalization;
 using MSFSBlindAssist.Aircraft.L1011;
 using MSFSBlindAssist.FirstOfficer.Models;
 using X = MSFSBlindAssist.FirstOfficer.L1011.L1011FoActionExecutor;
@@ -9,7 +10,8 @@ using Group = Models.ChecklistGroup<L1011FoActionExecutor, L1011FoStateEvaluator
 using CheckFn = System.Func<L1011FoActionExecutor, L1011FoStateEvaluator, System.Threading.Tasks.Task>;
 
 /// <summary>
-/// The iniBuilds L-1011 TriStar First Officer checklists, the MD-11's two layers: Power Up, then Preflight.
+/// The iniBuilds L-1011 TriStar First Officer checklists, the MD-11's two layers: Power Up, Preflight, then
+/// Before Start.
 ///
 /// The ACTION group (<c>POWER_UP</c>) lists the Power Up flow's writes and its unconditional Captain step,
 /// in the flow's order and with the flow's labels: ticking a line runs the same write as its flow step,
@@ -33,6 +35,12 @@ using CheckFn = System.Func<L1011FoActionExecutor, L1011FoStateEvaluator, System
 /// which turns the battery off for a moment. Unread refuses, as the flow's guards do. The fuel pump tick is
 /// also left alone while the APU runs or is still spooling up, as its flow step is: the tank 2 left pump
 /// feeds the APU from the moment it starts turning.
+///
+/// Before Start has one action group (<c>BEFORE_START</c>: the flow's writes and the fleet's Before Start tail; its
+/// conditional doors, cabin baro and INS prompts stay flow-only) and one read-back, the aircraft's "Before engine
+/// start" page up to its first ground start, ending with the fleet's "Start ACARS". The cabin baro and INS lines
+/// write their provider's value, or nothing without one, as their steps do. The pack 2 line switches packs 1 and 3
+/// off, so its tick is left alone off the ground, as Preflight's packs line is.
 /// </summary>
 public static class L1011FoChecklistDefinitions
 {
@@ -40,6 +48,7 @@ public static class L1011FoChecklistDefinitions
     {
         PowerUp(), PowerUpCL(),
         Preflight(), PreflightEngineerCL(), PreflightOverheadCL(), PreflightMainPanelCL(), PreflightConsoleCL(),
+        BeforeStart(), BeforeStartCL(),
     };
 
     private const string ContIgnition = "SWITCH_CONT_IGNITION";
@@ -464,6 +473,93 @@ public static class L1011FoChecklistDefinitions
                 Read("PFX_FUEL_IGN", G, "Fuel and ignition switches: off", "FO_FUEL_IGNITION_OFF", On),
                 Reminder("PFX_RADIOS", G, "Communication radios: set"),
                 Read("PFX_XPDR", G, "Transponder: set and STBY", Transponder, v => Is(v, 1)),
+            }
+        };
+    }
+
+    // ================================================================== Before Start
+
+    private const string SeatBelts = "SWITCH_SEATBELT_LIGHT";
+    private const string AntiCollision = "SWITCH_ANTICOL_LIGHT";
+
+    /// <summary>The transponder mode selector's TA/RA position (1 is standby).</summary>
+    private const int TransponderTaRa = 5;
+
+    private static readonly string[] GalleyBuses = { "SWITCH_GALLEY_BUS_1", "SWITCH_GALLEY_BUS_2", "SWITCH_GALLEY_BUS_3" };
+
+    /// <summary>The three engine isolation valves, then the two crossbleeds: the flow's order.</summary>
+    private static readonly string[] StartAirValves =
+        { "SWITCH_ISLN_VALVE_ENG_1", "SWITCH_ISLN_VALVE_ENG_2", "SWITCH_ISLN_VALVE_ENG_3", "SWITCH_XBLEED_1", "SWITCH_XBLEED_3" };
+
+    /// <summary>
+    /// The Before Start flow's writes and the fleet's tail, in the flow's order and with its labels: a single switch
+    /// reads its key at the target, a multi-switch line its synthetic, external power its breaker read open. The
+    /// cabin baro and each INS line write their provider's value (the captain's altimeter; NAV for a unit read
+    /// aligned or already at NAV) and nothing without one, and read the state their step sets.
+    /// </summary>
+    private static Group BeforeStart()
+    {
+        const string G = "BEFORE_START";
+        return new Group
+        {
+            Id = G, Name = "Before Start",
+            Items = new()
+            {
+                Auto("BS_EXT_OFF", G, "External power: off", "FO_EXT_POWER_OFF", On, Set(X.ExternalPower, 0)),
+                Auto("BS_SEAT_BELTS", G, "Seat belt signs: on", SeatBelts, v => Is(v, 1), Set(SeatBelts, 1)),
+                Auto("BS_ANTICOL", G, "Anti-collision lights: on", AntiCollision, v => Is(v, 1), Set(AntiCollision, 1)),
+                Auto("BS_GALLEY", G, "Galley power: off", "FO_GALLEY_OFF", On, SetAll(All(0, GalleyBuses))),
+                Auto("BS_APU_MODE_MIN", G, "APU compressor mode: minimum", ApuMode, v => Is(v, 0), Set(ApuMode, 0)),
+                // Packs 1 and 3 off in the air cut two of the three packs: on the ground only (FO-25).
+                LeaveAlone(Auto("BS_PACK_2", G, "Packs: pack 2 on, packs 1 and 3 off", "FO_PACK_2_ONLY", On,
+                        SetAll((PackKeys[0], 0), (PackKeys[1], 1), (PackKeys[2], 0))),
+                    NotOnGround, PacksStayText),
+                Auto("BS_ISLN_XBLEEDS", G, "Engine isolation and crossbleed valves: on", "FO_START_AIR_VALVES_ON", On,
+                    SetAll(All(1, StartAirValves))),
+                Auto("BS_APU_BLEED", G, "APU bleed: on", ApuBleed, v => Is(v, 1), Set(ApuBleed, 1)),
+                // A standard or unread captain's altimeter gives no value: the tick writes nothing (FO-20).
+                Auto("BS_CABIN_BARO", G, "Cabin barometric setting: captain's altimeter", "FO_CABIN_BARO_SET", On,
+                    Provided(X.CabinBaro, s => s.CabinBaroTargetHundredths())),
+                InsNav(G, 1), InsNav(G, 2), InsNav(G, 3),
+                Auto("BS_XPDR", G, "Transponder: TA/RA", Transponder, v => Is(v, TransponderTaRa), Set(Transponder, TransponderTaRa)),
+                Reminder("BS_ACARS", G, "Start ACARS"),
+                Reminder("BS_CLEARANCE", G, "Obtain pushback and start clearance"),
+            }
+        };
+    }
+
+    /// <summary>INS <paramref name="unit"/> to NAV: the tick turns it only once it reads aligned or already reads NAV,
+    /// and writes nothing while it still aligns or sits at OFF or STBY (FO-20), as its step does.</summary>
+    private static Item InsNav(string groupId, int unit)
+    {
+        string key = L1011InsAlignmentAnnouncer.MsuKey(unit);
+        string n = unit.ToString(CultureInfo.InvariantCulture);
+        return Auto($"BS_INS_{n}_NAV", groupId, $"INS {n}: nav", key, v => Is(v, L1011FoStateEvaluator.InsNav),
+            Provided(key, s => s.InsNavTarget(unit)));
+    }
+
+    /// <summary>The aircraft's "Before engine start" page, up to its first ground start, in its own words; the fleet's
+    /// "Start ACARS" last.</summary>
+    private static Group BeforeStartCL()
+    {
+        const string G = "BEFORE_START_CL";
+        return new Group
+        {
+            Id = G, Name = "Before Engine Start",
+            Items = new()
+            {
+                Read("BSC_INS_NAV", G, "All INS: NAV", "FO_INS_NAVIGATING", On),
+                Read("BSC_XPDR", G, "Transponder: TA/RA", Transponder, v => Is(v, TransponderTaRa)),
+                Read("BSC_SEAT_BELTS", G, "Seatbelt sign: on", SeatBelts, v => Is(v, 1)),
+                Read("BSC_ANTICOL", G, "Anti coll light: on", AntiCollision, v => Is(v, 1)),
+                Read("BSC_IGNITION", G, "Start ignition: A or B", "FO_IGNITION_SELECTED", On),
+                Read("BSC_DOORS", G, "Door lights: out", "FO_DOORS_CLOSED", On),
+                Read("BSC_GALLEY", G, "Galley power: off", "FO_GALLEY_OFF", On),
+                Read("BSC_FUEL_PUMP", G, "Fuel pump: minimum one on", "FO_ANY_FUEL_PUMP_ON", On),
+                Read("BSC_APU_MODE", G, "APU: min mode", ApuMode, v => Is(v, 0)),
+                Read("BSC_PACK_2", G, "Packs: pack 2 on", "FO_PACK_2_ONLY", On),
+                Read("BSC_ISLN_VALVES", G, "All engine isolation valves: latched", "FO_START_AIR_VALVES_ON", On),
+                Reminder("BSC_ACARS", G, "Start ACARS"),
             }
         };
     }

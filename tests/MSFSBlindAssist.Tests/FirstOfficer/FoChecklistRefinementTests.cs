@@ -8,6 +8,7 @@ using A320 = MSFSBlindAssist.FirstOfficer.FBWA320;
 using A380 = MSFSBlindAssist.FirstOfficer.FBWA380;
 using HwA330 = MSFSBlindAssist.FirstOfficer.HWA330;
 using Md11 = MSFSBlindAssist.FirstOfficer.MD11;
+using TriStar = MSFSBlindAssist.FirstOfficer.L1011;
 using B737 = MSFSBlindAssist.FirstOfficer.PMDG737;
 using IFly737 = MSFSBlindAssist.FirstOfficer.IFly737;
 
@@ -93,6 +94,10 @@ public class FoChecklistRefinementTests
     [Fact] public void Md11_BeforeStartTail()
     { AssertBeforeStartTail(Md11.Md11FoChecklistDefinitions.Build());
       AssertBeforeStartFlowTail(Md11.Md11FoFlowDefinitions.Build()); }
+
+    [Fact] public void L1011_BeforeStartTail()
+    { AssertBeforeStartTail(TriStar.L1011FoChecklistDefinitions.Build());
+      AssertBeforeStartFlowTail(TriStar.L1011FoFlowDefinitions.Build()); }
 
     // ---- A320 family follows the Nov 2021 Airbus card: no line markers, no Before/After Takeoff read-backs ----
     [Fact] public void A320_Readbacks_FollowTheAirbusCard()

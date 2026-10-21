@@ -96,15 +96,17 @@ public class L1011FoFlowChecklistLinkTests
     private static readonly string[] UndoneLaterLines = { "PF_APU_MODE_MIN", "PF_PACKS_OFF", "PF_HOT_AIR_OFF" };
 
     /// <summary>What the aircraft reads once the step's work is done: its keys at their targets; the external
-    /// power breaker closed for the external power composite; the battery on and standby power armed under
-    /// its closed guard after the standby power check; the three INS mode selectors at ALIGN after the INS
-    /// align composite; the APU turning after its start; the APU generator's field and breaker relays and the
-    /// three AC ties closed after theirs; the four fire loop selectors at Both after the fire test, the wheel
-    /// well selector at Both after its test, and the AC pumps and PTUs off after the hydraulic check; and for
-    /// a provider step, the readout at the provider's value (the cabin altitude selector's, in metres).</summary>
+    /// power breaker closed for the external power composite on, open for it off; the battery on and standby
+    /// power armed under its closed guard after the standby power check; the three INS mode selectors at ALIGN
+    /// after the INS align composite; the APU turning after its start; the APU generator's field and breaker
+    /// relays and the three AC ties closed after theirs; the four fire loop selectors at Both after the fire
+    /// test, the wheel well selector at Both after its test, and the AC pumps and PTUs off after the hydraulic
+    /// check; and for a provider step, the readout at the provider's value (the cabin altitude selector's, in
+    /// metres; the cabin baro's, at the captain's altimeter), or an INS mode selector at NAV.</summary>
     private static (string Key, double Value)[] Done(Step s)
     {
-        if (s.EventName == X.ExternalPower) return new[] { ("L1011_RO_EXT_PWR_BREAKER", 1.0) };
+        if (s.EventName == X.ExternalPower)
+            return new[] { ("L1011_RO_EXT_PWR_BREAKER", s.TargetValue == 0 ? 0.0 : 1.0) };
         if (s.EventName == X.InsAlign)
             return new[] { ("ROTARY_INS_MODE_1", 2.0), ("ROTARY_INS_MODE_2", 2.0), ("ROTARY_INS_MODE_3", 2.0) };
         if (s.EventName == X.StandbyPowerCheck)
@@ -120,6 +122,10 @@ public class L1011FoFlowChecklistLinkTests
         if (s.EventName == X.HydraulicCheck)
             return new[] { "SWITCH_HYD_AC_PUMP_B3", "SWITCH_HYD_AC_PUMP_C3", "SWITCH_PTU_AB", "SWITCH_PTU_CD" }
                 .Select(k => (k, 0.0)).ToArray();
+        if (s.EventName == X.CabinBaro)
+            return new[] { ("L1011_RO_CABIN_BARO", 1002.4), ("L1011_RO_ALTIMETER_1", 1002.4) };
+        if (s.TargetValueProvider != null && s.EventName!.StartsWith("ROTARY_INS_MODE_", StringComparison.Ordinal))
+            return new[] { (s.EventName, (double)L1011FoStateEvaluator.InsNav) };
         if (s.TargetValueProvider is { } provider)
         {
             Assert.Equal(X.CabinAltitudeSelect, s.EventName);

@@ -1,3 +1,4 @@
+using System.Globalization;
 using MSFSBlindAssist.Aircraft.L1011;
 using MSFSBlindAssist.FirstOfficer.Models;
 using X = MSFSBlindAssist.FirstOfficer.L1011.L1011FoActionExecutor;
@@ -9,7 +10,7 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 
 /// <summary>
 /// The iniBuilds L-1011 TriStar First Officer flows, following the aircraft's manual checklist: Power Up,
-/// then Preflight. Every switch step but the standby power check and Preflight's three tests carries a
+/// Preflight, then Before Start. Every switch step but the standby power check and Preflight's three tests carries a
 /// SkipCondition on its own state ("Already set"; a check or a test is the point, so it always runs), and
 /// the executor re-reads before acting anyway. Captain steps are spoken reminders, never automated.
 ///
@@ -32,6 +33,14 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// guards ([FO-25]); its packs step is also left alone off the ground, as its tick is. Its toggle-carrying
 /// writes (APU bleed, anti-skid, no smoking) are single switches whose "Already set" reads their own
 /// position: the executor reads first, and from an unknown position the definition refuses the write.
+///
+/// Before Start opens with the ground guard (it switches packs 1 and 3 off) and two read-only Stop waits, the APU
+/// running and its generator on line, so external power comes off only once the APU carries the buses, as the
+/// MD-11's does. It turns each INS unit to NAV only once that unit reads aligned (or already reads NAV), and copies
+/// the captain's altimeter into the cabin barometric setting; a unit still aligning, or a standard or unread
+/// altimeter, gives no value, so nothing is sent or spoken and a Captain step asks instead ([FO-20]). Its doors,
+/// cabin baro and INS Captain steps speak only while the aircraft does not show the state, so they are flow-only.
+/// Its toggle-carrying writes (seat belts, APU bleed) are single switches that read their own position first.
 /// </summary>
 public static class L1011FoFlowDefinitions
 {
@@ -39,6 +48,7 @@ public static class L1011FoFlowDefinitions
     {
         BuildPowerUp(),
         BuildPreflight(),
+        BuildBeforeStart(),
     };
 
     // ------------------------------------------------------------------ Power Up (the manual's cockpit entry and power-up)
@@ -389,6 +399,126 @@ public static class L1011FoFlowDefinitions
             Done(Captain("PF_CPT_RADIOS", "Set the radios"), "PF_CPT_RADIOS"),
         }
     };
+
+    // ------------------------------------------------------------------ Before Start (the manual's before engine start)
+
+    /// <summary>The transponder mode selector's TA/RA position (1 is standby).</summary>
+    private const int TransponderTaRa = 5;
+
+    /// <summary>How long Before Start waits for the APU to read running: Preflight started it.</summary>
+    private const int ApuRunningCheckSeconds = 10;
+
+    /// <summary>How long Before Start waits for the APU generator's breaker to read closed before external power
+    /// comes off.</summary>
+    private const int ApuGenOnLineSeconds = 60;
+
+    /// <summary>How long the navigating check waits: a unit turned to NAV reads aligned for about a second before it
+    /// reads navigating.</summary>
+    private const int InsNavigatingCheckSeconds = 15;
+
+    private static readonly string[] GalleyKeys = { "SWITCH_GALLEY_BUS_1", "SWITCH_GALLEY_BUS_2", "SWITCH_GALLEY_BUS_3" };
+
+    /// <summary>The three engine isolation valves, then the two crossbleeds: the keys <c>FO_START_AIR_VALVES_ON</c>
+    /// reads, in its order.</summary>
+    private static readonly string[] StartAirKeys =
+        { "SWITCH_ISLN_VALVE_ENG_1", "SWITCH_ISLN_VALVE_ENG_2", "SWITCH_ISLN_VALVE_ENG_3", "SWITCH_XBLEED_1", "SWITCH_XBLEED_3" };
+
+    private static Flow BuildBeforeStart() => new()
+    {
+        Id = "BEFORE_START", Name = "Before Start",
+        Description = "External power off once the APU generator is on line; seat belts, anti-collision lights, doors, "
+            + "galley; APU air for the start; cabin barometric setting; INS to NAV; transponder TA/RA.",
+        RelatedChecklistGroupIds = new[] { "BEFORE_START", "BEFORE_START_CL" },
+        Steps = new()
+        {
+            // The flow switches packs 1 and 3 off: never airborne (FO-25). Links no line.
+            OnGroundGuard("BS_ON_GROUND"),
+            // Preflight started the APU and put its generator on line. External power comes off only once the APU
+            // generator is on line: nothing interlocks them, and pulled first it leaves the buses on the battery.
+            WaitForField("BS_APU_RUNNING", "APU running", "FO_APU_RUNNING", On, ApuRunningCheckSeconds,
+                onTimeout: FlowStepFailurePolicy.Stop),
+            WaitForField("BS_APU_GEN_ON_LINE", "APU generator on line", "FO_APU_GEN_ON_LINE", On, ApuGenOnLineSeconds,
+                onTimeout: FlowStepFailurePolicy.Stop),
+            Done(Skip(SW("BS_EXT_OFF", "External power: off", X.ExternalPower, 0), s => s.GetValue("FO_EXT_POWER_ON") < 0.5),
+                "BS_EXT_OFF"),
+            // A toggle-carrying switch: written only over its own position read (L1011-4).
+            Also(Done(Skip(SW("BS_SEAT_BELTS", "Seat belt signs: on", "SWITCH_SEATBELT_LIGHT", 1),
+                s => s.IsPosition("SWITCH_SEATBELT_LIGHT", 1)), "BS_SEAT_BELTS"), "BSC_SEAT_BELTS"),
+            Also(Done(Skip(SW("BS_ANTICOL", "Anti-collision lights: on", "SWITCH_ANTICOL_LIGHT", 1),
+                s => s.IsPosition("SWITCH_ANTICOL_LIGHT", 1)), "BS_ANTICOL"), "BSC_ANTICOL"),
+            // The doors are the tablet's: the Captain is asked while the door light reads lit or unread.
+            Skip(Captain("BS_DOORS_CPT", "Doors", "Close the doors on the tablet."), s => s.IsOn("FO_DOORS_CLOSED")),
+            Check("BS_CHK_DOORS", "Door lights: out", "FO_DOORS_CLOSED", On, CheckSeconds, "BSC_DOORS"),
+            Also(Done(Skip(Multi("BS_GALLEY", "Galley power: off", AllTo(0, GalleyKeys)),
+                s => s.IsOn("FO_GALLEY_OFF")), "BS_GALLEY"), "BSC_GALLEY"),
+            Check("BS_CHK_FUEL_PUMP", "Fuel pump: at least one on", "FO_ANY_FUEL_PUMP_ON", On, CheckSeconds, "BSC_FUEL_PUMP"),
+
+            // ---- APU air for the start: minimum compressor load, pack 2 only, the valves open, APU bleed on ----
+            Also(Done(Skip(SW("BS_APU_MODE_MIN", "APU compressor mode: minimum", "SWITCH_APU_MODE", 0),
+                s => s.IsPosition("SWITCH_APU_MODE", 0)), "BS_APU_MODE_MIN"), "BSC_APU_MODE"),
+            Also(Done(Skip(Multi("BS_PACK_2", "Packs: pack 2 on, packs 1 and 3 off",
+                    (PackKeys[0], 0), (PackKeys[1], 1), (PackKeys[2], 0)),
+                s => s.IsOn("FO_PACK_2_ONLY")), "BS_PACK_2"), "BSC_PACK_2"),
+            Also(Done(Skip(Multi("BS_ISLN_XBLEEDS", "Engine isolation and crossbleed valves: on", AllTo(1, StartAirKeys)),
+                s => s.IsOn("FO_START_AIR_VALVES_ON")), "BS_ISLN_XBLEEDS"), "BSC_ISLN_VALVES"),
+            // A toggle-carrying switch: written only over its own position read (L1011-4).
+            Done(Skip(SW("BS_APU_BLEED", "APU bleed: on", "SWITCH_APU_BLEED", 1),
+                s => s.IsPosition("SWITCH_APU_BLEED", 1)), "BS_APU_BLEED"),
+
+            // The captain's altimeter holds the QNH the Captain set in Preflight. Standard or unread: nothing is sent
+            // or spoken (FO-20), and the Captain step below asks for it.
+            Done(Skip(Provider("BS_CABIN_BARO", "Cabin barometric setting: captain's altimeter", X.CabinBaro,
+                    s => s.CabinBaroTargetHundredths()),
+                s => s.IsOn("FO_CABIN_BARO_SET")), "BS_CABIN_BARO"),
+            // Keyed on the setting, never on the altimeter: without a value, or with a write that did not take, the
+            // cabin baro does not read the captain's setting and the Captain is asked.
+            Skip(Captain("BS_CABIN_BARO_CPT", "Cabin barometric setting",
+                    "Set the cabin barometric setting to the QNH on the engineer's pressurization panel."),
+                s => s.IsOn("FO_CABIN_BARO_SET")),
+            // Preflight set system A or B: read only.
+            Check("BS_CHK_IGNITION", "Ignition selector: system A or B", "FO_IGNITION_SELECTED", On, CheckSeconds, "BSC_IGNITION"),
+
+            // ---- INS to NAV, unit by unit, then all three navigating ----
+            InsToNav(1), InsStillAligning(1),
+            InsToNav(2), InsStillAligning(2),
+            InsToNav(3), InsStillAligning(3),
+            Check("BS_CHK_INS_NAV", "INS 1, 2 and 3: navigating", "FO_INS_NAVIGATING", On, InsNavigatingCheckSeconds,
+                "BSC_INS_NAV"),
+
+            // The manual's place for TA/RA: before start.
+            Also(Done(Skip(SW("BS_XPDR", "Transponder: TA/RA", "ROTARY_TCAS_MODE", TransponderTaRa),
+                s => s.IsPosition("ROTARY_TCAS_MODE", TransponderTaRa)), "BS_XPDR"), "BSC_XPDR"),
+
+            // ---- the fleet's tail: each ticks its own reminder line ----
+            Done(Captain("BS_ACARS", "Start ACARS"), "BS_ACARS"),
+            Done(Captain("BS_CLEARANCE", "Obtain pushback and start clearance"), "BS_CLEARANCE"),
+        }
+    };
+
+    /// <summary>
+    /// INS <paramref name="unit"/> to NAV once it reads aligned or its selector already reads NAV. While it still
+    /// aligns, or sits at OFF or STBY, the provider gives no value: nothing is sent or spoken ([FO-20]) and
+    /// <see cref="InsStillAligning"/> asks the Captain.
+    /// </summary>
+    private static Step InsToNav(int unit)
+    {
+        string key = L1011InsAlignmentAnnouncer.MsuKey(unit);
+        string n = unit.ToString(CultureInfo.InvariantCulture);
+        string id = $"BS_INS_{n}_NAV";
+        return Done(Skip(Provider(id, $"INS {n}: nav", key, s => s.InsNavTarget(unit)),
+            s => s.IsPosition(key, L1011FoStateEvaluator.InsNav)), id);
+    }
+
+    /// <summary>The Captain's line for a unit the First Officer left where it was: keyed on the selector, so a write
+    /// that did not take asks too.</summary>
+    private static Step InsStillAligning(int unit)
+    {
+        string key = L1011InsAlignmentAnnouncer.MsuKey(unit);
+        string n = unit.ToString(CultureInfo.InvariantCulture);
+        return Skip(Captain($"BS_INS_{n}_CPT", $"INS {n} still aligning",
+                $"INS {n} still aligning: set it to NAV once READY NAV lights."),
+            s => s.IsPosition(key, L1011FoStateEvaluator.InsNav));
+    }
 
     // ------------------------------------------------------------------ step builders (the MD-11's, retyped)
 

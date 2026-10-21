@@ -43,6 +43,7 @@ public class L1011FoChecklistStructureTests
         {
             "POWER_UP", "POWER_UP_CL",
             "PREFLIGHT", "PREFLIGHT_FE_CL", "PREFLIGHT_OVHD_CL", "PREFLIGHT_MAIN_CL", "PREFLIGHT_CONSOLE_CL",
+            "BEFORE_START", "BEFORE_START_CL",
         }, Groups.Select(g => g.Id));
 
     [Fact]

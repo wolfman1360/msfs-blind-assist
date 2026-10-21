@@ -48,7 +48,8 @@ public class FoCutGuardSweepTests
         + @"primary pump switches: off|\birs\b.*: off|\badirs\b.*: off|\badiru\b.*: off|\bbatter(y|ies)\b.*: off)",
         RegexOptions.IgnoreCase);
 
-    private static readonly Regex PacksOff = new(@"\bpacks?( switches)?: off", RegexOptions.IgnoreCase);
+    // "Packs: off", or some packs off by number ("packs 1 and 3 off", the TriStar's pack 2 only line).
+    private static readonly Regex PacksOff = new(@"\bpacks?( switches)?: off|\bpacks? \d( and \d)* off", RegexOptions.IgnoreCase);
 
     private static Cut? Classify(string label)
     {
@@ -366,6 +367,8 @@ public class FoCutGuardSweepTests
     [InlineData("Fuel pumps: ALL ON", "")]
     [InlineData("APU master: OFF", "")]
     [InlineData("Pack flow: NORMAL", "")]
+    [InlineData("Packs: pack 2 on, packs 1 and 3 off", "Packs")]
+    [InlineData("Packs: pack 2 on", "")]
     [InlineData("Engine masters 1 to 4: OFF", "Engine")]
     [InlineData("Fuel Control switches: CUTOFF", "Engine")]
     [InlineData("Fuel switches: OFF", "Engine")]
