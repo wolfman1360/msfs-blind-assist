@@ -21,9 +21,9 @@ using CheckFn = System.Func<L1011FoActionExecutor, L1011FoStateEvaluator, System
 /// power check's line is judged by no state; the flow's composite step delivers it ([FO-7]). The inspection
 /// has no galley line, so none is invented: the galley step completes its action line only.
 ///
-/// Three hand ticks are left alone unless the aircraft reads on the ground with every engine stopped
-/// ([FO-25]): the AC hydraulic pumps and the fuel pumps off, and the standby power check, which turns the
-/// battery off for a moment. Unread refuses, as the flow's guards do.
+/// Four hand ticks are left alone unless the aircraft reads on the ground with every engine stopped
+/// ([FO-25]): the ATM switches, the AC hydraulic pumps and the fuel pumps off, and the standby power check,
+/// which turns the battery off for a moment. Unread refuses, as the flow's guards do.
 /// </summary>
 public static class L1011FoChecklistDefinitions
 {
@@ -85,9 +85,13 @@ public static class L1011FoChecklistDefinitions
                     SetAll(("SWITCH_MASTER_RADIO_ESS", 1), ("SWITCH_MASTER_RADIO_NO2", 1))),
                 Auto("PU_XPDR", G, "Transponder: standby", Transponder, v => Is(v, 1), Set(Transponder, 1)),
                 Auto("PU_RADAR", G, "Weather radar: off", RadarOff, v => Is(v, 1), Set(RadarOff, 1)),
-                Auto("PU_ATMS", G, "ATM switches: off", "FO_ATMS_OFF", On,
+                // Cold-and-dark cuts ([FO-25]): never airborne, never with an engine turning, never unread.
+                // The ATMs are the air-turbine hydraulic pumps of systems B and C, left in AUTO through the
+                // flight: off there cuts backup hydraulic power, and the fleet's cut sweep cannot see them by
+                // their label (Ruling R9).
+                LeaveAlone(Auto("PU_ATMS", G, "ATM switches: off", "FO_ATMS_OFF", On,
                     SetAll(("ROTARY_HYD_B2_MODE", 0), ("ROTARY_HYD_C2_MODE", 0))),
-                // A cold-and-dark cut ([FO-25]): never airborne, never with an engine turning, never unread.
+                    NotParked, ParkedOnlyText),
                 LeaveAlone(Auto("PU_AC_PUMPS", G, "AC hydraulic pumps: off", "FO_AC_PUMPS_OFF", On,
                     SetAll(("SWITCH_HYD_AC_PUMP_B3", 0), ("SWITCH_HYD_AC_PUMP_C3", 0))),
                     NotParked, ParkedOnlyText),
@@ -201,7 +205,7 @@ public static class L1011FoChecklistDefinitions
         return item;
     }
 
-    internal const string ParkedOnlyText = "Left alone: the aircraft must be on the ground with the engines stopped.";
+    private const string ParkedOnlyText = "Left alone: the aircraft must be on the ground with the engines stopped.";
 
     // On the ground (the stock SIM_ON_GROUND, the flow's PU_ON_GROUND) with every engine read stopped
     // (FO_ENGINES_STOPPED, the flow's PU_ENGINES_STOPPED); airborne, an engine turning, or either unread,

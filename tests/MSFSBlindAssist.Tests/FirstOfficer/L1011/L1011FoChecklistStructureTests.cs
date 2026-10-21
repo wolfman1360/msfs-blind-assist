@@ -344,15 +344,21 @@ public class L1011FoChecklistStructureTests
 
     public static IEnumerable<object[]> GuardedLines() => new[]
     {
-        new object[] { "PU_AC_PUMPS" }, new object[] { "PU_FUEL_PUMPS" }, new object[] { "PU_STBY_CHECK" },
+        new object[] { "PU_ATMS" }, new object[] { "PU_AC_PUMPS" }, new object[] { "PU_FUEL_PUMPS" },
+        new object[] { "PU_STBY_CHECK" },
     };
 
-    /// <summary>The three lines that cut pumps or the battery carry the guard; no other line does.</summary>
+    /// <summary>
+    /// The four lines that cut hydraulic or fuel pumps or the battery carry the guard; no other line does.
+    /// The ATM switches are the air-turbine hydraulic pumps of systems B and C, left in AUTO through the flight
+    /// (Ruling R9): off in the air or with an engine turning cuts backup hydraulic power, and the fleet's cut
+    /// sweep cannot see them by their label.
+    /// </summary>
     [Fact]
     public void OnlyThePumpAndStandbyCheckLines_AreLeftAlone()
     {
         var guarded = Groups.SelectMany(g => g.Items).Where(i => i.LeaveAloneWhen != null).Select(i => i.Id).ToArray();
-        Assert.Equal(new[] { "PU_AC_PUMPS", "PU_FUEL_PUMPS", "PU_STBY_CHECK" }, guarded);
+        Assert.Equal(new[] { "PU_ATMS", "PU_AC_PUMPS", "PU_FUEL_PUMPS", "PU_STBY_CHECK" }, guarded);
     }
 
     [Theory]
