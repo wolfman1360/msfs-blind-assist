@@ -10,6 +10,7 @@ using A330State = MSFSBlindAssist.FirstOfficer.HWA330.HwA330StateEvaluator;
 using A380State = MSFSBlindAssist.FirstOfficer.FBWA380.FbwA380StateEvaluator;
 using FenixState = MSFSBlindAssist.FirstOfficer.Fenix.FenixStateEvaluator;
 using IFlyState = MSFSBlindAssist.FirstOfficer.IFly737.IFly737StateEvaluator;
+using L1011State = MSFSBlindAssist.FirstOfficer.L1011.L1011FoStateEvaluator;
 using Md11State = MSFSBlindAssist.FirstOfficer.MD11.Md11FoStateEvaluator;
 using Pmdg737State = MSFSBlindAssist.FirstOfficer.PMDG737.AircraftStateEvaluator;
 using Pmdg777State = MSFSBlindAssist.FirstOfficer.AircraftStateEvaluator;
@@ -40,7 +41,7 @@ public class FoCutGuardSweepTests
 
     private static readonly Regex EngineCut = new(
         @"(\bengine \d master: off|\bengine masters.*: off|start levers?: cutoff|"
-        + @"fuel control( switches)?: cutoff|fuel switches: off)", RegexOptions.IgnoreCase);
+        + @"fuel control( switches)?: cutoff|fuel switches: off|fuel (and|&) ignition switches: off)", RegexOptions.IgnoreCase);
 
     private static readonly Regex PumpIrsBattery = new(
         @"(fuel pumps?( switches)?: (all )?off|hydraulic.*pumps?( \w+)?: off|demand pump selectors: off|\b(electric|engine|demand) pumps: off|"
@@ -232,6 +233,25 @@ public class FoCutGuardSweepTests
         },
         () => new Md11State());
 
+    // The TriStar reads its engines from N3 and its fuel-and-ignition switch rows (the stock fuel
+    // valve), never N2: running is N3 near idle with the switches on, stopped is both at 0.
+    private static Profile<MSFSBlindAssist.FirstOfficer.L1011.L1011FoActionExecutor, L1011State> L1011() => new("L-1011",
+        MSFSBlindAssist.FirstOfficer.L1011.L1011FoChecklistDefinitions.Build(),
+        MSFSBlindAssist.FirstOfficer.L1011.L1011FoFlowDefinitions.Build(),
+        (g, r) =>
+        {
+            var seeds = new List<(string, double)> { ("SIM_ON_GROUND", g ? 1 : 0) };
+            for (int n = 1; n <= 3; n++)
+            {
+                seeds.Add(($"L1011_RO_N3_{n}", r ? 60 : 0));
+                seeds.Add(($"TOGGLE_CUTOFF_ENG_{n}", r ? 1 : 0));
+            }
+            var s = new L1011State();
+            s.SetSimConnect(SeededSimConnectCache.With(seeds.ToArray()));
+            return s;
+        },
+        () => new L1011State());
+
     [Fact]
     public void A320_family() // the A32NX, its Headwind A330 duplicate and the Fenix: one rule for all three
     {
@@ -255,6 +275,9 @@ public class FoCutGuardSweepTests
 
     [Fact]
     public void Tfdi_MD11() => Sweep(Md11());
+
+    [Fact]
+    public void Inibuilds_L1011() => Sweep(L1011());
 
     // ---- The flows that power the aircraft down or set it up cold open with BOTH guards ---------
 
@@ -302,6 +325,7 @@ public class FoCutGuardSweepTests
         AssertOpensWithGroundAndEnginesGuards(Fenix().Flows, "ELECTRICAL_POWER_UP", "Fenix");
         AssertOpensWithGroundAndEnginesGuards(A380().Flows, "COCKPIT_PREP", "A380");
         AssertOpensWithGroundAndEnginesGuards(Md11().Flows, "POWER_UP", "MD-11");
+        AssertOpensWithGroundAndEnginesGuards(L1011().Flows, "POWER_UP", "L-1011");
         // The 737 Preflights switch the fuel pumps off: cold and dark only, like the 777's
         // Cockpit Preparation and Electrical Power Up (hydraulic pumps, fuel controls).
         AssertOpensWithGroundAndEnginesGuards(MSFSBlindAssist.FirstOfficer.PMDG737.PMDG737FlowDefinitions.Build(), "PREFLIGHT", "PMDG 737");
@@ -343,6 +367,8 @@ public class FoCutGuardSweepTests
     [InlineData("Engine masters 1 to 4: OFF", "Engine")]
     [InlineData("Fuel Control switches: CUTOFF", "Engine")]
     [InlineData("Fuel switches: OFF", "Engine")]
+    [InlineData("Fuel and ignition switches: off", "Engine")]
+    [InlineData("Fuel & ignition switches: OFF", "Engine")]
     [InlineData("Engine start levers: CUTOFF", "Engine")]
     [InlineData("Engine anti-ice: OFF", "")]
     [InlineData("IRS 1, 2 and 3: NAV", "")]

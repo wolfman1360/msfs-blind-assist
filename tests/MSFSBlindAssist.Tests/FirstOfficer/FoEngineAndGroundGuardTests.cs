@@ -8,6 +8,7 @@ using MSFSBlindAssist.FirstOfficer.FBWA380;
 using MSFSBlindAssist.FirstOfficer.Fenix;
 using MSFSBlindAssist.FirstOfficer.HWA330;
 using MSFSBlindAssist.FirstOfficer.IFly737;
+using MSFSBlindAssist.FirstOfficer.L1011;
 using MSFSBlindAssist.FirstOfficer.MD11;
 using MSFSBlindAssist.FirstOfficer.Models;
 using MSFSBlindAssist.SimConnect;
@@ -54,6 +55,7 @@ public class FoEngineAndGroundGuardTests
         AssertGuardFirst(PMDG777FlowDefinitions.Build(), "ELECTRICAL_POWER_UP", "EPU_ENGINES_STOPPED", Pmdg777State.EnginesStoppedField);
         AssertGuardFirst(PMDG777FlowDefinitions.Build(), "COCKPIT_PREP", "CP_ENGINES_STOPPED", Pmdg777State.EnginesStoppedField);
         AssertGuardFirst(Md11FoFlowDefinitions.Build(), "POWER_UP", "PU_ENGINES_STOPPED", "FO_ENGINES_STOPPED");
+        AssertGuardFirst(L1011FoFlowDefinitions.Build(), "POWER_UP", "PU_ENGINES_STOPPED", "FO_ENGINES_STOPPED");
     }
 
     [Fact]
