@@ -204,10 +204,19 @@ public partial class IniL1011Definition
             SnapBack(key, sim);
             return false;
         }
-        sim.ExecuteCalculatorCodeUnique(rpn);
+        SendCalc(sim, rpn);
         if (confirmation != null)
             announcer.Announce(confirmation);   // a typed value: the pilot needs the exact figure back
         return true;
+    }
+
+    /// <summary>What follows a lever write that was sent, for a panel pick and the First Officer alike:
+    /// the gear lever is read again once its gauge has settled. The lever's own gauge refuses "up" on the
+    /// ground: the write lands and nothing moves, so no delivery comes to put an open panel's combo back.</summary>
+    private void AfterLeverSent(string key, SimConnectManager sim)
+    {
+        if (key == L1011Levers.GearLeverKey)
+            _ = ReReadAfterSettleAsync(key, L1011Levers.GearSettleMs, sim);
     }
 
     /// <summary>
@@ -242,6 +251,14 @@ public partial class IniL1011Definition
             OpenInsWindow?.Invoke(device);
             return;
         }
+        if (L1011Levers.LeverRpn(row.Key, value) is string leverRpn)
+        {
+            // A panel pick is not recorded as commanded: MainForm's UI echo already keeps the lever's
+            // call-out from speaking it back (the First Officer's write, which has no echo, records it).
+            if (SendCustom(row.Key, row.Name, leverRpn, sim, announcer))
+                AfterLeverSent(row.Key, sim);
+            return;
+        }
         switch (row.Key)
         {
             case L1011Levers.BreakerListKey:
@@ -249,23 +266,6 @@ public partial class IniL1011Definition
                 return;
             case L1011Afcs.DisconnectKey:
                 DisconnectAutopilot(sim, announcer);
-                return;
-            case L1011Levers.FlapHandleKey:
-                SendCustom(row.Key, row.Name, L1011Levers.FlapRpn((int)Math.Round(value)), sim, announcer);
-                return;
-            case L1011Levers.GearLeverKey:
-                // The lever's own gauge refuses "up" on the ground: the write lands and nothing moves.
-                if (SendCustom(row.Key, row.Name, L1011Levers.GearRpn(value), sim, announcer))
-                    _ = ReReadAfterSettleAsync(row.Key, L1011Levers.GearSettleMs, sim);
-                return;
-            case L1011Levers.SpeedBrakeKey:
-                SendCustom(row.Key, row.Name, L1011Levers.SpeedBrakeRpn(value), sim, announcer);
-                return;
-            case L1011Levers.GroundSpoilersKey:
-                SendCustom(row.Key, row.Name, L1011Levers.GroundSpoilersRpn(value), sim, announcer);
-                return;
-            case L1011Levers.ParkingBrakeKey:
-                SendCustom(row.Key, row.Name, L1011Levers.ParkingBrakeRpn(value), sim, announcer);
                 return;
             case L1011Levers.SquawkKey:
                 if (L1011Levers.SquawkBcd(value) is uint bcd)

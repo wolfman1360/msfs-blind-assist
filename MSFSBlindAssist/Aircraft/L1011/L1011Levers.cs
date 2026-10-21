@@ -113,6 +113,25 @@ public static class L1011Levers
     /// <summary>What the parking-brake input event's own Set code sends.</summary>
     public static string ParkingBrakeRpn(double target) => $"{(target >= 0.5 ? 1 : 0)} (>K:PARKING_BRAKE_SET)";
 
+    /// <summary>The console levers and the string each writes for a target, the one table the panel rows
+    /// and the First Officer both send from, so the two can never write a lever differently.</summary>
+    private static readonly IReadOnlyDictionary<string, Func<double, string>> LeverWrites =
+        new Dictionary<string, Func<double, string>>(StringComparer.Ordinal)
+        {
+            [FlapHandleKey] = target => FlapRpn((int)Math.Round(target)),
+            [GearLeverKey] = GearRpn,
+            [SpeedBrakeKey] = SpeedBrakeRpn,
+            [GroundSpoilersKey] = GroundSpoilersRpn,
+            [ParkingBrakeKey] = ParkingBrakeRpn,
+        };
+
+    /// <summary>True for the flap handle, gear lever, speed brake, ground-spoiler arm and parking brake.</summary>
+    public static bool IsLever(string key) => LeverWrites.ContainsKey(key);
+
+    /// <summary>The calculator string a lever key writes for <paramref name="target"/>; null for any other key.</summary>
+    public static string? LeverRpn(string key, double target) =>
+        LeverWrites.TryGetValue(key, out var write) ? write(target) : null;
+
     /// <summary>
     /// What is spoken when a lever moves without MSFSBA moving it (a hardware lever, the aircraft's
     /// own automation): "Flaps 14 degrees", "Flaps up", "Parking brake set", "Ground spoilers armed".

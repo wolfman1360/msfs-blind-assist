@@ -16,7 +16,8 @@ namespace MSFSBlindAssist.Aircraft;
 /// <item>LEVERS moved by something other than MSFSBA (a hardware lever, the EFB's automation): the
 /// flap handle, parking brake and ground-spoiler arm (<see cref="L1011Levers.Announcement"/>), spoken
 /// from ProcessSimVarUpdate, where MainForm's wrap applies both the Ctrl+M mute and the UI echo —
-/// so the pilot's own combo pick is never spoken back.</item>
+/// so the pilot's own combo pick is never spoken back. The First Officer's own lever write has no UI
+/// echo, so it is recorded as commanded and not spoken within <see cref="L1011CommandedState.HoldMs"/>.</item>
 /// <item>AUTOPILOT states (<see cref="L1011AfcsModes"/>): engage paddles, mode buttons, the
 /// autothrottle's alpha mode and the armed/captured flags, through <see cref="L1011AfcsAnnouncer"/> inside ProcessSimVarUpdate, under the
 /// same wrap; MSFSBA's own press, within <see cref="L1011CommandedState.HoldMs"/>, is silent only
@@ -110,13 +111,17 @@ public partial class IniL1011Definition
         return true;   // a position: the open control follows it (RefreshControlWhenDefHandled)
     }
 
-    /// <summary>Baseline-first: the first value after a reset is recorded, a later change is spoken.</summary>
+    /// <summary>Baseline-first: the first value after a reset is recorded, a later change is spoken.
+    /// A lever the First Officer just put there (<see cref="L1011CommandedState.IsOwn"/>) is recorded and
+    /// not spoken: MainForm's UI echo covers only a panel pick, so the flow's own line says it instead.</summary>
     private void AnnounceLever(string key, double value, ScreenReaderAnnouncer announcer)
     {
         string? words = L1011Levers.Announcement(key, value);
         bool known = _leverLast.TryGetValue(key, out double last);
         _leverLast[key] = value;
         if (!known || words == null || words == L1011Levers.Announcement(key, last))
+            return;
+        if (_commanded.IsOwn(key, value, Clock()))
             return;
         announcer.Announce(words);
     }

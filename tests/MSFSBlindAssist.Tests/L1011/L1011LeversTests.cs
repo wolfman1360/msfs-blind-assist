@@ -71,6 +71,25 @@ public class L1011LeversTests
         Assert.Equal("0 (>K:SPOILERS_ARM_SET)", L1011Levers.GroundSpoilersRpn(0));
     }
 
+    [Fact]
+    public void The_lever_table_sends_what_each_levers_own_builder_sends_and_nothing_for_another_key()
+    {
+        Assert.Equal(L1011Levers.FlapRpn(3), L1011Levers.LeverRpn(L1011Levers.FlapHandleKey, 3));
+        Assert.Equal(L1011Levers.FlapRpn(3), L1011Levers.LeverRpn(L1011Levers.FlapHandleKey, 2.6));   // the index rounds
+        Assert.Equal(L1011Levers.GearRpn(100), L1011Levers.LeverRpn(L1011Levers.GearLeverKey, 100));
+        Assert.Equal(L1011Levers.SpeedBrakeRpn(50), L1011Levers.LeverRpn(L1011Levers.SpeedBrakeKey, 50));
+        Assert.Equal(L1011Levers.GroundSpoilersRpn(1), L1011Levers.LeverRpn(L1011Levers.GroundSpoilersKey, 1));
+        Assert.Equal(L1011Levers.ParkingBrakeRpn(1), L1011Levers.LeverRpn(L1011Levers.ParkingBrakeKey, 1));
+        Assert.Null(L1011Levers.LeverRpn(L1011Levers.StabTrimKey, 5));
+        Assert.Null(L1011Levers.LeverRpn("NOT_A_TRISTAR_KEY", 1));
+        Assert.All(new[]
+        {
+            L1011Levers.FlapHandleKey, L1011Levers.GearLeverKey, L1011Levers.SpeedBrakeKey,
+            L1011Levers.GroundSpoilersKey, L1011Levers.ParkingBrakeKey,
+        }, key => Assert.True(L1011Levers.IsLever(key), key));
+        Assert.False(L1011Levers.IsLever(L1011Levers.StabTrimKey));
+    }
+
     [Theory]
     [InlineData(0, 0)]
     [InlineData(12, 0)]
