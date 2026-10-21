@@ -8,8 +8,9 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 
 /// <summary>
 /// The iniBuilds L-1011 TriStar First Officer flows, following the aircraft's manual checklist. Part 1
-/// is the Power Up flow. Every switch step carries a SkipCondition on its own state ("Already set"), and
-/// the executor re-reads before acting anyway. Captain steps are spoken reminders, never automated.
+/// is the Power Up flow. Every switch step but the standby power check carries a SkipCondition on its own
+/// state ("Already set"; the check is the point, so it always runs), and the executor re-reads before
+/// acting anyway. Captain steps are spoken reminders, never automated.
 ///
 /// Power Up is a cold-and-dark flow that switches the fuel pumps and hydraulic pumps off and, in its
 /// standby power check, turns the battery off for a moment ([FO-25]): it opens with BOTH guards, engines
@@ -83,9 +84,11 @@ public static class L1011FoFlowDefinitions
             Also(Done(Skip(Multi("PU_PAX_OXY", "Passenger oxygen: off and guarded",
                     ("SWITCH_PAX_OXY_MANUAL", 0), ("GUARD_PAX_OXY_MANUAL", 0)),
                 s => s.IsOn("FO_PAX_OXY_SAFE")), "PU_PAX_OXY"), "PUC_PAX_OXY"),
-            Also(Done(Skip(Multi("PU_GALLEY", "Galley power: off",
+            // The aircraft's cockpit safety inspection has no galley line, so POWER_UP_CL has no PUC_GALLEY
+            // (Ruling R3): this step completes its action line only.
+            Done(Skip(Multi("PU_GALLEY", "Galley power: off",
                     ("SWITCH_GALLEY_BUS_1", 0), ("SWITCH_GALLEY_BUS_2", 0), ("SWITCH_GALLEY_BUS_3", 0)),
-                s => s.IsOn("FO_GALLEY_OFF")), "PU_GALLEY"), "PUC_GALLEY"),
+                s => s.IsOn("FO_GALLEY_OFF")), "PU_GALLEY"),
 
             // The aircraft's checklist lines 18 to 32 in one composite: battery off, standby power On, the
             // lights read, battery on, standby power armed, the lights read again. No SkipCondition: the check

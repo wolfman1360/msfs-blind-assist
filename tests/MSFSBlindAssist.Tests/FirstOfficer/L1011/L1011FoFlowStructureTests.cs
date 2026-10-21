@@ -11,7 +11,8 @@ namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 /// The TriStar First Officer's flows (part 1: Power Up), pinned by structure and by behaviour: the step
 /// ids and their order, the two guards that must come first ([FO-25]: the standby power check turns the
 /// battery off and the fuel pumps and hydraulic pumps are switched off here), every label word for word,
-/// every write's SkipCondition on its own state ("Already set"), the checklist lines each step delivers
+/// every write's SkipCondition on its own state ("Already set"; the standby power check is the one write
+/// with none, the check is the point), the checklist lines each step delivers
 /// ([FO-6], [FO-7]), and that Power Up writes nothing the First Officer must not: no lever, no typed value
 /// and no toggle-carrying control, whose write is refused from an unknown position ([L1011-4]).
 /// </summary>
@@ -238,7 +239,7 @@ public class L1011FoFlowStructureTests
         foreach (var id in new[]
         {
             "PU_CONT_IGN", "PU_RADIO_MASTERS", "PU_XPDR", "PU_RADAR", "PU_ATMS", "PU_AC_PUMPS", "PU_FUEL_PUMPS",
-            "PU_JETTISON", "PU_PAX_OXY", "PU_GALLEY",
+            "PU_JETTISON", "PU_PAX_OXY",
         })
         {
             string readBack = "PUC_" + id["PU_".Length..];
@@ -246,6 +247,19 @@ public class L1011FoFlowStructureTests
             Assert.Equal(id, s.CompletesChecklistItemId);
             Assert.Equal(new[] { id, readBack }, s.LinkedChecklistItemIds);
         }
+    }
+
+    /// <summary>
+    /// The aircraft's cockpit safety inspection has no galley line, so <c>POWER_UP_CL</c> has no
+    /// <c>PUC_GALLEY</c> (Ruling R3, overriding the brief): the galley step completes its action line only.
+    /// </summary>
+    [Fact]
+    public void TheGalleyStep_LinksOnlyItsActionLine()
+    {
+        var s = Of("PU_GALLEY");
+        Assert.Equal("PU_GALLEY", s.CompletesChecklistItemId);
+        Assert.Equal(new[] { "PU_GALLEY" }, s.LinkedChecklistItemIds);
+        Assert.DoesNotContain(PowerUp.Steps.SelectMany(x => x.LinkedChecklistItemIds), id => id == "PUC_GALLEY");
     }
 
     [Fact]
@@ -382,8 +396,8 @@ public class L1011FoFlowStructureTests
 
     [Fact]
     public void OnlyTheTwoCompositesArePseudoKeys()
-        => Assert.Equal(new[] { X.StandbyPowerCheck, X.ExternalPower },
-            EveryWrittenKey().Select(w => w.Key).Where(X.IsPseudoKey).Distinct());
+        => Assert.Equal(new[] { X.StandbyPowerCheck, X.ExternalPower }.OrderBy(k => k, StringComparer.Ordinal),
+            EveryWrittenKey().Select(w => w.Key).Where(X.IsPseudoKey).Distinct().OrderBy(k => k, StringComparer.Ordinal));
 
     [Fact]
     public void NoStepWritesALever()
