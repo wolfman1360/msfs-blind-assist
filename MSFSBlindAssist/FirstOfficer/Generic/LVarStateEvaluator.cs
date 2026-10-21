@@ -84,5 +84,5 @@ public abstract class LVarStateEvaluator : IFoStateEvaluator
     protected double Eng2N2 => Volatile.Read(ref _eng2N2);
 
     /// <summary>Stored for parity; L:var Airbus pressurization is automatic — no consumer.</summary>
-    public void SetPlannedPressurizationAltitudes(int? cruiseAltFt, int? destElevFt) { }
+    public virtual void SetPlannedPressurizationAltitudes(int? cruiseAltFt, int? destElevFt) { }
 }

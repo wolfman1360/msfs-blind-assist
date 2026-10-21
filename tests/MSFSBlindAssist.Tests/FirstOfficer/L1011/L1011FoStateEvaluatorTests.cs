@@ -1,5 +1,7 @@
 using MSFSBlindAssist.Aircraft;
+using MSFSBlindAssist.Aircraft.L1011;
 using MSFSBlindAssist.FirstOfficer;
+using MSFSBlindAssist.FirstOfficer.Generic;
 using MSFSBlindAssist.FirstOfficer.L1011;
 using MSFSBlindAssist.SimConnect;
 
@@ -323,11 +325,30 @@ public class L1011FoStateEvaluatorTests
     public void EveryField_IsPinned()
         => Assert.Equal(new[]
         {
-            "FO_AC_PUMPS_OFF", "FO_ATMS_OFF", "FO_ENG1_RUNNING", "FO_ENG2_RUNNING", "FO_ENG3_RUNNING",
-            "FO_ENGINES_STOPPED", "FO_EXT_POWER_AVAILABLE", "FO_EXT_POWER_ON", "FO_FIRE_HANDLES_IN",
-            "FO_FLAPS_AGREE", "FO_FUEL_IGNITION_OFF", "FO_FUEL_PUMPS_OFF", "FO_GALLEY_OFF", "FO_GEAR_LEVER_DOWN",
-            "FO_INS_ALIGN_OR_NAV", "FO_JETTISON_SAFE", "FO_PAX_OXY_SAFE", "FO_RADIO_MASTERS_ON",
-            "FO_SPEED_BRAKE_FORWARD", "FO_STBY_ARMED",
+            "FO_AC_PUMPS_OFF", "FO_AC_TIES_CLOSED", "FO_AIR_DATA_HEAT_OFF", "FO_ANTI_ICE_OFF", "FO_ANY_FUEL_PUMP_ON",
+            "FO_APU_AIR_ON", "FO_APU_GEN_CLOSED", "FO_APU_GEN_FIELD_CLOSED", "FO_APU_GEN_OFF_LINE",
+            "FO_APU_GEN_ON_LINE", "FO_APU_OFF", "FO_APU_RUNNING", "FO_APU_STARTING_OR_RUNNING",
+            "FO_ATMS_AC_PUMPS_OFF", "FO_ATMS_AUTO", "FO_ATMS_OFF", "FO_BUS_FAIL_LIGHTS_OUT",
+            "FO_CABIN_ALT_AT_CRUISE", "FO_CABIN_ALT_AT_DEST", "FO_CABIN_BARO_SET", "FO_COMPASSES_MAG",
+            "FO_CROSSBLEEDS_ON", "FO_CROSSFEEDS_CLOSED", "FO_DISCONNECT_HANDLES_STOWED", "FO_DME_NORMAL",
+            "FO_DOORS_CLOSED", "FO_DRAIN_MAST_HEAT_ON", "FO_ECS_ON", "FO_EMER_LIGHTS_ARMED", "FO_EMER_LIGHTS_OFF",
+            "FO_ENG1_FUEL_FEED", "FO_ENG1_RUNNING", "FO_ENG2_FUEL_FEED", "FO_ENG2_RUNNING", "FO_ENG3_FUEL_FEED",
+            "FO_ENG3_RUNNING", "FO_ENGINES_STOPPED", "FO_ENGINE_GENERATORS_ON", "FO_EXT_LIGHTS_PREFLIGHT",
+            "FO_EXT_POWER_AVAILABLE", "FO_EXT_POWER_OFF", "FO_EXT_POWER_ON", "FO_FCES_ON", "FO_FIRE_HANDLES_IN",
+            "FO_FIRE_LOOPS_BOTH", "FO_FLAPS_AGREE", "FO_FLAPS_TAKEOFF", "FO_FLAPS_UP", "FO_FLIGHT_DIRECTORS_ON",
+            "FO_FUEL_CTRL_OVRD_OFF", "FO_FUEL_IGNITION_OFF", "FO_FUEL_PUMPS_OFF", "FO_FUEL_PUMPS_ON",
+            "FO_GALLEY_OFF", "FO_GALLEY_ON", "FO_GEAR_DOWN_CONFIRMED", "FO_GEAR_LEVER_DOWN", "FO_GEAR_LEVER_UP",
+            "FO_GEAR_UP_CONFIRMED", "FO_GEN_BREAKERS_CLOSED", "FO_GEN_FIELDS_CLOSED", "FO_GROUND_LIGHTS_OFF",
+            "FO_GROUND_LIGHTS_ON", "FO_HI_PRESS_ON", "FO_HOT_AIR_OFF", "FO_HOT_AIR_ON", "FO_HYD_ENGINE_PUMPS_ON",
+            "FO_IDG_LIGHTS_OUT", "FO_IGNITION_BOTH", "FO_IGNITION_SELECTED", "FO_INSTR_SOURCES_NORMAL",
+            "FO_INS_ALIGN_OR_NAV", "FO_INS_NAVIGATING", "FO_INS_NAV_MODE", "FO_INS_OFF", "FO_ISLN_VALVES_ON",
+            "FO_JETTISON_SAFE", "FO_LANDING_LIGHTS_OFF", "FO_LANDING_LIGHTS_ON", "FO_MACH_FEEL_RUDDER_ON",
+            "FO_MOVIE_OFF", "FO_ONLY_APU_PUMP_ON", "FO_PACKS_AUTO", "FO_PACKS_OFF", "FO_PACKS_ON", "FO_PACK_2_ONLY",
+            "FO_PADDLES_OFF", "FO_PAX_OXY_SAFE", "FO_PFCS_ON", "FO_PITOT_ALPHA_HEAT_ON", "FO_POWER_SOURCE_ON",
+            "FO_PTUS_OFF", "FO_RADIO_MASTERS_OFF", "FO_RADIO_MASTERS_ON", "FO_SIDE_WINDOWS_OFF",
+            "FO_SIDE_WINDOWS_ON", "FO_SPEED_BRAKE_FORWARD", "FO_STAB_TRIM_ZERO", "FO_START_AIR_VALVES_ON",
+            "FO_START_LIGHTS_OUT", "FO_STBY_ARMED", "FO_TANKS_1A_3A_FUELED", "FO_TANK_VALVES_ON", "FO_TRANSFERS_OFF",
+            "FO_TRANSFERS_ON", "FO_WINDSHIELD_IDLE", "FO_WINDSHIELD_NORMAL", "FO_WIPERS_OFF", "FO_ZONE_TRIMS_ON",
         }, L1011FoStateEvaluator.SyntheticKeys.OrderBy(k => k, StringComparer.Ordinal).ToArray());
 
     [Fact]
@@ -456,5 +477,545 @@ public class L1011FoStateEvaluatorTests
 
         e.SetSimConnect(SeededSimConnectCache.With((IniL1011Definition.PerfSelectedFlapsKey, 10)));
         Assert.Null(e.TakeoffStabTrimUnits());   // connected, the trim never delivered
+    }
+
+    // ================================================================== part 2: the flows' fields
+
+    /// <summary>A NaN want reads unknown; any other want is that value.</summary>
+    private static void AssertReads(double want, double actual, string because)
+    {
+        if (double.IsNaN(want))
+            Assert.True(double.IsNaN(actual), $"{because}: want unknown, read {actual}");
+        else
+            Assert.True(want == actual, $"{because}: want {want}, read {actual}");
+    }
+
+    /// <summary>The given readings, a NaN one left unread.</summary>
+    private static Dictionary<string, double> Readings(params (string Key, double Value)[] values)
+        => values.Where(v => !double.IsNaN(v.Value)).ToDictionary(v => v.Key, v => v.Value);
+
+    private static L1011FoStateEvaluator Evaluator(params (string Key, double Value)[] cached)
+    {
+        var e = new L1011FoStateEvaluator();
+        e.SetSimConnect(SeededSimConnectCache.With(cached.Where(c => !double.IsNaN(c.Value)).ToArray()));
+        return e;
+    }
+
+    [Fact]
+    public void Part_2_thresholds_are_pinned()
+    {
+        Assert.Equal(95, L1011FoStateEvaluator.ApuRunningRpm);
+        Assert.Equal(1, L1011FoStateEvaluator.ApuStartingRpm);
+        Assert.Equal(5, L1011FoStateEvaluator.ApuStoppedRpm);
+        Assert.Equal(50, L1011FoStateEvaluator.TransferTankMinLbs);
+        Assert.Equal(0.2, L1011FoStateEvaluator.StabTrimZeroDegrees);
+        Assert.Equal(0.1, L1011FoStateEvaluator.InsNavigatingTolerance);
+        Assert.Equal(75, L1011FoStateEvaluator.GearLeverUpAbove);
+        Assert.Equal(150, L1011FoStateEvaluator.CabinAltitudeToleranceFt);
+        Assert.Equal(0.5, L1011FoStateEvaluator.CabinBaroToleranceHpa);
+        Assert.Equal(0.2, L1011FoStateEvaluator.StandardMillibarsTolerance);
+        Assert.Equal(0.3048, L1011FoStateEvaluator.MetresPerFoot);
+        Assert.Equal(3, L1011FoStateEvaluator.InsNav);
+        Assert.Equal(2, L1011FoStateEvaluator.InsAligned);
+    }
+
+    // ------------------------------------------------------------------ fields where every input reads one value
+
+    private static readonly string[] PfcsSwitches =
+    {
+        "SWITCH_PFCS_PITCH_1", "SWITCH_PFCS_PITCH_2", "SWITCH_PFCS_ROLL_1", "SWITCH_PFCS_ROLL_2", "SWITCH_PFCS_RUDDER",
+        "SWITCH_STABILIZER_A", "SWITCH_STABILIZER_B", "SWITCH_STABILIZER_C", "SWITCH_STABILIZER_D",
+        "SWITCH_AILERON_L_OUTBD", "SWITCH_AILERON_L_INBD", "SWITCH_AILERON_R_INBD", "SWITCH_AILERON_R_OUTBD",
+        "SWITCH_SPOILER_L56", "SWITCH_SPOILER_LR4", "SWITCH_SPOILER_LR1", "SWITCH_SPOILER_LR2", "SWITCH_SPOILER_LR3",
+        "SWITCH_SPOILER_R56",
+    };
+
+    private static readonly string[] FcesSwitches =
+    {
+        "SWITCH_ACS_1", "SWITCH_ACS_2", "SWITCH_YAW_SAS_1", "SWITCH_YAW_SAS_2", "SWITCH_STALL_WARN_1", "SWITCH_STALL_WARN_2",
+        "SWITCH_PITCH_TRIM_1", "SWITCH_PITCH_TRIM_2", "SWITCH_DLC_AUTO_1", "SWITCH_DLC_AUTO_2", "SWITCH_ATS_1", "SWITCH_ATS_2",
+        "SWITCH_MACH_TRIM_1", "SWITCH_MACH_TRIM_2",
+    };
+
+    private static readonly string[] InstrumentSources =
+    {
+        "SWITCH_INSTR_SRC_CPT_NAV", "SWITCH_INSTR_SRC_CPT_HDG", "SWITCH_INSTR_SRC_CPT_ATT", "SWITCH_INSTR_SRC_CPT_ALT",
+        "SWITCH_INSTR_SRC_CPT_IAS", "SWITCH_INSTR_SRC_CPT_FLT_DIR",
+        "SWITCH_INSTR_SRC_FO_NAV", "SWITCH_INSTR_SRC_FO_HDG", "SWITCH_INSTR_SRC_FO_ATT", "SWITCH_INSTR_SRC_FO_ALT",
+        "SWITCH_INSTR_SRC_FO_IAS", "SWITCH_INSTR_SRC_FO_FLT_DIR",
+    };
+
+    private static readonly string[] AntiIce =
+    {
+        "SWITCH_ANTI_ICE_ENG_1", "SWITCH_ANTI_ICE_ENG_2", "SWITCH_ANTI_ICE_ENG_3",
+        "SWITCH_ANTI_ICE_LEFT_AUTO", "SWITCH_ANTI_ICE_LEFT_MAN", "SWITCH_ANTI_ICE_RIGHT_AUTO", "SWITCH_ANTI_ICE_RIGHT_MAN",
+    };
+
+    private static object[] Row(string field, double good, double bad, params string[] keys)
+        => new object[] { field, good, bad, keys };
+
+    /// <summary>(field, the reading that makes it true, a reading that makes it false, its inputs).</summary>
+    public static IEnumerable<object[]> AllAtFields() => new[]
+    {
+        // APU and electrical: relays read 1 closed, 0 open; a lamp field is true with every lamp out.
+        Row("FO_APU_GEN_CLOSED", 1, 0, "L1011_RO_APU_GEN_FIELD", "L1011_RO_APU_GEN_BREAKER"),
+        Row("FO_APU_GEN_OFF_LINE", 0, 1, "L1011_RO_APU_GEN_BREAKER"),
+        Row("FO_GEN_FIELDS_CLOSED", 1, 0, "L1011_RO_GEN_1_FIELD", "L1011_RO_GEN_2_FIELD", "L1011_RO_GEN_3_FIELD"),
+        Row("FO_GEN_BREAKERS_CLOSED", 1, 0, "L1011_RO_GEN_1_BREAKER", "L1011_RO_GEN_2_BREAKER", "L1011_RO_GEN_3_BREAKER"),
+        Row("FO_ENGINE_GENERATORS_ON", 1, 0, "L1011_RO_GEN_1_FIELD", "L1011_RO_GEN_2_FIELD", "L1011_RO_GEN_3_FIELD",
+            "L1011_RO_GEN_1_BREAKER", "L1011_RO_GEN_2_BREAKER", "L1011_RO_GEN_3_BREAKER"),
+        Row("FO_AC_TIES_CLOSED", 1, 0, "L1011_RO_AC_TIE_1", "L1011_RO_AC_TIE_2", "L1011_RO_AC_TIE_3"),
+        Row("FO_EXT_POWER_OFF", 0, 1, "L1011_RO_EXT_PWR_BREAKER"),
+        // The IDG lights are lit BELOW 40 psi of IDG oil pressure: 60 is out, 20 is lit.
+        Row("FO_IDG_LIGHTS_OUT", 60, 20, "LAMP_IDG_OIL_PRESSURE_1", "LAMP_IDG_OIL_PRESSURE_2", "LAMP_IDG_OIL_PRESSURE_3"),
+        Row("FO_BUS_FAIL_LIGHTS_OUT", 0, 1, "LAMP_AC_ESS_FAIL_LIGHT", "LAMP_AC_STBY_FAIL_LIGHT",
+            "LAMP_DC_ESS_FAIL_LIGHT", "LAMP_DC_STBY_FAIL_LIGHT"),
+        Row("FO_RADIO_MASTERS_OFF", 0, 1, "SWITCH_MASTER_RADIO_ESS", "SWITCH_MASTER_RADIO_NO2"),
+        Row("FO_GALLEY_ON", 1, 0, "SWITCH_GALLEY_BUS_1", "SWITCH_GALLEY_BUS_2", "SWITCH_GALLEY_BUS_3"),
+        Row("FO_EMER_LIGHTS_OFF", 0, 1, "TOGGLE_EMER_LIGHTING"),
+
+        // Bleeds and air.
+        Row("FO_CROSSBLEEDS_ON", 1, 0, "SWITCH_XBLEED_1", "SWITCH_XBLEED_3"),
+        Row("FO_APU_AIR_ON", 1, 0, "SWITCH_APU_ISLN_VALVE", "SWITCH_XBLEED_1", "SWITCH_XBLEED_3"),
+        Row("FO_ISLN_VALVES_ON", 1, 0, "SWITCH_ISLN_VALVE_ENG_1", "SWITCH_ISLN_VALVE_ENG_2", "SWITCH_ISLN_VALVE_ENG_3"),
+        Row("FO_START_AIR_VALVES_ON", 1, 0, "SWITCH_ISLN_VALVE_ENG_1", "SWITCH_ISLN_VALVE_ENG_2", "SWITCH_ISLN_VALVE_ENG_3",
+            "SWITCH_XBLEED_1", "SWITCH_XBLEED_3"),
+        Row("FO_HI_PRESS_ON", 1, 0, "SWITCH_HI_PRESS_ENG_1", "SWITCH_HI_PRESS_ENG_2", "SWITCH_HI_PRESS_ENG_3"),
+        Row("FO_PACKS_ON", 1, 0, "SWITCH_PACK_FLOW_ENG_1", "SWITCH_PACK_FLOW_ENG_2", "SWITCH_PACK_FLOW_ENG_3"),
+        Row("FO_PACKS_OFF", 0, 1, "SWITCH_PACK_FLOW_ENG_1", "SWITCH_PACK_FLOW_ENG_2", "SWITCH_PACK_FLOW_ENG_3"),
+        Row("FO_PACKS_AUTO", 1, 0, "SWITCH_BLEED_PLENUM_ENG_1", "SWITCH_BLEED_PLENUM_ENG_2", "SWITCH_BLEED_PLENUM_ENG_3"),
+        Row("FO_HOT_AIR_OFF", 0, 1, "SWITCH_HOT_AIR_ENG_1", "SWITCH_HOT_AIR_ENG_3", "SWITCH_ISLN_VALVE_OVHT_2A", "SWITCH_ISLN_VALVE_OVHT_2B"),
+        Row("FO_HOT_AIR_ON", 1, 0, "SWITCH_HOT_AIR_ENG_1", "SWITCH_HOT_AIR_ENG_3", "SWITCH_ISLN_VALVE_OVHT_2A", "SWITCH_ISLN_VALVE_OVHT_2B"),
+        Row("FO_ZONE_TRIMS_ON", 1, 0, "SWITCH_FLT_STA_CLOSE", "SWITCH_FWD_CAB_CLOSE", "SWITCH_MID_CAB_CLOSE", "SWITCH_AFT_CAB_CLOSE"),
+        Row("FO_ECS_ON", 1, 0, "SWITCH_COOL_AIR_OVBD", "SWITCH_CARGO_HEAT_FWD", "SWITCH_CARGO_HEAT_MID", "SWITCH_CARGO_HEAT_AFT"),
+        Row("FO_FIRE_LOOPS_BOTH", 2, 1, "ROTARY_FIRE_DETECT_TEST_ENG_1", "ROTARY_FIRE_DETECT_TEST_ENG_2",
+            "ROTARY_FIRE_DETECT_TEST_ENG_3", "ROTARY_FIRE_DETECT_TEST_APU"),
+
+        // Hydraulics.
+        Row("FO_PTUS_OFF", 0, 1, "SWITCH_PTU_AB", "SWITCH_PTU_CD"),
+        Row("FO_ATMS_AUTO", 1, 0, "ROTARY_HYD_B2_MODE", "ROTARY_HYD_C2_MODE"),
+        Row("FO_ATMS_AC_PUMPS_OFF", 0, 1, "ROTARY_HYD_B2_MODE", "ROTARY_HYD_C2_MODE", "SWITCH_HYD_AC_PUMP_B3", "SWITCH_HYD_AC_PUMP_C3"),
+
+        // Fuel: a crossfeed reads 0 closed (spec 4.8, confirmed live).
+        Row("FO_FUEL_PUMPS_ON", 1, 0, FuelPumps),
+        Row("FO_CROSSFEEDS_CLOSED", 0, 1, "SWITCH_FUEL_LEFT_XFEED", "SWITCH_FUEL_CTR_XFEED", "SWITCH_FUEL_RIGHT_XFEED"),
+        Row("FO_TRANSFERS_OFF", 0, 1, "SWITCH_FUEL_XFR_1A", "SWITCH_FUEL_XFR_3A"),
+        Row("FO_TRANSFERS_ON", 1, 0, "SWITCH_FUEL_XFR_1A", "SWITCH_FUEL_XFR_3A"),
+        Row("FO_FUEL_CTRL_OVRD_OFF", 0, 1, "SWITCH_FUEL_CTRL_OVRD_ENG_1", "SWITCH_FUEL_CTRL_OVRD_ENG_2", "SWITCH_FUEL_CTRL_OVRD_ENG_3"),
+
+        // Engines, INS and doors.
+        Row("FO_IGNITION_BOTH", 1, 0, "ROTARY_ENG_START_SEL"),
+        Row("FO_START_LIGHTS_OUT", 0, 1, "LAMP_SWITCH_GND_START_ENG_1_LIGHT", "LAMP_SWITCH_GND_START_ENG_2_LIGHT",
+            "LAMP_SWITCH_GND_START_ENG_3_LIGHT"),
+        Row("FO_INS_NAV_MODE", 3, 2, "ROTARY_INS_MODE_1", "ROTARY_INS_MODE_2", "ROTARY_INS_MODE_3"),
+        Row("FO_INS_OFF", 0, 1, "ROTARY_INS_MODE_1", "ROTARY_INS_MODE_2", "ROTARY_INS_MODE_3"),
+        Row("FO_DOORS_CLOSED", 0, 1, "LAMP_LX_MIP_DOOR_OPEN"),
+
+        // Overhead.
+        Row("FO_COMPASSES_MAG", 1, 0, "SWITCH_COMPASS_1_MAG", "SWITCH_COMPASS_2_MAG"),
+        Row("FO_WIPERS_OFF", 0, 1, "ROTARY_CPT_WIPER", "ROTARY_FO_WIPER"),
+        Row("FO_ANTI_ICE_OFF", 0, 1, AntiIce),
+        Row("FO_WINDSHIELD_NORMAL", 1, 0, "SWITCH_ANTI_ICE_CPT", "SWITCH_ANTI_ICE_FO"),
+        Row("FO_WINDSHIELD_IDLE", 0, 1, "SWITCH_ANTI_ICE_CPT", "SWITCH_ANTI_ICE_FO"),
+        Row("FO_SIDE_WINDOWS_ON", 1, 0, "SWITCH_ANTI_ICE_L_FWD", "SWITCH_ANTI_ICE_L_REAR", "SWITCH_ANTI_ICE_R_FWD", "SWITCH_ANTI_ICE_R_REAR"),
+        Row("FO_SIDE_WINDOWS_OFF", 0, 1, "SWITCH_ANTI_ICE_L_FWD", "SWITCH_ANTI_ICE_L_REAR", "SWITCH_ANTI_ICE_R_FWD", "SWITCH_ANTI_ICE_R_REAR"),
+        Row("FO_AIR_DATA_HEAT_OFF", 0, 1, "SWITCH_CPT_PITOT_HEAT", "SWITCH_FO_PITOT_HEAT", "SWITCH_PROBE_HEAT", "SWITCH_ALPHA_HEAT"),
+        Row("FO_PITOT_ALPHA_HEAT_ON", 1, 0, "SWITCH_CPT_PITOT_HEAT", "SWITCH_FO_PITOT_HEAT", "SWITCH_ALPHA_HEAT"),
+        Row("FO_MACH_FEEL_RUDDER_ON", 1, 0, "SWITCH_MACH_FEEL_1", "SWITCH_MACH_FEEL_2", "SWITCH_RUDDER_LIMITER"),
+        Row("FO_PFCS_ON", 1, 0, PfcsSwitches),
+        Row("FO_FCES_ON", 1, 0, FcesSwitches),
+        Row("FO_LANDING_LIGHTS_ON", 1, 0, "TOGGLE_LANDING_LEFT", "TOGGLE_LANDING_RIGHT"),
+        Row("FO_LANDING_LIGHTS_OFF", 0, 1, "TOGGLE_LANDING_LEFT", "TOGGLE_LANDING_RIGHT"),
+        Row("FO_GROUND_LIGHTS_ON", 1, 0, "TOGGLE_LANDING_NOSE", "TOGGLE_TAXI_LIGHT", "TOGGLE_RWY_TURNOFF"),
+        Row("FO_GROUND_LIGHTS_OFF", 0, 1, "TOGGLE_LANDING_NOSE", "TOGGLE_TAXI_LIGHT", "TOGGLE_RWY_TURNOFF"),
+        Row("FO_DRAIN_MAST_HEAT_ON", 1, 0, "SWITCH_WASTE_WATER_MID", "SWITCH_WASTE_WATER_AFT"),
+        Row("FO_MOVIE_OFF", 0, 1, "MOVIES_OFF", "GUARD_MOVIES_OFF"),
+
+        // Main panel and console: an engage paddle reads 0 command, 1 CWS, 2 off.
+        Row("FO_INSTR_SOURCES_NORMAL", 0, 1, InstrumentSources),
+        Row("FO_DME_NORMAL", 1, 0, "ROTARY_NAV_1_MODE", "ROTARY_NAV_2_MODE"),
+        Row("FO_FLIGHT_DIRECTORS_ON", 1, 0, "SWITCH_AFCS_FD_A", "SWITCH_AFCS_FD_B"),
+        Row("FO_PADDLES_OFF", 2, 0, "SWITCH_AFCS_AP_A", "SWITCH_AFCS_AP_B"),
+        Row("FO_DISCONNECT_HANDLES_STOWED", 0, 1, "LEVER_PITCH_DISC", "LEVER_ROLL_DISC"),
+    };
+
+    [Theory]
+    [MemberData(nameof(AllAtFields))]
+    public void A_part_2_field_needs_every_input_read_and_at_its_reading(string field, double good, double bad, string[] keys)
+    {
+        AssertAllOf(field, good, bad, keys);
+        Assert.Equal(keys.OrderBy(k => k, StringComparer.Ordinal), InputsOf(field));
+    }
+
+    /// <summary>The inputs the evaluator declares for a field, in ordinal order.</summary>
+    private static IEnumerable<string> InputsOf(string field)
+        => L1011FoStateEvaluator.SyntheticInputsOf(field).OrderBy(k => k, StringComparer.Ordinal);
+
+    // ------------------------------------------------------------------ fields where the inputs read different values
+
+    private static object[] Mixed(string field, params (string Key, double Good, double Bad)[] inputs)
+        => new object[] { field, inputs.Select(i => i.Key).ToArray(), inputs.Select(i => i.Good).ToArray(), inputs.Select(i => i.Bad).ToArray() };
+
+    /// <summary>(field, its inputs, each input's reading that makes it true, each one's reading that makes it false).</summary>
+    public static IEnumerable<object[]> MixedFields() => new[]
+    {
+        Mixed("FO_EMER_LIGHTS_ARMED", ("TOGGLE_EMER_LIGHTING", 1, 0), ("GUARD_EMER_LIGHTING", 0, 1)),
+        Mixed("FO_PACK_2_ONLY", ("SWITCH_PACK_FLOW_ENG_1", 0, 1), ("SWITCH_PACK_FLOW_ENG_2", 1, 0), ("SWITCH_PACK_FLOW_ENG_3", 0, 1)),
+        Mixed("FO_HYD_ENGINE_PUMPS_ON",
+            ("SWITCH_HYD_PUMP_A1", 1, 0), ("SWITCH_HYD_PUMP_B1", 1, 0), ("SWITCH_HYD_PUMP_C1", 1, 0), ("SWITCH_HYD_PUMP_D1", 1, 0),
+            ("GUARD_HYD_PUMP_A1", 0, 1), ("GUARD_HYD_PUMP_B1", 0, 1), ("GUARD_HYD_PUMP_C1", 0, 1), ("GUARD_HYD_PUMP_D1", 0, 1)),
+        Mixed("FO_ONLY_APU_PUMP_ON",
+            ("SWITCH_FUEL_PUMP_1_1", 0, 1), ("SWITCH_FUEL_PUMP_1_2", 0, 1), ("SWITCH_FUEL_PUMP_2L_1", 1, 0), ("SWITCH_FUEL_PUMP_2L_2", 0, 1),
+            ("SWITCH_FUEL_PUMP_2R_1", 0, 1), ("SWITCH_FUEL_PUMP_2R_2", 0, 1), ("SWITCH_FUEL_PUMP_3_1", 0, 1), ("SWITCH_FUEL_PUMP_3_2", 0, 1)),
+        Mixed("FO_TANK_VALVES_ON",
+            ("SWITCH_ENG_1_TANK_VALVE", 1, 0), ("SWITCH_ENG_2_TANK_VALVE", 1, 0), ("SWITCH_ENG_3_TANK_VALVE", 1, 0),
+            ("GUARD_ENG_1_TANK_VALVE", 0, 1), ("GUARD_ENG_2_TANK_VALVE", 0, 1), ("GUARD_ENG_3_TANK_VALVE", 0, 1)),
+        Mixed("FO_ENG1_FUEL_FEED", ("SWITCH_FUEL_PUMP_1_1", 1, 0), ("SWITCH_ENG_1_TANK_VALVE", 1, 0), ("GUARD_ENG_1_TANK_VALVE", 0, 1)),
+        Mixed("FO_ENG2_FUEL_FEED", ("SWITCH_FUEL_PUMP_2L_1", 1, 0), ("SWITCH_ENG_2_TANK_VALVE", 1, 0), ("GUARD_ENG_2_TANK_VALVE", 0, 1)),
+        Mixed("FO_ENG3_FUEL_FEED", ("SWITCH_FUEL_PUMP_3_1", 1, 0), ("SWITCH_ENG_3_TANK_VALVE", 1, 0), ("GUARD_ENG_3_TANK_VALVE", 0, 1)),
+        // The flood and wheel well lights read 1 off.
+        Mixed("FO_EXT_LIGHTS_PREFLIGHT",
+            ("TOGGLE_LOGO_LIGHT", 1, 0), ("SWITCH_POSITION_LIGHT", 1, 0),
+            ("TOGGLE_LANDING_LEFT", 0, 1), ("TOGGLE_LANDING_RIGHT", 0, 1), ("TOGGLE_LANDING_NOSE", 0, 1), ("TOGGLE_RWY_TURNOFF", 0, 1),
+            ("SWITCH_STROBE_LIGHT", 0, 1), ("SWITCH_ANTICOL_LIGHT", 0, 1),
+            ("SWITCH_FLOOD_LIGHT", 1, 0), ("SWITCH_WHEEL_LIGHT", 1, 0)),
+    };
+
+    [Theory]
+    [MemberData(nameof(MixedFields))]
+    public void A_part_2_field_needs_each_input_read_and_at_its_own_reading(string field, string[] keys, double[] good, double[] bad)
+    {
+        Dictionary<string, double> Good() => keys.Select((k, i) => (k, good[i])).ToDictionary(p => p.k, p => p.Item2);
+
+        Assert.Equal(1, Compute(field, Good()));
+        for (int i = 0; i < keys.Length; i++)
+        {
+            var wrong = Good();
+            wrong[keys[i]] = bad[i];
+            Assert.True(Compute(field, wrong) == 0, $"{field}: {keys[i]} at {bad[i]} must read false");
+
+            var unread = Good();
+            unread.Remove(keys[i]);
+            Assert.True(double.IsNaN(Compute(field, unread)), $"{field}: {keys[i]} unread must read unknown");
+        }
+        Assert.Equal(keys.OrderBy(k => k, StringComparer.Ordinal), InputsOf(field));
+    }
+
+    // ------------------------------------------------------------------ one input against a threshold
+
+    [Theory]
+    [InlineData("FO_APU_RUNNING", "L1011_RO_APU_RPM", 100.0, 1)]
+    [InlineData("FO_APU_RUNNING", "L1011_RO_APU_RPM", 95.0, 1)]
+    [InlineData("FO_APU_RUNNING", "L1011_RO_APU_RPM", 94.9, 0)]
+    [InlineData("FO_APU_STARTING_OR_RUNNING", "L1011_RO_APU_RPM", 1.0, 1)]
+    [InlineData("FO_APU_STARTING_OR_RUNNING", "L1011_RO_APU_RPM", 100.0, 1)]
+    [InlineData("FO_APU_STARTING_OR_RUNNING", "L1011_RO_APU_RPM", 0.9, 0)]
+    [InlineData("FO_APU_OFF", "L1011_RO_APU_RPM", 0.0, 1)]
+    [InlineData("FO_APU_OFF", "L1011_RO_APU_RPM", 4.9, 1)]
+    [InlineData("FO_APU_OFF", "L1011_RO_APU_RPM", 5.0, 0)]
+    [InlineData("FO_APU_GEN_FIELD_CLOSED", "L1011_RO_APU_GEN_FIELD", 1.0, 1)]
+    [InlineData("FO_APU_GEN_FIELD_CLOSED", "L1011_RO_APU_GEN_FIELD", 0.0, 0)]
+    [InlineData("FO_APU_GEN_ON_LINE", "L1011_RO_APU_GEN_BREAKER", 1.0, 1)]
+    [InlineData("FO_APU_GEN_ON_LINE", "L1011_RO_APU_GEN_BREAKER", 0.0, 0)]
+    [InlineData("FO_IGNITION_SELECTED", "ROTARY_ENG_START_SEL", 0.0, 1)]   // A
+    [InlineData("FO_IGNITION_SELECTED", "ROTARY_ENG_START_SEL", 2.0, 1)]   // B
+    [InlineData("FO_IGNITION_SELECTED", "ROTARY_ENG_START_SEL", 1.0, 0)]   // both
+    [InlineData("FO_IGNITION_BOTH", "ROTARY_ENG_START_SEL", 2.0, 0)]
+    [InlineData("FO_FLAPS_UP", "L1011_FLAP_HANDLE", 0.0, 1)]
+    [InlineData("FO_FLAPS_UP", "L1011_FLAP_HANDLE", 0.4, 1)]
+    [InlineData("FO_FLAPS_UP", "L1011_FLAP_HANDLE", 1.0, 0)]
+    [InlineData("FO_FLAPS_UP", "L1011_FLAP_HANDLE", 6.0, 0)]
+    [InlineData("FO_GEAR_LEVER_UP", "L1011_GEAR_LEVER", 100.0, 1)]
+    [InlineData("FO_GEAR_LEVER_UP", "L1011_GEAR_LEVER", 75.1, 1)]
+    [InlineData("FO_GEAR_LEVER_UP", "L1011_GEAR_LEVER", 75.0, 0)]
+    [InlineData("FO_GEAR_LEVER_UP", "L1011_GEAR_LEVER", 50.0, 0)]
+    [InlineData("FO_GEAR_LEVER_UP", "L1011_GEAR_LEVER", 0.0, 0)]
+    [InlineData("FO_STAB_TRIM_ZERO", "L1011_RO_ELEVATOR_TRIM", 0.0, 1)]
+    [InlineData("FO_STAB_TRIM_ZERO", "L1011_RO_ELEVATOR_TRIM", 0.19, 1)]
+    [InlineData("FO_STAB_TRIM_ZERO", "L1011_RO_ELEVATOR_TRIM", -0.19, 1)]
+    [InlineData("FO_STAB_TRIM_ZERO", "L1011_RO_ELEVATOR_TRIM", 0.2, 0)]
+    [InlineData("FO_STAB_TRIM_ZERO", "L1011_RO_ELEVATOR_TRIM", -0.2, 0)]
+    [InlineData("FO_STAB_TRIM_ZERO", "L1011_RO_ELEVATOR_TRIM", 2.38, 0)]
+    public void A_single_input_field_reads_its_threshold(string field, string key, double value, double want)
+    {
+        Assert.Equal(want, Compute(field, new() { [key] = value }));
+        Assert.True(double.IsNaN(Compute(field, new Dictionary<string, double>())), $"{field} unread must read unknown");
+        Assert.Equal(new[] { key }, InputsOf(field));
+    }
+
+    // ------------------------------------------------------------------ the brief's named cases
+
+    [Theory]
+    [InlineData(1.0, double.NaN, 1)]
+    [InlineData(double.NaN, 1.0, 1)]
+    [InlineData(1.0, 0.0, 1)]
+    [InlineData(0.0, 1.0, 1)]
+    [InlineData(0.0, 0.0, 0)]
+    [InlineData(0.0, double.NaN, double.NaN)]
+    [InlineData(double.NaN, 0.0, double.NaN)]
+    [InlineData(double.NaN, double.NaN, double.NaN)]
+    public void Power_source_is_either_breaker_closed(double apuBreaker, double extBreaker, double want)
+        => AssertReads(want, Compute("FO_POWER_SOURCE_ON",
+                Readings(("L1011_RO_APU_GEN_BREAKER", apuBreaker), ("L1011_RO_EXT_PWR_BREAKER", extBreaker))),
+            $"APU {apuBreaker}, external {extBreaker}");
+
+    [Theory]
+    [InlineData(51.0, 51.0, 1)]
+    [InlineData(50.0, 500.0, 0)]
+    [InlineData(500.0, 50.0, 0)]
+    [InlineData(500.0, double.NaN, double.NaN)]
+    [InlineData(double.NaN, 500.0, double.NaN)]
+    public void Tanks_1A_and_3A_are_fueled_above_fifty_pounds(double tank1A, double tank3A, double want)
+        => AssertReads(want, Compute("FO_TANKS_1A_3A_FUELED",
+                Readings(("L1011_RO_TANK_4", tank1A), ("L1011_RO_TANK_5", tank3A))),
+            $"tank 1A {tank1A}, tank 3A {tank3A}");
+
+    [Theory]
+    [InlineData(1.0, 1.0, 1.05, 1)]
+    [InlineData(1.0, 0.95, 1.0, 1)]
+    [InlineData(1.0, 2.0, 1.0, 0)]     // one unit aligned, not navigating
+    [InlineData(90.0, 1.0, 1.0, 0)]    // one unit not aligned
+    [InlineData(1.0, 1.0, double.NaN, double.NaN)]
+    [InlineData(double.NaN, 1.0, 1.0, double.NaN)]
+    public void Ins_navigating_needs_every_status_at_one(double one, double two, double three, double want)
+        => AssertReads(want, Compute("FO_INS_NAVIGATING", Readings(
+                (L1011InsAlignmentAnnouncer.StatusKey(1), one),
+                (L1011InsAlignmentAnnouncer.StatusKey(2), two),
+                (L1011InsAlignmentAnnouncer.StatusKey(3), three))),
+            $"statuses {one}, {two}, {three}");
+
+    [Fact]
+    public void Plan_values_are_null_without_a_plan_and_stored_as_given()
+    {
+        var e = new L1011FoStateEvaluator();
+        Assert.Null(e.PlannedCruiseFt);
+        Assert.Null(e.PlannedDestElevFt);
+
+        e.SetPlannedPressurizationAltitudes(35000, 1234);
+        Assert.Equal(35000, e.PlannedCruiseFt);
+        Assert.Equal(1234, e.PlannedDestElevFt);
+
+        // No rounding to a knob step, and a field below sea level is kept.
+        e.SetPlannedPressurizationAltitudes(37123, -11);
+        Assert.Equal(37123, e.PlannedCruiseFt);
+        Assert.Equal(-11, e.PlannedDestElevFt);
+
+        e.SetPlannedPressurizationAltitudes(null, null);
+        Assert.Null(e.PlannedCruiseFt);
+        Assert.Null(e.PlannedDestElevFt);
+    }
+
+    /// <summary>The window hands the plan over through the interface: the override must be the one called.</summary>
+    [Fact]
+    public void The_plan_lands_through_the_interface_and_the_base_class()
+    {
+        var e = new L1011FoStateEvaluator();
+        ((IFoStateEvaluator)e).SetPlannedPressurizationAltitudes(35000, 1500);
+        Assert.Equal(35000, e.PlannedCruiseFt);
+        Assert.Equal(1500, e.PlannedDestElevFt);
+
+        ((LVarStateEvaluator)e).SetPlannedPressurizationAltitudes(31000, null);
+        Assert.Equal(31000, e.PlannedCruiseFt);
+        Assert.Null(e.PlannedDestElevFt);
+    }
+
+    private const string CabinAltSelected = "L1011_RO_CABIN_ALT_SELECTED";
+
+    [Fact]
+    public void Cabin_altitude_selected_compares_in_feet_from_a_metres_readout()
+    {
+        // The destination: the readout is delivered in metres.
+        double Dest(double feet, int? destElev = 1500)
+        {
+            var e = Evaluator((CabinAltSelected, feet * 0.3048));
+            e.SetPlannedPressurizationAltitudes(null, destElev);
+            return e.GetValue("FO_CABIN_ALT_AT_DEST");
+        }
+        Assert.Equal(1, Dest(1500));
+        Assert.Equal(1, Dest(1500 + 149));
+        Assert.Equal(0, Dest(1500 + 151));
+        Assert.Equal(0, Dest(1500 - 151));
+        Assert.Equal(1, Dest(-11, destElev: -11));
+        Assert.True(double.IsNaN(Dest(1500, destElev: null)), "no plan must read unknown");
+
+        var unread = Evaluator();
+        unread.SetPlannedPressurizationAltitudes(null, 1500);
+        Assert.True(double.IsNaN(unread.GetValue("FO_CABIN_ALT_AT_DEST")), "the readout unread must read unknown");
+
+        // The cruise: the cabin altitude that holds the maximum differential at the planned cruise.
+        int cabin = L1011Pressurization.CabinAltitudeAtMaxDifferentialFt(35000);
+        double Cruise(double feet, int? cruise = 35000)
+        {
+            var e = Evaluator((CabinAltSelected, feet * 0.3048));
+            e.SetPlannedPressurizationAltitudes(cruise, null);
+            return e.GetValue("FO_CABIN_ALT_AT_CRUISE");
+        }
+        Assert.Equal(1, Cruise(cabin));
+        Assert.Equal(0, Cruise(cabin + 151));
+        Assert.Equal(0, Cruise(cabin - 151));
+        Assert.True(double.IsNaN(Cruise(cabin, cruise: null)), "no plan must read unknown");
+
+        var noDest = Evaluator((CabinAltSelected, cabin * 0.3048));
+        noDest.SetPlannedPressurizationAltitudes(35000, null);
+        Assert.True(double.IsNaN(noDest.GetValue("FO_CABIN_ALT_AT_DEST")), "a cruise alone gives the destination nothing");
+
+        Assert.Equal(new[] { CabinAltSelected }, InputsOf("FO_CABIN_ALT_AT_CRUISE"));
+        Assert.Equal(new[] { CabinAltSelected }, InputsOf("FO_CABIN_ALT_AT_DEST"));
+    }
+
+    [Fact]
+    public void Cruise_cabin_altitude_is_the_pressurization_modules_answer_or_null()
+    {
+        var e = new L1011FoStateEvaluator();
+        Assert.Null(e.CruiseCabinAltitudeFt());
+
+        e.SetPlannedPressurizationAltitudes(35000, 1500);
+        Assert.Equal(L1011Pressurization.CabinAltitudeAtMaxDifferentialFt(35000), e.CruiseCabinAltitudeFt());
+
+        e.SetPlannedPressurizationAltitudes(null, 1500);
+        Assert.Null(e.CruiseCabinAltitudeFt());
+    }
+
+    private const string CabinBaro = "L1011_RO_CABIN_BARO";
+    private const string Altimeter1 = "L1011_RO_ALTIMETER_1";
+
+    [Theory]
+    [InlineData(1002.0, 1002.3, 1)]
+    [InlineData(1002.0, 1001.7, 1)]
+    [InlineData(1002.0, 1002.6, 0)]
+    [InlineData(1002.0, 1001.4, 0)]
+    [InlineData(1013.25, 1013.25, double.NaN)]   // standard is "no value"
+    [InlineData(1013.4, 1013.4, double.NaN)]     // within 0.2 of standard
+    [InlineData(1013.6, 1013.6, 1)]
+    [InlineData(double.NaN, 1002.0, double.NaN)]
+    [InlineData(1002.0, double.NaN, double.NaN)]
+    public void Cabin_baro_set_needs_a_captain_altimeter_off_standard(double altimeter, double cabinBaro, double want)
+    {
+        AssertReads(want, Compute("FO_CABIN_BARO_SET", Readings((Altimeter1, altimeter), (CabinBaro, cabinBaro))),
+            $"altimeter {altimeter}, cabin baro {cabinBaro}");
+        AssertReads(want, Evaluator((Altimeter1, altimeter), (CabinBaro, cabinBaro)).GetValue("FO_CABIN_BARO_SET"),
+            $"the instance: altimeter {altimeter}, cabin baro {cabinBaro}");
+    }
+
+    [Theory]
+    [InlineData(1002.37, 100237)]
+    [InlineData(1013.3, null)]
+    [InlineData(1013.25, null)]
+    [InlineData(1013.6, 101360)]
+    [InlineData(1012.9, 101290)]
+    [InlineData(double.NaN, null)]
+    public void Cabin_baro_target_is_the_captain_altimeter_in_hundredths_off_standard(double altimeter, int? want)
+        => Assert.Equal(want, Evaluator((Altimeter1, altimeter)).CabinBaroTargetHundredths());
+
+    [Fact]
+    public void Cabin_baro_target_is_null_without_a_connection()
+        => Assert.Null(new L1011FoStateEvaluator().CabinBaroTargetHundredths());
+
+    [Theory]
+    [InlineData(4.0, 1)]
+    [InlineData(10.0, 2)]
+    [InlineData(14.0, 3)]
+    [InlineData(18.0, 4)]
+    [InlineData(22.0, 5)]
+    [InlineData(33.0, 6)]
+    [InlineData(10.4, 2)]
+    [InlineData(9.6, 2)]
+    [InlineData(10.6, null)]
+    [InlineData(12.0, null)]      // between detents
+    [InlineData(0.0, null)]       // no export
+    [InlineData(-1.0, null)]      // SimBrief's "no plan"
+    [InlineData(40.0, null)]
+    [InlineData(double.NaN, null)]
+    public void Flap_index_for_degrees_is_the_handle_detent(double degrees, int? want)
+        => Assert.Equal(want, L1011FoStateEvaluator.FlapIndexForDegrees(degrees));
+
+    [Fact]
+    public void Takeoff_flap_index_prefers_the_tablet_then_simbrief()
+    {
+        const string tablet = IniL1011Definition.PerfSelectedFlapsKey;
+
+        Assert.Equal(3, Evaluator((tablet, 14)).TakeoffFlapIndex());
+
+        var simBrief10 = Evaluator((tablet, 0));
+        simBrief10.SetTakeoffFlaps(10);
+        Assert.Equal(2, simBrief10.TakeoffFlapIndex());
+
+        var neither = Evaluator((tablet, 0));
+        neither.SetTakeoffFlaps(0);
+        Assert.Null(neither.TakeoffFlapIndex());
+
+        Assert.Null(Evaluator((tablet, 12)).TakeoffFlapIndex());   // not a detent
+
+        var tabletUnread = Evaluator();
+        tabletUnread.SetTakeoffFlaps(22);
+        Assert.Equal(5, tabletUnread.TakeoffFlapIndex());
+
+        var both = Evaluator((tablet, 14));
+        both.SetTakeoffFlaps(10);
+        Assert.Equal(3, both.TakeoffFlapIndex());                  // the tablet wins
+
+        Assert.Null(new L1011FoStateEvaluator().TakeoffFlapIndex()); // nothing at all
+    }
+
+    [Fact]
+    public void Flaps_takeoff_is_nan_without_a_target()
+    {
+        const string tablet = IniL1011Definition.PerfSelectedFlapsKey;
+        const string handle = L1011Levers.FlapHandleKey;
+
+        Assert.True(double.IsNaN(Evaluator((handle, 3)).GetValue("FO_FLAPS_TAKEOFF")), "no tablet, no plan");
+        Assert.True(double.IsNaN(Compute("FO_FLAPS_TAKEOFF", new() { [handle] = 3 })), "the pure field has no plan");
+
+        Assert.Equal(1, Evaluator((tablet, 14), (handle, 3)).GetValue("FO_FLAPS_TAKEOFF"));
+        Assert.Equal(1, Evaluator((tablet, 14), (handle, 3.2)).GetValue("FO_FLAPS_TAKEOFF"));
+        Assert.Equal(0, Evaluator((tablet, 14), (handle, 2)).GetValue("FO_FLAPS_TAKEOFF"));
+        Assert.True(double.IsNaN(Evaluator((tablet, 14)).GetValue("FO_FLAPS_TAKEOFF")), "the handle unread");
+
+        var simBrief = Evaluator((handle, 2));
+        simBrief.SetTakeoffFlaps(10);
+        Assert.Equal(1, simBrief.GetValue("FO_FLAPS_TAKEOFF"));
+
+        Assert.Equal(1, Compute("FO_FLAPS_TAKEOFF", new() { [tablet] = 14, [handle] = 3 }));
+    }
+
+    [Fact]
+    public void Ins_nav_target_is_three_only_for_an_aligned_or_navigating_unit()
+    {
+        string status = L1011InsAlignmentAnnouncer.StatusKey(1);
+        string mode = L1011InsAlignmentAnnouncer.MsuKey(1);
+
+        Assert.Equal(3, Evaluator((status, 2)).InsNavTarget(1));
+        Assert.Equal(3, Evaluator((status, 90), (mode, 3)).InsNavTarget(1));
+        Assert.Equal(3, Evaluator((status, 1), (mode, 3)).InsNavTarget(1));
+        Assert.Null(Evaluator((status, 90), (mode, 2)).InsNavTarget(1));
+        Assert.Null(Evaluator((status, 50), (mode, 2)).InsNavTarget(1));
+        Assert.Null(Evaluator().InsNavTarget(1));
+        Assert.Null(new L1011FoStateEvaluator().InsNavTarget(1));
+
+        // A unit reads its own status and selector, never another unit's.
+        Assert.Null(Evaluator((status, 2), (mode, 3)).InsNavTarget(2));
+        Assert.Equal(3, Evaluator((L1011InsAlignmentAnnouncer.StatusKey(3), 2)).InsNavTarget(3));
+    }
+
+    /// <summary>The readouts part 2's fields read, polled each second; never the total fuel, which the
+    /// fuel hotkey's readout speaks on every delivery.</summary>
+    [Fact]
+    public void The_poll_list_covers_the_part_2_readouts()
+    {
+        var polled = new L1011FoStateEvaluator().OnRequestPollFields;
+        foreach (var k in new[]
+        {
+            "L1011_RO_APU_RPM",
+            "L1011_RO_GEN_1_FIELD", "L1011_RO_GEN_2_FIELD", "L1011_RO_GEN_3_FIELD",
+            "L1011_RO_GEN_1_BREAKER", "L1011_RO_GEN_2_BREAKER", "L1011_RO_GEN_3_BREAKER",
+            "L1011_RO_APU_GEN_FIELD", "L1011_RO_APU_GEN_BREAKER",
+            "L1011_RO_TANK_4", "L1011_RO_TANK_5",
+            "L1011_RO_CABIN_ALT_SELECTED", "L1011_RO_CABIN_BARO", "L1011_RO_ALTIMETER_1",
+            "L1011_RO_GEAR_LEFT", "L1011_RO_GEAR_NOSE", "L1011_RO_GEAR_RIGHT",
+            "L1011_RO_ELEVATOR_TRIM", IniL1011Definition.PerfSelectedFlapsKey,
+        })
+            Assert.Contains(k, polled);
+        Assert.DoesNotContain("L1011_RO_FUEL_TOTAL", polled);
+        Assert.Equal(polled.Count, polled.Distinct().Count());
     }
 }
