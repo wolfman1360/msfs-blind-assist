@@ -14,7 +14,8 @@ namespace MSFSBlindAssist.Aircraft;
 /// once. The hand-written levers and the stabilizer trim are sent as the panel rows send them
 /// (<see cref="L1011Levers"/>), and the altimeters in one string. The First Officer's executor calls in
 /// from pool threads, so every write (and the lamp mute) hops onto the UI thread captured at
-/// <see cref="Attach"/> first (<see cref="OnUiThreadAsync{T}"/>).
+/// <see cref="Attach"/> first (<see cref="OnUiThreadAsync{T}"/>). The universal autopilot engage
+/// (<see cref="EngageAutopilot"/>) presses paddle A through the same entry.
 /// </summary>
 public partial class IniL1011Definition
 {
@@ -219,4 +220,62 @@ public partial class IniL1011Definition
     /// <summary>A map row the First Officer writes through the panels' core.</summary>
     private static bool IsFoMapRow(L1011PlacedRow row) =>
         row.Action is L1011RowAction.Set or L1011RowAction.Press or L1011RowAction.Increase or L1011RowAction.Decrease;
+
+    // ---- The universal auto-engage -----------------------------------------------------------------
+    //
+    // UniversalAutomationService engages the autopilot through the definition (EngageAutopilot) and, as
+    // IsAutopilotEngaged is non-null, works closed loop on it ([FO-18]): it announces only a CONFIRMED
+    // engagement, retries a rejected press and reports a Captain action if it never takes. The default
+    // press, the stock AUTOPILOT_ON, is ignored by the paddle-driven autopilot.
+
+    /// <summary>The two engage paddles (map positions: 0 Command, 1 CWS, 2 Off). The auto-engage presses A
+    /// and never touches B.</summary>
+    private const string EngagePaddleAKey = "SWITCH_AFCS_AP_A";
+    private const string EngagePaddleBKey = "SWITCH_AFCS_AP_B";
+
+    /// <summary>
+    /// True when either engage paddle reads Command, false when both are read and neither is, null while
+    /// either is unread and the other is not at Command (an engaged paddle is a fact whatever the other
+    /// reads). Read as the aircraft REPORTS it (<see cref="ReportedPosition"/>), never as MSFSBA just
+    /// commanded it, so the service's "Autopilot engaged" follows the aircraft and not our own press.
+    /// CWS is not engaged: it flies nothing of its own.
+    /// </summary>
+    public override bool? IsAutopilotEngaged(SimConnectManager simConnect)
+    {
+        double? a = ReadEngagePaddle(EngagePaddleAKey, simConnect);
+        double? b = ReadEngagePaddle(EngagePaddleBKey, simConnect);
+        if (AtCommand(a) || AtCommand(b))
+            return true;
+        return a is null || b is null ? null : false;
+    }
+
+    /// <summary>A paddle's reported position; a NaN is no reading.</summary>
+    private double? ReadEngagePaddle(string key, SimConnectManager sim) =>
+        ReportedPosition(key, sim) is double v && !double.IsNaN(v) ? v : null;
+
+    private static bool AtCommand(double? paddle) => paddle is double v && Math.Abs(v) < 0.5;
+
+    /// <summary>The paddle's reading comes with the 1 Hz batch, after the CWS notch and the settle: presses
+    /// 3 s apart, so a retry never lands on a press that is still settling.</summary>
+    public override int AutopilotEngageRetryIntervalMs => ToggleAutopilotEngageRetryIntervalMs;
+
+    /// <summary>The engage presses nothing on an unread paddle, so the service must wait for a reading
+    /// rather than take the open-loop path, which announced "Autopilot engaged" over no press at all.</summary>
+    public override bool AutopilotEngageWaitsForState => true;
+
+    /// <summary>
+    /// Universal auto-engage: paddle A to Command, only when both paddles read and neither is at Command.
+    /// The press is the First Officer's own entry (<see cref="FoSetAsync"/>), so it is the panel row's
+    /// click replay, with the CWS notch from Off ([L1011-21]), its paddle moves recorded as ours (the
+    /// service's confirmation is the one line) and nothing spoken. Never the stock AUTOPILOT_ON. Called on
+    /// the UI thread, so the write runs inline; a write that cannot land sends nothing and the service
+    /// retries, then reports a Captain action. No engage floor: the manual gives none.
+    /// </summary>
+    public override void EngageAutopilot(SimConnectManager simConnect)
+    {
+        if (IsAutopilotEngaged(simConnect) != false)
+            return;
+        Attach(simConnect);
+        _ = FoSetAsync(EngagePaddleAKey, 0);
+    }
 }
