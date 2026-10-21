@@ -415,6 +415,15 @@ public class L1011FoBeforeStartTests
         Assert.Null(step.TargetValueProvider!(State((InsMode(unit), 0))));
         Assert.False(captain.SkipCondition!(State()), "unread: the Captain is asked");
 
+        // Aligned, but the pilot left the selector at OFF or STBY, or it is unread: never switched on by the First
+        // Officer; the Captain is asked.
+        foreach (var offAlignAndNav in new[] { State((InsStatus(unit), 2), (InsMode(unit), 0)),
+                     State((InsStatus(unit), 2), (InsMode(unit), 1)), State((InsStatus(unit), 2)) })
+        {
+            Assert.Null(step.TargetValueProvider!(offAlignAndNav));
+            Assert.False(captain.SkipCondition!(offAlignAndNav));
+        }
+
         // The other units' readings never steer this one.
         var others = new[] { 1, 2, 3 }.Where(n => n != unit)
             .SelectMany(n => new[] { (InsStatus(n), 2.0), (InsMode(n), 3.0) }).ToArray();
@@ -628,12 +637,21 @@ public class L1011FoBeforeStartTests
 
     private static (string, double) Ground(bool onGround) => ("SIM_ON_GROUND", onGround ? 1 : 0);
 
+    /// <summary>The two Before Start ticks left alone: external power (until the APU generator is on line) and pack 2
+    /// only (off the ground). The flow leaves no step alone: its waits and its ground guard cover both.</summary>
+    [Fact]
+    public void Only_the_external_power_and_pack_2_ticks_are_left_alone()
+    {
+        Assert.Equal(new[] { "BS_EXT_OFF", "BS_PACK_2" },
+            Group("BEFORE_START").Items.Where(i => i.LeaveAloneWhen != null).Select(i => i.Id));
+        Assert.DoesNotContain(BeforeStart.Steps, s => s.LeaveAloneWhen != null);
+    }
+
     /// <summary>Packs 1 and 3 off in the air cut two of the three packs: the tick is left alone off the ground, as
-    /// Preflight's packs tick is. It is the only Before Start line left alone; the flow's ground guard covers its step.</summary>
+    /// Preflight's packs tick is.</summary>
     [Fact]
     public void The_pack_2_tick_is_left_alone_off_the_ground()
     {
-        Assert.Equal(new[] { "BS_PACK_2" }, Group("BEFORE_START").Items.Where(i => i.LeaveAloneWhen != null).Select(i => i.Id));
         var line = Line("BS_PACK_2");
         Assert.Equal(PacksText, line.LeaveAloneText);
         var when = line.LeaveAloneWhen!;
@@ -642,8 +660,6 @@ public class L1011FoBeforeStartTests
         Assert.True(when(Connected()), "nothing read");
         Assert.False(when(Connected(Engines(false).Append(Ground(true)).ToArray())), "parked");
         Assert.False(when(Connected(Engines(true).Append(Ground(true)).ToArray())), "on the ground, engines running");
-
-        Assert.DoesNotContain(BeforeStart.Steps, s => s.LeaveAloneWhen != null);
     }
 
     [Fact]
@@ -659,11 +675,75 @@ public class L1011FoBeforeStartTests
         Assert.False(line.IsChecked);
     }
 
+    // ---- the external power tick --------------------------------------------------------------------------------
+
+    private const string ExtPowerText = "External power left on: the APU generator is not on line.";
+    private const string ApuGenBreaker = "L1011_RO_APU_GEN_BREAKER";
+
+    /// <summary>A tick that drops external power with no other source on line leaves the aircraft on the battery: the
+    /// tick waits for the APU generator, as the flow does, and an unread generator refuses too.</summary>
+    [Fact]
+    public void The_external_power_tick_is_left_alone_until_the_APU_generator_is_on_line()
+    {
+        var line = Line("BS_EXT_OFF");
+        Assert.Equal(ExtPowerText, line.LeaveAloneText);
+        var when = line.LeaveAloneWhen!;
+        Assert.False(when(Connected((ApuGenBreaker, 1), (ExtPowerBreaker, 1))), "the APU generator on line: goes ahead");
+        Assert.True(when(Connected((ApuGenBreaker, 0), (ExtPowerBreaker, 1))), "the APU generator off line");
+        Assert.True(when(Connected((ExtPowerBreaker, 1))), "the APU generator unread");
+        Assert.True(when(Connected()), "nothing read");
+    }
+
+    /// <summary>Through the real checklist manager: refused at once, aloud, with the generator off line or unread;
+    /// with it on line the tick goes ahead and runs its write.</summary>
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(double.NaN)]
+    public void The_external_power_tick_through_the_checklist_manager_is_refused_aloud_without_the_APU_generator(double apuGen)
+    {
+        var groups = L1011FoChecklistDefinitions.Build();
+        var seeds = new List<(string, double)> { (ExtPowerBreaker, 1) };
+        if (!double.IsNaN(apuGen)) seeds.Add((ApuGenBreaker, apuGen));
+        var exec = new X();
+        exec.SetTransport(new FakeL1011Aircraft());
+        var mgr = new ChecklistManager<X, L1011FoStateEvaluator>(Connected(seeds.ToArray()), exec, groups);
+        var line = groups.SelectMany(g => g.Items).Single(i => i.Id == "BS_EXT_OFF");
+
+        Assert.False(mgr.ToggleItem(line.GroupId, line.Id, out var spoken));
+        Assert.Equal(ExtPowerText, spoken);
+        Assert.False(line.IsChecked);
+        Assert.False(line.AwaitingActionConfirmation);
+    }
+
+    [Fact]
+    public async Task The_external_power_tick_through_the_checklist_manager_goes_ahead_with_the_APU_generator_on_line()
+    {
+        var groups = L1011FoChecklistDefinitions.Build();
+        var ac = new FakeL1011Aircraft();
+        ac.Set("TOGGLE_EXT_PWR", 1);
+        ac.Set(ExtPowerBreaker, 1);
+        var exec = new X();
+        exec.SetTransport(ac);
+        var mgr = new ChecklistManager<X, L1011FoStateEvaluator>(
+            Connected((ApuGenBreaker, 1), (ExtPowerBreaker, 1)), exec, groups);
+        var line = groups.SelectMany(g => g.Items).Single(i => i.Id == "BS_EXT_OFF");
+
+        Assert.True(mgr.ToggleItem(line.GroupId, line.Id, out var spoken));
+        Assert.Null(spoken);
+        Assert.True(line.IsChecked);
+        // The tick's write runs in the background: wait, bounded, for it to reach the aircraft.
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (!ac.Writes.Contains(("TOGGLE_EXT_PWR", 0.0)) && DateTime.UtcNow < deadline)
+            await Task.Delay(20);
+        Assert.Contains(("TOGGLE_EXT_PWR", 0.0), ac.Writes);
+    }
+
     // ---- a hand tick does what the flow step does ----------------------------------------------------------------
 
-    /// <summary>The evaluator the providers read: all three units aligned and the captain's altimeter at 1002.4.</summary>
+    /// <summary>The evaluator the providers read: all three units aligned at ALIGN and the captain's altimeter at 1002.4.</summary>
     private static L1011FoStateEvaluator Ready()
-        => State(new[] { 1, 2, 3 }.Select(n => (InsStatus(n), 2.0)).Append((CaptainAltimeter, 1002.4)).ToArray());
+        => State(new[] { 1, 2, 3 }.SelectMany(n => new[] { (InsStatus(n), 2.0), (InsMode(n), 2.0) })
+            .Append((CaptainAltimeter, 1002.4)).ToArray());
 
     /// <summary>
     /// An aircraft set up so the step has work to do: each key the step writes the other way from its target (an INS

@@ -995,13 +995,18 @@ public class L1011FoStateEvaluatorTests
         Assert.Equal(1, Compute("FO_FLAPS_TAKEOFF", new() { [tablet] = 14, [handle] = 3 }));
     }
 
+    /// <summary>
+    /// NAV only for a unit whose selector reads ALIGN and whose status reads aligned, or whose selector already reads
+    /// NAV. A unit the pilot left at OFF, STBY or ATT, or whose selector is unread, gets no value, whatever its status
+    /// reads: the First Officer never switches a unit on, and its Captain line speaks instead.
+    /// </summary>
     [Fact]
     public void Ins_nav_target_is_three_only_for_an_aligned_or_navigating_unit()
     {
         string status = L1011InsAlignmentAnnouncer.StatusKey(1);
         string mode = L1011InsAlignmentAnnouncer.MsuKey(1);
 
-        Assert.Equal(3, Evaluator((status, 2)).InsNavTarget(1));
+        Assert.Equal(3, Evaluator((status, 2), (mode, 2)).InsNavTarget(1));
         Assert.Equal(3, Evaluator((status, 90), (mode, 3)).InsNavTarget(1));
         Assert.Equal(3, Evaluator((status, 1), (mode, 3)).InsNavTarget(1));
         Assert.Null(Evaluator((status, 90), (mode, 2)).InsNavTarget(1));
@@ -1009,9 +1014,15 @@ public class L1011FoStateEvaluatorTests
         Assert.Null(Evaluator().InsNavTarget(1));
         Assert.Null(new L1011FoStateEvaluator().InsNavTarget(1));
 
+        // Aligned, but the selector off ALIGN and NAV, or unread: left where it is.
+        Assert.Null(Evaluator((status, 2), (mode, 0)).InsNavTarget(1));
+        Assert.Null(Evaluator((status, 2), (mode, 1)).InsNavTarget(1));
+        Assert.Null(Evaluator((status, 2), (mode, 4)).InsNavTarget(1));
+        Assert.Null(Evaluator((status, 2)).InsNavTarget(1));
+
         // A unit reads its own status and selector, never another unit's.
         Assert.Null(Evaluator((status, 2), (mode, 3)).InsNavTarget(2));
-        Assert.Equal(3, Evaluator((L1011InsAlignmentAnnouncer.StatusKey(3), 2)).InsNavTarget(3));
+        Assert.Equal(3, Evaluator((L1011InsAlignmentAnnouncer.StatusKey(3), 2), (L1011InsAlignmentAnnouncer.MsuKey(3), 2)).InsNavTarget(3));
     }
 
     /// <summary>The readouts the flows' fields read, polled each second; never the total fuel, which the

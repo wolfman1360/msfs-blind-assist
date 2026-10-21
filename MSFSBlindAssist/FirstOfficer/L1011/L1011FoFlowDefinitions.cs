@@ -36,7 +36,8 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 ///
 /// Before Start opens with the ground guard (it switches packs 1 and 3 off) and two read-only Stop waits, the APU
 /// running and its generator on line, so external power comes off only once the APU carries the buses, as the
-/// MD-11's does. It turns each INS unit to NAV only once that unit reads aligned (or already reads NAV), and copies
+/// MD-11's does. It turns each INS unit to NAV only from ALIGN once that unit reads aligned (or leaves one already
+/// at NAV there), never a unit the pilot left at OFF or STBY, and copies
 /// the captain's altimeter into the cabin barometric setting; a unit still aligning, or a standard or unread
 /// altimeter, gives no value, so nothing is sent or spoken and a Captain step asks instead ([FO-20]). Its doors,
 /// cabin baro and INS Captain steps speak only while the aircraft does not show the state, so they are flow-only.
@@ -496,9 +497,9 @@ public static class L1011FoFlowDefinitions
     };
 
     /// <summary>
-    /// INS <paramref name="unit"/> to NAV once it reads aligned or its selector already reads NAV. While it still
-    /// aligns, or sits at OFF or STBY, the provider gives no value: nothing is sent or spoken ([FO-20]) and
-    /// <see cref="InsStillAligning"/> asks the Captain.
+    /// INS <paramref name="unit"/> to NAV once its selector reads ALIGN and it reads aligned, or its selector already
+    /// reads NAV. While it still aligns, or sits at OFF, STBY or ATT, the provider gives no value: nothing is sent or
+    /// spoken ([FO-20]) and <see cref="InsStillAligning"/> asks the Captain.
     /// </summary>
     private static Step InsToNav(int unit)
     {

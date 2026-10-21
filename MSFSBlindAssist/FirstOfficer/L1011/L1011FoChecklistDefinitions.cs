@@ -40,7 +40,8 @@ using CheckFn = System.Func<L1011FoActionExecutor, L1011FoStateEvaluator, System
 /// conditional doors, cabin baro and INS prompts stay flow-only) and one read-back, the aircraft's "Before engine
 /// start" page up to its first ground start, ending with the fleet's "Start ACARS". The cabin baro and INS lines
 /// write their provider's value, or nothing without one, as their steps do. The pack 2 line switches packs 1 and 3
-/// off, so its tick is left alone off the ground, as Preflight's packs line is.
+/// off, so its tick is left alone off the ground, as Preflight's packs line is; the external power line is left
+/// alone until the APU generator reads on line, as its flow step waits for it.
 /// </summary>
 public static class L1011FoChecklistDefinitions
 {
@@ -485,6 +486,9 @@ public static class L1011FoChecklistDefinitions
     /// <summary>The transponder mode selector's TA/RA position (1 is standby).</summary>
     private const int TransponderTaRa = 5;
 
+    /// <summary>The external power line's reason: it stays on until the APU generator is read on line.</summary>
+    private const string ExtPowerStaysText = "External power left on: the APU generator is not on line.";
+
     private static readonly string[] GalleyBuses = { "SWITCH_GALLEY_BUS_1", "SWITCH_GALLEY_BUS_2", "SWITCH_GALLEY_BUS_3" };
 
     /// <summary>The three engine isolation valves, then the two crossbleeds: the flow's order.</summary>
@@ -505,7 +509,10 @@ public static class L1011FoChecklistDefinitions
             Id = G, Name = "Before Start",
             Items = new()
             {
-                Auto("BS_EXT_OFF", G, "External power: off", "FO_EXT_POWER_OFF", On, Set(X.ExternalPower, 0)),
+                // Dropped with no other source on line, external power leaves the aircraft on the battery: the tick
+                // waits for the APU generator as the flow does, and an unread generator refuses too.
+                LeaveAlone(Auto("BS_EXT_OFF", G, "External power: off", "FO_EXT_POWER_OFF", On, Set(X.ExternalPower, 0)),
+                    s => !s.IsOn("FO_APU_GEN_ON_LINE"), ExtPowerStaysText),
                 Auto("BS_SEAT_BELTS", G, "Seat belt signs: on", SeatBelts, v => Is(v, 1), Set(SeatBelts, 1)),
                 Auto("BS_ANTICOL", G, "Anti-collision lights: on", AntiCollision, v => Is(v, 1), Set(AntiCollision, 1)),
                 Auto("BS_GALLEY", G, "Galley power: off", "FO_GALLEY_OFF", On, SetAll(All(0, GalleyBuses))),
@@ -528,8 +535,8 @@ public static class L1011FoChecklistDefinitions
         };
     }
 
-    /// <summary>INS <paramref name="unit"/> to NAV: the tick turns it only once it reads aligned or already reads NAV,
-    /// and writes nothing while it still aligns or sits at OFF or STBY (FO-20), as its step does.</summary>
+    /// <summary>INS <paramref name="unit"/> to NAV: the tick turns it only from ALIGN once it reads aligned (or finds it
+    /// already at NAV), and writes nothing while it still aligns or sits at OFF, STBY or ATT (FO-20), as its step does.</summary>
     private static Item InsNav(string groupId, int unit)
     {
         string key = L1011InsAlignmentAnnouncer.MsuKey(unit);

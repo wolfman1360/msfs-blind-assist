@@ -198,15 +198,20 @@ public sealed class L1011FoStateEvaluator : LVarStateEvaluator, IFoEngine3N2Sink
             : null;
 
     /// <summary>
-    /// <see cref="InsNav"/> for a unit that is aligned (its status within 0.5 of <see cref="InsAligned"/>)
-    /// or whose selector already reads NAV; null otherwise (unread included), so a step turning the
-    /// selector to NAV is a silent skip while the unit still aligns (D7).
+    /// <see cref="InsNav"/> for a unit whose selector reads ALIGN with its status aligned (within 0.5 of
+    /// <see cref="InsAligned"/>), or whose selector already reads NAV; null otherwise (unread included), so a
+    /// step turning the selector to NAV is a silent skip while the unit still aligns. A unit the pilot left at
+    /// OFF, STBY or ATT, or whose selector is unread, also gets null whatever its status reads: the First
+    /// Officer never switches a unit on, and leaves it to the Captain.
     /// </summary>
     public int? InsNavTarget(int unit)
-        => At(Raw(L1011InsAlignmentAnnouncer.StatusKey(unit)), InsAligned)
-            || At(Raw(L1011InsAlignmentAnnouncer.MsuKey(unit)), InsNav)
+    {
+        double selector = Raw(L1011InsAlignmentAnnouncer.MsuKey(unit));
+        return At(selector, InsNav)
+            || (At(selector, InsAlign) && At(Raw(L1011InsAlignmentAnnouncer.StatusKey(unit)), InsAligned))
             ? InsNav
             : null;
+    }
 
     // ------------------------------------------------------------------ synthetic fields
 
