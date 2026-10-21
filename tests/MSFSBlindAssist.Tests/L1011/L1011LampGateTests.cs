@@ -49,6 +49,40 @@ public class L1011LampGateTests
     }
 
     [Fact]
+    public void A_change_during_a_mute_is_recorded_silently()
+    {
+        var g = new L1011LampGate();
+        g.Observe("ENG_FIRE_1", false, 0);
+        g.MuteUntil(5_000);
+        g.Observe("ENG_FIRE_1", true, 2_000);
+        Assert.Empty(g.Due(4_000));
+        // The lamp's known state is now lit: a later change back is a real change, spoken once settled.
+        g.Observe("ENG_FIRE_1", false, 6_000);
+        Assert.Equal(new[] { ("ENG_FIRE_1", false) }, g.Due(7_300));
+    }
+
+    [Fact]
+    public void A_change_after_the_mute_is_spoken()
+    {
+        var g = new L1011LampGate();
+        g.Observe("ENG_FIRE_1", false, 0);
+        g.MuteUntil(5_000);
+        g.Observe("ENG_FIRE_1", true, 5_100);
+        Assert.Equal(new[] { ("ENG_FIRE_1", true) }, g.Due(6_400));
+    }
+
+    [Fact]
+    public void A_mute_never_cuts_a_running_light_test_short()
+    {
+        var g = new L1011LampGate();
+        g.Observe("ENG_FIRE_1", false, 0);
+        g.SetLightTest(true, 0);
+        g.MuteUntil(1_000);
+        g.Observe("ENG_FIRE_1", true, 2_000);
+        Assert.Empty(g.Due(9_999));
+    }
+
+    [Fact]
     public void Reset_makes_the_next_delivery_a_baseline_again()
     {
         var g = new L1011LampGate();

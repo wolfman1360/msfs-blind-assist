@@ -12,6 +12,8 @@ namespace MSFSBlindAssist.Aircraft.L1011;
 /// spoken once, in the state it settles in.</item>
 /// <item>LIGHT TEST: while the annunciator light test is on, and for <see cref="TestTailMs"/> after it
 /// ends, lamp changes are recorded silently: the test lights every lamp at once, which is not news.</item>
+/// <item>MUTE: <see cref="MuteUntil"/> extends the same silent window for a change the First Officer's
+/// own write causes.</item>
 /// </list>
 /// </summary>
 public sealed class L1011LampGate
@@ -25,6 +27,13 @@ public sealed class L1011LampGate
 
     public void SetLightTest(bool on, long nowMs) =>
         _testUntilMs = on ? long.MaxValue : (_testUntilMs == long.MaxValue ? nowMs + TestTailMs : _testUntilMs);
+
+    /// <summary>
+    /// Records lamp changes that begin before <paramref name="untilMs"/> silently, exactly as during a
+    /// light test: a change the First Officer's own write causes is not news. Never shortens a light
+    /// test that is running or its tail.
+    /// </summary>
+    public void MuteUntil(long untilMs) => _testUntilMs = Math.Max(_testUntilMs, untilMs);
 
     public void Observe(string key, bool lit, long nowMs)
     {
