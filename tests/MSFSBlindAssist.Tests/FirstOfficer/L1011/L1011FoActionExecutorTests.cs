@@ -517,4 +517,578 @@ public class L1011FoActionExecutorTests
         speaks = true;
         Assert.True(_exec.SpeaksFlowProgress);
     }
+
+    // ================= Composites =================================================================================
+
+    private const string Battery = "TOGGLE_BATTERY";
+    private const string StandbyGuard = "GUARD_STBY_POWER";
+    private const string StandbyPower = "TOGGLE_STBY_POWER";
+    private const string Unarmed = "LAMP_STBY_UNARM_LIGHT";
+    private const string Flowbar = "LAMP_STBY_PWR_FLOWBAR_LIGHT";
+    private const string AcStandbyFail = "LAMP_AC_STBY_FAIL_LIGHT";
+    private const string DcStandbyFail = "LAMP_DC_STBY_FAIL_LIGHT";
+    private const string AcEssentialFail = "LAMP_AC_ESS_FAIL_LIGHT";
+    private const string DcEssentialFail = "LAMP_DC_ESS_FAIL_LIGHT";
+    private const string ExtPower = "TOGGLE_EXT_PWR";
+    private const string ExtPowerAvailable = "LAMP_EXTERNAL_POWER_AVAILABLE";
+    private const string ExtPowerBreaker = "L1011_RO_EXT_PWR_BREAKER";
+    private static string TieClose(int n) => $"SWITCH_TIE_FLOW_{n}";
+    private static string Tie(int n) => $"L1011_RO_AC_TIE_{n}";
+
+    private const string Pass = "Standby power check: pass";
+
+    /// <summary>The check's writes, in the checklist's order (lines 18 to 32).</summary>
+    private static readonly (string, double)[] CheckWrites =
+    {
+        (Battery, 0), (StandbyGuard, 1), (StandbyPower, 2),   // step 1
+        (Battery, 1), (StandbyPower, 1), (StandbyGuard, 0),   // step 3
+    };
+
+    /// <summary>Battery on, standby power Off under its closed guard, external power off line.</summary>
+    private void SeedStandbyCheck()
+    {
+        _ac.Set(Battery, 1);
+        _ac.Set(StandbyPower, 0);
+        _ac.Set(StandbyGuard, 0);
+        _ac.Set(ExtPowerBreaker, 0);
+    }
+
+    private void AssertEndsArmed()
+    {
+        Assert.Equal(1, _ac.Get(Battery));
+        Assert.Equal(1, _ac.Get(StandbyPower));
+        Assert.Equal(0, _ac.Get(StandbyGuard));
+    }
+
+    private static bool IsLampOrBreaker(string key) => key.StartsWith("LAMP_", StringComparison.Ordinal) || key == ExtPowerBreaker;
+
+    /// <summary>
+    /// The fake behind a script: <see cref="AfterWrite"/> runs an action once, right after a given write has
+    /// reached the fake (so a light can go wrong between the check's steps), <see cref="AfterRead"/> once after
+    /// the nth fresh read of a key, and <see cref="Events"/> lists the lamp mutes and writes in the order they
+    /// arrived. Everything else is the fake's.
+    /// </summary>
+    private sealed class ScriptedTransport : IL1011FoTransport
+    {
+        private readonly FakeL1011Aircraft _ac;
+        private readonly List<(string Key, double Value, Action Act)> _after = new();
+        private readonly List<(string Key, int Nth, Action Act)> _afterRead = new();
+        private readonly Dictionary<string, int> _reads = new(StringComparer.Ordinal);
+        private readonly ConcurrentQueue<string> _events = new();
+
+        public ScriptedTransport(FakeL1011Aircraft ac) => _ac = ac;
+
+        public IReadOnlyList<string> Events => _events.ToList();
+
+        public void AfterWrite(string key, double value, Action act) => _after.Add((key, value, act));
+
+        public void AfterRead(string key, int nth, Action act) => _afterRead.Add((key, nth, act));
+
+        public async Task<double?> ReadFreshAsync(string key, int timeoutMs)
+        {
+            var value = await _ac.ReadFreshAsync(key, timeoutMs).ConfigureAwait(false);
+            int count = _reads[key] = _reads.GetValueOrDefault(key) + 1;
+            int i = _afterRead.FindIndex(a => a.Key == key && a.Nth == count);
+            if (i >= 0)
+            {
+                var act = _afterRead[i].Act;
+                _afterRead.RemoveAt(i);
+                act();
+            }
+            return value;
+        }
+
+        public bool Ready => _ac.Ready;
+        public long NowMs => _ac.NowMs;
+
+        public async Task<L1011FoResult> SetAsync(string key, double value)
+        {
+            _events.Enqueue($"write {key}={value.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+            var result = await _ac.SetAsync(key, value).ConfigureAwait(false);
+            int i = _after.FindIndex(a => a.Key == key && a.Value == value);
+            if (i >= 0)
+            {
+                var act = _after[i].Act;
+                _after.RemoveAt(i);
+                act();
+            }
+            return result;
+        }
+
+        public Task<L1011FoResult> SetAltimetersAsync(double millibars) => _ac.SetAltimetersAsync(millibars);
+        public bool CanReadBack(string key) => _ac.CanReadBack(key);
+        public double? ReadCached(string key) => _ac.ReadCached(key);
+
+        public void MuteLampSpeech(int ms)
+        {
+            _events.Enqueue($"mute {ms.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+            _ac.MuteLampSpeech(ms);
+        }
+
+        public Task DelayAsync(int ms) => _ac.DelayAsync(ms);
+    }
+
+    [Fact]
+    public void The_composites_are_pseudo_keys()
+    {
+        Assert.Equal("FO_STANDBY_POWER_CHECK", L1011FoActionExecutor.StandbyPowerCheck);
+        Assert.Equal("FO_EXTERNAL_POWER", L1011FoActionExecutor.ExternalPower);
+        Assert.True(L1011FoActionExecutor.IsPseudoKey(L1011FoActionExecutor.StandbyPowerCheck));
+        Assert.True(L1011FoActionExecutor.IsPseudoKey(L1011FoActionExecutor.ExternalPower));
+    }
+
+    [Fact]
+    public void Every_light_the_composites_read_is_a_registered_annunciator_lamp()
+    {
+        var lamps = L1011Annunciators.All.Select(L1011Annunciators.KeyFor).ToHashSet(StringComparer.Ordinal);
+        foreach (var key in new[] { Unarmed, Flowbar, AcStandbyFail, DcStandbyFail, AcEssentialFail, DcEssentialFail, ExtPowerAvailable })
+        {
+            Assert.Contains(key, lamps);
+            Assert.True(_ac.CanReadBack(key), key);   // a registered variable the definition reads
+        }
+    }
+
+    // ---- The standby power check -----------------------------------------------------------------------------
+
+    [Fact]
+    public async Task The_standby_power_check_writes_in_the_checklists_order_reads_between_and_ends_armed()
+    {
+        SeedStandbyCheck();
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.StandbyPowerCheck, 1));
+
+        Assert.Equal(CheckWrites, _ac.Writes);
+        AssertEndsArmed();
+
+        // Step 2 read between the standby On write and the battery On write; step 4 after the guard closes.
+        var io = _ac.Io;
+        int on = io.FindIndex(e => e is { Kind: FakeL1011IoKind.Write, Key: StandbyPower, Value: 2 });
+        int batteryOn = io.FindIndex(e => e is { Kind: FakeL1011IoKind.Write, Key: Battery, Value: 1 });
+        int guardClosed = io.FindIndex(e => e is { Kind: FakeL1011IoKind.Write, Key: StandbyGuard, Value: 0 });
+        Assert.Equal(new[] { Flowbar, AcStandbyFail, DcStandbyFail, ExtPowerBreaker, AcEssentialFail, DcEssentialFail },
+            io.Skip(on).Take(batteryOn - on).Where(e => e.Kind == FakeL1011IoKind.FreshRead && IsLampOrBreaker(e.Key)).Select(e => e.Key));
+        Assert.Equal(new[] { Unarmed, Flowbar, AcStandbyFail, DcStandbyFail },
+            io.Skip(guardClosed).Where(e => e.Kind == FakeL1011IoKind.FreshRead && IsLampOrBreaker(e.Key)).Select(e => e.Key));
+
+        Assert.Equal(new[] { Pass }, _spoken);   // progress speech on until a flow attaches its setting
+    }
+
+    [Fact]
+    public async Task The_standby_power_check_from_cold_and_dark_finds_the_battery_already_off()
+    {
+        SeedStandbyCheck();
+        _ac.Set(Battery, 0);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.StandbyPowerCheck, 1));
+
+        Assert.Equal(CheckWrites.Skip(1), _ac.Writes);
+        AssertEndsArmed();
+    }
+
+    [Fact]
+    public async Task A_passing_check_is_silent_with_flow_progress_speech_off()
+    {
+        SeedStandbyCheck();
+        _exec.AttachFlowProgressSpeech(() => false);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.StandbyPowerCheck, 1));
+
+        Assert.Empty(_spoken);
+        AssertEndsArmed();
+    }
+
+    [Fact]
+    public async Task The_check_mutes_the_lamp_speech_first_and_leaves_the_mute_to_end_by_itself()
+    {
+        SeedStandbyCheck();
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.StandbyPowerCheck, 1));
+
+        Assert.Equal("mute 20000", io.Events[0]);
+        Assert.Equal(new[] { 20_000 }, _ac.MuteRequests);   // asked once, never cut short
+    }
+
+    [Fact]
+    public async Task A_flow_step_runs_the_check_by_its_pseudo_key()
+    {
+        SeedStandbyCheck();
+
+        Assert.True(await _exec.ExecuteStepAsync(new Step { EventName = L1011FoActionExecutor.StandbyPowerCheck }));
+
+        Assert.Equal(CheckWrites, _ac.Writes);
+    }
+
+    [Fact]
+    public async Task The_essential_bus_fail_lights_are_not_expected_with_external_power_on_line()
+    {
+        SeedStandbyCheck();
+        _ac.Set(ExtPowerBreaker, 1);   // the essential bus fail lights go out with external power on line
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.StandbyPowerCheck, 1));
+
+        Assert.DoesNotContain(AcEssentialFail, _ac.FreshReads);
+        Assert.DoesNotContain(DcEssentialFail, _ac.FreshReads);
+    }
+
+    [Fact]
+    public async Task The_essential_bus_fail_lights_are_not_expected_while_the_breaker_is_unread()
+    {
+        SeedStandbyCheck();
+        _ac.NeverDeliver(ExtPowerBreaker);
+        _ac.Unset(ExtPowerBreaker);
+        _ac.NeverDeliver(AcEssentialFail);
+        _ac.Set(AcEssentialFail, 0);   // would fail the check were it expected lit
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.StandbyPowerCheck, 1));
+
+        Assert.Equal(new[] { Pass }, _spoken);
+    }
+
+    public static TheoryData<string, double, string, bool> StepTwoWrongLights()
+    {
+        var data = new TheoryData<string, double, string, bool>();
+        foreach (bool progress in new[] { true, false })
+        {
+            data.Add(Flowbar, 0, "Standby power check: standby power flowbar light did not come on", progress);
+            data.Add(AcStandbyFail, 1, "Standby power check: AC standby bus fail light came on", progress);
+            data.Add(DcStandbyFail, 1, "Standby power check: DC standby bus fail light came on", progress);
+            data.Add(AcEssentialFail, 0, "Standby power check: AC essential bus fail light did not come on", progress);
+            data.Add(DcEssentialFail, 0, "Standby power check: DC essential bus fail light did not come on", progress);
+        }
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(StepTwoWrongLights))]
+    public async Task A_wrong_light_with_standby_power_on_speaks_one_sentence_and_the_check_still_ends_armed(
+        string lamp, double reading, string sentence, bool progress)
+    {
+        SeedStandbyCheck();
+        _ac.NeverDeliver(lamp);
+        _ac.Set(lamp, reading);   // the light stays wrong whatever the switches do
+        _exec.AttachFlowProgressSpeech(() => progress);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.StandbyPowerCheck, 1));
+
+        Assert.Equal(new[] { sentence }, _spoken);   // one sentence, even when step 4 finds it wrong again
+        Assert.Equal(CheckWrites, _ac.Writes);       // carried on through step 3
+        AssertEndsArmed();
+    }
+
+    public static TheoryData<string, double, string, bool> StepFourWrongLights()
+    {
+        var data = new TheoryData<string, double, string, bool>();
+        foreach (bool progress in new[] { true, false })
+        {
+            data.Add(Unarmed, 1, "Standby power check: standby power unarmed light came on", progress);
+            data.Add(Flowbar, 1, "Standby power check: standby power flowbar light did not go out", progress);
+            data.Add(AcStandbyFail, 1, "Standby power check: AC standby bus fail light came on", progress);
+            data.Add(DcStandbyFail, 1, "Standby power check: DC standby bus fail light came on", progress);
+        }
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(StepFourWrongLights))]
+    public async Task A_wrong_light_once_armed_speaks_one_sentence(string lamp, double reading, string sentence, bool progress)
+    {
+        SeedStandbyCheck();
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        io.AfterWrite(StandbyGuard, 0, () =>
+        {
+            _ac.NeverDeliver(lamp);
+            _ac.Set(lamp, reading);
+        });
+        _exec.AttachFlowProgressSpeech(() => progress);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.StandbyPowerCheck, 1));
+
+        Assert.Equal(new[] { sentence }, _spoken);
+        Assert.Equal(CheckWrites, _ac.Writes);
+        AssertEndsArmed();
+    }
+
+    [Fact]
+    public async Task An_unread_light_speaks_one_sentence_naming_it_and_the_check_still_ends_armed()
+    {
+        SeedStandbyCheck();
+        _ac.NeverDeliver(Flowbar);
+        _ac.Unset(Flowbar);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.StandbyPowerCheck, 1));
+
+        Assert.Equal(new[] { "Standby power check: standby power flowbar light could not be read" }, _spoken);
+        Assert.Equal(CheckWrites, _ac.Writes);
+        AssertEndsArmed();
+    }
+
+    [Fact]
+    public async Task A_wrong_light_waits_for_the_lights_to_settle_within_the_verify_time_out()
+    {
+        SeedStandbyCheck();
+        _ac.NeverDeliver(Flowbar);
+        _ac.Set(Flowbar, 0);
+        long on = -1, batteryOn = -1;
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        io.AfterWrite(StandbyPower, 2, () => on = _ac.NowMs);
+        io.AfterWrite(Battery, 1, () => batteryOn = _ac.NowMs);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.StandbyPowerCheck, 1));
+
+        // Step 2 polled the flowbar until the verify time-out, on the transport's clock, then carried on.
+        Assert.InRange(batteryOn - on, L1011FoActionExecutor.VerifyTimeoutMs,
+            L1011FoActionExecutor.VerifyTimeoutMs + L1011FoActionExecutor.PollMs + 4 * L1011FoActionExecutor.ReadTimeoutMs);
+        Assert.True(_ac.FreshReads.Count(k => k == Flowbar) > 2);   // polled, not read once
+    }
+
+    [Fact]
+    public async Task A_light_that_settles_a_little_late_still_passes()
+    {
+        SeedStandbyCheck();
+        _ac.NeverDeliver(Flowbar);
+        _ac.Set(Flowbar, 0);
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        io.AfterRead(Flowbar, 2, () => _ac.Set(Flowbar, 1));   // lit from its third read on
+        io.AfterWrite(StandbyGuard, 0, () => _ac.Set(Flowbar, 0));   // and out once armed
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.StandbyPowerCheck, 1));
+
+        Assert.Equal(new[] { Pass }, _spoken);
+        Assert.Equal(CheckWrites, _ac.Writes);
+    }
+
+    [Fact]
+    public async Task A_refused_battery_write_ends_the_check_at_once_restores_and_is_not_done()
+    {
+        SeedStandbyCheck();
+        _ac.Refuse(Battery);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.StandbyPowerCheck, 1));
+
+        Assert.Equal(new[] { (StandbyPower, 1.0) }, _ac.Writes);   // the guard never opened; standby armed
+        Assert.DoesNotContain(_ac.FreshReads, IsLampOrBreaker);     // no light read
+        AssertEndsArmed();
+        Assert.Contains(_logged, line => line.Contains(Battery) && line.Contains(FakeL1011Aircraft.RefusalReason));
+        Assert.Empty(_spoken);   // a write not done is the flow's to say ("Skipping")
+    }
+
+    [Fact]
+    public async Task A_guard_that_will_not_open_puts_the_battery_back_on()
+    {
+        SeedStandbyCheck();
+        _ac.Refuse(StandbyGuard);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.StandbyPowerCheck, 1));
+
+        Assert.Equal(new[] { (Battery, 0.0), (Battery, 1.0), (StandbyPower, 1.0) }, _ac.Writes);
+        AssertEndsArmed();
+        Assert.Empty(_spoken);
+    }
+
+    [Fact]
+    public async Task A_write_failing_after_a_wrong_light_still_speaks_the_light_and_ends_armed()
+    {
+        SeedStandbyCheck();
+        _ac.NeverDeliver(Flowbar);
+        _ac.Set(Flowbar, 0);
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        io.AfterWrite(StandbyPower, 2, () => _ac.Refuse(StandbyPower));   // standby will not go back to Arm
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.StandbyPowerCheck, 1));
+
+        Assert.Equal(new[] { "Standby power check: standby power flowbar light did not come on" }, _spoken);
+        // Step 3 stops at the refused standby write; the put-back closes the guard, which arms it.
+        Assert.Equal(new[] { (Battery, 0.0), (StandbyGuard, 1.0), (StandbyPower, 2.0), (Battery, 1.0), (StandbyGuard, 0.0) }, _ac.Writes);
+        Assert.DoesNotContain(_ac.FreshReads, k => k == Unarmed);   // step 4 never ran
+        AssertEndsArmed();
+    }
+
+    [Fact]
+    public async Task A_write_that_throws_mid_check_still_puts_the_battery_back_on()
+    {
+        SeedStandbyCheck();
+        var io = new HoldingTransport(_ac);
+        _exec.SetTransport(io);
+        io.Throw(StandbyGuard);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.StandbyPowerCheck, 1).WaitAsync(Hang));
+
+        Assert.Equal(new[] { (Battery, 0.0), (Battery, 1.0), (StandbyPower, 1.0) }, _ac.Writes);
+        AssertEndsArmed();
+        Assert.Contains(_logged, line => line.Contains("threw"));
+        Assert.True(await _exec.Set(ContinuousIgnition, 1).WaitAsync(Hang));   // the gate was freed
+    }
+
+    [Fact]
+    public async Task The_whole_check_runs_under_the_one_gate()
+    {
+        SeedStandbyCheck();
+        _ac.Set(ContinuousIgnition, 0);
+        var io = new HoldingTransport(_ac) { TimeStandsStill = true };
+        _exec.SetTransport(io);
+        var door = io.Hold(StandbyGuard);
+
+        var check = _exec.Set(L1011FoActionExecutor.StandbyPowerCheck, 1);
+        var other = _exec.Set(ContinuousIgnition, 1);
+
+        Assert.Equal(new[] { Battery, StandbyGuard }, io.Started);   // the check is in flight
+        Assert.False(other.IsCompleted);
+        Assert.DoesNotContain(_ac.Io, e => e.Key == ContinuousIgnition);
+
+        door.SetResult();
+        Assert.Equal(new[] { true, true }, await Task.WhenAll(check, other).WaitAsync(Hang));
+
+        int lastOfCheck = _ac.Io.FindLastIndex(e => e.Key != ContinuousIgnition);
+        int firstOfOther = _ac.Io.FindIndex(e => e.Key == ContinuousIgnition);
+        Assert.True(firstOfOther > lastOfCheck);   // the other write only after the whole check, step 4 included
+    }
+
+    // ---- External power ---------------------------------------------------------------------------------------
+
+    private void SeedExternalPower(double available)
+    {
+        _ac.Set(ExtPowerAvailable, available);
+        _ac.Set(ExtPower, 0);
+        _ac.Set(ExtPowerBreaker, 0);
+        foreach (int n in new[] { 1, 2, 3 })
+            _ac.Set(Tie(n), 1);
+    }
+
+    [Fact]
+    public async Task External_power_is_refused_with_its_available_light_dark()
+    {
+        SeedExternalPower(available: 0);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.ExternalPower, 1));
+
+        Assert.Empty(_ac.Writes);
+        Assert.Contains(_logged, line => line.Contains(ExtPowerAvailable));
+        Assert.Empty(_spoken);
+    }
+
+    [Fact]
+    public async Task External_power_is_refused_with_its_available_light_unread()
+    {
+        SeedExternalPower(available: 0);
+        _ac.Unset(ExtPowerAvailable);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.ExternalPower, 1));
+
+        Assert.Empty(_ac.Writes);
+        Assert.Contains(_logged, line => line.Contains(ExtPowerAvailable));
+    }
+
+    [Fact]
+    public async Task External_power_on_closes_its_breaker_then_presses_only_the_open_ties()
+    {
+        SeedExternalPower(available: 1);
+        _ac.Set(Tie(1), 0);
+        _ac.Set(Tie(3), 0);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ExternalPower, 1));
+
+        Assert.Equal(new[] { (ExtPower, 1.0), (TieClose(1), 1.0), (TieClose(3), 1.0) }, _ac.Writes);
+        Assert.Equal(1, _ac.Get(ExtPowerBreaker));
+        foreach (int n in new[] { 1, 2, 3 })
+            Assert.Equal(1, _ac.Get(Tie(n)));
+        // The breaker verified before any tie was read.
+        int breakerRead = _ac.Io.FindLastIndex(e => e.Kind == FakeL1011IoKind.FreshRead && e.Key == ExtPowerBreaker);
+        int firstTieRead = _ac.Io.FindIndex(e => e.Kind == FakeL1011IoKind.FreshRead && e.Key.StartsWith("L1011_RO_AC_TIE_", StringComparison.Ordinal));
+        Assert.True(breakerRead < firstTieRead);
+    }
+
+    [Fact]
+    public async Task External_power_on_with_every_tie_closed_presses_no_tie()
+    {
+        SeedExternalPower(available: 1);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ExternalPower, 1));
+
+        Assert.Equal(new[] { (ExtPower, 1.0) }, _ac.Writes);
+    }
+
+    [Fact]
+    public async Task External_power_whose_breaker_never_closes_is_not_done_and_presses_no_tie()
+    {
+        SeedExternalPower(available: 1);
+        _ac.Set(Tie(1), 0);
+        _ac.NeverDeliver(ExtPowerBreaker);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.ExternalPower, 1));
+
+        Assert.Equal(new[] { (ExtPower, 1.0) }, _ac.Writes);
+        Assert.Contains(_logged, line => line.Contains(ExtPowerBreaker));
+    }
+
+    [Fact]
+    public async Task A_tie_that_does_not_close_is_not_done_and_the_next_tie_is_still_pressed()
+    {
+        SeedExternalPower(available: 1);
+        foreach (int n in new[] { 1, 2, 3 })
+            _ac.Set(Tie(n), 0);
+        _ac.NeverDeliver(Tie(2));
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.ExternalPower, 1));
+
+        Assert.Equal(new[] { (ExtPower, 1.0), (TieClose(1), 1.0), (TieClose(2), 1.0), (TieClose(3), 1.0) }, _ac.Writes);
+        Assert.Contains(_logged, line => line.Contains(Tie(2)));
+    }
+
+    [Fact]
+    public async Task An_unread_tie_is_never_pressed_and_external_power_is_not_done()
+    {
+        SeedExternalPower(available: 1);
+        _ac.Unset(Tie(2));
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.ExternalPower, 1));
+
+        Assert.Equal(new[] { (ExtPower, 1.0) }, _ac.Writes);
+        Assert.Contains(_logged, line => line.Contains(Tie(2)));
+    }
+
+    [Fact]
+    public async Task External_power_off_opens_its_breaker_and_leaves_the_ties()
+    {
+        SeedExternalPower(available: 1);
+        _ac.Set(ExtPower, 1);
+        _ac.Set(ExtPowerBreaker, 1);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ExternalPower, 0));
+
+        Assert.Equal(new[] { (ExtPower, 0.0) }, _ac.Writes);
+        Assert.Equal(0, _ac.Get(ExtPowerBreaker));
+        Assert.DoesNotContain(_ac.Io, e => e.Key.StartsWith("L1011_RO_AC_TIE_", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task External_power_off_whose_breaker_stays_closed_is_not_done()
+    {
+        SeedExternalPower(available: 1);
+        _ac.Set(ExtPower, 1);
+        _ac.Set(ExtPowerBreaker, 1);
+        _ac.NeverDeliver(ExtPowerBreaker);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.ExternalPower, 0));
+
+        Assert.Equal(new[] { (ExtPower, 0.0) }, _ac.Writes);
+        Assert.Contains(_logged, line => line.Contains(ExtPowerBreaker));
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(-1)]
+    public async Task External_power_to_any_other_target_writes_nothing(int target)
+    {
+        SeedExternalPower(available: 1);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.ExternalPower, target));
+
+        Assert.Empty(_ac.Io);
+    }
 }

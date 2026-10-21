@@ -71,13 +71,100 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     /// <summary>A switch reads a position within this of it.</summary>
     private const double PositionTolerance = 0.5;
 
+    // ---- the composites' pseudo-keys ----
+
+    /// <summary>The standby power check (target ignored).</summary>
+    public const string StandbyPowerCheck = "FO_STANDBY_POWER_CHECK";
+
+    /// <summary>External power on (1, with its ties) or off (0).</summary>
+    public const string ExternalPower = "FO_EXTERNAL_POWER";
+
     /// <summary>
-    /// The composites, by pseudo-key (empty until the first composite, the standby power check, joins
-    /// it): each runs under the gate, writes through <see cref="WriteAsync"/> (never <see cref="Set"/>,
-    /// which would wait on the gate it holds) and reads back what it changed.
+    /// The composites, by pseudo-key: each runs under the gate, writes through <see cref="WriteAsync"/>
+    /// (never <see cref="Set"/>, which would wait on the gate it holds) and reads back what it changed.
     /// </summary>
     private static readonly Dictionary<string, Func<L1011FoActionExecutor, IL1011FoTransport, int, Task<bool>>> Pseudo =
-        new(StringComparer.Ordinal);
+        new(StringComparer.Ordinal)
+        {
+            [StandbyPowerCheck] = (exec, io, _) => exec.StandbyPowerCheckAsync(io),
+            [ExternalPower] = (exec, io, target) => exec.ExternalPowerAsync(io, target),
+        };
+
+    // ---- the standby power check ----
+
+    internal const string Battery = "TOGGLE_BATTERY";
+    internal const string StandbyGuard = "GUARD_STBY_POWER";
+    internal const string StandbyPowerSwitch = "TOGGLE_STBY_POWER";
+    internal const string ExternalPowerBreaker = "L1011_RO_EXT_PWR_BREAKER";
+
+    /// <summary>A breaker or tie relay reads closed at or above this (1 closed, 0 open).</summary>
+    private const double RelayClosedAtOrAbove = 0.5;
+
+    /// <summary>The check's lamp mute: its end is left to this time-out, never cut short.</summary>
+    internal const int StandbyCheckMuteMs = 20_000;
+
+    private const string StandbyCheckName = "Standby power check";
+    private const string DidNotComeOn = "did not come on";
+    private const string DidNotGoOut = "did not go out";
+    private const string CameOn = "came on";
+
+    /// <summary>Lines 18 and 19: battery off, the guard open, standby power On.</summary>
+    private static readonly (string Key, int Target)[] StandbyOnWrites =
+    {
+        (Battery, 0), (StandbyGuard, 1), (StandbyPowerSwitch, 2),
+    };
+
+    /// <summary>Lines 28 and 30: battery on, standby power Arm, the guard closed. Also the put-back after a
+    /// write not done, so the aircraft is never left with the battery off.</summary>
+    private static readonly (string Key, int Target)[] StandbyArmWrites =
+    {
+        (Battery, 1), (StandbyPowerSwitch, 1), (StandbyGuard, 0),
+    };
+
+    /// <summary>One light the check expects, and what it is said to have done when it reads otherwise.
+    /// <paramref name="OnlyOffExternalPower"/>: expected only while the external power breaker reads open.</summary>
+    private sealed record LightCheck(L1011Lamp Lamp, bool Lit, string WhenWrong, bool OnlyOffExternalPower = false)
+    {
+        public string Key => L1011Annunciators.KeyFor(Lamp);
+    }
+
+    private static readonly L1011Lamp UnarmedLamp = LampOf("STBY_UNARM_LIGHT");
+    private static readonly L1011Lamp FlowbarLamp = LampOf("STBY_PWR_FLOWBAR_LIGHT");
+    private static readonly L1011Lamp AcStandbyFailLamp = LampOf("AC_STBY_FAIL_LIGHT");
+    private static readonly L1011Lamp DcStandbyFailLamp = LampOf("DC_STBY_FAIL_LIGHT");
+    private static readonly L1011Lamp AcEssentialFailLamp = LampOf("AC_ESS_FAIL_LIGHT");
+    private static readonly L1011Lamp DcEssentialFailLamp = LampOf("DC_ESS_FAIL_LIGHT");
+
+    /// <summary>Step 2, with standby power On, as this aircraft shows it (live, 2026-10-21): the flowbar lit,
+    /// both standby bus fail lights out, and both essential bus fail lights lit unless external power is on
+    /// line. The unarmed light means "switch Off" here, so it is not expected lit.</summary>
+    private static readonly LightCheck[] StandbyOnLights =
+    {
+        new(FlowbarLamp, Lit: true, DidNotComeOn),
+        new(AcStandbyFailLamp, Lit: false, CameOn),
+        new(DcStandbyFailLamp, Lit: false, CameOn),
+        new(AcEssentialFailLamp, Lit: true, DidNotComeOn, OnlyOffExternalPower: true),
+        new(DcEssentialFailLamp, Lit: true, DidNotComeOn, OnlyOffExternalPower: true),
+    };
+
+    /// <summary>Step 4, armed: the unarmed light, the flowbar and both standby bus fail lights out.</summary>
+    private static readonly LightCheck[] StandbyArmedLights =
+    {
+        new(UnarmedLamp, Lit: false, CameOn),
+        new(FlowbarLamp, Lit: false, DidNotGoOut),
+        new(AcStandbyFailLamp, Lit: false, CameOn),
+        new(DcStandbyFailLamp, Lit: false, CameOn),
+    };
+
+    private static L1011Lamp LampOf(string lampVar) => L1011Annunciators.All.Single(l => l.Var == lampVar);
+
+    // ---- external power ----
+
+    internal const string ExternalPowerSwitch = "TOGGLE_EXT_PWR";
+    private static readonly L1011Lamp ExternalPowerAvailableLamp = LampOf("EXTERNAL_POWER_AVAILABLE");
+
+    private static string TieClosePress(int n) => $"SWITCH_TIE_FLOW_{n.ToString(CultureInfo.InvariantCulture)}";
+    private static string TieReadout(int n) => $"L1011_RO_AC_TIE_{n.ToString(CultureInfo.InvariantCulture)}";
 
     /// <summary>True for a composite's key. A flow key is known when this or the definition's
     /// <c>FoAcceptsKey</c> is true.</summary>
@@ -233,6 +320,189 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
                 Note($"{what}: not sent, {Describe(result)}");
                 return false;
         }
+    }
+
+    // ================= the standby power check =================
+
+    /// <summary>
+    /// The aircraft's checklist lines 18 to 32 with the lamp speech muted (<see cref="StandbyCheckMuteMs"/>,
+    /// its end left to its time-out): battery off, the guard open, standby power On; the lights read
+    /// (<see cref="StandbyOnLights"/>); battery on, standby power Arm, the guard closed; the lights read
+    /// again (<see cref="StandbyArmedLights"/>). Done when every write was done and every light matched.
+    /// A wrong light does not stop the check, so the aircraft still ends with the battery on and standby
+    /// power armed. A write not done (or a throw) ends it at once with those three put back, best effort.
+    /// Speech, through the announcer ([FO-26]): one sentence naming the first wrong light, always; "pass"
+    /// only while flow progress speech is on; a write not done is the flow's to say.
+    /// </summary>
+    private async Task<bool> StandbyPowerCheckAsync(IL1011FoTransport io)
+    {
+        io.MuteLampSpeech(StandbyCheckMuteMs);
+        string? wrongLight = null;
+        bool passed = false;
+        try
+        {
+            if (!await WriteEachAsync(io, StandbyOnWrites).ConfigureAwait(false))
+            {
+                await PutStandbyBackAsync(io).ConfigureAwait(false);
+                return false;
+            }
+            wrongLight = await WrongLightAsync(io, StandbyOnLights, "standby power on").ConfigureAwait(false);
+            if (!await WriteEachAsync(io, StandbyArmWrites).ConfigureAwait(false))
+            {
+                await PutStandbyBackAsync(io).ConfigureAwait(false);
+                return false;
+            }
+            // Read even after a wrong light, for the log; only the first is spoken.
+            string? armedWrong = await WrongLightAsync(io, StandbyArmedLights, "standby power armed").ConfigureAwait(false);
+            wrongLight ??= armedWrong;
+            passed = wrongLight is null;
+            return passed;
+        }
+        catch
+        {
+            await PutStandbyBackAsync(io).ConfigureAwait(false);
+            throw;
+        }
+        finally
+        {
+            if (wrongLight is not null)
+                _say?.Invoke(wrongLight);
+            else if (passed && SpeaksFlowProgress)
+                _say?.Invoke($"{StandbyCheckName}: pass");
+        }
+    }
+
+    /// <summary>Each write in order; stops at the first not done (it was logged).</summary>
+    private async Task<bool> WriteEachAsync(IL1011FoTransport io, IReadOnlyList<(string Key, int Target)> writes)
+    {
+        foreach (var (key, target) in writes)
+            if (!await WriteAsync(io, key, target).ConfigureAwait(false))
+                return false;
+        return true;
+    }
+
+    /// <summary>Battery on, standby power Arm, the guard closed: each tried, whatever the others do.</summary>
+    private async Task PutStandbyBackAsync(IL1011FoTransport io)
+    {
+        Note($"{StandbyCheckName}: not done, putting the battery back on and standby power back to Arm");
+        foreach (var (key, target) in StandbyArmWrites)
+        {
+            try
+            {
+                await WriteAsync(io, key, target).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Note($"{StandbyCheckName}: {key} -> {target.ToString(CultureInfo.InvariantCulture)} threw putting it back: {ex.Message}", warn: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Reads the lights fresh, in order, until each reads as expected, or, once <see cref="VerifyTimeoutMs"/>
+    /// has passed on the transport's clock, the sentence naming the first that did not (logged). Null when
+    /// all matched. A light expected only off external power is skipped unless the breaker reads open.
+    /// </summary>
+    private async Task<string?> WrongLightAsync(IL1011FoTransport io, IReadOnlyList<LightCheck> lights, string what)
+    {
+        long deadline = io.NowMs + VerifyTimeoutMs;
+        while (true)
+        {
+            var wrong = await FirstWrongLightAsync(io, lights).ConfigureAwait(false);
+            if (wrong is not { } w) return null;
+            if (io.NowMs >= deadline)
+            {
+                string read = w.Reading is double r ? r.ToString(CultureInfo.InvariantCulture) : "unread";
+                Note($"{StandbyCheckName}, {what}: {w.Check.Key} reads {read} after {VerifyTimeoutMs.ToString(CultureInfo.InvariantCulture)} ms, expected {(w.Check.Lit ? "lit" : "out")}");
+                string did = w.Reading is null ? "could not be read" : w.Check.WhenWrong;
+                return $"{StandbyCheckName}: {SpokenLightName(w.Check.Lamp)} {did}";
+            }
+            await io.DelayAsync(PollMs).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<(LightCheck Check, double? Reading)?> FirstWrongLightAsync(IL1011FoTransport io, IReadOnlyList<LightCheck> lights)
+    {
+        bool? offExternalPower = null;
+        foreach (var check in lights)
+        {
+            if (check.OnlyOffExternalPower)
+            {
+                // Read once a round, and only when needed: unread is not "open".
+                offExternalPower ??= await ReadAsync(io, ExternalPowerBreaker).ConfigureAwait(false) is double b
+                    && b < RelayClosedAtOrAbove;
+                if (offExternalPower == false) continue;
+            }
+            var reading = await ReadAsync(io, check.Key).ConfigureAwait(false);
+            if (reading is not double v || L1011Annunciators.IsLit(check.Lamp, v) != check.Lit)
+                return (check, reading);
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// A lamp's spoken name inside a sentence: <see cref="L1011Lamp.Name"/> with its first letter lowered
+    /// unless its first word is an abbreviation ("AC"), and "light" added when the name does not end in it:
+    /// "standby power unarmed light", "AC standby bus fail light".
+    /// </summary>
+    internal static string SpokenLightName(L1011Lamp lamp)
+    {
+        string name = lamp.Name;
+        int space = name.IndexOf(' ');
+        string firstWord = space < 0 ? name : name[..space];
+        if (!firstWord.All(char.IsUpper))
+            name = char.ToLowerInvariant(name[0]) + name[1..];
+        return name.EndsWith(" light", StringComparison.OrdinalIgnoreCase) ? name : name + " light";
+    }
+
+    // ================= external power =================
+
+    /// <summary>
+    /// Target 1: refused, nothing written, unless the external power available light reads lit; the switch
+    /// on, verified on its breaker reading closed; then each AC tie that reads open pressed closed and
+    /// verified (one not closing does not stop the next; an unread tie is never pressed and is not done).
+    /// Target 0: the switch off, verified on the breaker reading open; the ties are left alone. Any other
+    /// target writes nothing.
+    /// </summary>
+    private async Task<bool> ExternalPowerAsync(IL1011FoTransport io, int target)
+    {
+        string what = $"{ExternalPower} -> {target.ToString(CultureInfo.InvariantCulture)}";
+        if (target == 0)
+            return await WriteAsync(io, ExternalPowerSwitch, 0).ConfigureAwait(false)
+                && await ReadsAsync(io, new[] { ExternalPowerBreaker }, v => v < RelayClosedAtOrAbove, what).ConfigureAwait(false);
+        if (target != 1)
+        {
+            Note($"{what}: not done, external power is 0 (off) or 1 (on)");
+            return false;
+        }
+
+        string availableKey = L1011Annunciators.KeyFor(ExternalPowerAvailableLamp);
+        var available = await ReadAsync(io, availableKey).ConfigureAwait(false);
+        if (available is not double a || !L1011Annunciators.IsLit(ExternalPowerAvailableLamp, a))
+        {
+            Note($"{what}: not done, {availableKey} reads {(available is double d ? d.ToString(CultureInfo.InvariantCulture) : "unread")}: no ground power to connect");
+            return false;
+        }
+        if (!await WriteAsync(io, ExternalPowerSwitch, 1).ConfigureAwait(false)
+            || !await ReadsAsync(io, new[] { ExternalPowerBreaker }, v => v >= RelayClosedAtOrAbove, what).ConfigureAwait(false))
+            return false;
+
+        bool tiesClosed = true;
+        for (int n = 1; n <= 3; n++)
+        {
+            string tie = TieReadout(n);
+            var reading = await ReadAsync(io, tie).ConfigureAwait(false);
+            if (reading is not double t)
+            {
+                Note($"{what}: {tie} unread, its tie not pressed");
+                tiesClosed = false;
+                continue;
+            }
+            if (t >= RelayClosedAtOrAbove) continue;   // closed already
+            tiesClosed &= await WriteAsync(io, TieClosePress(n), 1).ConfigureAwait(false)
+                && await ReadsAsync(io, new[] { tie }, v => v >= RelayClosedAtOrAbove, $"{what}, AC tie {n.ToString(CultureInfo.InvariantCulture)}").ConfigureAwait(false);
+        }
+        return tiesClosed;
     }
 
     /// <summary>
