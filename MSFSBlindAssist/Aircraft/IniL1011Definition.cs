@@ -55,6 +55,11 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
     private SimConnectManager? _sim;
     private bool _disposed;
 
+    /// <summary>The UI thread's context, captured by the first <see cref="Attach"/> that runs under one
+    /// (every caller is a WinForms handler), or null when none was (tests, headless). The First Officer's
+    /// entry marshals onto it (<see cref="OnUiThreadAsync{T}"/>): its state is UI-thread only.</summary>
+    private SynchronizationContext? _uiContext;
+
     /// <summary>The Autopilot panel's pitch-mode status row.</summary>
     public const string PitchModeKey = "L1011_AFCS_PITCH_MODE";
 
@@ -99,8 +104,13 @@ public partial class IniL1011Definition : BaseAircraftDefinition, IDisposable
     }
 
     /// <summary>The SimConnect manager the definition writes through; MainForm calls this when the
-    /// TriStar is selected and at start-up, and every write path refreshes it.</summary>
-    public void Attach(SimConnectManager sim) => _sim = sim;
+    /// TriStar is selected and at start-up, and every write path refreshes it. The first call that runs
+    /// under a synchronization context also captures it as the UI thread's (<see cref="_uiContext"/>).</summary>
+    public void Attach(SimConnectManager sim)
+    {
+        _sim = sim;
+        _uiContext ??= SynchronizationContext.Current;
+    }
 
     /// <summary>Opens the circuit-breaker window (set by MainForm).</summary>
     public Action? OpenCircuitBreakers { get; set; }

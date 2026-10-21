@@ -1,5 +1,6 @@
 using MSFSBlindAssist.Aircraft.L1011;
 using MSFSBlindAssist.SimConnect;
+using MSFSBlindAssist.Utils.Logging;
 
 namespace MSFSBlindAssist.Aircraft;
 
@@ -11,7 +12,9 @@ namespace MSFSBlindAssist.Aircraft;
 /// (<see cref="L1011FoResult"/>), and it completes only once the plan has run, a button's hold
 /// included. A press still held when the definition goes away is released by <see cref="Dispose"/>,
 /// once. The hand-written levers and the stabilizer trim are sent as the panel rows send them
-/// (<see cref="L1011Levers"/>), and the altimeters in one string.
+/// (<see cref="L1011Levers"/>), and the altimeters in one string. The First Officer's executor calls in
+/// from pool threads, so every write (and the lamp mute) hops onto the UI thread captured at
+/// <see cref="Attach"/> first (<see cref="OnUiThreadAsync{T}"/>).
 /// </summary>
 public partial class IniL1011Definition
 {
@@ -28,9 +31,16 @@ public partial class IniL1011Definition
     /// does not take (<see cref="FoAcceptsKey"/>); <see cref="L1011FoOutcome.Unavailable"/> when the
     /// definition is not attached, has gone away, or the write cannot land;
     /// <see cref="L1011FoOutcome.Refused"/> with the reason the panel would have spoken. Completes when
-    /// the plan has run.
+    /// the plan has run. Marshals onto the UI thread captured at <see cref="Attach"/>, because the state
+    /// it touches (the commanded positions, the write generations, the owed releases) and SimConnect
+    /// are UI-thread only; <see cref="L1011FoOutcome.Unavailable"/> when that thread can no longer take
+    /// the call.
     /// </summary>
-    internal async Task<L1011FoResult> FoSetAsync(string key, double value)
+    internal Task<L1011FoResult> FoSetAsync(string key, double value) =>
+        OnUiThreadAsync(() => FoSetOnUiThreadAsync(key, value), L1011FoResult.Unavailable);
+
+    /// <summary>The body of <see cref="FoSetAsync"/>, run on the UI thread.</summary>
+    private async Task<L1011FoResult> FoSetOnUiThreadAsync(string key, double value)
     {
         if (!_rows.TryGetValue(key, out var row) || !IsFoRow(row))
             return L1011FoResult.UnknownKey;
@@ -84,26 +94,108 @@ public partial class IniL1011Definition
     /// (<see cref="L1011Levers.AltimeterMillibars"/>), so a setting in inches is taken too:
     /// <see cref="L1011FoOutcome.Refused"/> with <see cref="L1011Levers.AltimeterRangeError"/> outside
     /// that range, <see cref="L1011FoOutcome.Unavailable"/> when the definition is not attached, has gone
-    /// away, or the write cannot land.
+    /// away, or the write cannot land. Marshals onto the UI thread captured at <see cref="Attach"/>,
+    /// because SimConnect is UI-thread only; <see cref="L1011FoOutcome.Unavailable"/> when that thread
+    /// can no longer take the call.
     /// </summary>
-    internal Task<L1011FoResult> FoSetAltimetersAsync(double millibars)
+    internal Task<L1011FoResult> FoSetAltimetersAsync(double millibars) =>
+        OnUiThreadAsync(() => Task.FromResult(FoSetAltimetersOnUiThread(millibars)), L1011FoResult.Unavailable);
+
+    /// <summary>The body of <see cref="FoSetAltimetersAsync"/>, run on the UI thread.</summary>
+    private L1011FoResult FoSetAltimetersOnUiThread(double millibars)
     {
         if (_disposed || _sim is not { } sim)
-            return Task.FromResult(L1011FoResult.Unavailable);
+            return L1011FoResult.Unavailable;
         if (L1011Levers.AltimeterMillibars(millibars) is not double setting)
-            return Task.FromResult(L1011FoResult.Refused(L1011Levers.AltimeterRangeError));
+            return L1011FoResult.Refused(L1011Levers.AltimeterRangeError);
         if (!CanLand(sim))
-            return Task.FromResult(L1011FoResult.Unavailable);
+            return L1011FoResult.Unavailable;
         SendCalc(sim, L1011Levers.AllAltimetersRpn(setting));
-        return Task.FromResult(L1011FoResult.Sent);
+        return L1011FoResult.Sent;
     }
 
     /// <summary>
     /// Silences the warning-light call-outs for <paramref name="ms"/> from now: a change the First
     /// Officer's own write causes (a light test, a start) is not news. A running annunciator light test
-    /// or its tail is never shortened.
+    /// or its tail is never shortened. Marshals onto the UI thread captured at <see cref="Attach"/>,
+    /// because the lamp gate is UI-thread state; it is posted in order with the writes around it, and
+    /// dropped when that thread can no longer take it. The window runs from this call, not from when
+    /// the UI thread gets to it.
     /// </summary>
-    internal void FoMuteLampSpeech(int ms) => _lampGate.MuteUntil(Clock() + ms);
+    internal void FoMuteLampSpeech(int ms)
+    {
+        long until = Clock() + ms;
+        OnUiThread(() => _lampGate.MuteUntil(until));
+    }
+
+    /// <summary>True when the caller is already on the UI thread's context, or none was captured (tests,
+    /// headless): the work then runs inline, where posting to the context the caller is blocking could
+    /// deadlock.</summary>
+    private bool OnUiContext => _uiContext is not { } context || SynchronizationContext.Current == context;
+
+    /// <summary>
+    /// Runs <paramref name="work"/> on the UI thread captured at <see cref="Attach"/>, whatever thread
+    /// calls. Inline when the caller is already on that context or none was captured. Otherwise it is
+    /// posted, and the returned task completes with the work's result, a failure inside the work
+    /// surfacing on the task (inline or posted, never thrown from this call). The caller's own
+    /// continuations run asynchronously, never on the UI thread inside the work. A UI thread that can
+    /// no longer take a post (its window is gone: the app is closing) never runs the work elsewhere:
+    /// the task completes with <paramref name="whenUnreachable"/>.
+    /// </summary>
+    private Task<T> OnUiThreadAsync<T>(Func<Task<T>> work, T whenUnreachable)
+    {
+        if (OnUiContext)
+        {
+            try
+            {
+                return work();
+            }
+            catch (Exception ex)
+            {
+                return Task.FromException<T>(ex);
+            }
+        }
+        var done = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            _uiContext!.Post(async _ =>
+            {
+                try
+                {
+                    done.TrySetResult(await work());
+                }
+                catch (Exception ex)
+                {
+                    done.TrySetException(ex);
+                }
+            }, null);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        {
+            Log.Debug("L1011", $"UI thread unavailable; a First Officer call was dropped: {ex.Message}");
+            done.TrySetResult(whenUnreachable);
+        }
+        return done.Task;
+    }
+
+    /// <summary>As <see cref="OnUiThreadAsync{T}"/>, for work nobody waits on: inline on the UI thread's
+    /// context (or with none captured), else posted, and dropped when that thread can no longer take it.</summary>
+    private void OnUiThread(Action action)
+    {
+        if (OnUiContext)
+        {
+            action();
+            return;
+        }
+        try
+        {
+            _uiContext!.Post(_ => action(), null);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+        {
+            Log.Debug("L1011", $"UI thread unavailable; a First Officer call was dropped: {ex.Message}");
+        }
+    }
 
     /// <summary>True for exactly the keys <see cref="FoSetAsync"/> does not answer
     /// <see cref="L1011FoOutcome.UnknownKey"/>.</summary>

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.L1011;
@@ -575,5 +576,316 @@ public class IniL1011FirstOfficerEntryTests
         {
             CultureInfo.CurrentCulture = previous;
         }
+    }
+
+    // ---- The entry runs on the UI thread from any caller -----------------------------------------
+    //
+    // The executor calls the entry from pool threads (it awaits with ConfigureAwait(false)), and its
+    // bodies touch UI-thread state (the commanded positions, the generations, the owed releases, the
+    // lamp gate) and SimConnect. Every wait below is bounded, and every custom context is put back.
+
+    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(10);
+
+    /// <summary>A UI thread stand-in: its posts run one at a time on a dedicated thread whose current
+    /// context is this one, as WinForms' do. Counts every post.</summary>
+    private sealed class UiThreadContext : SynchronizationContext, IDisposable
+    {
+        private readonly BlockingCollection<(SendOrPostCallback Callback, object? State)> _queue = new();
+        private readonly Thread _thread;
+        private int _posts;
+
+        public UiThreadContext()
+        {
+            _thread = new Thread(Pump) { IsBackground = true, Name = "Stand-in UI thread" };
+            _thread.Start();
+        }
+
+        public int ThreadId => _thread.ManagedThreadId;
+        public int Posts => Volatile.Read(ref _posts);
+
+        private void Pump()
+        {
+            SetSynchronizationContext(this);
+            foreach (var (callback, state) in _queue.GetConsumingEnumerable())
+                callback(state);
+        }
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            Interlocked.Increment(ref _posts);
+            _queue.Add((d, state));
+        }
+
+        /// <summary>Runs <paramref name="work"/> on the thread, as a message handler would. Counts as one post.</summary>
+        public Task<T> Run<T>(Func<T> work)
+        {
+            var done = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+            Post(_ =>
+            {
+                try { done.SetResult(work()); }
+                catch (Exception ex) { done.SetException(ex); }
+            }, null);
+            return done.Task;
+        }
+
+        public void Dispose()
+        {
+            _queue.CompleteAdding();
+            _thread.Join(Bound);
+        }
+    }
+
+    /// <summary>A UI thread that is gone: WinForms' BeginInvoke once the thread's window has closed.</summary>
+    private sealed class ClosedContext : SynchronizationContext
+    {
+        public override void Post(SendOrPostCallback d, object? state) =>
+            throw new InvalidOperationException("Invoke or BeginInvoke cannot be called on a control until the window handle has been created.");
+    }
+
+    /// <summary>A definition attached while <paramref name="context"/> is the current context (null: none),
+    /// the test thread's own context put back after. Every send is recorded with the thread it ran on.</summary>
+    private IniL1011Definition BuildAttachedUnder(SynchronizationContext? context,
+        ConcurrentQueue<(int Thread, string Rpn)> sends)
+    {
+        var def = Build(new List<string>());
+        def.SendCalc = (_, rpn) => sends.Enqueue((Environment.CurrentManagedThreadId, rpn));
+        var previous = SynchronizationContext.Current;
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(context);
+            def.Attach(_sim);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+        return def;
+    }
+
+    [Fact]
+    public async Task A_call_from_a_pool_thread_runs_on_the_captured_context()
+    {
+        using var ui = new UiThreadContext();
+        var sends = new ConcurrentQueue<(int Thread, string Rpn)>();
+        var def = BuildAttachedUnder(ui, sends);
+        _cache[ContinuousIgnitionKey] = 0;
+        int posts = ui.Posts;
+
+        var result = await Task.Run(() => def.FoSetAsync(ContinuousIgnitionKey, 1)).WaitAsync(Bound);
+
+        Assert.Equal(L1011FoResult.Sent, result);
+        var send = Assert.Single(sends);
+        Assert.Equal(ui.ThreadId, send.Thread);
+        Assert.Equal(PanelSends(ContinuousIgnitionKey, 1), new[] { send.Rpn });
+        Assert.Equal(posts + 1, ui.Posts);   // one hop, not one per step
+    }
+
+    [Fact]
+    public async Task A_call_on_the_captured_context_runs_inline()
+    {
+        using var ui = new UiThreadContext();
+        var sends = new ConcurrentQueue<(int Thread, string Rpn)>();
+        var def = BuildAttachedUnder(ui, sends);
+        _cache[ContinuousIgnitionKey] = 0;
+
+        var (posted, completedAtOnce, task) = await ui.Run(() =>
+        {
+            int before = ui.Posts;
+            var call = def.FoSetAsync(ContinuousIgnitionKey, 1);
+            return (ui.Posts - before, call.IsCompleted, call);
+        }).WaitAsync(Bound);
+
+        Assert.Equal(0, posted);
+        Assert.True(completedAtOnce);
+        Assert.Equal(L1011FoResult.Sent, await task);
+        Assert.Equal(ui.ThreadId, Assert.Single(sends).Thread);
+    }
+
+    [Fact]
+    public async Task A_caller_on_the_captured_context_that_blocks_on_the_result_does_not_deadlock()
+    {
+        using var ui = new UiThreadContext();
+        var def = BuildAttachedUnder(ui, new ConcurrentQueue<(int Thread, string Rpn)>());
+        _cache[ContinuousIgnitionKey] = 0;
+
+        var (finished, result) = await ui.Run(() =>
+        {
+            var call = def.FoSetAsync(ContinuousIgnitionKey, 1);
+            bool done = call.Wait(TimeSpan.FromSeconds(3));   // posted to itself, this could never finish
+            return (done, done ? call.Result : default);
+        }).WaitAsync(Bound);
+
+        Assert.True(finished);
+        Assert.Equal(L1011FoResult.Sent, result);
+    }
+
+    [Fact]
+    public async Task With_no_captured_context_a_call_runs_inline_on_its_own_thread()
+    {
+        var sends = new ConcurrentQueue<(int Thread, string Rpn)>();
+        var def = BuildAttachedUnder(null, sends);
+        _cache[ContinuousIgnitionKey] = 0;
+        int callerThread = 0;
+
+        var result = await Task.Run(() =>
+        {
+            callerThread = Environment.CurrentManagedThreadId;
+            return def.FoSetAsync(ContinuousIgnitionKey, 1);
+        }).WaitAsync(Bound);
+
+        Assert.Equal(L1011FoResult.Sent, result);
+        Assert.Equal(callerThread, Assert.Single(sends).Thread);
+    }
+
+    [Fact]
+    public async Task A_posted_call_does_nothing_until_the_context_runs_it()
+    {
+        using var ui = new UiThreadContext();
+        var sends = new ConcurrentQueue<(int Thread, string Rpn)>();
+        var def = BuildAttachedUnder(ui, sends);
+        _cache[ContinuousIgnitionKey] = 0;
+        using var release = new ManualResetEventSlim();
+        int posts = ui.Posts;
+        var busy = ui.Run(() => release.Wait(Bound));   // the UI thread is occupied
+
+        var call = Task.Run(() => def.FoSetAsync(ContinuousIgnitionKey, 1));
+        Assert.True(SpinWait.SpinUntil(() => ui.Posts == posts + 2, Bound));   // the call is queued behind it
+
+        Assert.False(call.IsCompleted);
+        Assert.Empty(sends);
+        release.Set();
+        Assert.Equal(L1011FoResult.Sent, await call.WaitAsync(Bound));
+        Assert.True(await busy.WaitAsync(Bound));
+        Assert.Single(sends);
+    }
+
+    [Fact]
+    public async Task A_held_press_from_a_pool_thread_sends_its_release_on_the_context_too()
+    {
+        using var ui = new UiThreadContext();
+        var sends = new ConcurrentQueue<(int Thread, string Rpn)>();
+        var def = BuildAttachedUnder(ui, sends);
+        var hold = new TaskCompletionSource();
+        def.StepDelay = _ => hold.Task;
+
+        var call = Task.Run(() => def.FoSetAsync(ApuStartKey, 1));
+        Assert.True(SpinWait.SpinUntil(() => sends.Count == 1, Bound));   // the press, held
+
+        Assert.False(call.IsCompleted);
+        hold.SetResult();
+        Assert.Equal(L1011FoResult.Sent, await call.WaitAsync(Bound));
+        Assert.Equal(2, sends.Count);
+        Assert.All(sends, send => Assert.Equal(ui.ThreadId, send.Thread));
+    }
+
+    [Fact]
+    public async Task A_lever_write_from_a_pool_thread_runs_on_the_captured_context()
+    {
+        using var ui = new UiThreadContext();
+        var sends = new ConcurrentQueue<(int Thread, string Rpn)>();
+        var def = BuildAttachedUnder(ui, sends);
+
+        var result = await Task.Run(() => def.FoSetAsync(L1011Levers.ParkingBrakeKey, 1)).WaitAsync(Bound);
+
+        Assert.Equal(L1011FoResult.Sent, result);
+        Assert.Equal(ui.ThreadId, Assert.Single(sends).Thread);
+    }
+
+    [Fact]
+    public async Task Altimeters_from_a_pool_thread_are_written_on_the_captured_context()
+    {
+        using var ui = new UiThreadContext();
+        var sends = new ConcurrentQueue<(int Thread, string Rpn)>();
+        var def = BuildAttachedUnder(ui, sends);
+        int posts = ui.Posts;
+
+        var result = await Task.Run(() => def.FoSetAltimetersAsync(1013.25)).WaitAsync(Bound);
+
+        Assert.Equal(L1011FoResult.Sent, result);
+        var send = Assert.Single(sends);
+        Assert.Equal(ui.ThreadId, send.Thread);
+        Assert.Equal(L1011Levers.AllAltimetersRpn(1013.25), send.Rpn);
+        Assert.Equal(posts + 1, ui.Posts);
+    }
+
+    [Fact]
+    public async Task A_failure_inside_the_posted_work_surfaces_on_the_returned_task()
+    {
+        using var ui = new UiThreadContext();
+        var def = BuildAttachedUnder(ui, new ConcurrentQueue<(int Thread, string Rpn)>());
+        def.SendCalc = (_, _) => throw new InvalidOperationException("sim gone");
+
+        var altimeters = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Task.Run(() => def.FoSetAltimetersAsync(1013.25)).WaitAsync(Bound));
+        var lever = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Task.Run(() => def.FoSetAsync(L1011Levers.ParkingBrakeKey, 1)).WaitAsync(Bound));
+
+        Assert.Equal("sim gone", altimeters.Message);
+        Assert.Equal("sim gone", lever.Message);
+    }
+
+    [Fact]
+    public async Task A_failure_in_an_inline_call_surfaces_on_the_returned_task_and_is_not_thrown()
+    {
+        var def = BuildAttachedUnder(null, new ConcurrentQueue<(int Thread, string Rpn)>());
+        def.SendCalc = (_, _) => throw new InvalidOperationException("sim gone");
+
+        var altimeters = def.FoSetAltimetersAsync(1013.25);
+        var lever = def.FoSetAsync(L1011Levers.ParkingBrakeKey, 1);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => altimeters);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => lever);
+    }
+
+    [Fact]
+    public async Task A_ui_thread_that_can_no_longer_take_a_post_makes_the_call_unavailable_and_runs_nothing()
+    {
+        var sends = new ConcurrentQueue<(int Thread, string Rpn)>();
+        var def = BuildAttachedUnder(new ClosedContext(), sends);
+        _cache[ContinuousIgnitionKey] = 0;
+
+        var set = await Task.Run(() => def.FoSetAsync(ContinuousIgnitionKey, 1)).WaitAsync(Bound);
+        var altimeters = await Task.Run(() => def.FoSetAltimetersAsync(1013.25)).WaitAsync(Bound);
+        await Task.Run(() => def.FoMuteLampSpeech(10_000)).WaitAsync(Bound);   // dropped, and no throw
+
+        Assert.Equal(L1011FoResult.Unavailable, set);
+        Assert.Equal(L1011FoResult.Unavailable, altimeters);
+        Assert.Empty(sends);
+    }
+
+    [Fact]
+    public async Task A_lamp_mute_from_a_pool_thread_is_posted_and_takes_effect()
+    {
+        using var ui = new UiThreadContext();
+        var def = BuildAttachedUnder(ui, new ConcurrentQueue<(int Thread, string Rpn)>());
+        def.ProcessSimVarUpdate("LAMP_STBY_UNARM_LIGHT", 0, _speech);   // baseline
+        _now += 1_000;
+        def.OnContinuousBatchDelivered(1);
+        int posts = ui.Posts;
+
+        await Task.Run(() => def.FoMuteLampSpeech(10_000)).WaitAsync(Bound);
+        await ui.Run(() => 0).WaitAsync(Bound);   // posts run in order: the mute has run
+
+        Assert.Equal(posts + 2, ui.Posts);        // the mute, then the marker
+        def.ProcessSimVarUpdate("LAMP_STBY_UNARM_LIGHT", 1, _speech);
+        _now += L1011LampGate.SettleMs + 1;
+        def.OnContinuousBatchDelivered(1);
+        Assert.Empty(_speech.All);
+    }
+
+    [Fact]
+    public async Task A_lamp_mute_on_the_captured_context_runs_inline()
+    {
+        using var ui = new UiThreadContext();
+        var def = BuildAttachedUnder(ui, new ConcurrentQueue<(int Thread, string Rpn)>());
+
+        int posted = await ui.Run(() =>
+        {
+            int before = ui.Posts;
+            def.FoMuteLampSpeech(10_000);
+            return ui.Posts - before;
+        }).WaitAsync(Bound);
+
+        Assert.Equal(0, posted);
     }
 }
