@@ -59,7 +59,7 @@ public class FoEngineAndGroundGuardTests
     }
 
     [Fact]
-    public void Every_shutdown_and_securing_flow_stops_unless_on_the_ground()
+    public void Every_shutdown_securing_and_after_landing_flow_stops_unless_on_the_ground()
     {
         AssertGuardFirst(FenixFlowDefinitions.Build(), "SHUTDOWN", "SD_ON_GROUND", "SIM_ON_GROUND");
         AssertGuardFirst(FenixFlowDefinitions.Build(), "SECURE", "SC_ON_GROUND", "SIM_ON_GROUND");

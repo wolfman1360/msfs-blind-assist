@@ -412,8 +412,9 @@ public class FakeL1011AircraftTests
         Assert.Equal(0, ac.Get(ApuRpm));
     }
 
-    /// <summary>Live, the APU ran down from 100 to 0 in about 60 s after the stop press: the fake spins it down
-    /// <see cref="FakeL1011Aircraft.ApuSpinDownPerSecond"/> (2 %) a second of its clock, never below 0.</summary>
+    /// <summary>Live, the APU ran down in about half a minute to a minute after the stop press: the fake spins it down
+    /// <see cref="FakeL1011Aircraft.ApuSpinDownPerSecond"/> (2 %) a second of its clock, 50 s from 100, never below
+    /// 0.</summary>
     [Fact]
     public async Task The_stop_press_spins_the_apu_down_by_the_clock()
     {

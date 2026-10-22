@@ -14,8 +14,8 @@ namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 /// start" page up to its first ground start), pinned by structure and by behaviour: the step ids and their order; the
 /// ground guard and the two Stop waits that open it, so external power goes off only once the APU generator is on
 /// line; every write's label, keys and targets word for word, with its "Already set" on its own state; the doors
-/// prompt while a door position reads open or unread; each INS unit turned to NAV only once it is aligned or already
-/// at NAV, its "not in NAV" Captain line otherwise ([FO-20]); the navigating check; the cabin barometric setting copied from the
+/// prompt while a door position reads open or unread; each INS unit turned to NAV only from ALIGN once it reads
+/// aligned, or left at NAV, its "not in NAV" Captain line otherwise ([FO-20]); the navigating check; the cabin barometric setting copied from the
 /// captain's altimeter, with its Captain fallback; the fleet's Before Start tail; the lines each step delivers
 /// ([FO-6], [FO-7]); the pack 2 tick left alone off the ground ([FO-25]); and that every key is one the definition
 /// takes, a toggle-carrying key only ever written over its own position read ([L1011-4]).
@@ -389,15 +389,15 @@ public class L1011FoBeforeStartTests
     // ------------------------------------------------------------------ INS to NAV, unit by unit ([FO-20])
 
     /// <summary>
-    /// A unit reading aligned (status 2), or whose selector already reads NAV, gets NAV (3); a unit still aligning,
-    /// or at OFF or STBY, gets no value, so nothing is sent or spoken and its Captain line asks for it. The Captain
-    /// line is already set once the selector reads NAV.
+    /// A unit whose selector reads ALIGN and whose status reads aligned (2), or whose selector already reads NAV, gets
+    /// NAV (3); a unit still aligning, or at OFF or STBY whatever its status, gets no value, so nothing is sent or
+    /// spoken and its Captain line asks for it. The Captain line is already set once the selector reads NAV.
     /// </summary>
     [Theory]
     [InlineData(1)]
     [InlineData(2)]
     [InlineData(3)]
-    public void Each_INS_unit_gets_nav_only_when_aligned_or_already_nav(int unit)
+    public void Each_INS_unit_gets_nav_only_from_align_once_aligned_or_already_at_nav(int unit)
     {
         var step = Of($"BS_INS_{unit}_NAV");
         var captain = Of($"BS_INS_{unit}_CPT");
@@ -760,14 +760,15 @@ public class L1011FoBeforeStartTests
             .Append((CaptainAltimeter, 1002.4)).ToArray());
 
     /// <summary>
-    /// An aircraft set up so the step has work to do: each key the step writes the other way from its target (an INS
-    /// selector at ALIGN), external power on line for its cut, and the cabin baro elsewhere.
+    /// An aircraft set up so the step has work to do: each key the step writes the other way from its target, an INS
+    /// selector at ALIGN (as <see cref="Ready"/> reads it: NAV is written only from ALIGN), external power on line for
+    /// its cut, and the cabin baro elsewhere.
     /// </summary>
     private static FakeL1011Aircraft AircraftFor(Step step)
     {
         var ac = new FakeL1011Aircraft();
         foreach (var (key, target) in Actions(step).Where(a => !X.IsPseudoKey(a.Key)))
-            ac.Set(key, target is int t ? Wrong(t) : 2);
+            ac.Set(key, key.StartsWith("ROTARY_INS_MODE_", StringComparison.Ordinal) ? 2 : target is int t ? Wrong(t) : 2);
         if (step.EventName == X.ExternalPower)
         {
             ac.Set("TOGGLE_EXT_PWR", 1);

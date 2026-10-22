@@ -2062,7 +2062,7 @@ public class L1011FoActionExecutorTests
     }
 
     // ---- The APU stop --------------------------------------------------------------------------------------------------
-    // One press of the stop button, then a read-only wait for the APU to spin down: live, from 100 to 0 in about 60 s.
+    // One press of the stop button, then a read-only wait for the APU to spin down: live, about half a minute to a minute.
     // A tick holds until the APU reads stopped, so its line, judged on the APU stopped, never reverts mid-spin-down.
 
     private const string ApuStopPress = "APU_STOP";
@@ -2249,6 +2249,27 @@ public class L1011FoActionExecutorTests
         Assert.True(await _exec.Set(L1011FoActionExecutor.ApuStop, 1).WaitAsync(Hang));
 
         Assert.Equal(2, _ac.Writes.Count(w => w == (ApuStopPress, 1.0)));
+        Assert.DoesNotContain(_logged, line => line.Contains("not pressed again"));
+    }
+
+    /// <summary>A stop press ends a start press still inside its spin-up window: an APU stopped and started again within
+    /// that window is pressed again, not taken for the earlier start still spinning up.</summary>
+    [Fact]
+    public async Task An_apu_stop_press_clears_a_pending_start_press()
+    {
+        SeedApu(rpm: 0);
+        _ac.ApuRpmAfterStart = 10;   // turning, well short of running
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ApuStart, 1).WaitAsync(Hang));   // its press is recorded
+        long startedAt = _ac.NowMs;
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ApuStop, 1).WaitAsync(Hang));    // pressed at 10 %, below 5 in 2.5 s
+        _ac.Set(ApuRpm, 0);                                                                 // stopped
+        Assert.True(_ac.NowMs - startedAt < L1011FoActionExecutor.ApuSpinUpWaitMs, "still inside the start's window");
+
+        _ac.ApuRpmAfterStart = 100;
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ApuStart, 1).WaitAsync(Hang));
+
+        Assert.Equal(new[] { (ApuStartPress, 1.0), (ApuStopPress, 1.0), (ApuStartPress, 1.0) }, _ac.Writes);
         Assert.DoesNotContain(_logged, line => line.Contains("not pressed again"));
     }
 

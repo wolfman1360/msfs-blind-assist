@@ -8,7 +8,8 @@ using Step = MSFSBlindAssist.FirstOfficer.Models.FlowStep<MSFSBlindAssist.FirstO
 namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 
 /// <summary>
-/// The TriStar First Officer's flows (part 1: Power Up), pinned by structure and by behaviour: the step
+/// The TriStar First Officer's Power Up flow, and the profile's twelve flows in order, pinned by structure and by
+/// behaviour: the step
 /// ids and their order, the two guards that must come first ([FO-25]: the standby power check turns the
 /// battery off and the fuel pumps and hydraulic pumps are switched off here), every label word for word,
 /// every write's SkipCondition on its own state ("Already set"; the standby power check is the one write

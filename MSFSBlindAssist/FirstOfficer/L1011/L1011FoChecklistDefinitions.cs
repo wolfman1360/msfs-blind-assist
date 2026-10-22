@@ -10,8 +10,9 @@ using Group = Models.ChecklistGroup<L1011FoActionExecutor, L1011FoStateEvaluator
 using CheckFn = System.Func<L1011FoActionExecutor, L1011FoStateEvaluator, System.Threading.Tasks.Task>;
 
 /// <summary>
-/// The iniBuilds L-1011 TriStar First Officer checklists, the MD-11's two layers: Power Up, Preflight, then
-/// Before Start.
+/// The iniBuilds L-1011 TriStar First Officer checklists, the MD-11's two layers, for its twelve flows: Power Up,
+/// Preflight, Before Start, Engine Start, After Start, Before Takeoff, After Takeoff, Descent, Before Landing, After
+/// Landing, Parking and Shutdown.
 ///
 /// The ACTION group (<c>POWER_UP</c>) lists the Power Up flow's writes and its unconditional Captain step,
 /// in the flow's order and with the flow's labels: ticking a line runs the same write as its flow step,
@@ -168,7 +169,7 @@ public static class L1011FoChecklistDefinitions
                 // Cold-and-dark cuts ([FO-25]): never airborne, never with an engine turning, never unread.
                 // The ATMs are the air-turbine hydraulic pumps of systems B and C, left in AUTO through the
                 // flight: off there cuts backup hydraulic power, and the fleet's cut sweep cannot see them by
-                // their label (Ruling R9).
+                // their label, so the line carries the guard itself.
                 LeaveAlone(Auto("PU_ATMS", G, "ATM switches: off", "FO_ATMS_OFF", On,
                     SetAll(("ROTARY_HYD_B2_MODE", 0), ("ROTARY_HYD_C2_MODE", 0))),
                     NotParked, ParkedOnlyText),
@@ -561,8 +562,8 @@ public static class L1011FoChecklistDefinitions
     /// <summary>
     /// The Before Start flow's writes and the fleet's tail, in the flow's order and with its labels: a single switch
     /// reads its key at the target, a multi-switch line its synthetic, external power its breaker read open. The
-    /// cabin baro and each INS line write their provider's value (the captain's altimeter; NAV for a unit read
-    /// aligned or already at NAV) and nothing without one, and read the state their step sets.
+    /// cabin baro and each INS line write their provider's value (the captain's altimeter; NAV for a unit at ALIGN read
+    /// aligned, or already at NAV) and nothing without one, and read the state their step sets.
     /// </summary>
     private static Group BeforeStart()
     {

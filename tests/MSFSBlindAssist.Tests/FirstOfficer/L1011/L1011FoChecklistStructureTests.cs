@@ -10,14 +10,14 @@ using Step = MSFSBlindAssist.FirstOfficer.Models.FlowStep<MSFSBlindAssist.FirstO
 namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 
 /// <summary>
-/// The TriStar First Officer's checklists (part 1: Power Up), the MD-11's two layers: the action group
+/// The TriStar First Officer's Power Up checklists, the MD-11's two layers: the action group
 /// <c>POWER_UP</c>, whose lines are the flow's writes and its unconditional Captain step in the flow's order
-/// (Ruling R4: the conditional ground power prompt stays flow-only), and the read-back group
+/// (a conditional Captain prompt, the ground power one, stays flow-only), and the read-back group
 /// <c>POWER_UP_CL</c>, the aircraft's cockpit safety inspection in its own words and order, action-free
-/// ([FO-3]) and with no galley line (Ruling R3). Every state line mirrors the aircraft live
+/// ([FO-3]) and with no galley line, since the aircraft's page has none. Every state line mirrors the aircraft live
 /// (<c>RevertToState</c>, [FOB-1]); a hand tick of a line that switches the fuel or hydraulic pumps off, or
 /// runs the standby power check (which turns the battery off), is left alone unless the aircraft reads on
-/// the ground with every engine stopped ([FO-25], Ruling R8).
+/// the ground with every engine stopped ([FO-25]).
 /// </summary>
 public class L1011FoChecklistStructureTests
 {
@@ -205,7 +205,7 @@ public class L1011FoChecklistStructureTests
         }
     }
 
-    /// <summary>Ruling R4: the action group's lines, in order. The conditional ground power prompt stays flow-only.</summary>
+    /// <summary>The action group's lines, in order. The conditional ground power prompt stays flow-only.</summary>
     [Fact]
     public void PowerUp_ActionLines_InTheFlowsOrder()
     {
@@ -276,7 +276,7 @@ public class L1011FoChecklistStructureTests
 
     // ------------------------------------------------------------------ the cockpit safety inspection
 
-    /// <summary>The aircraft's cockpit safety inspection, word for word and in its order. No galley line (Ruling R3).</summary>
+    /// <summary>The aircraft's cockpit safety inspection, word for word and in its order. No galley line: the aircraft's page has none.</summary>
     [Fact]
     public void CockpitSafetyInspection_LinesWordForWord()
     {
@@ -355,7 +355,7 @@ public class L1011FoChecklistStructureTests
         Assert.True(line.ManualCompletionAllowed);
     }
 
-    // ------------------------------------------------------------------ the guarded hand ticks ([FO-25], R8)
+    // ------------------------------------------------------------------ the guarded hand ticks ([FO-25])
 
     private static L1011FoStateEvaluator State(params (string Key, double Value)[] values)
     {
@@ -384,9 +384,9 @@ public class L1011FoChecklistStructureTests
 
     /// <summary>
     /// The four lines that cut hydraulic or fuel pumps or the battery carry the guard; no other line does.
-    /// The ATM switches are the air-turbine hydraulic pumps of systems B and C, left in AUTO through the flight
-    /// (Ruling R9): off in the air or with an engine turning cuts backup hydraulic power, and the fleet's cut
-    /// sweep cannot see them by their label.
+    /// The ATM switches are the air-turbine hydraulic pumps of systems B and C, left in AUTO through the flight:
+    /// off in the air or with an engine turning cuts backup hydraulic power, and the fleet's cut sweep cannot see
+    /// them by their label, so the line carries the guard itself.
     /// </summary>
     [Fact]
     public void OnlyThePumpAndStandbyCheckLines_AreLeftAlone()

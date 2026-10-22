@@ -44,7 +44,7 @@ public class BeforeStartAcarsReadbackTests
             "FBW A380" => Project(A380.FbwA380ChecklistDefinitions.Build()),
             "TFDi MD-11" => Project(Md11.Md11FoChecklistDefinitions.Build()),
             "iniBuilds L-1011" => Project(TriStar.L1011FoChecklistDefinitions.Build()),
-            _ =>throw new System.ArgumentException(profile),
+            _ => throw new System.ArgumentException(profile),
         };
 
     private static (string, string, ChecklistItemType, bool)[] Project<TExec, TState>(List<ChecklistGroup<TExec, TState>> groups)

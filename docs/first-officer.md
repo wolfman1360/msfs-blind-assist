@@ -567,7 +567,7 @@ aircraft's own checklist pages in its own words, condensed to the lines BA can r
 Inspection for Power Up; Flight Engineer Station, Overhead, Main Panel and Center Console Preparation
 for Preflight; then Before Engine Start, Engine Start, After Start and Taxi, Line Up, Take Off and
 Climb, Descent, Approach, After Landing, Parking and Securing. Every group is classified in
-`FoDepartureGroups` (FO-22). Rules: `.claude/rules/first-officer-l1011.md` (FOL-1 to FOL-8); the
+`FoDepartureGroups` (FO-22). Rules: `.claude/rules/first-officer-l1011.md` (FOL-1 to FOL-9); the
 aircraft's write rules are in [docs/l1011.md](l1011.md).
 
 Every write goes through the definition's First Officer entry (`IniL1011Definition.FirstOfficer.cs`:
@@ -673,36 +673,48 @@ generator breaker tripped, the bleed off, the stop (`FO_APU_STOP`), the manual's
 only after a stop this run sent, and the master off only once the stop is done or found done, else "APU
 master left on: the APU did not stop." The stop presses once and then holds, outside the dispatch gate,
 until the APU reads below 5 %, up to 90 s: the APU takes about half a minute to a minute to stop, longer
-than a checklist tick's grace (FOL-8, FO-11).
+than a checklist tick's grace (FOL-8, FO-11). The master line's tick, in After Start and in Shutdown, is
+left alone with the same sentence until the APU reads stopped.
 
 Before Takeoff is the manual's line-up: pack 2 only (left alone off the ground), anti-skid, the take-off
 autobrake, strobe and landing lights, continuous ignition, probe heat, the transponder read at TA/RA and
-the weather radar. After Takeoff puts the gear lever up (the aircraft refuses it on the ground, and the
-step reads not done there), reminds the Captain of the flap schedule, sets the climb, waits up to five
-minutes, read only, for the flaps up, and confirms the gear up last (FO-13). Descent puts the seat belt
+the weather radar. After Takeoff puts the gear lever up only with the aircraft read airborne: on the
+ground, or with the on-ground flag unread, the step and its tick are left alone, aloud ("Gear left down: on
+the ground."), and nothing relies on the aircraft refusing gear up on the ground, which has not been seen
+(FOL-9). It reminds the Captain of the flap schedule, sets the climb, waits up to five minutes, read only,
+for the flaps up, and confirms the gear up last (FO-13). Descent puts the seat belt
 signs on, reminds the Captain of the landing data, the landing autobrake (the panel named, no setting:
 FO-14) and the QNH, and turns the cabin altitude selector to the plan's destination elevation. Before
 Landing copies the captain's altimeter, by now the destination QNH, into the cabin barometric setting,
 sets the fuel for landing, the ground lights and continuous ignition, puts the gear lever down, reminds
-the Captain of the flap schedule and confirms the gear down last. After Landing turns the anti-skid,
-autobrake, landing and strobe lights, continuous ignition, air data heat and side window heat off and
-the windshield heat to idle, zeroes the
-stabilizer trim (verified on its readout), stows the speed brake, raises the flaps (on the ground only),
-turns the radar and transfers off, and starts the APU: one press, done once it turns.
+the Captain of the flap schedule and confirms the gear down last. After Landing opens with the ground
+guard (read only, Stop, fails unread): started in the air by mistake it would turn the air data heat and
+anti-skid off, zero the trim and stow the speed brake lever, so it stops whole (FOL-9). Then it turns the
+anti-skid, autobrake, landing and strobe lights, continuous ignition, air data heat and side window heat
+off and the windshield heat to idle, zeroes the stabilizer trim (verified on its readout), stows the speed
+brake, raises the flaps, turns the radar and transfers off, and starts the APU: one press, done once it
+turns. A tick has no flow guard, so the anti-skid, air data heat, stabilizer trim, speed brake and flaps
+ticks are each left alone off the ground, aloud.
 
 Parking opens with the aircraft read stopped (ground speed below a knot, read only, Stop), sets the
 parking brake and the ground lights off, waits up to two minutes for the APU After Landing started (left
 alone at once when it is not turning), puts its generator on line, or external power when the APU
 generator is not on line and ground power is there, and confirms one of the two on line (read only, Stop)
-before the fuel and ignition go off. Then the anti-collision lights and seat belts go off, the engines are
-read stopped (read only, up to two minutes, Stop), and only then the INS, the transponder, the ATMs and AC
-pumps and the fuel panel, which keeps the tank 2 left pump and the engine 2 tank valve on for the APU
-(FOL-6); the APU bleed goes on and the Captain is reminded of ground power. Shutdown is the manual's
+before the fuel and ignition go off; the fuel and ignition tick is left alone unless the aircraft reads on
+the ground with the APU generator or external power on line. Then the engines are read stopped (read
+only, up to two minutes, Stop) before anything else: the anti-collision lights (the ground crew's sign
+that engines turn, off only once they stop, as the MD-11's beacon), the seat belts, the INS, the
+transponder, the ATMs and AC pumps and the fuel panel, which keeps the tank 2 left pump and the engine 2
+tank valve on for the APU (FOL-6). An engine that does not stop ends the flow with the beacon on and
+nothing cut. The APU bleed goes on and the Captain is reminded of ground power. Shutdown is the manual's
 securing, behind both guards: emergency lights and galley off; the APU shut down in the manual's order
-(the generator breaker, the bleed, the stop held until it reads stopped, then, after a stop this run
-sent, a wait of up to 150 s for a standstill below 1 %, and the master off only once the stop is done);
-packs off on the ground only, external power off, the fuel pumps off (left alone while the APU turns,
-FOL-6); and standby power, the radio masters and the battery last.
+(the generator breaker, the bleed, the stop held until it reads below 5 %, then a wait of up to 150 s for
+a standstill below 1 %, already set when it reads so, so an APU found coasting is waited out whoever
+stopped it, and the master off only once the stop is done or found done); packs off on the ground only,
+external power off, the fuel pumps off (left alone while the APU turns, FOL-6); and standby power, the
+radio masters and the battery last. The battery goes off only once the APU master went off or was found
+off ("Battery left on: the APU did not stop." otherwise), and its step and tick are left alone while the
+APU still reads turning, so the battery never goes with the APU running (FOL-8).
 
 Pressurization is the flight engineer's, so the First Officer sets it. The cabin altitude selector is
 turned by its knob's own click after seeding only the knob's step (FOL-5): Preflight to the cabin

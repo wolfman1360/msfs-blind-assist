@@ -1153,7 +1153,7 @@ public class L1011FoStateEvaluatorTests
     /// reads: the First Officer never switches a unit on, and its Captain line speaks instead.
     /// </summary>
     [Fact]
-    public void Ins_nav_target_is_three_only_for_an_aligned_or_navigating_unit()
+    public void Ins_nav_target_is_three_only_at_align_once_aligned_or_already_at_nav()
     {
         string status = L1011InsAlignmentAnnouncer.StatusKey(1);
         string mode = L1011InsAlignmentAnnouncer.MsuKey(1);

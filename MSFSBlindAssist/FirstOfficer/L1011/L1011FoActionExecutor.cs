@@ -30,10 +30,10 @@ namespace MSFSBlindAssist.FirstOfficer.L1011;
 /// for a flow step only, held by the flow's Pause without counting it (<see cref="WaitUntilAsync"/>). So a
 /// paused flow never queues a hand tick, the automation or the drain behind its wait.
 ///
-/// The exception is the audible tests (the fire, wheel well and hydraulic tests) and the standby power check:
-/// bounded <see cref="Pseudo"/> composites that keep the gate for their whole run, because a hand tick moving
-/// a test switch or a pump in the middle of a test would corrupt it. Every wait inside them is bounded on the
-/// transport's clock, and none waits on the flow's Pause.
+/// The exception is the <see cref="Pseudo"/> composites, which keep the gate for their whole run: every wait inside
+/// them is bounded on the transport's clock, and none waits on the flow's Pause. The long ones include the audible
+/// tests (the fire, wheel well and hydraulic tests) and the standby power check, which must keep it, because a hand
+/// tick moving a test switch or a pump in the middle of a test would corrupt it.
 ///
 /// The engine start is the one step a stopped flow must not leave half done: a ground start a flow turned on is
 /// recorded with the run's Stop (<see cref="_flowGroundStarts"/>), and a run stopped before that engine's fuel and

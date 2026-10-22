@@ -37,7 +37,8 @@ internal readonly record struct FakeL1011Io(FakeL1011IoKind Kind, string Key, do
 /// <item>The APU: a start press (<c>SWITCH_APU_START</c>) with the master (<c>TOGGLE_APU_POWER</c>) reading 1
 /// sets its RPM (<c>L1011_RO_APU_RPM</c>) to <see cref="ApuRpmAfterStart"/>, with the master off or unread
 /// nothing, and ends a spin-down; the stop press (<c>APU_STOP</c>) spins it down by the clock,
-/// <see cref="ApuSpinDownPerSecond"/> a second down to 0 (live: from 100 to 0 in about 60 s). The generator field press
+/// <see cref="ApuSpinDownPerSecond"/> a second down to 0, 50 s from 100 (live, it took about half a minute to a
+/// minute). The generator field press
 /// (<c>SWITCH_APU_BRG</c>) closes its relay (<c>L1011_RO_APU_GEN_FIELD</c>) only with the APU running (95 %);
 /// the breaker press (<c>SWITCH_GND_FLOW</c>) closes the breaker relay (<c>L1011_RO_APU_GEN_BREAKER</c>) only
 /// over a closed field, whatever external power does (no interlock); the trip (<c>SWITCH_GND_FLOW_OPEN</c>)
@@ -210,8 +211,8 @@ internal sealed class FakeL1011Aircraft : IL1011FoTransport
     /// scripting the spool-up sets 0 and drives the RPM through <see cref="OnClock"/>.</summary>
     public double ApuRpmAfterStart { get; set; } = 100;
 
-    /// <summary>The APU's RPM fall per clock second after a stop press (live: from 100 to 0 in about 60 s); 0 for an
-    /// APU that never spins down.</summary>
+    /// <summary>The APU's RPM fall per clock second after a stop press: 2 takes 50 s from 100 to 0 (live, it took about
+    /// half a minute to a minute); 0 for an APU that never spins down.</summary>
     public double ApuSpinDownPerSecond { get; set; } = 2.0;
 
     /// <summary>An engine's N3 rise per clock second while its ground start turns it (live, on APU air: about

@@ -167,8 +167,9 @@ public sealed class L1011FoStateEvaluator : LVarStateEvaluator, IFoEngine3N2Sink
 
     /// <summary>
     /// The take-off flap handle index (1 to 6 for 4, 10, 14, 18, 22 and 33 degrees): the tablet's
-    /// export first, else SimBrief's take-off flaps, else null. 0, -1, an unread tablet and any value
-    /// off a detent are no value (D9).
+    /// export first, else SimBrief's take-off flaps, else null. 0 (the tablet before its export), -1 (no
+    /// SimBrief plan), an unread tablet and any value off a detent are no value, so the step sends nothing
+    /// and its Captain step asks ([FO-20]).
     /// </summary>
     public int? TakeoffFlapIndex() => TakeoffFlapIndexFrom(Raw, GetTakeoffFlaps());
 
@@ -206,7 +207,8 @@ public sealed class L1011FoStateEvaluator : LVarStateEvaluator, IFoEngine3N2Sink
     /// <summary>
     /// The cabin baro's target in hundredths of a hectopascal: the captain's altimeter, read and off
     /// standard. Null while it is unread or within <see cref="StandardMillibarsTolerance"/> of 1013.25,
-    /// where the captain has set no local pressure to copy (D2).
+    /// where the captain has set no local pressure to copy, so the step sends nothing and its Captain step
+    /// asks ([FO-20]).
     /// </summary>
     public int? CabinBaroTargetHundredths()
         => OffStandard(Raw(CaptainAltimeterKey)) is double setting ? (int)Math.Round(setting * 100) : null;
@@ -495,7 +497,7 @@ public sealed class L1011FoStateEvaluator : LVarStateEvaluator, IFoEngine3N2Sink
         ["FO_CROSSFEEDS_CLOSED"] = AllAt(0, "SWITCH_FUEL_LEFT_XFEED", "SWITCH_FUEL_CTR_XFEED", "SWITCH_FUEL_RIGHT_XFEED"),
         ["FO_TRANSFERS_OFF"] = AllAt(0, TransferKeys),
         ["FO_TRANSFERS_ON"] = AllAt(1, TransferKeys),
-        // Tanks 1A and 3A are the readouts' tanks 4 and 5 (D10).
+        // Tanks 1A and 3A are the readouts' tanks 4 and 5.
         ["FO_TANKS_1A_3A_FUELED"] = Vars(v => v.All(lbs => lbs > TransferTankMinLbs), Tank1AKey, Tank3AKey),
         ["FO_TANK_VALVES_ON"] = AtEach(
             ("SWITCH_ENG_1_TANK_VALVE", 1), ("SWITCH_ENG_2_TANK_VALVE", 1), ("SWITCH_ENG_3_TANK_VALVE", 1),
@@ -575,7 +577,7 @@ public sealed class L1011FoStateEvaluator : LVarStateEvaluator, IFoEngine3N2Sink
         ["FO_CABIN_ALT_AT_CRUISE"] = CabinAltitudeAt(plan => CruiseCabinAltitudeFor(plan.CruiseFt)),
         // Against the destination clamped to the selector's end stops, the value the Descent step writes.
         ["FO_CABIN_ALT_AT_DEST"] = CabinAltitudeAt(plan => DestinationCabinAltitudeFor(plan.DestElevFt)),
-        // The cabin baro at the captain's altimeter; a standard altimeter is no target, so NaN (D2).
+        // The cabin baro at the captain's altimeter; a standard altimeter is no target, so NaN ([FO-20]).
         ["FO_CABIN_BARO_SET"] = new(new[] { CabinBaroKey, CaptainAltimeterKey }, (r, _) =>
         {
             double cabin = r(CabinBaroKey);

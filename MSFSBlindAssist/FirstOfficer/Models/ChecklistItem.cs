@@ -253,7 +253,8 @@ public class ChecklistItem<TExec, TState>
     // Captain reminder
     // -----------------------------------------------------------------------
 
-    /// <summary>Text spoken to the captain for CaptainReminder type items.</summary>
+    /// <summary>The Captain's reminder for a CaptainReminder item, kept with the item; nothing speaks it. A checklist
+    /// line speaks its label, and the flow's Captain step speaks its own <c>FlowStep.ReminderText</c>.</summary>
     public string? ReminderText { get; set; }
 
     // -----------------------------------------------------------------------
