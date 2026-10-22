@@ -59,7 +59,8 @@ public class L1011FoParkingTests
     private const string ApuNotStartedText = "APU not started: external power will be used.";
     private const string ApuGenText = "APU generator left off: the APU is not running.";
     private const string ExtPowerText = "External power left off: the APU generator is on line, or no ground power is available.";
-    private const string FuelIgnitionText = "Fuel and ignition left on: not read on the ground.";
+    private const string FuelIgnitionText =
+        "Fuel and ignition left on: not on the ground, or no APU generator or external power on line.";
     private const string ParkedOnlyText = "Left alone: the aircraft must be on the ground with the engines stopped.";
 
     private static readonly string[] FuelPumps =
@@ -108,12 +109,13 @@ public class L1011FoParkingTests
         Assert.False(string.IsNullOrWhiteSpace(Parking.Description));
     }
 
-    /// <summary>The manual's order, with the engines-stopped wait directly before the INS: every cut of the INS, the
-    /// ATMs, the AC pumps and the tank pumps sits behind it ([FO-25]).</summary>
+    /// <summary>The manual's order, with the engines-stopped wait directly after the fuel cut: the beacon and every step
+    /// after it, every cut of the INS, the ATMs, the AC pumps and the tank pumps among them, wait for the engines to read
+    /// stopped ([FO-25]), as the MD-11's beacon does.</summary>
     private static readonly string[] StepIds =
     {
         "PK_STOPPED", "PK_GROUND_LIGHTS", "PK_PARKING_BRAKE", "PK_APU_RUNNING", "PK_APU_GEN", "PK_EXT_PWR", "PK_POWER_SOURCE",
-        "PK_FUEL_IGN_OFF", "PK_ANTICOL", "PK_SEAT_BELTS", "PK_SPOOL_DOWN", "PK_INS_OFF", "PK_XPDR", "PK_ATMS_AC_PUMPS",
+        "PK_FUEL_IGN_OFF", "PK_SPOOL_DOWN", "PK_ANTICOL", "PK_SEAT_BELTS", "PK_INS_OFF", "PK_XPDR", "PK_ATMS_AC_PUMPS",
         "PK_FUEL_PANEL", "PK_APU_BLEED", "PK_CPT_GROUND_POWER",
     };
 
@@ -378,10 +380,11 @@ public class L1011FoParkingTests
         Assert.All(steps.Take(wait), s => Assert.Null(FoCutGuardSweepTests.CutKind(s.Label)));
     }
 
-    /// <summary>The engines read stopped, read only, up to two minutes, Stop, before the INS, the ATMs, the AC pumps and the
-    /// tank pumps come off: an engine that does not stop ends the flow before any of them is cut ([FO-25]).</summary>
+    /// <summary>The engines read stopped, read only, up to two minutes, Stop, directly after the fuel cut: the beacon, the
+    /// seat belt signs, the INS, the ATMs, the AC pumps and the tank pumps come off only after it, so an engine that does
+    /// not stop ends the flow with the beacon still on and nothing cut ([FO-25]).</summary>
     [Fact]
-    public void The_pumps_and_ATMs_come_off_only_after_the_engines_stop()
+    public void The_beacon_the_INS_and_the_pumps_come_off_only_after_the_engines_stop()
     {
         var steps = Parking.Steps;
         int spool = steps.FindIndex(s => s.Id == "PK_SPOOL_DOWN");
@@ -397,8 +400,8 @@ public class L1011FoParkingTests
         Assert.False(wait.Condition!(0));
         Assert.True(wait.Condition!(1));
 
-        Assert.True(spool > steps.FindIndex(s => s.Id == "PK_FUEL_IGN_OFF"), "the engines stop after the fuel cut");
-        foreach (var id in new[] { "PK_INS_OFF", "PK_ATMS_AC_PUMPS", "PK_FUEL_PANEL" })
+        Assert.Equal(steps.FindIndex(s => s.Id == "PK_FUEL_IGN_OFF") + 1, spool);
+        foreach (var id in new[] { "PK_ANTICOL", "PK_SEAT_BELTS", "PK_INS_OFF", "PK_XPDR", "PK_ATMS_AC_PUMPS", "PK_FUEL_PANEL", "PK_APU_BLEED" })
             Assert.True(steps.FindIndex(s => s.Id == id) > spool, $"{id} before the engines read stopped");
     }
 
@@ -420,19 +423,57 @@ public class L1011FoParkingTests
 
     // ------------------------------------------------------------------ the cut ticks ([FO-25])
 
-    /// <summary>The fuel and ignition tick is an engine cut: refused airborne and unread, and on the ground it goes ahead
-    /// with the engines running, which is its point.</summary>
+    /// <summary>The APU generator's breaker or external power's breaker read closed, the other open: a power source on
+    /// line.</summary>
+    private static (string, double)[] Source(bool apu) =>
+        new[] { (ApuGenBreaker, apu ? 1.0 : 0.0), (ExtPowerBreaker, apu ? 0.0 : 1.0) };
+
+    private static readonly (string, double)[] NoSource = { (ApuGenBreaker, 0.0), (ExtPowerBreaker, 0.0) };
+
+    /// <summary>The fuel and ignition tick is an engine cut, and cuts the engine generators off the buses with it: refused
+    /// airborne or unread, and on the ground with neither the APU generator nor external power read on line, as the flow's
+    /// power source wait refuses it. On the ground with a source on line it goes ahead with the engines running, which is
+    /// its point.</summary>
     [Fact]
-    public void The_fuel_and_ignition_tick_is_left_alone_off_the_ground_only()
+    public void The_fuel_and_ignition_tick_needs_the_ground_and_a_power_source()
     {
         var tick = Line("PK_FUEL_IGN_OFF");
         Assert.Equal(FuelIgnitionText, tick.LeaveAloneText);
-        Assert.True(tick.LeaveAloneWhen!(Airborne()), "airborne");
+        Assert.True(tick.LeaveAloneWhen!(State(Engines(running: true).Append((Ground, 0)).Concat(Source(apu: true)).ToArray())),
+            "airborne, a source on line");
         Assert.True(tick.LeaveAloneWhen!(State()), "unread");
-        Assert.True(tick.LeaveAloneWhen!(State(Engines(running: true).ToArray())), "the ground unread");
-        Assert.False(tick.LeaveAloneWhen!(RunningOnTheGround()), "on the ground, engines running");
-        Assert.False(tick.LeaveAloneWhen!(ParkedStopped()), "parked");
+        Assert.True(tick.LeaveAloneWhen!(State(Engines(running: true).Concat(Source(apu: true)).ToArray())), "the ground unread");
+        Assert.True(tick.LeaveAloneWhen!(State(Engines(running: true).Append((Ground, 1)).Concat(NoSource).ToArray())),
+            "on the ground, engines running, no source on line");
+        Assert.True(tick.LeaveAloneWhen!(RunningOnTheGround()), "on the ground, engines running, the sources unread");
+        Assert.False(tick.LeaveAloneWhen!(State(Engines(running: true).Append((Ground, 1)).Concat(Source(apu: true)).ToArray())),
+            "on the ground, engines running, the APU generator on line");
+        Assert.False(tick.LeaveAloneWhen!(State(Engines(running: true).Append((Ground, 1)).Concat(Source(apu: false)).ToArray())),
+            "on the ground, engines running, external power on line");
+        Assert.False(tick.LeaveAloneWhen!(State(Engines(running: false).Append((Ground, 1)).Concat(Source(apu: false)).ToArray())),
+            "parked, external power on line");
         Assert.Equal("Engine", FoCutGuardSweepTests.CutKind(tick.Label));
+    }
+
+    /// <summary>Through the real checklist manager: with the engines running on the ground and no power source on line,
+    /// the tick is refused at once, aloud, and nothing is written.</summary>
+    [Fact]
+    public void The_fuel_and_ignition_tick_through_the_checklist_manager_is_refused_aloud_with_no_power_source()
+    {
+        var groups = L1011FoChecklistDefinitions.Build();
+        var ac = new FakeL1011Aircraft();
+        foreach (var key in FuelIgnition)
+            ac.Set(key, 1);
+        var exec = new X();
+        exec.SetTransport(ac);
+        var mgr = new ChecklistManager<X, L1011FoStateEvaluator>(
+            Connected(Engines(running: true).Append((Ground, 1)).Concat(NoSource).ToArray()), exec, groups);
+        var line = groups.SelectMany(g => g.Items).Single(i => i.Id == "PK_FUEL_IGN_OFF");
+
+        Assert.False(mgr.ToggleItem(line.GroupId, line.Id, out var spoken));
+        Assert.Equal(FuelIgnitionText, spoken);
+        Assert.False(line.IsChecked);
+        Assert.Empty(ac.Io);
     }
 
     public static IEnumerable<object[]> ParkedOnlyTicks() =>

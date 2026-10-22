@@ -1,5 +1,3 @@
-using System.Collections.Concurrent;
-using System.Diagnostics;
 using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.L1011;
 using MSFSBlindAssist.FirstOfficer;
@@ -16,9 +14,10 @@ namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 /// The TriStar First Officer's Shutdown flow (the manual's securing), its action group and its read-back, pinned by
 /// structure and by behaviour: both guards first, on the ground and engines stopped, read only, Stop ([FO-25]); the
 /// emergency lights and galley off; the APU shut down in the manual's order, its stop held until the APU reads stopped,
-/// the wait for it to stop to a standstill only after a stop this run sent, and its master off only once the stop is
-/// done or found done; the packs off on the ground only; external power off; the fuel pumps off only with the APU not
-/// turning; standby power, the radio masters and the battery last; every cut tick left alone unless it may go ahead; the
+/// a wait for it to a standstill unless it already reads below 1 %, and its master off only once the stop is done or
+/// found done; the packs off on the ground only; external power off; the fuel pumps off only with the APU not turning;
+/// standby power and the radio masters, then the battery last, and the battery only once the APU master went off or was
+/// found off; every cut tick, and the master's, left alone unless it may go ahead; the
 /// lines each step delivers ([FO-6], [FO-7]); the groups arrival groups ([FO-22]); and that every key is one the
 /// definition takes, a toggle-carrying key only ever written over its own position read ([L1011-4]).
 /// </summary>
@@ -61,6 +60,7 @@ public class L1011FoShutdownTests
     private const string ParkedApuOffText =
         "Left alone: the aircraft must be on the ground with the engines stopped and the APU shut down.";
     private const string MasterLeftOnText = "APU master left on: the APU did not stop.";
+    private const string BatteryLeftOnText = "Battery left on: the APU did not stop.";
 
     private static readonly string[] FuelPumps =
     {
@@ -312,12 +312,13 @@ public class L1011FoShutdownTests
     }
 
     /// <summary>
-    /// The wait for the APU to a standstill runs only when this run sent the stop: an APU found stopped costs no wait.
-    /// It reads the APU's speed below 1 %, so it agrees with the fuel pump cut's own rule (pumps kept while the APU reads
-    /// 1 % or more); up to 150 s, then skipped aloud; read only, linking no line.
+    /// The wait for the APU to a standstill is "Already set" once the APU's speed reads below 1 %, so an APU found
+    /// stopped costs no wait; otherwise it runs, unread included, whether or not this run sent the stop: an APU coasting
+    /// between 1 % and 5 % is waited out before the master and the pump cut. Below 1 % is the pump cut's own rule (pumps
+    /// kept while the APU reads 1 % or more), so the two agree. Up to 150 s, then skipped aloud; read only, linking no line.
     /// </summary>
     [Fact]
-    public void The_APU_wait_runs_only_when_this_run_sent_the_stop()
+    public void The_APU_wait_is_already_set_only_below_one_percent()
     {
         var wait = Of("SD_APU_STOPPED");
         Assert.Equal("APU to stop", wait.Label);
@@ -325,74 +326,165 @@ public class L1011FoShutdownTests
         Assert.Equal(ApuRpm, wait.ConditionFieldName);
         Assert.Equal(150, wait.TimeoutSeconds);
         Assert.Equal(FlowStepFailurePolicy.Skip, wait.FailurePolicy);
-        Assert.Equal("SD_APU_STOP", wait.RunOnlyIfStepSent);
-        Assert.Null(wait.SkipCondition);
+        Assert.Null(wait.RunOnlyIfStepSent);
         Assert.Null(wait.RequiresStepId);
+        Assert.Null(wait.LeaveAloneWhen);
         Assert.Empty(wait.LinkedChecklistItemIds);
         Assert.True(wait.Condition!(0));
         Assert.True(wait.Condition!(0.9));
         Assert.False(wait.Condition!(1));
         Assert.False(wait.Condition!(4));
         Assert.False(wait.Condition!(double.NaN), "unread must not pass");
+
+        Assert.True(wait.SkipCondition!(State((ApuRpm, 0))), "stopped");
+        Assert.True(wait.SkipCondition!(State((ApuRpm, 0.9))), "below 1 %");
+        Assert.False(wait.SkipCondition!(State((ApuRpm, 1))), "at 1 %");
+        Assert.False(wait.SkipCondition!(State((ApuRpm, 3))), "coasting below the stop's 5 %");
+        Assert.False(wait.SkipCondition!(State((ApuRpm, 100))), "running");
+        Assert.False(wait.SkipCondition!(State()), "unread: waited for");
         // The same 1 % the pump cut keeps the pumps for.
         Assert.Equal(1, L1011FoStateEvaluator.ApuStartingRpm);
-        Assert.Equal(new[] { "SD_APU_STOPPED" }, Shutdown.Steps.Where(s => s.RunOnlyIfStepSent != null).Select(s => s.Id));
+        Assert.Empty(Shutdown.Steps.Where(s => s.RunOnlyIfStepSent != null));
     }
 
     /// <summary>The master goes off only once the stop is done or found done: a stop that did not take leaves the master
-    /// on, saying so.</summary>
+    /// on, saying so. The battery goes off only once the master went off or was found off: a master left on leaves the
+    /// battery on, saying so.</summary>
     [Fact]
-    public void The_APU_master_requires_the_stop()
+    public void The_APU_master_requires_the_stop_and_the_battery_the_master()
     {
         var master = Of("SD_APU_MASTER_OFF");
         Assert.Equal("SD_APU_STOP", master.RequiresStepId);
         Assert.Equal(MasterLeftOnText, master.RequiresStepSkipText);
-        Assert.Equal(new[] { "SD_APU_MASTER_OFF" }, Shutdown.Steps.Where(s => s.RequiresStepId != null).Select(s => s.Id));
+        var battery = Of("SD_BATTERY_OFF");
+        Assert.Equal("SD_APU_MASTER_OFF", battery.RequiresStepId);
+        Assert.Equal(BatteryLeftOnText, battery.RequiresStepSkipText);
+        Assert.Equal(new[] { "SD_APU_MASTER_OFF", "SD_BATTERY_OFF" },
+            Shutdown.Steps.Where(s => s.RequiresStepId != null).Select(s => s.Id));
     }
 
     private static readonly string[] ApuTail = { "SD_APU_STOP", "SD_APU_STOPPED", "SD_APU_MASTER_OFF" };
 
-    private static L1011FoStateEvaluator ApuReading(double rpm) => Connected((ApuRpm, rpm), (ApuMaster, 1));
+    /// <summary>An APU at <paramref name="rpm"/> with its master on, on a cache the test can change during the run.</summary>
+    private static (L1011FoStateEvaluator State, System.Collections.Concurrent.ConcurrentDictionary<string, double> Cache)
+        ApuReading(double rpm)
+    {
+        var sim = SeededSimConnectCache.ConnectedWith((ApuRpm, rpm), (ApuMaster, 1));
+        var state = new L1011FoStateEvaluator();
+        state.SetSimConnect(sim);
+        return (state, SeededSimConnectCache.Cache(sim));
+    }
 
-    /// <summary>On a real flow manager: an APU found stopped is "Already set", not skipped, so the wait passes silently
-    /// and the master still goes off.</summary>
+    /// <summary>The APU coming to a standstill about 1.5 s after <paramref name="step"/> starts, as the cache follows the
+    /// sim: the wait reads it turning first, then stopped.</summary>
+    private static Action<string> StopsDuring(string step, System.Collections.Concurrent.ConcurrentDictionary<string, double> cache)
+        => id =>
+        {
+            if (id == step) _ = Task.Delay(1500).ContinueWith(_ => cache[ApuRpm] = 0.5);
+        };
+
+    /// <summary>On a real flow manager: an APU found stopped makes the stop and the wait "Already set", neither skipped,
+    /// so no wait runs and the master still goes off.</summary>
     [Fact]
     public async Task An_APU_found_stopped_is_already_set_and_the_master_goes_off()
     {
-        var run = await L1011FoFlowRun.RunAsync("SHUTDOWN", ApuTail, ApuReading(0));
+        var run = await L1011FoFlowRun.RunAsync("SHUTDOWN", ApuTail, ApuReading(0).State);
 
         Assert.True(run.Finished);
         Assert.Contains("Already set: APU: stop", run.Speech);
+        Assert.Contains("Already set: APU to stop", run.Speech);
         Assert.Empty(run.Skipped);
         Assert.Contains("SD_APU_STOPPED", run.Completed);
         Assert.DoesNotContain("SD_APU_STOPPED", run.Started);
         Assert.Equal(new[] { ApuMaster }, run.Sent);
     }
 
-    /// <summary>On a real flow manager: a stop that is not done is skipped, the wait passes (nothing was sent), and the
-    /// master is left on, aloud.</summary>
+    /// <summary>On a real flow manager: an APU found coasting at 3 % reads stopped for the stop (below 5 %), so nothing is
+    /// pressed, but the wait still runs and holds the master until the APU reads below 1 %.</summary>
     [Fact]
-    public async Task A_stop_not_done_leaves_the_master_on_aloud()
+    public async Task An_APU_found_coasting_is_waited_out_before_the_master()
     {
-        var run = await L1011FoFlowRun.RunAsync("SHUTDOWN", ApuTail, ApuReading(100), fail: new[] { X.ApuStop });
+        var (state, cache) = ApuReading(3);
+        var run = await L1011FoFlowRun.RunAsync("SHUTDOWN", ApuTail, state, onStarted: StopsDuring("SD_APU_STOPPED", cache));
+
+        Assert.True(run.Finished);
+        Assert.Contains("Already set: APU: stop", run.Speech);
+        Assert.Contains("SD_APU_STOPPED", run.Started);
+        Assert.Contains("SD_APU_STOPPED", run.Completed);
+        Assert.Empty(run.Skipped);
+        Assert.Equal(new[] { ApuMaster }, run.Sent);
+    }
+
+    /// <summary>On a real flow manager: a stop that is not done is skipped, and the wait still runs while the APU reads
+    /// turning (cancelled here, as a 150 s wait would otherwise run out); nothing more is sent.</summary>
+    [Fact]
+    public async Task A_stop_not_done_still_waits_for_the_APU()
+    {
+        var run = await L1011FoFlowRun.RunAsync("SHUTDOWN", ApuTail, ApuReading(100).State, fail: new[] { X.ApuStop },
+            cancelWhenStarted: "SD_APU_STOPPED");
+
+        Assert.Contains("Skipping: APU: stop", run.Speech);
+        Assert.Contains("SD_APU_STOPPED", run.Started);
+        Assert.Empty(run.Sent);
+    }
+
+    /// <summary>On a real flow manager: a stop that is not done leaves the master on, and with it the battery, each saying
+    /// so; neither is written.</summary>
+    [Fact]
+    public async Task A_stop_not_done_leaves_the_master_and_the_battery_on_aloud()
+    {
+        var run = await L1011FoFlowRun.RunAsync("SHUTDOWN", new[] { "SD_APU_STOP", "SD_APU_MASTER_OFF", "SD_BATTERY_OFF" },
+            Connected((ApuRpm, 100), (ApuMaster, 1), ("TOGGLE_BATTERY", 1)), fail: new[] { X.ApuStop });
 
         Assert.True(run.Finished);
         Assert.Contains("Skipping: APU: stop", run.Speech);
         Assert.Contains(MasterLeftOnText, run.Speech);
-        Assert.Equal(new[] { "SD_APU_STOP", "SD_APU_MASTER_OFF" }, run.Skipped);
-        Assert.DoesNotContain(ApuMaster, run.Sent);
+        Assert.Contains(BatteryLeftOnText, run.Speech);
+        Assert.Equal(new[] { "SD_APU_STOP", "SD_APU_MASTER_OFF", "SD_BATTERY_OFF" }, run.Skipped);
+        Assert.Empty(run.Sent);
     }
 
-    /// <summary>On a real flow manager: a stop this run sent starts the wait for the APU to a standstill (cancelled here,
-    /// as a 150 s wait would otherwise run out).</summary>
+    /// <summary>On a real flow manager: a stop this run sent is followed by the wait, which holds the master until the APU
+    /// reads below 1 %; then the master goes off.</summary>
     [Fact]
-    public async Task A_stop_this_run_sent_starts_the_wait()
+    public async Task A_stop_this_run_sent_is_waited_out_before_the_master()
     {
-        var run = await L1011FoFlowRun.RunAsync("SHUTDOWN", ApuTail, ApuReading(100), cancelWhenStarted: "SD_APU_STOPPED");
+        var (state, cache) = ApuReading(100);
+        var run = await L1011FoFlowRun.RunAsync("SHUTDOWN", ApuTail, state, onStarted: StopsDuring("SD_APU_STOPPED", cache));
 
-        Assert.Equal(new[] { X.ApuStop }, run.Sent);
+        Assert.True(run.Finished);
         Assert.Contains("SD_APU_STOPPED", run.Started);
-        Assert.DoesNotContain(ApuMaster, run.Sent);
+        Assert.Empty(run.Skipped);
+        Assert.Equal(new[] { X.ApuStop, ApuMaster }, run.Sent);
+    }
+
+    // ------------------------------------------------------------------ the APU master tick
+
+    /// <summary>The master tick is left alone, saying the APU did not stop, unless the APU reads stopped (below 5 %, the
+    /// stop's own "done"): unread or turning, the master stays on, as the flow's master waits on its stop.</summary>
+    [Fact]
+    public void The_APU_master_tick_waits_for_the_APU_to_read_stopped()
+    {
+        var tick = Line("SD_APU_MASTER_OFF");
+        Assert.Equal(MasterLeftOnText, tick.LeaveAloneText);
+        Assert.True(tick.LeaveAloneWhen!(Parked(100)), "running");
+        Assert.True(tick.LeaveAloneWhen!(Parked(5)), "at 5 %");
+        Assert.True(tick.LeaveAloneWhen!(Parked()), "unread");
+        Assert.False(tick.LeaveAloneWhen!(Parked(4.9)), "below 5 %");
+        Assert.False(tick.LeaveAloneWhen!(Parked(0)), "stopped");
+        Assert.False(tick.LeaveAloneWhen!(State((ApuRpm, 0))), "stopped, nothing else read");
+    }
+
+    [Fact]
+    public void The_APU_master_tick_through_the_checklist_manager_is_refused_aloud_with_the_APU_running()
+    {
+        var groups = L1011FoChecklistDefinitions.Build();
+        var mgr = new ChecklistManager<X, L1011FoStateEvaluator>(Connected((ApuRpm, 100), (ApuMaster, 1)), new X(), groups);
+        var line = groups.SelectMany(g => g.Items).Single(i => i.Id == "SD_APU_MASTER_OFF");
+
+        Assert.False(mgr.ToggleItem(line.GroupId, line.Id, out var spoken));
+        Assert.Equal(MasterLeftOnText, spoken);
+        Assert.False(line.IsChecked);
     }
 
     // ------------------------------------------------------------------ the pump cut and the APU
@@ -455,16 +547,12 @@ public class L1011FoShutdownTests
         }
     }
 
-    public static IEnumerable<object[]> ParkedOnlyTicks() =>
-        new[] { "SD_STBY_POWER_OFF", "SD_BATTERY_OFF" }.Select(id => new object[] { id });
-
-    /// <summary>Standby power and the battery off: refused airborne, unread or with an engine running, going ahead parked
-    /// with every engine stopped.</summary>
-    [Theory]
-    [MemberData(nameof(ParkedOnlyTicks))]
-    public void The_standby_power_and_battery_ticks_go_ahead_only_parked(string id)
+    /// <summary>Standby power off: refused airborne, unread or with an engine running, going ahead parked with every
+    /// engine stopped, whatever the APU reads.</summary>
+    [Fact]
+    public void The_standby_power_tick_goes_ahead_only_parked()
     {
-        var tick = Line(id);
+        var tick = Line("SD_STBY_POWER_OFF");
         Assert.Equal(ParkedOnlyText, tick.LeaveAloneText);
         Assert.True(tick.LeaveAloneWhen!(Airborne()), "airborne");
         Assert.True(tick.LeaveAloneWhen!(State()), "unread");
@@ -473,27 +561,59 @@ public class L1011FoShutdownTests
         Assert.False(tick.LeaveAloneWhen!(Parked()), "parked");
     }
 
+    /// <summary>The battery off, as the PMDG 777's waits on its APU: refused airborne, unread or with an engine running,
+    /// and parked while the APU reads 1 % or more; it goes ahead parked with the APU below 1 % or unread.</summary>
+    [Fact]
+    public void The_battery_tick_goes_ahead_only_parked_with_the_APU_not_turning()
+    {
+        var tick = Line("SD_BATTERY_OFF");
+        Assert.Equal(ParkedApuOffText, tick.LeaveAloneText);
+        Assert.True(tick.LeaveAloneWhen!(Airborne()), "airborne");
+        Assert.True(tick.LeaveAloneWhen!(State()), "unread");
+        Assert.True(tick.LeaveAloneWhen!(RunningOnTheGround()), "engines running");
+        Assert.True(tick.LeaveAloneWhen!(Parked(100)), "parked, the APU running");
+        Assert.True(tick.LeaveAloneWhen!(Parked(1)), "parked, the APU at 1 %");
+        Assert.False(tick.LeaveAloneWhen!(Parked(0.9)), "parked, the APU below 1 %");
+        Assert.False(tick.LeaveAloneWhen!(Parked(0)), "parked, the APU stopped");
+        Assert.False(tick.LeaveAloneWhen!(Parked()), "parked, the APU unread");
+    }
+
     [Theory]
-    [MemberData(nameof(ParkedOnlyTicks))]
-    public void A_parked_only_tick_through_the_checklist_manager_is_refused_aloud_airborne(string id)
+    [InlineData("SD_STBY_POWER_OFF", 0.0, ParkedOnlyText)]
+    [InlineData("SD_BATTERY_OFF", 0.0, ParkedApuOffText)]
+    public void A_parked_only_tick_through_the_checklist_manager_is_refused_aloud_airborne(string id, double rpm, string text)
     {
         var groups = L1011FoChecklistDefinitions.Build();
         var mgr = new ChecklistManager<X, L1011FoStateEvaluator>(
-            Connected(Engines(running: true).Append((Ground, 0)).ToArray()), new X(), groups);
+            Connected(Engines(running: true).Append((Ground, 0)).Append((ApuRpm, rpm)).ToArray()), new X(), groups);
         var line = groups.SelectMany(g => g.Items).Single(i => i.Id == id);
 
         Assert.False(mgr.ToggleItem(line.GroupId, line.Id, out var spoken));
-        Assert.Equal(ParkedOnlyText, spoken);
+        Assert.Equal(text, spoken);
         Assert.False(line.IsChecked);
     }
 
-    /// <summary>In the flow only the packs and the pump cut are left alone (both guards stand before every cut); in the
-    /// action group the packs, the pumps, standby power and the battery.</summary>
     [Fact]
-    public void Only_the_cuts_are_left_alone()
+    public void The_battery_tick_through_the_checklist_manager_is_refused_aloud_with_the_APU_running()
+    {
+        var groups = L1011FoChecklistDefinitions.Build();
+        var mgr = new ChecklistManager<X, L1011FoStateEvaluator>(
+            Connected(Engines(running: false).Append((Ground, 1)).Append((ApuRpm, 100)).ToArray()), new X(), groups);
+        var line = groups.SelectMany(g => g.Items).Single(i => i.Id == "SD_BATTERY_OFF");
+
+        Assert.False(mgr.ToggleItem(line.GroupId, line.Id, out var spoken));
+        Assert.Equal(ParkedApuOffText, spoken);
+        Assert.False(line.IsChecked);
+    }
+
+    /// <summary>In the flow only the packs and the pump cut are left alone (both guards stand before every cut, and the
+    /// master and the battery hang on the steps before them); in the action group the APU master, the packs, the pumps,
+    /// standby power and the battery.</summary>
+    [Fact]
+    public void Only_the_cuts_and_the_APU_master_are_left_alone()
     {
         Assert.Equal(new[] { "SD_PACKS_OFF", "SD_FUEL_PUMPS" }, Shutdown.Steps.Where(s => s.LeaveAloneWhen != null).Select(s => s.Id));
-        Assert.Equal(new[] { "SD_PACKS_OFF", "SD_FUEL_PUMPS", "SD_STBY_POWER_OFF", "SD_BATTERY_OFF" },
+        Assert.Equal(new[] { "SD_APU_MASTER_OFF", "SD_PACKS_OFF", "SD_FUEL_PUMPS", "SD_STBY_POWER_OFF", "SD_BATTERY_OFF" },
             Group("SHUTDOWN").Items.Where(i => i.LeaveAloneWhen != null).Select(i => i.Id));
     }
 
@@ -830,82 +950,5 @@ public class L1011FoShutdownTests
             Assert.False(s.SkipCondition!(State()), $"{step}: {key} unread must not be already set");
         }
         Assert.Equal(ToggleCarrying, toggles);
-    }
-}
-
-/// <summary>
-/// Runs part of a real TriStar flow on a real <see cref="FlowManager{TExec,TState}"/> over the real evaluator, with an
-/// executor that accepts every write except the keys it is told to fail (the real one needs the sim): what was spoken,
-/// started, completed, skipped and sent. A run must finish by itself within 15 s, unless it is cancelled 300 ms after a
-/// named step starts (a long wait that would otherwise run out).
-/// </summary>
-internal static class L1011FoFlowRun
-{
-    internal sealed record Result(List<string> Speech, List<string> Started, List<string> Completed, List<string> Skipped,
-        string[] Sent, bool Finished);
-
-    private sealed class Executor : IFoActionExecutor
-    {
-        private readonly HashSet<string> _fails;
-        public Executor(IEnumerable<string> fails) => _fails = new HashSet<string>(fails, StringComparer.Ordinal);
-        public ConcurrentQueue<string> Sent { get; } = new();
-        public bool IsAvailable => true;
-
-        public Task<bool> ExecuteStepAsync(IFlowStepDispatch step)
-        {
-            var keys = step.ActionType == FlowStepActionType.SetSwitchMultiple
-                ? step.MultiActions.Select(a => a.EventName).ToArray()
-                : new[] { step.EventName ?? "" };
-            bool ok = true;
-            foreach (var key in keys)
-            {
-                if (_fails.Contains(key)) { ok = false; continue; }
-                Sent.Enqueue(key);
-            }
-            return Task.FromResult(ok);
-        }
-
-        public Task WaitForDispatchDrainAsync() => Task.CompletedTask;
-    }
-
-    internal static async Task<Result> RunAsync(string flowId, string[] stepIds, L1011FoStateEvaluator state,
-        IEnumerable<string>? fail = null, string? cancelWhenStarted = null)
-    {
-        var source = L1011FoFlowDefinitions.Build().Single(f => f.Id == flowId);
-        var flow = new FlowDefinition<L1011FoStateEvaluator>
-        {
-            Id = source.Id,
-            Name = source.Name,
-            RelatedChecklistGroupIds = source.RelatedChecklistGroupIds,
-            Steps = source.Steps.Where(s => stepIds.Contains(s.Id)).ToList(),
-        };
-        Assert.Equal(stepIds, flow.Steps.Select(s => s.Id).ToArray());
-
-        var executor = new Executor(fail ?? Array.Empty<string>());
-        var speech = new GatedSpeechCapture();
-        var checklist = new ChecklistManager<Executor, L1011FoStateEvaluator>(state, executor,
-            new List<ChecklistGroup<Executor, L1011FoStateEvaluator>>());
-        var flows = new FlowManager<Executor, L1011FoStateEvaluator>(state, executor, checklist, speech);
-        var started = new List<string>();
-        var completed = new List<string>();
-        var skipped = new List<string>();
-        flows.StepStarted += (_, step, _) =>
-        {
-            lock (started) started.Add(step.Id);
-            if (step.Id == cancelWhenStarted) _ = Task.Delay(300).ContinueWith(_ => flows.Cancel());
-        };
-        flows.StepCompleted += (_, step, _) => { lock (completed) completed.Add(step.Id); };
-        flows.StepSkipped += (_, step, _) => { lock (skipped) skipped.Add(step.Id); };
-
-        flows.StartFlow(flow);
-        var sw = Stopwatch.StartNew();
-        while (flows.IsRunning && sw.Elapsed < TimeSpan.FromSeconds(15))
-            await Task.Delay(20);
-        bool finished = !flows.IsRunning;
-        flows.Cancel();
-        while (flows.IsRunning && sw.Elapsed < TimeSpan.FromSeconds(20))
-            await Task.Delay(20);
-
-        return new Result(speech.All.ToList(), started, completed, skipped, executor.Sent.ToArray(), finished);
     }
 }

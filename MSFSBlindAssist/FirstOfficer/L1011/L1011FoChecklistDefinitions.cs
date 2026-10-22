@@ -53,9 +53,10 @@ using CheckFn = System.Func<L1011FoActionExecutor, L1011FoStateEvaluator, System
 /// its conditional flaps prompt stays flow-only) and two read-backs: the aircraft's after start page, ending with the
 /// engine start page's APU shutdown lines, which After Start delivers, and its taxi page. The flaps line writes the
 /// take-off index (the tablet's, else SimBrief's) or nothing without one, and is left alone off the ground; the
-/// transfers line is left alone unless tanks 1A and 3A both hold fuel. The four APU shutdown lines are left alone until
-/// all three engine generators read on line, as the flow's APU steps wait for them, and the stop line's tick holds until
-/// the APU reads stopped. The ATMs-on line reads no state: the flow puts them to auto right after. The stabilizer trim
+/// transfers line is left alone unless tanks 1A and 3A both hold fuel. The generator trip, bleed and stop lines are left
+/// alone until all three engine generators read on line, as the flow's APU steps wait for them, and the stop line's tick
+/// holds until the APU reads stopped; the master line is left alone until the APU reads stopped, as the flow's master
+/// waits on its stop. The ATMs-on line reads no state: the flow puts them to auto right after. The stabilizer trim
 /// line shows the tablet's exported trim as its live value.
 ///
 /// Before Takeoff has one action group (<c>BEFORE_TAKEOFF</c>: the flow's eight writes) and one read-back, the
@@ -65,7 +66,7 @@ using CheckFn = System.Func<L1011FoActionExecutor, L1011FoStateEvaluator, System
 /// After Takeoff has one action group (<c>AFTER_TAKEOFF</c>: the gear lever up, the Captain's flap schedule, then the
 /// climb's writes) and two read-backs, the aircraft's take-off page (the gear confirmed up by the lever and every leg,
 /// the flaps up) and its climb page. The page's fuel balance, 10,000 ft and transition lines are the Captain's and the
-/// phase monitor's and are left out.
+/// phase monitor's and are left out. The gear line is left alone unless the aircraft reads airborne, as its step is.
 ///
 /// Descent has one action group (<c>DESCENT</c>: the seat belt signs, the Captain's landing data, landing autobrake and
 /// QNH, and the cabin altitude for the destination; its conditional cabin altitude prompt stays flow-only) and one
@@ -79,18 +80,22 @@ using CheckFn = System.Func<L1011FoActionExecutor, L1011FoStateEvaluator, System
 ///
 /// After Landing has one action group (<c>AFTER_LANDING</c>: the flow's fifteen writes) and one read-back, the aircraft's
 /// after landing page. The stabilizer trim line reads the trim readout at zero, the typed entry being write-only; the
-/// flaps line is left alone off the ground, as After Start's is; the APU start line holds until the APU turns ([FO-11]).
+/// flaps line is left alone off the ground, as After Start's is, and so are the anti-skid, air data heat, stabilizer trim
+/// and speed brake lines, which the flow's ground guard covers; the APU start line holds until the APU turns ([FO-11]).
 ///
 /// Parking has one action group (<c>PARKING</c>: the flow's writes and the Captain's ground power line; its waits stay
 /// flow-only) and one read-back, the aircraft's parking page. The APU generator line is left alone unless the APU runs,
 /// and the external power line while the APU generator is on line or no ground power is available, as their steps are.
-/// The fuel and ignition line is an engine cut, left alone off the ground; the INS, the ATMs and AC pumps and the fuel
-/// panel lines are left alone unless the aircraft reads on the ground with every engine stopped ([FO-25]).
+/// The fuel and ignition line is an engine cut that takes the engine generators off the buses: left alone unless the
+/// aircraft reads on the ground with the APU generator or external power on line, as the flow's power source wait (and
+/// the MD-11's fuel line) refuses it; the INS, the ATMs and AC pumps and the fuel panel lines are left alone unless the
+/// aircraft reads on the ground with every engine stopped ([FO-25]).
 ///
 /// Shutdown has one action group (<c>SHUTDOWN</c>: the flow's writes; its guards and APU wait stay flow-only) and one
-/// read-back, the aircraft's securing page. The APU stop line's tick holds until the APU reads stopped ([FO-11]). The
-/// packs line is left alone off the ground; the fuel pump line unless the aircraft reads parked with every engine stopped
-/// and the APU not turning, as Power Up's is; the standby power and battery lines unless parked ([FO-25]).
+/// read-back, the aircraft's securing page. The APU stop line's tick holds until the APU reads stopped ([FO-11]), and
+/// the master line is left alone until it does. The packs line is left alone off the ground; the fuel pump and battery
+/// lines unless the aircraft reads parked with every engine stopped and the APU not turning (the pumps as Power Up's,
+/// the battery as the PMDG 777's waits on its APU); the standby power line unless parked ([FO-25]).
 /// </summary>
 public static class L1011FoChecklistDefinitions
 {
@@ -719,6 +724,14 @@ public static class L1011FoChecklistDefinitions
     /// <summary>The APU shutdown lines' reason: the APU keeps the buses until the engine generators carry them.</summary>
     internal const string ApuStaysTickText = "APU left running: the engine generators are not all on line.";
 
+    /// <summary>The APU master's reason, step and tick, in After Start and Shutdown: the master stays on over an APU that
+    /// did not stop.</summary>
+    internal const string ApuMasterStaysText = "APU master left on: the APU did not stop.";
+
+    /// <summary>The APU not read stopped (5 % or more, or unread): its master stays on. The master ticks share it, as the
+    /// flows' masters wait on their stops.</summary>
+    internal static bool ApuNotStopped(L1011FoStateEvaluator s) => !s.IsOn("FO_APU_OFF");
+
     /// <summary>Not all six engine generator relays read closed (one open, or any unread): the APU shutdown ticks are
     /// left alone, as the flow's APU steps wait for the same field.</summary>
     internal static bool EngineGeneratorsNotOnLine(L1011FoStateEvaluator s) => !s.IsOn("FO_ENGINE_GENERATORS_ON");
@@ -787,8 +800,9 @@ public static class L1011FoChecklistDefinitions
                 // The composite holds until the APU reads stopped, a slow condition (FO-11): about a minute.
                 LeaveAlone(Auto("AS_APU_STOP", G, "APU: stop", "FO_APU_OFF", On, Set(X.ApuStop, 1)),
                     EngineGeneratorsNotOnLine, ApuStaysTickText),
+                // The master only over an APU read stopped, as the flow's master waits on its stop.
                 LeaveAlone(Auto("AS_APU_MASTER_OFF", G, "APU master: off", ApuMaster, v => Is(v, 0), Set(ApuMaster, 0)),
-                    EngineGeneratorsNotOnLine, ApuStaysTickText),
+                    ApuNotStopped, ApuMasterStaysText),
             }
         };
     }
@@ -916,6 +930,13 @@ public static class L1011FoChecklistDefinitions
     /// <summary>The gear lever's up position (0 down, 50 off).</summary>
     private const int GearUp = 100;
 
+    /// <summary>The gear line's reason, and its flow step's.</summary>
+    internal const string GearStaysDownText = "Gear left down: on the ground.";
+
+    /// <summary>Not read airborne (on the ground, or the stock SIM_ON_GROUND unread): the gear stays down. The After
+    /// Takeoff gear step and its tick share it.</summary>
+    internal static bool NotAirborne(L1011FoStateEvaluator s) => !s.IsPosition("SIM_ON_GROUND", 0);
+
     /// <summary>
     /// The After Takeoff flow's writes and its Captain's flap schedule, in its order and with its labels: the gear line
     /// reads the lever up (the read-back's gear line reads the legs too), a single switch its key at the target, a
@@ -929,7 +950,9 @@ public static class L1011FoChecklistDefinitions
             Id = G, Name = "After Takeoff",
             Items = new()
             {
-                Auto("AT_GEAR", G, "Landing gear: up", "FO_GEAR_LEVER_UP", On, Set(L1011Levers.GearLeverKey, GearUp)),
+                // Gear up only with the aircraft read airborne, as the flow's step.
+                LeaveAlone(Auto("AT_GEAR", G, "Landing gear: up", "FO_GEAR_LEVER_UP", On, Set(L1011Levers.GearLeverKey, GearUp)),
+                    NotAirborne, GearStaysDownText),
                 Reminder("AT_CPT_FLAPS", G,
                     "Retract the flaps on schedule: 10 at V2 plus 10, 4 at V2 plus 20, up at V2 plus 60.",
                     label: "Flaps up on schedule"),
@@ -1086,11 +1109,18 @@ public static class L1011FoChecklistDefinitions
     private static readonly string[] SideWindows =
         { "SWITCH_ANTI_ICE_L_FWD", "SWITCH_ANTI_ICE_L_REAR", "SWITCH_ANTI_ICE_R_FWD", "SWITCH_ANTI_ICE_R_REAR" };
 
+    /// <summary>The ground-only After Landing lines' reasons: each says what stays as it is.</summary>
+    private const string AntiSkidStaysText = "Anti-skid left on: not read on the ground.";
+    private const string AirDataHeatStaysText = "Air data heat left on: not read on the ground.";
+    private const string StabTrimStaysText = "Stabilizer trim left as it is: not read on the ground.";
+    private const string SpeedBrakeStaysText = "Speed brake lever left as it is: not read on the ground.";
+
     /// <summary>
     /// The After Landing flow's fifteen writes, in its order and with its labels: a single switch reads its key at the
     /// target, a multi-switch line its synthetic, the stabilizer trim its readout at zero, the speed brake forward, the
-    /// flaps up, the APU start the APU turning. The flaps tick is left alone off the ground, as its step is; the APU start
-    /// tick holds until the APU turns, a slow condition ([FO-11]).
+    /// flaps up, the APU start the APU turning. A tick is the pilot's own and has no flow guard, so the anti-skid, air data
+    /// heat, stabilizer trim, speed brake and flaps ticks are each left alone off the ground; the APU start tick holds until
+    /// the APU turns, a slow condition ([FO-11]).
     /// </summary>
     private static Group AfterLanding()
     {
@@ -1100,18 +1130,25 @@ public static class L1011FoChecklistDefinitions
             Id = G, Name = "After Landing",
             Items = new()
             {
-                Auto("AL_ANTISKID", G, "Anti-skid: off", AntiSkid, v => Is(v, 0), Set(AntiSkid, 0)),
+                // In the air these four hurt the landing: anti-skid off, probe heat off, the trim zeroed, an armed speed
+                // brake stowed. On the ground only, as the flow's guard has it.
+                LeaveAlone(Auto("AL_ANTISKID", G, "Anti-skid: off", AntiSkid, v => Is(v, 0), Set(AntiSkid, 0)),
+                    NotOnGround, AntiSkidStaysText),
                 Auto("AL_AUTOBRAKE", G, "Autobrake: off", Autobrake, v => Is(v, AutobrakeOff), Set(Autobrake, AutobrakeOff)),
                 Auto("AL_LANDING_LIGHTS", G, "Landing lights: off", "FO_LANDING_LIGHTS_OFF", On, SetAll(All(0, LandingLights))),
                 Auto("AL_STROBES", G, "Strobe lights: off", StrobeLights, v => Is(v, 0), Set(StrobeLights, 0)),
                 Auto("AL_CONT_IGN", G, "Continuous ignition: off", ContIgnition, v => Is(v, 0), Set(ContIgnition, 0)),
-                Auto("AL_AIR_DATA", G, "Air data heat: off", "FO_AIR_DATA_HEAT_OFF", On, SetAll(All(0, AirDataHeat))),
+                LeaveAlone(Auto("AL_AIR_DATA", G, "Air data heat: off", "FO_AIR_DATA_HEAT_OFF", On, SetAll(All(0, AirDataHeat))),
+                    NotOnGround, AirDataHeatStaysText),
                 Auto("AL_WINDSHIELD", G, "Windshield heat: idle", "FO_WINDSHIELD_IDLE", On,
                     SetAll(All(0, "SWITCH_ANTI_ICE_CPT", "SWITCH_ANTI_ICE_FO"))),
                 Auto("AL_SIDE_WINDOWS", G, "Side window heat: off", "FO_SIDE_WINDOWS_OFF", On, SetAll(All(0, SideWindows))),
                 // The typed entry is write-only: the line reads the trim readout, which the executor verifies the write on.
-                Auto("AL_STAB_TRIM", G, "Stabilizer trim: zero", "FO_STAB_TRIM_ZERO", On, Set(L1011Levers.StabTrimKey, 0)),
-                Auto("AL_SPEED_BRAKE", G, "Speed brake lever: forward", "FO_SPEED_BRAKE_FORWARD", On, Set(L1011Levers.SpeedBrakeKey, 0)),
+                LeaveAlone(Auto("AL_STAB_TRIM", G, "Stabilizer trim: zero", "FO_STAB_TRIM_ZERO", On, Set(L1011Levers.StabTrimKey, 0)),
+                    NotOnGround, StabTrimStaysText),
+                LeaveAlone(Auto("AL_SPEED_BRAKE", G, "Speed brake lever: forward", "FO_SPEED_BRAKE_FORWARD", On,
+                        Set(L1011Levers.SpeedBrakeKey, 0)),
+                    NotOnGround, SpeedBrakeStaysText),
                 // The flaps move on the ground only, as the flow's step.
                 LeaveAlone(Auto("AL_FLAPS_UP", G, "Flaps: up", "FO_FLAPS_UP", On, Set(L1011Levers.FlapHandleKey, 0)),
                     NotOnGround, FlapsStayText),
@@ -1171,8 +1208,14 @@ public static class L1011FoChecklistDefinitions
     internal static bool ExtPowerNotWanted(L1011FoStateEvaluator s) =>
         s.IsOn("FO_APU_GEN_ON_LINE") || !s.IsOn("FO_EXT_POWER_AVAILABLE");
 
-    /// <summary>The fuel and ignition line's reason: an engine cut, so on the ground only.</summary>
-    private const string FuelIgnitionStaysText = "Fuel and ignition left on: not read on the ground.";
+    /// <summary>The fuel and ignition line's reason: an engine cut, so on the ground only, and with a source to take the
+    /// buses from the engine generators it cuts.</summary>
+    private const string FuelIgnitionStaysText =
+        "Fuel and ignition left on: not on the ground, or no APU generator or external power on line.";
+
+    /// <summary>Not read on the ground, or neither the APU generator nor external power read on line (both open, or
+    /// unread): the fuel and ignition stay on, or the aircraft would drop to its battery.</summary>
+    private static bool FuelCutNotAllowed(L1011FoStateEvaluator s) => NotOnGround(s) || !s.IsOn("FO_POWER_SOURCE_ON");
 
     private static readonly string[] FuelIgnition = { "TOGGLE_CUTOFF_ENG_1", "TOGGLE_CUTOFF_ENG_2", "TOGGLE_CUTOFF_ENG_3" };
 
@@ -1209,10 +1252,12 @@ public static class L1011FoChecklistDefinitions
                     ApuNotRunning, ApuGenStaysOffText),
                 LeaveAlone(Auto("PK_EXT_PWR", G, "External power: on", "FO_EXT_POWER_ON", On, Set(X.ExternalPower, 1)),
                     ExtPowerNotWanted, ExtPowerStaysOffText),
-                // An engine cut: never airborne, never unread; on the ground it goes ahead with the engines running.
+                // An engine cut: never airborne, never unread, and never with no power source on line to take the buses
+                // (the flow's power source wait, the MD-11's fuel line); on the ground with a source on line it goes ahead
+                // with the engines running.
                 LeaveAlone(Auto("PK_FUEL_IGN_OFF", G, "Fuel and ignition switches: off", "FO_FUEL_IGNITION_OFF", On,
                         SetAll(All(0, FuelIgnition))),
-                    NotOnGround, FuelIgnitionStaysText),
+                    FuelCutNotAllowed, FuelIgnitionStaysText),
                 Auto("PK_ANTICOL", G, "Anti-collision lights: off", AntiCollision, v => Is(v, 0), Set(AntiCollision, 0)),
                 Auto("PK_SEAT_BELTS", G, "Seat belt signs: off", SeatBelts, v => Is(v, 0), Set(SeatBelts, 0)),
                 // The INS and the pumps: parked only, with every engine stopped (FO-25).
@@ -1281,7 +1326,9 @@ public static class L1011FoChecklistDefinitions
                 Auto("SD_APU_BLEED_OFF", G, "APU bleed: off", ApuBleed, v => Is(v, 0), Set(ApuBleed, 0)),
                 // The composite holds until the APU reads stopped, a slow condition (FO-11): about a minute.
                 Auto("SD_APU_STOP", G, "APU: stop", "FO_APU_OFF", On, Set(X.ApuStop, 1)),
-                Auto("SD_APU_MASTER_OFF", G, "APU master: off", ApuMaster, v => Is(v, 0), Set(ApuMaster, 0)),
+                // The master only over an APU read stopped, as the flow's master waits on its stop.
+                LeaveAlone(Auto("SD_APU_MASTER_OFF", G, "APU master: off", ApuMaster, v => Is(v, 0), Set(ApuMaster, 0)),
+                    ApuNotStopped, ApuMasterStaysText),
                 // Off in the air depressurizes the cabin: on the ground only (FO-25).
                 LeaveAlone(Auto("SD_PACKS_OFF", G, "Packs: off", "FO_PACKS_OFF", On, SetAll(All(0, PackKeys))),
                     NotOnGround, PacksStayText),
@@ -1294,8 +1341,10 @@ public static class L1011FoChecklistDefinitions
                     NotParked, ParkedOnlyText),
                 Auto("SD_RADIO_MASTERS_OFF", G, "Radio master switches: off", "FO_RADIO_MASTERS_OFF", On,
                     SetAll(All(0, "SWITCH_MASTER_RADIO_ESS", "SWITCH_MASTER_RADIO_NO2"))),
+                // Parked only, and kept while the APU turns, as the flow's battery waits on the APU master (the PMDG
+                // 777's battery waits on its APU too).
                 LeaveAlone(Auto("SD_BATTERY_OFF", G, "Battery: off", Battery, v => Is(v, 0), Set(Battery, 0)),
-                    NotParked, ParkedOnlyText),
+                    s => NotParked(s) || s.IsOn("FO_APU_STARTING_OR_RUNNING"), ParkedApuOffText),
             }
         };
     }
@@ -1410,7 +1459,7 @@ public static class L1011FoChecklistDefinitions
 
     private const string ParkedOnlyText = "Left alone: the aircraft must be on the ground with the engines stopped.";
 
-    /// <summary>The fuel pump line's reason: it also keeps the pumps while the APU runs.</summary>
+    /// <summary>The fuel pump lines' and Shutdown's battery line's reason: each also stays while the APU runs.</summary>
     private const string ParkedApuOffText = "Left alone: the aircraft must be on the ground with the engines stopped and the APU shut down.";
 
     // On the ground (the stock SIM_ON_GROUND, the flow's PU_ON_GROUND) with every engine read stopped

@@ -76,6 +76,8 @@ public class FoEngineAndGroundGuardTests
         AssertGuardFirst(IFly737FlowDefinitions.Build(), "SHUTDOWN", "SD_ON_GROUND", IFly737StateEvaluator.OnGroundField);
         AssertGuardFirst(IFly737FlowDefinitions.Build(), "SECURE", "SE_ON_GROUND", IFly737StateEvaluator.OnGroundField);
         AssertGuardFirst(L1011FoFlowDefinitions.Build(), "SHUTDOWN", "SD_ON_GROUND", "SIM_ON_GROUND");
+        // The TriStar's After Landing zeroes the trim and stows the speed brake lever: never airborne either.
+        AssertGuardFirst(L1011FoFlowDefinitions.Build(), "AFTER_LANDING", "AL_ON_GROUND", "SIM_ON_GROUND");
     }
 
     private static void AssertPowerWaitBefore<T>(IEnumerable<FlowDefinition<T>> flows, string flowId, string waitId,

@@ -13,7 +13,8 @@ namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 /// <summary>
 /// The TriStar First Officer's After Takeoff flow, its action group and its two read-backs (the aircraft's take-off and
 /// climb pages), pinned by structure and by behaviour: the step ids and their order; the gear lever up, skipped once it
-/// reads up and not done when the aircraft refuses it on the ground; the flaps left to the Captain, with a read-only
+/// reads up, left alone (step and tick) unless the aircraft reads airborne, and not done when the lever does not move;
+/// the flaps left to the Captain, with a read-only
 /// wait of up to five minutes for them; every write's label, keys and targets word for word, with its "Already set" on
 /// its own state; the gear confirmed up last, read only, 20 s, then skipped ([FO-13]); the lines each step delivers
 /// ([FO-6], [FO-7]); and that every key is one the definition takes.
@@ -54,6 +55,13 @@ public class L1011FoAfterTakeoffTests
     {
         var evaluator = new L1011FoStateEvaluator();
         evaluator.SetSimConnect(SeededSimConnectCache.With(values));
+        return evaluator;
+    }
+
+    private static L1011FoStateEvaluator Connected(params (string Key, double Value)[] values)
+    {
+        var evaluator = new L1011FoStateEvaluator();
+        evaluator.SetSimConnect(SeededSimConnectCache.ConnectedWith(values));
         return evaluator;
     }
 
@@ -191,10 +199,10 @@ public class L1011FoAfterTakeoffTests
         Assert.False(skip(State()), "lever unread");
     }
 
-    /// <summary>The aircraft refuses gear up on the ground: the lever does not move, so the write reads back not done
-    /// and the step is not done (Skip, spoken by the flow).</summary>
+    /// <summary>A gear lever that does not move (the fake never delivers it) reads back not done, and the step is not done
+    /// (Skip, spoken by the flow).</summary>
     [Fact]
-    public async Task Gear_up_refused_on_the_ground_reads_back_not_done()
+    public async Task A_gear_lever_that_does_not_move_reads_back_not_done()
     {
         var ac = new FakeL1011Aircraft();
         ac.Set(GearLever, 0);
@@ -278,12 +286,46 @@ public class L1011FoAfterTakeoffTests
     }
 
     [Fact]
-    public void Nothing_in_After_Takeoff_is_left_alone_and_nothing_cuts()
+    public void Only_the_gear_is_left_alone_and_nothing_cuts()
     {
-        Assert.DoesNotContain(AfterTakeoff.Steps, s => s.LeaveAloneWhen != null);
-        Assert.DoesNotContain(Group("AFTER_TAKEOFF").Items, i => i.LeaveAloneWhen != null);
+        Assert.Equal(new[] { "AT_GEAR" }, AfterTakeoff.Steps.Where(s => s.LeaveAloneWhen != null).Select(s => s.Id));
+        Assert.Equal(new[] { "AT_GEAR" }, Group("AFTER_TAKEOFF").Items.Where(i => i.LeaveAloneWhen != null).Select(i => i.Id));
         foreach (var label in AfterTakeoff.Steps.Select(s => s.Label).Concat(Group("AFTER_TAKEOFF").Items.Select(i => i.Label)))
             Assert.Null(FoCutGuardSweepTests.CutKind(label));
+    }
+
+    private const string GearText = "Gear left down: on the ground.";
+
+    /// <summary>Gear up goes ahead only with the aircraft read airborne: the step and its tick are left alone, aloud, on
+    /// the ground or with the on-ground flag unread, and nothing is written. Whether the aircraft itself refuses gear up on
+    /// the ground has not been seen live, so the First Officer never relies on it.</summary>
+    [Fact]
+    public void Gear_up_is_left_alone_unless_read_airborne()
+    {
+        foreach (var (leaves, text) in new[] { (Of("AT_GEAR").LeaveAloneWhen!, Of("AT_GEAR").LeaveAloneText),
+                     (Line("AT_GEAR").LeaveAloneWhen!, Line("AT_GEAR").LeaveAloneText) })
+        {
+            Assert.Equal(GearText, text);
+            Assert.True(leaves(State(("SIM_ON_GROUND", 1))), "on the ground");
+            Assert.True(leaves(State()), "the on-ground flag unread");
+            Assert.False(leaves(State(("SIM_ON_GROUND", 0))), "airborne");
+        }
+    }
+
+    [Fact]
+    public void The_gear_tick_through_the_checklist_manager_is_refused_aloud_on_the_ground()
+    {
+        var groups = L1011FoChecklistDefinitions.Build();
+        var ac = AircraftFor(Of("AT_GEAR"));
+        var exec = new X();
+        exec.SetTransport(ac);
+        var mgr = new ChecklistManager<X, L1011FoStateEvaluator>(Connected(("SIM_ON_GROUND", 1), (GearLever, 0)), exec, groups);
+        var line = groups.SelectMany(g => g.Items).Single(i => i.Id == "AT_GEAR");
+
+        Assert.False(mgr.ToggleItem(line.GroupId, line.Id, out var spoken));
+        Assert.Equal(GearText, spoken);
+        Assert.False(line.IsChecked);
+        Assert.DoesNotContain(ac.Io, e => e.Kind == FakeL1011IoKind.Write);
     }
 
     // ------------------------------------------------------------------ every field is served

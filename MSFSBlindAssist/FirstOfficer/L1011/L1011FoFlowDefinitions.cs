@@ -70,8 +70,9 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// weather radar on. Its one cut, packs 1 and 3 off, is left alone off the ground, as its tick is ([FO-25]). The
 /// anti-skid carries a toggle: its single-switch step reads its own position first.
 ///
-/// After Takeoff puts the gear lever up (the aircraft refuses it on the ground, and the lever's read-back then reports
-/// the step not done), reminds the Captain of the flap schedule, sets the climb (autobrake, nose, taxi and turnoff
+/// After Takeoff puts the gear lever up, only with the aircraft read airborne: on the ground, or with the on-ground flag
+/// unread, the step and its tick are left alone, aloud (whether the aircraft itself refuses gear up on the ground has not
+/// been seen live). It reminds the Captain of the flap schedule, sets the climb (autobrake, nose, taxi and turnoff
 /// lights, continuous ignition off, packs on), waits up to five minutes, read only, for the Captain's flaps up, and
 /// confirms the gear up last ([FO-13]): a read-only 20 s wait on the lever and the legs that never writes.
 ///
@@ -87,7 +88,9 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// lever down, the Captain's flap schedule, and the gear confirmed down last ([FO-13]). The landing autobrake stays the
 /// Captain's ([FO-14]).
 ///
-/// After Landing is the manual's after landing, cleared off the runway: anti-skid and autobrake off, the landing and
+/// After Landing is the manual's after landing, cleared off the runway. It opens with the ground guard (read only, Stop):
+/// started in the air by mistake it would turn the air data heat and anti-skid off, zero the trim and stow the speed
+/// brake lever, so it stops whole. Then anti-skid and autobrake off, the landing and
 /// strobe lights, continuous ignition and the air data, windshield and side window heat off, the stabilizer trim zeroed
 /// (verified on its readout), the speed brake lever forward, the flaps up (on the ground only, left alone otherwise, as
 /// After Start's take-off flaps are), the weather radar and the 1A and 3A transfers off, then the APU master on and the
@@ -99,22 +102,24 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// <c>PK_STOPPED</c>), sets the parking brake and turns the ground lights off, waits up to two minutes for the APU After
 /// Landing started (left alone at once when it does not turn), puts its generator on line, or external power on when the
 /// APU generator is not on line and ground power is there, and confirms one of the two on line, read only, Stop, before
-/// the fuel and ignition go off (the MD-11's <c>PK_POWER_SOURCE</c>: never drop to the battery). The anti-collision
-/// lights and seat belt signs go off; then the engines are read stopped, read only, up to two minutes, Stop, before the
-/// INS, the ATMs, the AC pumps and the tank pumps come off ([FO-25]): an engine that does not stop ends the flow before
-/// any of them is cut, and no tank pump is ever switched off under a running engine. The fuel panel leaves the tank 2
+/// the fuel and ignition go off (the MD-11's <c>PK_POWER_SOURCE</c>: never drop to the battery). Then the engines are
+/// read stopped, read only, up to two minutes, Stop, before anything else: the anti-collision lights (the ground crew's
+/// sign that engines turn, off only once they stop, as the MD-11's beacon), the seat belt signs, and the INS, the ATMs,
+/// the AC pumps and the tank pumps ([FO-25]). An engine that does not stop ends the flow with the beacon on and nothing
+/// cut, and no tank pump is ever switched off under a running engine. The fuel panel leaves the tank 2
 /// left pump and the engine 2 tank valve on for the APU, the crossfeeds closed. The APU bleed goes on and the Captain is
 /// reminded of ground power. The seat belts, the APU bleed and the three fuel and ignition switches carry a toggle: each
 /// step's "Already set" reads its own keys, and the executor reads each key before it writes it.
 ///
 /// Shutdown is the manual's securing. It cuts the pumps and the battery, so it opens with both guards, on the ground and
 /// engines stopped ([FO-25]). The emergency lights and galley go off; the APU is shut down in the manual's order: the
-/// generator breaker tripped, the bleed off, the stop pressed and held until the APU reads stopped (live, about a minute
-/// from 100 to 0), then, only when this run sent the stop, a wait of up to 150 s for it to a standstill, and the master
-/// off only once the stop is done or found done. The packs go off on the ground only, external power off when it was used
-/// (a breaker read open is "Already set"), then the fuel pumps, left alone while the APU turns (the tank 2 left pump feeds
-/// it); standby power, the radio masters and the battery come last. The APU bleed carries a toggle: its single-switch step
-/// reads its own position first.
+/// generator breaker tripped, the bleed off, the stop pressed and held until the APU reads stopped (below 5 %; live, about
+/// a minute from 100 to 0), then a wait of up to 150 s for it to a standstill (below 1 %), already set when it reads so,
+/// so an APU found coasting is waited out too, and the master off only once the stop is done or found done. The packs go
+/// off on the ground only, external power off when it was used (a breaker read open is "Already set"), then the fuel
+/// pumps, left alone while the APU turns (the tank 2 left pump feeds it); standby power and the radio masters come last,
+/// then the battery, only once the APU master went off or was found off (the PMDG 777's battery waits on its APU too).
+/// The APU bleed carries a toggle: its single-switch step reads its own position first.
 /// </summary>
 public static class L1011FoFlowDefinitions
 {
@@ -720,9 +725,9 @@ public static class L1011FoFlowDefinitions
     /// <summary>What every APU step says when the engine generators were not all read on line: the APU stays.</summary>
     private const string ApuStaysText = "The engine generators are not all on line, so the APU stays running.";
 
-    /// <summary>What the APU master says when the stop was skipped or not done: the master is never switched off over an
-    /// APU that may still be turning. After Start's and Shutdown's.</summary>
-    private const string ApuMasterStaysText = "APU master left on: the APU did not stop.";
+    /// <summary>What the APU master says when the stop was skipped or not done, and its tick while the APU does not read
+    /// stopped. After Start's and Shutdown's.</summary>
+    private const string ApuMasterStaysText = L1011FoChecklistDefinitions.ApuMasterStaysText;
 
     private static readonly string[] AtmKeys = { "ROTARY_HYD_B2_MODE", "ROTARY_HYD_C2_MODE" };
 
@@ -900,10 +905,12 @@ public static class L1011FoFlowDefinitions
         RelatedChecklistGroupIds = new[] { "AFTER_TAKEOFF", "AFTER_TAKEOFF_CL", "CLIMB_CL" },
         Steps = new()
         {
-            // Already set once the lever reads up. On the ground the aircraft refuses it: the lever stays down, the
-            // read-back reports the step not done, and the flow says so and goes on. Its read-back line is the legs',
-            // which the gear check last delivers.
-            Done(Skip(SW("AT_GEAR", "Landing gear: up", L1011Levers.GearLeverKey, GearUp),
+            // Already set once the lever reads up. Written only with the aircraft read airborne: on the ground, or with
+            // the on-ground flag unread, it is left alone, aloud, as its tick is. Whether the aircraft itself refuses gear
+            // up on the ground has not been seen live, so nothing relies on it. Its read-back line is the legs', which
+            // the gear check last delivers.
+            Done(Skip(LeaveAlone(SW("AT_GEAR", "Landing gear: up", L1011Levers.GearLeverKey, GearUp),
+                    L1011FoChecklistDefinitions.NotAirborne, L1011FoChecklistDefinitions.GearStaysDownText),
                 s => s.IsOn("FO_GEAR_LEVER_UP")), "AT_GEAR"),
             // The flaps stay the Captain's in flight.
             Done(Captain("AT_CPT_FLAPS", "Flaps up on schedule",
@@ -1026,6 +1033,9 @@ public static class L1011FoFlowDefinitions
         RelatedChecklistGroupIds = new[] { "AFTER_LANDING", "AFTER_LANDING_CL" },
         Steps = new()
         {
+            // Started airborne by mistake, the flow would turn the air data heat and anti-skid off, zero the trim and stow
+            // the speed brake lever: never in the air. Read only, fails unread, links no line.
+            OnGroundGuard("AL_ON_GROUND"),
             // A toggle-carrying switch: written only over its own position read (L1011-4).
             Also(Done(Skip(SW("AL_ANTISKID", "Anti-skid: off", "SWITCH_ANTISKID_ON", 0),
                 s => s.IsPosition("SWITCH_ANTISKID_ON", 0)), "AL_ANTISKID"), "ALC_ANTISKID"),
@@ -1096,7 +1106,7 @@ public static class L1011FoFlowDefinitions
     {
         Id = "PARKING", Name = "Parking",
         Description = "Aircraft stopped; ground lights off, parking brake set; the APU generator or external power on line "
-            + "before the fuel and ignition go off; anti-collision lights and seat belts off; once the engines stop, INS off, "
+            + "before the fuel and ignition go off; once the engines stop, anti-collision lights and seat belts off, INS off, "
             + "transponder standby, ATMs and AC pumps off, the fuel panel set for the APU; APU bleed on.",
         RelatedChecklistGroupIds = new[] { "PARKING", "PARKING_CL" },
         Steps = new()
@@ -1128,16 +1138,17 @@ public static class L1011FoFlowDefinitions
             // Toggle-carrying switches: each key read before it is written, and refused from an unknown position (L1011-4).
             Also(Done(Skip(Multi("PK_FUEL_IGN_OFF", "Fuel and ignition switches: off", AllTo(0, FuelIgnitionKeys)),
                 s => s.IsOn("FO_FUEL_IGNITION_OFF")), "PK_FUEL_IGN_OFF"), "PKC_FUEL_IGN"),
+
+            // ---- the engines stopped before anything else (FO-25): the beacon, the ground crew's sign that engines turn,
+            // goes off only once they stop, as the MD-11's does, and an engine that does not stop ends the flow here,
+            // with the beacon on and before a tank pump goes off under it. Read only; links no line.
+            WaitForField("PK_SPOOL_DOWN", "Engines stopped", "FO_ENGINES_STOPPED", On, ParkingWaitSeconds,
+                onTimeout: FlowStepFailurePolicy.Stop),
             Also(Done(Skip(SW("PK_ANTICOL", "Anti-collision lights: off", "SWITCH_ANTICOL_LIGHT", 0),
                 s => s.IsPosition("SWITCH_ANTICOL_LIGHT", 0)), "PK_ANTICOL"), "PKC_ANTICOL"),
             // A toggle-carrying switch: written only over its own position read (L1011-4).
             Also(Done(Skip(SW("PK_SEAT_BELTS", "Seat belt signs: off", "SWITCH_SEATBELT_LIGHT", 0),
                 s => s.IsPosition("SWITCH_SEATBELT_LIGHT", 0)), "PK_SEAT_BELTS"), "PKC_SEAT_BELTS"),
-
-            // ---- the engines stopped before the INS and any pump is cut (FO-25): an engine that does not stop ends the
-            // flow here, before a tank pump goes off under it. Read only; links no line.
-            WaitForField("PK_SPOOL_DOWN", "Engines stopped", "FO_ENGINES_STOPPED", On, ParkingWaitSeconds,
-                onTimeout: FlowStepFailurePolicy.Stop),
             Also(Done(Skip(Multi("PK_INS_OFF", "INS: all off", AllTo(0, InsModeKeys)),
                 s => s.IsOn("FO_INS_OFF")), "PK_INS_OFF"), "PKC_INS"),
             Also(Done(Skip(SW("PK_XPDR", "Transponder: standby", "ROTARY_TCAS_MODE", 1),
@@ -1159,8 +1170,11 @@ public static class L1011FoFlowDefinitions
 
     // ------------------------------------------------------------------ Shutdown (the manual's securing)
 
-    /// <summary>How long Shutdown waits for the APU to come to a standstill after this run's stop.</summary>
+    /// <summary>How long Shutdown waits for the APU to come to a standstill.</summary>
     private const int ApuStandstillSeconds = 150;
+
+    /// <summary>What the battery says when the APU master was left on: the battery stays with it.</summary>
+    private const string BatteryStaysText = "Battery left on: the APU did not stop.";
 
     /// <summary>What the pump cut says while the APU turns: the tank 2 left pump feeds it.</summary>
     private const string PumpsStayForApuText = "Fuel pumps left on: the APU is running.";
@@ -1192,10 +1206,13 @@ public static class L1011FoFlowDefinitions
             // One press, then the composite holds until the APU reads stopped (below 5 %). Already set below 5 %.
             Also(Done(Skip(SW("SD_APU_STOP", "APU: stop", X.ApuStop, 1),
                 s => s.IsOn("FO_APU_OFF")), "SD_APU_STOP"), "SDC_APU_STOP"),
-            // Only after a stop this run sent: then on to a standstill, below the 1 % the pump cut keeps the pumps for,
-            // so the two agree. Read only; timed out, skipped aloud.
-            Sent(WaitForField("SD_APU_STOPPED", "APU to stop", "L1011_RO_APU_RPM",
-                v => v < L1011FoStateEvaluator.ApuStartingRpm, ApuStandstillSeconds), "SD_APU_STOP"),
+            // On to a standstill, below the 1 % the pump cut keeps the pumps for, so the two agree. Already set below it,
+            // so an APU found stopped costs no wait; otherwise it runs, unread included, whether or not this run sent the
+            // stop: an APU found coasting between 1 and 5 % (stopped to the stop step) is waited out before the master and
+            // the pump cut. Read only; timed out, skipped aloud.
+            Skip(WaitForField("SD_APU_STOPPED", "APU to stop", "L1011_RO_APU_RPM",
+                    v => v < L1011FoStateEvaluator.ApuStartingRpm, ApuStandstillSeconds),
+                s => s.GetValue("L1011_RO_APU_RPM") < L1011FoStateEvaluator.ApuStartingRpm),
             // Only once the stop is done or found done ("Already set" is not a skip).
             Also(Done(Skip(Requires(SW("SD_APU_MASTER_OFF", "APU master: off", "TOGGLE_APU_POWER", 0),
                     "SD_APU_STOP", ApuMasterStaysText),
@@ -1220,7 +1237,10 @@ public static class L1011FoFlowDefinitions
             Also(Done(Skip(Multi("SD_RADIO_MASTERS_OFF", "Radio master switches: off",
                     AllTo(0, "SWITCH_MASTER_RADIO_ESS", "SWITCH_MASTER_RADIO_NO2")),
                 s => s.IsOn("FO_RADIO_MASTERS_OFF")), "SD_RADIO_MASTERS_OFF"), "SDC_RADIO_MASTERS"),
-            Also(Done(Skip(SW("SD_BATTERY_OFF", "Battery: off", "TOGGLE_BATTERY", 0),
+            // Only once the APU master went off or was found off: a master left on (the APU did not stop) leaves the
+            // battery on, as the PMDG 777's battery waits on its APU.
+            Also(Done(Skip(Requires(SW("SD_BATTERY_OFF", "Battery: off", "TOGGLE_BATTERY", 0),
+                    "SD_APU_MASTER_OFF", BatteryStaysText),
                 s => s.IsPosition("TOGGLE_BATTERY", 0)), "SD_BATTERY_OFF"), "SDC_BATTERY"),
         }
     };

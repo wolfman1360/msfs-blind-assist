@@ -12,9 +12,10 @@ namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 
 /// <summary>
 /// The TriStar First Officer's After Landing flow, its action group and its read-back (the aircraft's after landing
-/// page), pinned by structure and by behaviour: the step ids and their order; every write's label, keys and targets
-/// word for word, with its "Already set" on its own state; the stabilizer trim zeroed and verified on its readout; the
-/// flaps up on the ground only, the step and its tick left alone otherwise; the APU master on and the APU started to its
+/// page), pinned by structure and by behaviour: the step ids and their order, the ground guard first, read only, Stop;
+/// every write's label, keys and targets word for word, with its "Already set" on its own state; the stabilizer trim
+/// zeroed and verified on its readout; the flaps up on the ground only, the step and its tick left alone otherwise, and
+/// the anti-skid, air data heat, stabilizer trim and speed brake ticks too; the APU master on and the APU started to its
 /// spin-up; no fuel, pump, INS, battery or pack cut; the lines each step delivers ([FO-6], [FO-7]); the groups arrival
 /// groups ([FO-22]); and that every key is one the definition takes, the anti-skid's toggle-carrying key only ever
 /// written over its own position read ([L1011-4]).
@@ -54,6 +55,10 @@ public class L1011FoAfterLandingTests
     private const string Ground = "SIM_ON_GROUND";
 
     private const string FlapsText = "Flaps left as they are: not read on the ground.";
+    private const string AntiSkidText = "Anti-skid left on: not read on the ground.";
+    private const string AirDataText = "Air data heat left on: not read on the ground.";
+    private const string StabTrimText = "Stabilizer trim left as it is: not read on the ground.";
+    private const string SpeedBrakeText = "Speed brake lever left as it is: not read on the ground.";
 
     private static L1011FoStateEvaluator State(params (string Key, double Value)[] values)
     {
@@ -81,14 +86,38 @@ public class L1011FoAfterLandingTests
 
     private static readonly string[] StepIds =
     {
+        "AL_ON_GROUND",
         "AL_ANTISKID", "AL_AUTOBRAKE", "AL_LANDING_LIGHTS", "AL_STROBES", "AL_CONT_IGN", "AL_AIR_DATA", "AL_WINDSHIELD",
         "AL_SIDE_WINDOWS", "AL_STAB_TRIM", "AL_SPEED_BRAKE", "AL_FLAPS_UP", "AL_RADAR", "AL_TRANSFERS_OFF", "AL_APU_MASTER",
         "AL_APU_START",
     };
 
+    /// <summary>The action group's lines: every step but the guard.</summary>
+    private static readonly string[] ActionLineIds = StepIds.Skip(1).ToArray();
+
     [Fact]
     public void AfterLanding_StepIdsAreInOrder()
         => Assert.Equal(StepIds, AfterLanding.Steps.Select(s => s.Id));
+
+    /// <summary>Started airborne (a mis-start on the approach), the flow would turn the air data heat and anti-skid off,
+    /// zero the trim and stow the speed brake lever: it opens with the fleet's ground guard, a read-only Stop of 5 s that
+    /// fails unread and links no line, so it stops whole.</summary>
+    [Fact]
+    public void The_ground_guard_comes_first_a_read_only_stop_that_links_nothing()
+    {
+        var guard = AfterLanding.Steps[0];
+        Assert.Equal(("AL_ON_GROUND", "On the ground", "SIM_ON_GROUND"), (guard.Id, guard.Label, guard.ConditionFieldName));
+        Assert.Equal(FlowStepActionType.WaitForCondition, guard.ActionType);
+        Assert.Equal(FlowStepFailurePolicy.Stop, guard.FailurePolicy);
+        Assert.Equal(5, guard.TimeoutSeconds);
+        Assert.Null(guard.SkipCondition);
+        Assert.Null(guard.LeaveAloneWhen);
+        Assert.Empty(guard.LinkedChecklistItemIds);
+        Assert.False(guard.Condition!(double.NaN), "unread must fail");
+        Assert.False(guard.Condition!(0));
+        Assert.True(guard.Condition!(1));
+        Assert.Equal(1, AfterLanding.Steps.Count(s => s.ActionType == FlowStepActionType.WaitForCondition));
+    }
 
     // ------------------------------------------------------------------ the writes
 
@@ -133,9 +162,11 @@ public class L1011FoAfterLandingTests
         => Assert.Equal(Writes.Select(w => w.Id).OrderBy(x => x, StringComparer.Ordinal),
             AfterLanding.Steps.Where(IsSwitch).Select(s => s.Id).OrderBy(x => x, StringComparer.Ordinal));
 
-    /// <summary>Every step's lines, from the table: each write its action line then the read-back line it sets.</summary>
+    /// <summary>Every step's lines, from the table: each write its action line then the read-back line it sets, the guard
+    /// none.</summary>
     private static readonly Dictionary<string, string[]> Links = new(StringComparer.Ordinal)
     {
+        ["AL_ON_GROUND"] = Array.Empty<string>(),
         ["AL_ANTISKID"] = new[] { "AL_ANTISKID", "ALC_ANTISKID" },
         ["AL_AUTOBRAKE"] = new[] { "AL_AUTOBRAKE", "ALC_AUTOBRAKE" },
         ["AL_LANDING_LIGHTS"] = new[] { "AL_LANDING_LIGHTS", "ALC_LANDING_LIGHTS" },
@@ -160,7 +191,7 @@ public class L1011FoAfterLandingTests
         {
             Assert.True(Links.TryGetValue(s.Id, out var expected), $"{s.Id} is not in the table");
             Assert.Equal(expected, s.LinkedChecklistItemIds);
-            Assert.Equal(expected!.First(), s.CompletesChecklistItemId);
+            Assert.Equal(expected!.FirstOrDefault(), s.CompletesChecklistItemId);
         }
         Assert.Equal(StepIds.Length, Links.Count);
     }
@@ -269,13 +300,55 @@ public class L1011FoAfterLandingTests
         Assert.False(line.IsChecked);
     }
 
-    /// <summary>Only the flaps are left alone, in the flow and in the action group.</summary>
+    /// <summary>In the flow only the flaps are left alone (the ground guard stands before every step); in the action group
+    /// the anti-skid, air data heat, stabilizer trim, speed brake and flaps ticks are, each off the ground.</summary>
     [Fact]
-    public void Only_the_flaps_are_left_alone()
+    public void Only_the_ground_only_lines_are_left_alone()
     {
         Assert.Equal(new[] { "AL_FLAPS_UP" }, AfterLanding.Steps.Where(s => s.LeaveAloneWhen != null).Select(s => s.Id));
-        Assert.Equal(new[] { "AL_FLAPS_UP" }, Group("AFTER_LANDING").Items.Where(i => i.LeaveAloneWhen != null).Select(i => i.Id));
+        Assert.Equal(new[] { "AL_ANTISKID", "AL_AIR_DATA", "AL_STAB_TRIM", "AL_SPEED_BRAKE", "AL_FLAPS_UP" },
+            Group("AFTER_LANDING").Items.Where(i => i.LeaveAloneWhen != null).Select(i => i.Id));
         Assert.DoesNotContain(AfterLanding.Steps, s => s.RequiresStepId != null || s.RunOnlyIfStepSent != null);
+    }
+
+    /// <summary>
+    /// A tick is the pilot's own and needs no flow, so it carries the guard itself: in the air the anti-skid off, the air
+    /// data heat off, the trim zeroed or the speed brake lever stowed (disarming an armed speed brake) would each hurt the
+    /// landing. Each is left alone airborne or with the ground unread, saying what stays as it is, and goes ahead on the
+    /// ground.
+    /// </summary>
+    [Theory]
+    [InlineData("AL_ANTISKID", AntiSkidText)]
+    [InlineData("AL_AIR_DATA", AirDataText)]
+    [InlineData("AL_STAB_TRIM", StabTrimText)]
+    [InlineData("AL_SPEED_BRAKE", SpeedBrakeText)]
+    public void A_ground_only_tick_is_left_alone_off_the_ground(string id, string text)
+    {
+        var tick = Line(id);
+        Assert.Equal(text, tick.LeaveAloneText);
+        Assert.True(tick.LeaveAloneWhen!(State((Ground, 0))), "airborne");
+        Assert.True(tick.LeaveAloneWhen!(State()), "the ground unread");
+        Assert.False(tick.LeaveAloneWhen!(State((Ground, 1))), "on the ground");
+    }
+
+    [Theory]
+    [InlineData("AL_ANTISKID", AntiSkidText)]
+    [InlineData("AL_AIR_DATA", AirDataText)]
+    [InlineData("AL_STAB_TRIM", StabTrimText)]
+    [InlineData("AL_SPEED_BRAKE", SpeedBrakeText)]
+    public void A_ground_only_tick_through_the_checklist_manager_is_refused_aloud_airborne(string id, string text)
+    {
+        var groups = L1011FoChecklistDefinitions.Build();
+        var ac = AircraftFor(Of(id));
+        var exec = new X();
+        exec.SetTransport(ac);
+        var mgr = new ChecklistManager<X, L1011FoStateEvaluator>(Connected((Ground, 0)), exec, groups);
+        var line = groups.SelectMany(g => g.Items).Single(i => i.Id == id);
+
+        Assert.False(mgr.ToggleItem(line.GroupId, line.Id, out var spoken));
+        Assert.Equal(text, spoken);
+        Assert.False(line.IsChecked);
+        Assert.DoesNotContain(ac.Io, e => e.Kind == FakeL1011IoKind.Write);
     }
 
     // ------------------------------------------------------------------ nothing cut ([FO-25])
@@ -351,9 +424,13 @@ public class L1011FoAfterLandingTests
     public void The_read_back_has_no_check_action()
         => Assert.All(Group("AFTER_LANDING_CL").Items, i => Assert.True(i.CheckAction == null, $"{i.Id} has a CheckAction"));
 
+    /// <summary>The ground guard is flow-only.</summary>
     [Fact]
     public void AfterLanding_ActionLines_InTheFlowsOrder()
-        => Assert.Equal(StepIds, Group("AFTER_LANDING").Items.Select(i => i.Id));
+    {
+        Assert.Equal(ActionLineIds, Group("AFTER_LANDING").Items.Select(i => i.Id));
+        Assert.DoesNotContain(Groups.SelectMany(g => g.Items), i => i.Id == "AL_ON_GROUND");
+    }
 
     [Fact]
     public void AfterLanding_ActionLabels_AreTheFlowStepLabels()

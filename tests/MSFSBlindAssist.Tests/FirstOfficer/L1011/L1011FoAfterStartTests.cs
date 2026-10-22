@@ -486,7 +486,7 @@ public class L1011FoAfterStartTests
     }
 
     /// <summary>In the flow only the flaps and the transfers are left alone (the APU steps hang on the generator wait
-    /// instead); in the action group the four APU shutdown ticks are too.</summary>
+    /// and the stop instead); in the action group the four APU shutdown ticks are too.</summary>
     [Fact]
     public void Only_the_flaps_the_transfers_and_the_APU_shutdown_ticks_are_left_alone()
     {
@@ -499,12 +499,13 @@ public class L1011FoAfterStartTests
 
     private const string ApuTickText = "APU left running: the engine generators are not all on line.";
 
-    public static IEnumerable<object[]> ApuShutdownTicks() => ApuTail.Select(id => new object[] { id });
+    public static IEnumerable<object[]> ApuShutdownTicks() => ApuTail.Take(3).Select(id => new object[] { id });
 
     /// <summary>
     /// A hand tick that trips the APU generator, or stops the APU, with an engine generator off line would leave the
-    /// buses on the battery: each of the four APU shutdown ticks goes ahead only once all six engine generator relays
-    /// read closed, as the flow waits for them. One relay open, or any unread, refuses it aloud.
+    /// buses on the battery: the generator trip, bleed and stop ticks each go ahead only once all six engine generator
+    /// relays read closed, as the flow waits for them. One relay open, or any unread, refuses it aloud. The master's tick
+    /// waits on the APU instead (below).
     /// </summary>
     [Theory]
     [MemberData(nameof(ApuShutdownTicks))]
@@ -531,6 +532,47 @@ public class L1011FoAfterStartTests
                 Assert.False(item.IsChecked);
                 Assert.Empty(aircraft.Io);
             }
+        }
+    }
+
+    /// <summary>
+    /// The master's tick goes ahead only once the APU reads stopped (below 5 %, the stop's own "done"), as the flow's
+    /// master waits on its stop: running, at 5 % or unread, it is refused aloud and nothing is written. With the APU
+    /// stopped, the engine generators do not matter to the master.
+    /// </summary>
+    [Fact]
+    public async Task The_APU_master_tick_waits_for_the_APU_to_read_stopped()
+    {
+        var line = Line("AS_APU_MASTER_OFF");
+        Assert.Equal(MasterLeftOnText, line.LeaveAloneText);
+        var relays = GeneratorRelays.Select(r => (r, 1.0)).ToArray();
+
+        foreach (var (seeds, why) in new[]
+                 {
+                     (relays.Append((ApuRpm, 0.0)).ToArray(), "stopped"),
+                     (relays.Append((ApuRpm, 4.9)).ToArray(), "below 5 %"),
+                     (relays.Where(r => r.Item1 != GeneratorRelays[0]).Append((GeneratorRelays[0], 0.0)).Append((ApuRpm, 0.0)).ToArray(),
+                         "stopped, a generator relay open"),
+                 })
+        {
+            var (ticked, spoken, _, ac) = await TickAsync("AS_APU_MASTER_OFF", seeds);
+            Assert.True(ticked, why);
+            Assert.Null(spoken);
+            Assert.Equal(new[] { ("TOGGLE_APU_POWER", 0.0) }, ac.Writes);
+        }
+
+        foreach (var (seeds, why) in new[]
+                 {
+                     (relays.Append((ApuRpm, 100.0)).ToArray(), "running"),
+                     (relays.Append((ApuRpm, 5.0)).ToArray(), "at 5 %"),
+                     (relays, "unread"),
+                 })
+        {
+            var (ticked, spoken, item, ac) = await TickAsync("AS_APU_MASTER_OFF", seeds);
+            Assert.False(ticked, why);
+            Assert.Equal(MasterLeftOnText, spoken);
+            Assert.False(item.IsChecked);
+            Assert.Empty(ac.Io);
         }
     }
 
