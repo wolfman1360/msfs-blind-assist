@@ -14,8 +14,8 @@ namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 /// start" page up to its first ground start), pinned by structure and by behaviour: the step ids and their order; the
 /// ground guard and the two Stop waits that open it, so external power goes off only once the APU generator is on
 /// line; every write's label, keys and targets word for word, with its "Already set" on its own state; the doors
-/// prompt while the door light is lit or unread; each INS unit turned to NAV only once it is aligned or already at
-/// NAV, its Captain line otherwise ([FO-20]); the navigating check; the cabin barometric setting copied from the
+/// prompt while a door position reads open or unread; each INS unit turned to NAV only once it is aligned or already
+/// at NAV, its "not in NAV" Captain line otherwise ([FO-20]); the navigating check; the cabin barometric setting copied from the
 /// captain's altimeter, with its Captain fallback; the fleet's Before Start tail; the lines each step delivers
 /// ([FO-6], [FO-7]); the pack 2 tick left alone off the ground ([FO-25]); and that every key is one the definition
 /// takes, a toggle-carrying key only ever written over its own position read ([L1011-4]).
@@ -46,7 +46,13 @@ public class L1011FoBeforeStartTests
     private const string ExtPowerBreaker = "L1011_RO_EXT_PWR_BREAKER";
     private const string CabinBaroReadout = "L1011_RO_CABIN_BARO";
     private const string CaptainAltimeter = "L1011_RO_ALTIMETER_1";
-    private const string DoorLamp = "LAMP_LX_MIP_DOOR_OPEN";
+    private const string DoorLamp = "LAMP_LX_MIP_DOOR_OPEN";   // the main panel door light: it does not follow the doors
+
+    /// <summary>The four stock door positions in percent (the First Officer's door reads).</summary>
+    private static (string Key, double Value)[] Doors(double d0, double d1, double d2, double d3) => new[]
+    {
+        ("L1011_FO_EXIT_OPEN_0", d0), ("L1011_FO_EXIT_OPEN_1", d1), ("L1011_FO_EXIT_OPEN_2", d2), ("L1011_FO_EXIT_OPEN_3", d3),
+    };
 
     private static string InsMode(int unit) => $"ROTARY_INS_MODE_{unit}";
     private static string InsStatus(int unit) => $"INS_{unit}_ALIGNMENT_STATUS";
@@ -353,10 +359,11 @@ public class L1011FoBeforeStartTests
 
     // ------------------------------------------------------------------ the doors
 
-    /// <summary>The doors are the tablet's: the Captain is asked while the door light reads lit or unread, never
-    /// while it reads out; the check that follows ticks the read-back's door line.</summary>
+    /// <summary>The doors are the tablet's: the Captain is asked while any of the four door positions reads open
+    /// (5 percent or more) or is unread, never while all read closed; the main panel's door light decides nothing,
+    /// because it stayed out with the main door open. The check that follows ticks the read-back's door line.</summary>
     [Fact]
-    public void The_doors_prompt_speaks_while_the_door_light_is_lit_or_unread()
+    public void The_doors_prompt_speaks_while_a_door_position_is_open_or_unread()
     {
         var prompt = Of("BS_DOORS_CPT");
         Assert.Equal(FlowStepActionType.CaptainReminder, prompt.ActionType);
@@ -364,9 +371,16 @@ public class L1011FoBeforeStartTests
         Assert.Equal("Close the doors on the tablet.", prompt.ReminderText);
         Assert.Empty(prompt.LinkedChecklistItemIds);
 
-        Assert.False(prompt.SkipCondition!(State((DoorLamp, 1))), "the door light lit: the Captain is asked");
-        Assert.False(prompt.SkipCondition!(State()), "the door light unread: the Captain is asked");
-        Assert.True(prompt.SkipCondition!(State((DoorLamp, 0))), "the door light out: nothing to ask");
+        Assert.False(prompt.SkipCondition!(State(Doors(100, 0, 0, 0))), "the main door open: the Captain is asked");
+        Assert.False(prompt.SkipCondition!(State(Doors(0, 0, 0, 5))), "a door at 5 percent is open: the Captain is asked");
+        Assert.False(prompt.SkipCondition!(State(Doors(100, 0, 0, 0).Append((DoorLamp, 0)).ToArray())),
+            "the door light out with a door open: the Captain is asked");
+        Assert.False(prompt.SkipCondition!(State()), "the doors unread: the Captain is asked");
+        Assert.False(prompt.SkipCondition!(State(Doors(0, 0, 0, 0).Take(3).ToArray())), "one door unread: the Captain is asked");
+        Assert.True(prompt.SkipCondition!(State(Doors(0, 0, 0, 0))), "every door closed: nothing to ask");
+        Assert.True(prompt.SkipCondition!(State(Doors(4, 0, 0, 0))), "under 5 percent is closed: nothing to ask");
+        Assert.True(prompt.SkipCondition!(State(Doors(0, 0, 0, 0).Append((DoorLamp, 1)).ToArray())),
+            "the door light lit with every door closed: nothing to ask");
 
         var ids = BeforeStart.Steps.Select(x => x.Id).ToList();
         Assert.Equal(ids.IndexOf("BS_DOORS_CPT") + 1, ids.IndexOf("BS_CHK_DOORS"));
@@ -390,8 +404,8 @@ public class L1011FoBeforeStartTests
         Assert.Equal(InsMode(unit), step.EventName);
         Assert.Null(step.TargetValue);
         Assert.Equal(FlowStepActionType.CaptainReminder, captain.ActionType);
-        Assert.Equal($"INS {unit} still aligning", captain.Label);
-        Assert.Equal($"INS {unit} still aligning: set it to NAV once READY NAV lights.", captain.ReminderText);
+        Assert.Equal($"INS {unit} not in NAV", captain.Label);
+        Assert.Equal($"INS {unit} is not in NAV: set it to NAV once READY NAV lights.", captain.ReminderText);
         Assert.Empty(captain.LinkedChecklistItemIds);
         var ids = BeforeStart.Steps.Select(s => s.Id).ToList();
         Assert.Equal(ids.IndexOf(step.Id) + 1, ids.IndexOf(captain.Id));
@@ -485,7 +499,7 @@ public class L1011FoBeforeStartTests
             return (all, t);
         });
         Assert.Contains("INS 2: nav", labels);
-        Assert.Contains("INS 3 still aligning: set it to NAV once READY NAV lights.", labels);
+        Assert.Contains("INS 3 is not in NAV: set it to NAV once READY NAV lights.", labels);
         Assert.Equal(100240, target);
     }
 

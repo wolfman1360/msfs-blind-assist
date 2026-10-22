@@ -627,7 +627,6 @@ public class L1011FoStateEvaluatorTests
             "LAMP_SWITCH_GND_START_ENG_3_LIGHT"),
         Row("FO_INS_NAV_MODE", 3, 2, "ROTARY_INS_MODE_1", "ROTARY_INS_MODE_2", "ROTARY_INS_MODE_3"),
         Row("FO_INS_OFF", 0, 1, "ROTARY_INS_MODE_1", "ROTARY_INS_MODE_2", "ROTARY_INS_MODE_3"),
-        Row("FO_DOORS_CLOSED", 0, 1, "LAMP_LX_MIP_DOOR_OPEN"),
 
         // Overhead.
         Row("FO_COMPASSES_MAG", 1, 0, "SWITCH_COMPASS_1_MAG", "SWITCH_COMPASS_2_MAG"),
@@ -800,6 +799,100 @@ public class L1011FoStateEvaluatorTests
                 (L1011InsAlignmentAnnouncer.StatusKey(2), two),
                 (L1011InsAlignmentAnnouncer.StatusKey(3), three))),
             $"statuses {one}, {two}, {three}");
+
+    // ------------------------------------------------------------------ the doors
+
+    private static readonly string[] DoorPositions =
+    {
+        "L1011_FO_EXIT_OPEN_0", "L1011_FO_EXIT_OPEN_1", "L1011_FO_EXIT_OPEN_2", "L1011_FO_EXIT_OPEN_3",
+    };
+
+    private const string DoorLight = "LAMP_LX_MIP_DOOR_OPEN";
+
+    /// <summary>The four exits' positions in percent, a NaN one left unread.</summary>
+    private static Dictionary<string, double> Doors(double d0, double d1, double d2, double d3)
+        => Readings((DoorPositions[0], d0), (DoorPositions[1], d1), (DoorPositions[2], d2), (DoorPositions[3], d3));
+
+    /// <summary>
+    /// The doors are closed when every one of the four stock door positions reads below 5 percent. Live, the
+    /// sim's door event opened the main door (exit 0 read 100) while the main panel's door light stayed out, so
+    /// the light does not follow the doors and decides nothing.
+    /// </summary>
+    [Theory]
+    [InlineData(0.0, 0.0, 0.0, 0.0, 1)]
+    [InlineData(100.0, 0.0, 0.0, 0.0, 0)]    // the main door open: the live finding
+    [InlineData(0.0, 100.0, 0.0, 0.0, 0)]
+    [InlineData(0.0, 0.0, 100.0, 0.0, 0)]
+    [InlineData(0.0, 0.0, 0.0, 100.0, 0)]
+    [InlineData(4.0, 0.0, 0.0, 0.0, 1)]      // under 5 percent is closed
+    [InlineData(4.9, 4.9, 4.9, 4.9, 1)]
+    [InlineData(5.0, 0.0, 0.0, 0.0, 0)]      // at 5 percent a door is open
+    [InlineData(0.0, 0.0, 0.0, 5.0, 0)]
+    [InlineData(50.0, 50.0, 50.0, 50.0, 0)]
+    public void Doors_closed_needs_every_door_position_below_five_percent(
+        double d0, double d1, double d2, double d3, double want)
+        => AssertReads(want, Compute("FO_DOORS_CLOSED", Doors(d0, d1, d2, d3)), $"doors {d0}, {d1}, {d2}, {d3}");
+
+    /// <summary>NaN when any door position is unread, an open door elsewhere included: never a guessed closed.</summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void Doors_closed_is_unknown_when_any_door_position_is_unread(int unread)
+    {
+        var closed = Doors(0, 0, 0, 0);
+        closed.Remove(DoorPositions[unread]);
+        Assert.True(double.IsNaN(Compute("FO_DOORS_CLOSED", closed)), $"{DoorPositions[unread]} unread must read unknown");
+
+        var oneOpen = Doors(0, 0, 0, 0);
+        oneOpen.Remove(DoorPositions[unread]);
+        oneOpen[DoorPositions[(unread + 1) % 4]] = 100;
+        Assert.True(double.IsNaN(Compute("FO_DOORS_CLOSED", oneOpen)), "unread, with another door open, still reads unknown");
+    }
+
+    [Fact]
+    public void Doors_closed_is_unknown_with_nothing_read()
+        => Assert.True(double.IsNaN(Compute("FO_DOORS_CLOSED", new Dictionary<string, double>())));
+
+    /// <summary>The main panel's door light no longer decides: out with a door open reads open, lit with every
+    /// door closed reads closed, and its reading is not an input.</summary>
+    [Fact]
+    public void Doors_closed_reads_the_door_positions_never_the_door_light()
+    {
+        var open = Doors(100, 0, 0, 0);
+        open[DoorLight] = 0;
+        Assert.Equal(0, Compute("FO_DOORS_CLOSED", open));
+
+        var closed = Doors(0, 0, 0, 0);
+        closed[DoorLight] = 1;
+        Assert.Equal(1, Compute("FO_DOORS_CLOSED", closed));
+
+        Assert.Equal(DoorPositions, InputsOf("FO_DOORS_CLOSED"));
+        Assert.DoesNotContain(DoorLight, L1011FoStateEvaluator.SyntheticInputs);
+    }
+
+    /// <summary>Through the evaluator's cache: the live finding (door open, light out) reads open.</summary>
+    [Fact]
+    public void Doors_closed_reads_the_cache_by_the_door_positions()
+    {
+        Assert.Equal(0, Evaluator((DoorPositions[0], 100), (DoorPositions[1], 0), (DoorPositions[2], 0), (DoorPositions[3], 0),
+            (DoorLight, 0)).GetValue("FO_DOORS_CLOSED"));
+        Assert.Equal(1, Evaluator((DoorPositions[0], 0), (DoorPositions[1], 0), (DoorPositions[2], 0), (DoorPositions[3], 0))
+            .GetValue("FO_DOORS_CLOSED"));
+        Assert.True(double.IsNaN(Evaluator((DoorPositions[0], 0)).GetValue("FO_DOORS_CLOSED")));
+    }
+
+    /// <summary>The door positions are read on request, so the window polls them each second.</summary>
+    [Fact]
+    public void The_poll_list_covers_the_door_positions()
+    {
+        var polled = new L1011FoStateEvaluator().OnRequestPollFields;
+
+        foreach (var key in DoorPositions)
+            Assert.Contains(key, polled);
+        Assert.Equal(polled.Count, polled.Distinct().Count());
+    }
 
     [Fact]
     public void Plan_values_are_null_without_a_plan_and_stored_as_given()

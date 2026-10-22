@@ -750,6 +750,47 @@ public class IniL1011FirstOfficerEntryTests
         Assert.False(_def.FoAcceptsKey(key));               // read, never written
     }
 
+    // ---- The door positions --------------------------------------------------------------------------
+
+    /// <summary>
+    /// Live: the sim's own door event opened the main door (<c>EXIT OPEN:0</c> read 100 %) while the main
+    /// panel's door light stayed out, so the light does not follow the doors; the First Officer reads the
+    /// stock positions of the four exits instead (exits 1 to 7 read 0). Each is a percentage read on
+    /// request, never spoken, so no Ctrl+M row ([VAR-9]); the pilot's number is the 1-based one.
+    /// </summary>
+    [Theory]
+    [InlineData("L1011_FO_EXIT_OPEN_0", "EXIT OPEN:0", "Door 1 position")]
+    [InlineData("L1011_FO_EXIT_OPEN_1", "EXIT OPEN:1", "Door 2 position")]
+    [InlineData("L1011_FO_EXIT_OPEN_2", "EXIT OPEN:2", "Door 3 position")]
+    [InlineData("L1011_FO_EXIT_OPEN_3", "EXIT OPEN:3", "Door 4 position")]
+    public void The_door_positions_are_registered_on_request_and_excluded_from_the_monitor(
+        string key, string name, string displayName)
+    {
+        var vars = new IniL1011Definition().GetVariables();
+        Assert.True(vars.TryGetValue(key, out var def), $"{key} is not registered");
+
+        Assert.Equal(name, def!.Name);
+        Assert.Equal(SimVarType.SimVar, def.Type);
+        Assert.Equal("percent", def.Units);
+        Assert.Equal(UpdateFrequency.OnRequest, def.UpdateFrequency);
+        Assert.True(def.ExcludeFromMonitorManager);
+        Assert.False(def.IsAnnounced);
+        Assert.Equal(displayName, def.DisplayName);
+        Assert.DoesNotContain(key, Services.MonitorRowBuilder.Build(vars).Select(r => r.Key));
+        Assert.Single(vars.Values, d => d.Name == name);   // one data definition, no second key on it
+        Assert.False(_def.FoAcceptsKey(key));               // read, never written
+    }
+
+    /// <summary>The door check reads exits 0 to 3 and registers exactly those: no fifth door position.</summary>
+    [Fact]
+    public void Only_four_door_positions_are_registered()
+    {
+        var keys = new IniL1011Definition().GetVariables().Keys.Where(k => k.StartsWith("L1011_FO_EXIT_OPEN_", StringComparison.Ordinal));
+
+        Assert.Equal(new[] { "L1011_FO_EXIT_OPEN_0", "L1011_FO_EXIT_OPEN_1", "L1011_FO_EXIT_OPEN_2", "L1011_FO_EXIT_OPEN_3" },
+            keys.OrderBy(k => k, StringComparer.Ordinal));
+    }
+
     // ---- The entry runs on the UI thread from any caller -----------------------------------------
     //
     // The executor calls the entry from pool threads (it awaits with ConfigureAwait(false)), and its

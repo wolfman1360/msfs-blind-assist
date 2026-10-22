@@ -38,9 +38,11 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// running and its generator on line, so external power comes off only once the APU carries the buses, as the
 /// MD-11's does. It turns each INS unit to NAV only from ALIGN once that unit reads aligned (or leaves one already
 /// at NAV there), never a unit the pilot left at OFF or STBY, and copies
-/// the captain's altimeter into the cabin barometric setting; a unit still aligning, or a standard or unread
-/// altimeter, gives no value, so nothing is sent or spoken and a Captain step asks instead ([FO-20]). Its doors,
-/// cabin baro and INS Captain steps speak only while the aircraft does not show the state, so they are flow-only.
+/// the captain's altimeter into the cabin barometric setting; a unit not ready for NAV (still aligning, or left
+/// at OFF or STBY), or a standard or unread altimeter, gives no value, so nothing is sent or spoken and a Captain
+/// step asks instead ([FO-20]). Its doors, cabin baro and INS Captain steps speak only while the aircraft does not
+/// show the state, so they are flow-only; the doors step reads the four stock door positions, because the main
+/// panel's door light does not follow the doors.
 /// Its toggle-carrying writes (seat belts, APU bleed) are single switches that read their own position first.
 /// </summary>
 public static class L1011FoFlowDefinitions
@@ -447,7 +449,8 @@ public static class L1011FoFlowDefinitions
                 s => s.IsPosition("SWITCH_SEATBELT_LIGHT", 1)), "BS_SEAT_BELTS"), "BSC_SEAT_BELTS"),
             Also(Done(Skip(SW("BS_ANTICOL", "Anti-collision lights: on", "SWITCH_ANTICOL_LIGHT", 1),
                 s => s.IsPosition("SWITCH_ANTICOL_LIGHT", 1)), "BS_ANTICOL"), "BSC_ANTICOL"),
-            // The doors are the tablet's: the Captain is asked while the door light reads lit or unread.
+            // The doors are the tablet's: the Captain is asked while any door position reads open or unread. The
+            // stock door positions are read because the main panel's door light does not follow the doors.
             Skip(Captain("BS_DOORS_CPT", "Doors", "Close the doors on the tablet."), s => s.IsOn("FO_DOORS_CLOSED")),
             Check("BS_CHK_DOORS", "Door lights: out", "FO_DOORS_CLOSED", On, CheckSeconds, "BSC_DOORS"),
             Also(Done(Skip(Multi("BS_GALLEY", "Galley power: off", AllTo(0, GalleyKeys)),
@@ -480,9 +483,9 @@ public static class L1011FoFlowDefinitions
             Check("BS_CHK_IGNITION", "Ignition selector: system A or B", "FO_IGNITION_SELECTED", On, CheckSeconds, "BSC_IGNITION"),
 
             // ---- INS to NAV, unit by unit, then all three navigating ----
-            InsToNav(1), InsStillAligning(1),
-            InsToNav(2), InsStillAligning(2),
-            InsToNav(3), InsStillAligning(3),
+            InsToNav(1), InsNotInNav(1),
+            InsToNav(2), InsNotInNav(2),
+            InsToNav(3), InsNotInNav(3),
             Check("BS_CHK_INS_NAV", "INS 1, 2 and 3: navigating", "FO_INS_NAVIGATING", On, InsNavigatingCheckSeconds,
                 "BSC_INS_NAV"),
 
@@ -499,7 +502,7 @@ public static class L1011FoFlowDefinitions
     /// <summary>
     /// INS <paramref name="unit"/> to NAV once its selector reads ALIGN and it reads aligned, or its selector already
     /// reads NAV. While it still aligns, or sits at OFF, STBY or ATT, the provider gives no value: nothing is sent or
-    /// spoken ([FO-20]) and <see cref="InsStillAligning"/> asks the Captain.
+    /// spoken ([FO-20]) and <see cref="InsNotInNav"/> asks the Captain.
     /// </summary>
     private static Step InsToNav(int unit)
     {
@@ -510,14 +513,15 @@ public static class L1011FoFlowDefinitions
             s => s.IsPosition(key, L1011FoStateEvaluator.InsNav)), id);
     }
 
-    /// <summary>The Captain's line for a unit the First Officer left where it was: keyed on the selector, so a write
-    /// that did not take asks too.</summary>
-    private static Step InsStillAligning(int unit)
+    /// <summary>The Captain's line for a unit the First Officer left where it was: keyed on the selector, so it
+    /// speaks whenever the unit is not in NAV (still aligning, or left at OFF or STBY), and a write that did not
+    /// take asks too.</summary>
+    private static Step InsNotInNav(int unit)
     {
         string key = L1011InsAlignmentAnnouncer.MsuKey(unit);
         string n = unit.ToString(CultureInfo.InvariantCulture);
-        return Skip(Captain($"BS_INS_{n}_CPT", $"INS {n} still aligning",
-                $"INS {n} still aligning: set it to NAV once READY NAV lights."),
+        return Skip(Captain($"BS_INS_{n}_CPT", $"INS {n} not in NAV",
+                $"INS {n} is not in NAV: set it to NAV once READY NAV lights."),
             s => s.IsPosition(key, L1011FoStateEvaluator.InsNav));
     }
 

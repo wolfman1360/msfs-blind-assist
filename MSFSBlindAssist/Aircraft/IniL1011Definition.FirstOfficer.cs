@@ -14,8 +14,8 @@ namespace MSFSBlindAssist.Aircraft;
 /// included. A press still held when the definition goes away is released by <see cref="Dispose"/>,
 /// once. The hand-written levers and the stabilizer trim are sent as the panel rows send them
 /// (<see cref="L1011Levers"/>), and the altimeters, the cabin baro and the cabin altitude selector each
-/// in one string. The tablet's take-off exports are registered here for the First Officer to read
-/// (<see cref="AddFirstOfficerVariables"/>). The First Officer's executor calls in
+/// in one string. The tablet's take-off exports and the exits' stock positions are registered here for
+/// the First Officer to read (<see cref="AddFirstOfficerVariables"/>). The First Officer's executor calls in
 /// from pool threads, so every write (and the lamp mute) hops onto the UI thread captured at
 /// <see cref="Attach"/> first (<see cref="OnUiThreadAsync{T}"/>). The universal autopilot engage
 /// (<see cref="EngageAutopilot"/>) presses paddle A through the same entry.
@@ -195,13 +195,34 @@ public partial class IniL1011Definition
     /// <summary>The take-off stabilizer trim the tablet's "Set bugs and EPR" exports (0 before any export).</summary>
     internal const string PerfStabTrimKey = "L1011_FO_PERF_STAB_TRIM";
 
+    /// <summary>How many exit positions the First Officer reads: exits 0 to 3.</summary>
+    internal const int DoorCount = 4;
+
+    /// <summary>The key of the stock position of exit <paramref name="index"/> (0 to <see cref="DoorCount"/> - 1).</summary>
+    internal static string DoorPositionKey(int index) => $"L1011_FO_EXIT_OPEN_{index.ToString(CultureInfo.InvariantCulture)}";
+
     /// <summary>
     /// The variables only the First Officer reads: the tablet's take-off exports, plain numbers read on
-    /// request (the First Officer window polls them) and never written. Never spoken, so no Ctrl+M row
-    /// ([VAR-9]).
+    /// request (the First Officer window polls them) and never written, and the four exits' stock
+    /// positions (<c>EXIT OPEN:n</c>, in percent). The positions are read because the main panel's door
+    /// light does not follow the doors: with the main door open it stayed out. Never spoken, so no Ctrl+M
+    /// row ([VAR-9]).
     /// </summary>
     private static void AddFirstOfficerVariables(Dictionary<string, SimVarDefinition> vars)
     {
+        for (int index = 0; index < DoorCount; index++)
+        {
+            vars[DoorPositionKey(index)] = new SimVarDefinition
+            {
+                Name = $"EXIT OPEN:{index.ToString(CultureInfo.InvariantCulture)}",
+                DisplayName = $"Door {(index + 1).ToString(CultureInfo.InvariantCulture)} position",
+                Type = SimVarType.SimVar,
+                Units = "percent",
+                UpdateFrequency = UpdateFrequency.OnRequest,
+                ExcludeFromMonitorManager = true,
+            };
+        }
+
         foreach (var (key, lvar, name) in new[]
         {
             (PerfSelectedFlapsKey, "PERF_SELECTED_FLAPS", "Tablet selected take-off flaps"),

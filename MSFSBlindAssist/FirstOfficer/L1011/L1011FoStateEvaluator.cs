@@ -6,9 +6,9 @@ namespace MSFSBlindAssist.FirstOfficer.L1011;
 
 /// <summary>
 /// The iniBuilds L-1011 TriStar First Officer's state evaluator. Reads the SimConnect cache by the
-/// definition's own variable keys: switch rows and levers ride the batches, gauge readouts and the
-/// tablet's take-off exports are OnRequest (polled here each second by the First Officer window), lamps
-/// ride the batch. NaN until every input of a field is read, never 0: a guessed 0 reads "engines
+/// definition's own variable keys: switch rows and levers ride the batches, gauge readouts, the
+/// tablet's take-off exports and the exits' stock positions are OnRequest (polled here each second by the
+/// First Officer window), lamps ride the batch. NaN until every input of a field is read, never 0: a guessed 0 reads "engines
 /// stopped" or "switch off" and lets a guard or a line pass over a turning engine.
 ///
 /// The engine reads are what the live aircraft shows. A cold engine's N3 gauge reads 1.4 to 1.9,
@@ -104,9 +104,17 @@ public sealed class L1011FoStateEvaluator : LVarStateEvaluator, IFoEngine3N2Sink
     /// <summary>Engine 3's N2 as the window last fed it, NaN until then. No TriStar field reads it.</summary>
     internal double Engine3N2 => Volatile.Read(ref _eng3N2);
 
+    /// <summary>An exit's stock position below this many percent is closed.</summary>
+    public const double DoorClosedBelowPercent = 5;
+
+    /// <summary>The four exits' stock positions (<c>EXIT OPEN:n</c>, in percent), which the doors check reads.
+    /// The main panel's door light is not used: it stayed out with the main door open.</summary>
+    private static readonly string[] DoorKeys =
+        Enumerable.Range(0, IniL1011Definition.DoorCount).Select(IniL1011Definition.DoorPositionKey).ToArray();
+
     // ------------------------------------------------------------------ polled readouts
 
-    private static readonly string[] PollFields =
+    private static readonly string[] PollFields = new[]
     {
         "L1011_RO_N3_1", "L1011_RO_N3_2", "L1011_RO_N3_3",
         FlapsAngleKey, ExtPowerBreakerKey,
@@ -125,7 +133,7 @@ public sealed class L1011FoStateEvaluator : LVarStateEvaluator, IFoEngine3N2Sink
         CabinAltSelectedKey, CabinBaroKey, CaptainAltimeterKey,
         "L1011_RO_GEAR_LEFT", "L1011_RO_GEAR_NOSE", "L1011_RO_GEAR_RIGHT",
         ElevatorTrimKey,
-    };
+    }.Concat(DoorKeys).ToArray();   // the exits' stock positions, which the doors check reads
 
     public override IReadOnlyList<string> OnRequestPollFields => PollFields;
 
@@ -488,7 +496,9 @@ public sealed class L1011FoStateEvaluator : LVarStateEvaluator, IFoEngine3N2Sink
         ["FO_INS_NAVIGATING"] = Vars(v => v.All(s => Math.Abs(s - InsNavigatingStatus) <= InsNavigatingTolerance), InsStatusKeys),
         ["FO_INS_NAV_MODE"] = AllAt(InsNav, InsModeKeys),
         ["FO_INS_OFF"] = AllAt(0, InsModeKeys),
-        ["FO_DOORS_CLOSED"] = LampsOut("LAMP_LX_MIP_DOOR_OPEN"),
+        // The stock door positions, each below 5 percent: the main panel's door light does not follow the doors
+        // (it stayed out with the main door open), so it is not read.
+        ["FO_DOORS_CLOSED"] = Vars(v => v.All(percent => percent < DoorClosedBelowPercent), DoorKeys),
 
         // ---- overhead ----
         ["FO_COMPASSES_MAG"] = AllAt(1, "SWITCH_COMPASS_1_MAG", "SWITCH_COMPASS_2_MAG"),
