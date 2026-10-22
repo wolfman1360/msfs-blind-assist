@@ -144,6 +144,36 @@ public class L1011FoStateEvaluatorTests
         }
     }
 
+    /// <summary>
+    /// A ground start released after a start: the engine's own switch off AND its N3 running. A cold aircraft has the
+    /// switch off too, so the switch alone would read released before any start; a switch still on reads not
+    /// released; unknown until both are read.
+    /// </summary>
+    [Fact]
+    public void StartReleased_IsTheSwitchOffWithTheEngineRunning()
+    {
+        for (int e = 1; e <= 3; e++)
+        {
+            string field = $"FO_ENG{e}_START_RELEASED";
+            string sw = $"SWITCH_GND_START_ENG_{e}";
+            string n3 = $"L1011_RO_N3_{e}";
+            Assert.Equal(1, Compute(field, new() { [sw] = 0, [n3] = 59.2 }));
+            Assert.Equal(1, Compute(field, new() { [sw] = 0, [n3] = 50.0 }));
+            Assert.Equal(0, Compute(field, new() { [sw] = 1, [n3] = 59.2 }));
+            Assert.Equal(0, Compute(field, new() { [sw] = 1, [n3] = 30.0 }));
+            Assert.Equal(0, Compute(field, new() { [sw] = 0, [n3] = 49.9 }));
+            Assert.Equal(0, Compute(field, new() { [sw] = 0, [n3] = 1.6 }));
+            Assert.True(double.IsNaN(Compute(field, new() { [n3] = 59.2 })), $"{field}: the switch unread");
+            Assert.True(double.IsNaN(Compute(field, new() { [sw] = 0 })), $"{field}: N3 unread");
+            Assert.True(double.IsNaN(Compute(field, new Dictionary<string, double>())));
+            // Another engine's readings never answer for this one.
+            var others = Enumerable.Range(1, 3).Where(o => o != e)
+                .SelectMany(o => new[] { ($"SWITCH_GND_START_ENG_{o}", 0.0), ($"L1011_RO_N3_{o}", 59.2) })
+                .ToDictionary(x => x.Item1, x => x.Item2);
+            Assert.True(double.IsNaN(Compute(field, others)));
+        }
+    }
+
     [Fact]
     public void FuelIgnitionOff_NeedsAllThreeSwitchesReadAndOff()
     {
@@ -350,8 +380,8 @@ public class L1011FoStateEvaluatorTests
             "FO_CABIN_ALT_AT_CRUISE", "FO_CABIN_ALT_AT_DEST", "FO_CABIN_BARO_SET", "FO_COMPASSES_MAG",
             "FO_CROSSBLEEDS_ON", "FO_CROSSFEEDS_CLOSED", "FO_DISCONNECT_HANDLES_STOWED", "FO_DME_NORMAL",
             "FO_DOORS_CLOSED", "FO_ECS_ON", "FO_EMER_LIGHTS_ARMED", "FO_EMER_LIGHTS_OFF",
-            "FO_ENG1_FUEL_FEED", "FO_ENG1_RUNNING", "FO_ENG2_FUEL_FEED", "FO_ENG2_RUNNING", "FO_ENG3_FUEL_FEED",
-            "FO_ENG3_RUNNING", "FO_ENGINES_STOPPED", "FO_ENGINE_GENERATORS_ON", "FO_EXT_LIGHTS_PREFLIGHT",
+            "FO_ENG1_FUEL_FEED", "FO_ENG1_RUNNING", "FO_ENG1_START_RELEASED", "FO_ENG2_FUEL_FEED", "FO_ENG2_RUNNING",
+            "FO_ENG2_START_RELEASED", "FO_ENG3_FUEL_FEED", "FO_ENG3_RUNNING", "FO_ENG3_START_RELEASED", "FO_ENGINES_STOPPED", "FO_ENGINE_GENERATORS_ON", "FO_EXT_LIGHTS_PREFLIGHT",
             "FO_EXT_POWER_AVAILABLE", "FO_EXT_POWER_OFF", "FO_EXT_POWER_ON", "FO_FCES_ON", "FO_FIRE_HANDLES_IN",
             "FO_FIRE_LOOPS_BOTH", "FO_FLAPS_AGREE", "FO_FLAPS_TAKEOFF", "FO_FLAPS_UP", "FO_FLIGHT_DIRECTORS_ON",
             "FO_FUEL_CTRL_OVRD_OFF", "FO_FUEL_IGNITION_OFF", "FO_FUEL_PUMPS_OFF", "FO_FUEL_PUMPS_ON",

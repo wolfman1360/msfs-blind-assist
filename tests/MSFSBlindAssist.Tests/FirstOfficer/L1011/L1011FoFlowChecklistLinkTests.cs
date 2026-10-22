@@ -30,7 +30,7 @@ public class L1011FoFlowChecklistLinkTests
     private static readonly string[] GroundStartLines = { "ES_E1_GND_START", "ES_E2_GND_START", "ES_E3_GND_START" };
 
     [Fact]
-    public void No_line_is_latched_with_no_step_behind_it()
+    public void Only_the_ground_start_lines_are_latched_with_no_step_behind_them()
         => Assert.Equal(GroundStartLines.Select(id => $"ENGINE_START/{id}"), FlowChecklistLinkAudit.UndeliveredLines(Latched()));
 
     [Fact]

@@ -152,9 +152,9 @@ public class L1011FoEngineStartTests
     /// <summary>
     /// Each engine, 2 then 1 then 3: the previous engine's isolation valve off (engines 1 and 3), its own fuel feed,
     /// its isolation valve read on, the ground start, the light-off watch to 20 percent N3, the fuel and ignition, the
-    /// ground start released by the aircraft, and a stable idle. Every step from the isolation valve on stops the flow
-    /// when it is not done; the ground start is skipped only for an engine already running (N3 at 50 or more), never
-    /// for one turning below that.
+    /// ground start released by the aircraft, and a stable idle. Every step from the fuel feed on stops the flow when it
+    /// is not done (a failed feed is never followed by a ground start and fuel on that engine); the ground start is
+    /// skipped only for an engine already running (N3 at 50 or more), never for one turning below that.
     /// </summary>
     [Theory]
     [MemberData(nameof(StartOrder))]
@@ -168,7 +168,7 @@ public class L1011FoEngineStartTests
         Assert.Equal(expected, ids.Skip(ids.IndexOf(expected[0])).Take(expected.Length));
         Assert.Equal(expected.Length, ids.Count(id => id.StartsWith(e, StringComparison.Ordinal)));
 
-        Assert.Equal(FlowStepFailurePolicy.Skip, Of(e + "FUEL_FEED").FailurePolicy);
+        Assert.Equal(FlowStepFailurePolicy.Stop, Of(e + "FUEL_FEED").FailurePolicy);
 
         // The isolation valve: Before Start turned it on; read only.
         var isolation = Of(e + "ISLN");
@@ -285,8 +285,9 @@ public class L1011FoEngineStartTests
     }
 
     /// <summary>Each engine's own feed: its tank pump (1, 2 left and 3, each the first pump of its tank), its engine
-    /// tank valve on and the valve's guard closed, already set only when all three read so. Engine 2's also delivers
-    /// the read-back's "minimum one pump on" line.</summary>
+    /// tank valve on and the valve's guard closed, already set only when all three read so. A feed that is not done
+    /// stops the flow: no ground start and no fuel on an engine its feed did not reach. Engine 2's also delivers the
+    /// read-back's "minimum one pump on" line.</summary>
     [Theory]
     [InlineData(1, "SWITCH_FUEL_PUMP_1_1")]
     [InlineData(2, "SWITCH_FUEL_PUMP_2L_1")]
@@ -297,7 +298,7 @@ public class L1011FoEngineStartTests
         Assert.Equal($"Engine {n} fuel: tank pump and tank valve on", s.Label);
         Assert.Equal(FlowStepActionType.SetSwitchMultiple, s.ActionType);
         Assert.Equal(new[] { (pump, 1), ($"SWITCH_ENG_{n}_TANK_VALVE", 1), ($"GUARD_ENG_{n}_TANK_VALVE", 0) }, Actions(s));
-        Assert.Equal(FlowStepFailurePolicy.Skip, s.FailurePolicy);
+        Assert.Equal(FlowStepFailurePolicy.Stop, s.FailurePolicy);
 
         var done = Actions(s).Select(a => (Key: a.Key, Value: (double)a.Target)).ToArray();
         Assert.True(s.SkipCondition!(State(done)), "every part reads done: already set");
@@ -708,15 +709,15 @@ public class L1011FoEngineStartTests
     {
         new("ESC_FUEL_PUMP", "Fuel pump: minimum one on", "FO_ANY_FUEL_PUMP_ON", 1),
         new("ESC_E2_FUEL_IGN", "Engine 2 at 20 percent N3: fuel and ignition on", "TOGGLE_CUTOFF_ENG_2", 1),
-        new("ESC_E2_RELEASED", "Engine 2 at 55 percent N3: ground start switch released", "SWITCH_GND_START_ENG_2", 0),
+        new("ESC_E2_RELEASED", "Engine 2 at 55 percent N3: ground start switch released", "FO_ENG2_START_RELEASED", 1),
         new("ESC_E2_RUNNING", "Engine 2: running", "FO_ENG2_RUNNING", 1),
         new("ESC_E2_ISLN_OFF", "Engine 2 isln valve: unlatch", "SWITCH_ISLN_VALVE_ENG_2", 0),
         new("ESC_E1_FUEL_IGN", "Engine 1 at 20 percent N3: fuel and ignition on", "TOGGLE_CUTOFF_ENG_1", 1),
-        new("ESC_E1_RELEASED", "Engine 1 at 55 percent N3: ground start switch released", "SWITCH_GND_START_ENG_1", 0),
+        new("ESC_E1_RELEASED", "Engine 1 at 55 percent N3: ground start switch released", "FO_ENG1_START_RELEASED", 1),
         new("ESC_E1_RUNNING", "Engine 1: running", "FO_ENG1_RUNNING", 1),
         new("ESC_E1_ISLN_OFF", "Engine 1 isln valve: unlatch", "SWITCH_ISLN_VALVE_ENG_1", 0),
         new("ESC_E3_FUEL_IGN", "Engine 3 at 20 percent N3: fuel and ignition on", "TOGGLE_CUTOFF_ENG_3", 1),
-        new("ESC_E3_RELEASED", "Engine 3 at 55 percent N3: ground start switch released", "SWITCH_GND_START_ENG_3", 0),
+        new("ESC_E3_RELEASED", "Engine 3 at 55 percent N3: ground start switch released", "FO_ENG3_START_RELEASED", 1),
         new("ESC_E3_RUNNING", "Engine 3: running", "FO_ENG3_RUNNING", 1),
         new("ESC_GEN_FIELDS", "Engine generator field: close", "FO_GEN_FIELDS_CLOSED", 1),
         new("ESC_GEN_BREAKERS", "Engine generator breaker: close", "FO_GEN_BREAKERS_CLOSED", 1),
@@ -743,6 +744,29 @@ public class L1011FoEngineStartTests
             foreach (double other in others.Where(v => v != rb.Done))
                 Assert.False(line.StateCondition!(other), $"{rb.Id}: {rb.Field} at {other} must not read done");
         }
+    }
+
+    /// <summary>
+    /// The release line ticks only after a start: a cold aircraft has every ground start switch off too, so a line on
+    /// the switch alone ticked before any engine turned. It reads the switch off with its engine running; the flow's
+    /// release wait, which runs only after the start, stays on the switch.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(StartOrder))]
+    public void The_release_line_ticks_only_after_a_start(int n)
+    {
+        var line = Line($"ESC_E{n}_RELEASED");
+        bool Ticks(params (string, double)[] seeds)
+            => line.StateCondition!(State(seeds).GetValue(line.StateFieldName!));
+        Assert.False(Ticks((GroundStartSwitch(n), 0), (N3(n), Cold)), "cold: no start yet");
+        Assert.False(Ticks((GroundStartSwitch(n), 1), (N3(n), 30)), "starting: the switch still on");
+        Assert.True(Ticks((GroundStartSwitch(n), 0), (N3(n), Idle)), "released with the engine running");
+        Assert.False(Ticks((GroundStartSwitch(n), 0)), "N3 unread");
+        Assert.False(Ticks((N3(n), Idle)), "the switch unread");
+
+        var wait = Of($"ES_E{n}_RELEASED");
+        Assert.Equal(GroundStartSwitch(n), wait.ConditionFieldName);
+        Assert.Equal(new[] { $"ESC_E{n}_RELEASED" }, wait.LinkedChecklistItemIds);
     }
 
     /// <summary>A finished run latches the action group and the read-back, and nothing else.</summary>

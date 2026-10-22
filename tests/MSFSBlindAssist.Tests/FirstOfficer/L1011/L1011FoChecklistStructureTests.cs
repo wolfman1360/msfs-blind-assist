@@ -154,8 +154,9 @@ public class L1011FoChecklistStructureTests
     }
 
     /// <summary>[FO-7]: an action line with a CheckAction and no delivering step would be latched with its switch
-    /// untouched. The one exception is the ground start lines: StayComplete on the engine running, they are never
-    /// linked to the ground start, and tick only from the engine running (L1011FoFlowChecklistLinkTests).</summary>
+    /// untouched. The one exception is the ground start lines: StayComplete state lines on the engine running, they are
+    /// never linked to the ground start, and tick only from the engine running (L1011FoFlowChecklistLinkTests). A manual
+    /// action line also carries StayComplete, as the model's default, and is never exempted.</summary>
     [Fact]
     public void EveryActionableItemInAnActionGroup_HasADeliveringFlowStep()
     {
@@ -164,7 +165,8 @@ public class L1011FoChecklistStructureTests
             var delivered = f.Steps.Select(s => s.CompletesChecklistItemId).Where(id => id != null).ToHashSet();
             var group = Groups.SingleOrDefault(g => g.Id == f.Id);
             Assert.NotNull(group);
-            foreach (var i in group!.Items.Where(i => i.CheckAction != null && i.RevertBehavior != RevertBehavior.StayComplete))
+            foreach (var i in group!.Items.Where(i => i.CheckAction != null
+                                                     && !(i.IsAutoDetectable && i.RevertBehavior == RevertBehavior.StayComplete)))
                 Assert.True(delivered.Contains(i.Id), $"{group.Id}/{i.Id} has a CheckAction but no flow step delivers it");
         }
     }

@@ -293,6 +293,7 @@ public sealed class L1011FoStateEvaluator : LVarStateEvaluator, IFoEngine3N2Sink
 
     private static readonly string[] N3Keys = Numbered("L1011_RO_N3_{0}", 3);
     private static readonly string[] FuelCutoffKeys = Numbered("TOGGLE_CUTOFF_ENG_{0}", 3);
+    private static readonly string[] GroundStartKeys = Numbered("SWITCH_GND_START_ENG_{0}", 3);
 
     private static readonly string[] FireHandleKeys =
         Numbered("HANDLE_FIRE_{0}", 3).Append("HANDLE_FIRE_APU").ToArray();
@@ -388,6 +389,11 @@ public sealed class L1011FoStateEvaluator : LVarStateEvaluator, IFoEngine3N2Sink
         ["FO_ENG1_RUNNING"] = Vars(v => v[0] >= EngineRunningN3, N3Keys[0]),
         ["FO_ENG2_RUNNING"] = Vars(v => v[0] >= EngineRunningN3, N3Keys[1]),
         ["FO_ENG3_RUNNING"] = Vars(v => v[0] >= EngineRunningN3, N3Keys[2]),
+        // A ground start released after a start: the switch off with the engine running. The switch alone reads off on
+        // a cold aircraft too, before any start.
+        ["FO_ENG1_START_RELEASED"] = Vars(v => At(v[0], 0) && v[1] >= EngineRunningN3, GroundStartKeys[0], N3Keys[0]),
+        ["FO_ENG2_START_RELEASED"] = Vars(v => At(v[0], 0) && v[1] >= EngineRunningN3, GroundStartKeys[1], N3Keys[1]),
+        ["FO_ENG3_START_RELEASED"] = Vars(v => At(v[0], 0) && v[1] >= EngineRunningN3, GroundStartKeys[2], N3Keys[2]),
         ["FO_FUEL_IGNITION_OFF"] = AllAt(0, FuelCutoffKeys),
 
         // ---- levers and handles ----

@@ -561,7 +561,7 @@ public static class L1011FoFlowDefinitions
         {
             // Never airborne. Links no line.
             OnGroundGuard("ES_ON_GROUND"),
-            // Engine 2's N3 read, so every wait and "Already set" below reads the engines (the MD-11's engine data wait).
+            // Confirms engine 2's N3 is read before anything is written (the MD-11's engine data wait).
             WaitForField("ES_DATA", "Engine data", X.N3Key(2), v => !double.IsNaN(v), StartReadySeconds,
                 onTimeout: FlowStepFailurePolicy.Stop),
             // The start air Before Start left: the APU running with its bleed on, both crossbleeds on. Read only.
@@ -592,8 +592,9 @@ public static class L1011FoFlowDefinitions
     /// Engine <paramref name="n"/>'s start. Engines 1 and 3 first turn the isolation valve of the engine started before
     /// (<paramref name="previous"/>) off. Then the engine's own feed, its isolation valve read on, the ground start (the
     /// executor turns the switch on and watches N3 rise), the light-off watch to 20 % N3, the fuel and ignition, the
-    /// ground start released by the aircraft itself past about 55 % N3, and a stable idle. From the isolation valve on,
-    /// every step stops the flow when it is not done: going on would start the next engine over a failed one.
+    /// ground start released by the aircraft itself past about 55 % N3, and a stable idle. From the feed on, every step
+    /// stops the flow when it is not done: going on would start this engine without its fuel, or the next engine over a
+    /// failed one.
     /// </summary>
     private static IEnumerable<Step> StartEngine(int n, int? previous)
     {
@@ -607,9 +608,10 @@ public static class L1011FoFlowDefinitions
                 s => s.IsPosition(isolation, 0)), e + "PREV_ISLN_OFF"), $"ESC_E{prev}_ISLN_OFF");
         }
         // Engine 2's feed is the APU's, set in Preflight: already set there. It also delivers the read-back's pump line.
-        var feed = Done(Skip(Multi(e + "FUEL_FEED", $"Engine {num} fuel: tank pump and tank valve on",
+        // A feed not done stops the flow: no ground start and no fuel on an engine its feed did not reach.
+        var feed = Done(Stop(Skip(Multi(e + "FUEL_FEED", $"Engine {num} fuel: tank pump and tank valve on",
                 (TankPump(n), 1), ($"SWITCH_ENG_{num}_TANK_VALVE", 1), ($"GUARD_ENG_{num}_TANK_VALVE", 0)),
-            s => s.IsOn($"FO_ENG{num}_FUEL_FEED")), e + "FUEL_FEED");
+            s => s.IsOn($"FO_ENG{num}_FUEL_FEED"))), e + "FUEL_FEED");
         yield return n == 2 ? Also(feed, "ESC_FUEL_PUMP") : feed;
         yield return WaitForField(e + "ISLN", $"Engine {num} isolation valve: on", $"SWITCH_ISLN_VALVE_ENG_{num}", On,
             StartReadySeconds, onTimeout: FlowStepFailurePolicy.Stop);

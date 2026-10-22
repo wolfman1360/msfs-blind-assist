@@ -636,8 +636,9 @@ public static class L1011FoChecklistDefinitions
                 items.Add(Read($"ESC_E{Num(p)}_ISLN_OFF", G, $"Engine {Num(p)} isln valve: unlatch", IsolationValve(p), v => Is(v, 0)));
             items.Add(Read($"ESC_E{Num(n)}_FUEL_IGN", G, $"Engine {Num(n)} at 20 percent N3: fuel and ignition on",
                 X.FuelIgnitionKey(n), v => Is(v, 1)));
+            // The switch off with the engine running: the switch alone reads off before any start too.
             items.Add(Read($"ESC_E{Num(n)}_RELEASED", G, $"Engine {Num(n)} at 55 percent N3: ground start switch released",
-                X.GroundStartKey(n), v => Is(v, 0)));
+                $"FO_ENG{Num(n)}_START_RELEASED", On));
             items.Add(Read($"ESC_E{Num(n)}_RUNNING", G, $"Engine {Num(n)}: running", $"FO_ENG{Num(n)}_RUNNING", On));
         }
         items.Add(Read("ESC_GEN_FIELDS", G, "Engine generator field: close", "FO_GEN_FIELDS_CLOSED", On));
