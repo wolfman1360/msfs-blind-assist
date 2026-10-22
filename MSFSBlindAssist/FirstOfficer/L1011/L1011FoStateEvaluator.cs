@@ -13,10 +13,13 @@ namespace MSFSBlindAssist.FirstOfficer.L1011;
 /// stopped" or "switch off" and lets a guard or a line pass over a turning engine.
 ///
 /// The engine reads are what the live aircraft shows. A cold engine's N3 gauge reads 1.4 to 1.9,
-/// never 0, and idles near 59, so <see cref="EngineStoppedN3"/> and <see cref="EngineRunningN3"/> sit
-/// well clear of both. The fuel-and-ignition truth is the <c>TOGGLE_CUTOFF_ENG_n</c> row, which reads the
-/// stock fuel valve; the L:var of that name reads 1 on a cold aircraft and is never read. Engine 3's N2
-/// arrives through <see cref="IFoEngine3N2Sink"/> and is stored, but no TriStar field uses it.
+/// never 0, an engine windmilling in a light tailwind read 5 with its fuel and start off, and an engine
+/// idles near 59, so <see cref="EngineStoppedN3"/> (15, well under the 20 % where a start puts fuel on) and
+/// <see cref="EngineRunningN3"/> sit well clear of them. Stopped also needs every fuel-and-ignition and
+/// ground start switch off, so an engine being motored is never stopped. The fuel-and-ignition truth is the
+/// <c>TOGGLE_CUTOFF_ENG_n</c> row, which reads the stock fuel valve; the L:var of that name reads 1 on a cold
+/// aircraft and is never read. Engine 3's N2 arrives through <see cref="IFoEngine3N2Sink"/> and is stored,
+/// but no TriStar field uses it.
 ///
 /// A few fields compare the cache against the plan: the take-off flaps (the tablet's export, else
 /// SimBrief's), the cruise cabin altitude and the destination elevation (SimBrief, through
@@ -25,8 +28,10 @@ namespace MSFSBlindAssist.FirstOfficer.L1011;
 /// </summary>
 public sealed class L1011FoStateEvaluator : LVarStateEvaluator, IFoEngine3N2Sink
 {
-    /// <summary>An engine's N3 below this is stopped (a cold gauge reads up to 1.9).</summary>
-    public const double EngineStoppedN3 = 5;
+    /// <summary>An engine's N3 below this is stopped (a cold gauge reads up to 1.9; a windmilling engine read 5 in a
+    /// light tailwind), with its fuel and ignition and its ground start off: well under the 20 % where a start puts
+    /// fuel on.</summary>
+    public const double EngineStoppedN3 = 15;
 
     /// <summary>An engine's N3 at or above this is running (idle is about 59).</summary>
     public const double EngineRunningN3 = 50;
@@ -397,10 +402,11 @@ public sealed class L1011FoStateEvaluator : LVarStateEvaluator, IFoEngine3N2Sink
     private static readonly Dictionary<string, Synth> Synthetics = new(StringComparer.Ordinal)
     {
         // ---- engines ----
-        // Stopped: every N3 below the stopped threshold AND every fuel-and-ignition switch off.
+        // Stopped: every N3 below the stopped threshold AND every fuel-and-ignition switch off AND every ground start
+        // switch off: an engine being motored is never stopped, however slowly it turns yet.
         ["FO_ENGINES_STOPPED"] = Vars(
             v => v.Take(3).All(n3 => n3 < EngineStoppedN3) && v.Skip(3).All(sw => At(sw, 0)),
-            N3Keys.Concat(FuelCutoffKeys).ToArray()),
+            N3Keys.Concat(FuelCutoffKeys).Concat(GroundStartKeys).ToArray()),
         ["FO_ENG1_RUNNING"] = Vars(v => v[0] >= EngineRunningN3, N3Keys[0]),
         ["FO_ENG2_RUNNING"] = Vars(v => v[0] >= EngineRunningN3, N3Keys[1]),
         ["FO_ENG3_RUNNING"] = Vars(v => v[0] >= EngineRunningN3, N3Keys[2]),

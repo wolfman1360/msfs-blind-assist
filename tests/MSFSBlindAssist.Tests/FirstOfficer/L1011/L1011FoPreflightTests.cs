@@ -524,6 +524,7 @@ public class L1011FoPreflightTests
         => Enumerable.Range(1, 3).SelectMany(n => new (string, double)[]
             {
                 ($"L1011_RO_N3_{n}", running ? 59 : 1.5), ($"TOGGLE_CUTOFF_ENG_{n}", running ? 1 : 0),
+                ($"SWITCH_GND_START_ENG_{n}", 0),
             }).ToArray();
 
     private static (string, double) Ground(bool onGround) => ("SIM_ON_GROUND", onGround ? 1 : 0);

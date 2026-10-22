@@ -1329,10 +1329,10 @@ public static class L1011FoFlowDefinitions
             onTimeout: FlowStepFailurePolicy.Stop);
 
     /// <summary>
-    /// Stops a cold-and-dark flow unless every engine reads stopped (<c>FO_ENGINES_STOPPED</c>: every N3 low
-    /// and every fuel-and-ignition switch off). An unread state is NaN, which fails the guard rather than
-    /// letting a destructive step through. Its label names both halves, so a refusal over stopped engines with a
-    /// fuel and ignition switch left on is spoken truly.
+    /// Stops a cold-and-dark flow unless every engine reads stopped (<c>FO_ENGINES_STOPPED</c>: every N3 below 15,
+    /// every fuel-and-ignition switch and every ground start switch off). An unread state is NaN, which fails the
+    /// guard rather than letting a destructive step through. Its label names the engines and the fuel and ignition,
+    /// so a refusal over stopped engines with a fuel and ignition switch left on is spoken truly.
     /// </summary>
     private static Step EnginesStoppedGuard(string id)
         => WaitForField(id, "Engines stopped, fuel and ignition off", "FO_ENGINES_STOPPED", v => v > 0.5, CheckSeconds,

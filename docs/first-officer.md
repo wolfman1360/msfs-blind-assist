@@ -582,8 +582,9 @@ runs (FOL-2).
 
 Power Up opens with two read-only guards, engines stopped and on the ground, each a Stop that fails
 when unread (FO-25). The engines are read on N3, never the window's N2 feed (FOL-3): running at 50 %
-or above, stopped when every N3 is below 5 % and every fuel and ignition switch reads off, so the
-engines guard, here and in Preflight and Shutdown, is "Engines stopped, fuel and ignition off". Then it
+or above, stopped when every N3 is below 15 % (an engine windmilling in a light tailwind read 5 %) and
+every fuel and ignition switch and ground start switch reads off, so the engines guard, here and in
+Preflight and Shutdown, is "Engines stopped, fuel and ignition off". Then it
 checks, without moving anything, that the fire handles are in, the gear lever is down, the speed
 brake is forward, the flaps agree with their handle and the fuel and ignition switches are off. It
 sets continuous ignition off, the essential and no. 2 radio masters on, the transponder to standby, the

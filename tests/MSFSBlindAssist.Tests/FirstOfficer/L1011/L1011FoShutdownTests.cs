@@ -82,13 +82,15 @@ public class L1011FoShutdownTests
         return evaluator;
     }
 
-    /// <summary>Every engine's N3 gauge and fuel-and-ignition switch: stopped (a cold gauge reads 1.5) or running.</summary>
+    /// <summary>Every engine's N3 gauge, fuel-and-ignition switch and ground start switch (off): stopped (a cold gauge
+    /// reads 1.5) or running.</summary>
     private static IEnumerable<(string, double)> Engines(bool running)
     {
         for (int n = 1; n <= 3; n++)
         {
             yield return ($"L1011_RO_N3_{n}", running ? 59 : 1.5);
             yield return ($"TOGGLE_CUTOFF_ENG_{n}", running ? 1 : 0);
+            yield return ($"SWITCH_GND_START_ENG_{n}", 0);
         }
     }
 

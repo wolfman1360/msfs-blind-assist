@@ -238,8 +238,9 @@ public class FoCutGuardSweepTests
         },
         () => new Md11State());
 
-    // The TriStar reads its engines from N3 and its fuel-and-ignition switch rows (the stock fuel
-    // valve), never N2: running is N3 near idle with the switches on, stopped is both at 0.
+    // The TriStar reads its engines from N3, its fuel-and-ignition switch rows (the stock fuel
+    // valve) and its ground start switches, never N2: running is N3 near idle with the fuel and
+    // ignition on, stopped is all three at 0.
     private static Profile<MSFSBlindAssist.FirstOfficer.L1011.L1011FoActionExecutor, L1011State> L1011() => new("L-1011",
         MSFSBlindAssist.FirstOfficer.L1011.L1011FoChecklistDefinitions.Build(),
         MSFSBlindAssist.FirstOfficer.L1011.L1011FoFlowDefinitions.Build(),
@@ -250,6 +251,7 @@ public class FoCutGuardSweepTests
             {
                 seeds.Add(($"L1011_RO_N3_{n}", r ? 60 : 0));
                 seeds.Add(($"TOGGLE_CUTOFF_ENG_{n}", r ? 1 : 0));
+                seeds.Add(($"SWITCH_GND_START_ENG_{n}", 0));
             }
             var s = new L1011State();
             s.SetSimConnect(SeededSimConnectCache.With(seeds.ToArray()));

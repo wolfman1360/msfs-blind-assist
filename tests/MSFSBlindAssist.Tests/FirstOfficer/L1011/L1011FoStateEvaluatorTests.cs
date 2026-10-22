@@ -64,33 +64,68 @@ public class L1011FoStateEvaluatorTests
 
     // ------------------------------------------------------------------ engines
 
-    private static Dictionary<string, double> Engines(double n3, double fuelSwitch = 0) => new()
+    private static Dictionary<string, double> Engines(double n3, double fuelSwitch = 0, double groundStart = 0) => new()
     {
         ["L1011_RO_N3_1"] = n3, ["L1011_RO_N3_2"] = n3, ["L1011_RO_N3_3"] = n3,
         ["TOGGLE_CUTOFF_ENG_1"] = fuelSwitch, ["TOGGLE_CUTOFF_ENG_2"] = fuelSwitch, ["TOGGLE_CUTOFF_ENG_3"] = fuelSwitch,
+        ["SWITCH_GND_START_ENG_1"] = groundStart, ["SWITCH_GND_START_ENG_2"] = groundStart,
+        ["SWITCH_GND_START_ENG_3"] = groundStart,
     };
 
     [Fact]
-    public void EnginesStopped_ReadsTrueWhenEveryN3IsLowAndEveryFuelSwitchIsOff()
+    public void EnginesStopped_ReadsTrueWhenEveryN3IsLowAndEveryFuelAndStartSwitchIsOff()
         => Assert.Equal(1, Compute("FO_ENGINES_STOPPED", Engines(n3: 0.5)));
 
-    /// <summary>On the live aircraft a cold TriStar's N3 gauge reads 1.4 to 1.9, never 0; that is stopped.</summary>
+    /// <summary>On the live aircraft a cold TriStar's N3 gauge reads 1.4 to 1.9, never 0, and an engine windmilling in a
+    /// light tailwind read 5.05 with its fuel and start off; each is stopped, as is anything below 15.</summary>
     [Theory]
     [InlineData(1.4)]
     [InlineData(1.9)]
-    [InlineData(4.99)]
-    public void EnginesStopped_CountsAColdN3ReadingAsStopped(double coldN3)
-        => Assert.Equal(1, Compute("FO_ENGINES_STOPPED", Engines(coldN3)));
+    [InlineData(5.05)]
+    [InlineData(14.9)]
+    public void EnginesStopped_CountsAColdOrWindmillingN3ReadingAsStopped(double n3)
+        => Assert.Equal(1, Compute("FO_ENGINES_STOPPED", Engines(n3)));
+
+    /// <summary>The live reading that read "not stopped" under the old 5 % threshold: engine 2 windmilling at 5.05 in a
+    /// 5 kt tailwind, engines 1 and 3 at 2.03 and 2.87, every fuel and start switch off.</summary>
+    [Fact]
+    public void EnginesStopped_ReadsAWindmillingEngineAsStopped()
+    {
+        var d = Engines(n3: 2.03);
+        d["L1011_RO_N3_2"] = 5.05;
+        d["L1011_RO_N3_3"] = 2.87;
+        Assert.Equal(1, Compute("FO_ENGINES_STOPPED", d));
+    }
 
     [Fact]
     public void EnginesStopped_ThresholdsArePinned()
     {
-        Assert.Equal(5, L1011FoStateEvaluator.EngineStoppedN3);
+        Assert.Equal(15, L1011FoStateEvaluator.EngineStoppedN3);
         Assert.Equal(50, L1011FoStateEvaluator.EngineRunningN3);
     }
 
+    /// <summary>An engine being motored is never stopped, however slowly it turns yet: a ground start switch on is not.</summary>
+    [Fact]
+    public void EnginesStopped_IsFalseWithAnyGroundStartSwitchOn()
+    {
+        for (int e = 1; e <= 3; e++)
+        {
+            var d = Engines(n3: 3);
+            d[$"SWITCH_GND_START_ENG_{e}"] = 1;
+            Assert.Equal(0, Compute("FO_ENGINES_STOPPED", d));
+        }
+    }
+
+    [Fact]
+    public void EnginesStopped_IsUnknownWithAGroundStartSwitchUnread()
+    {
+        var d = Engines(n3: 3);
+        d.Remove("SWITCH_GND_START_ENG_2");
+        Assert.True(double.IsNaN(Compute("FO_ENGINES_STOPPED", d)));
+    }
+
     [Theory]
-    [InlineData(5.0)]
+    [InlineData(15.0)]
     [InlineData(20.0)]
     [InlineData(59.0)]
     public void EnginesStopped_IsFalseWhileAnyEngineTurns(double n3)
