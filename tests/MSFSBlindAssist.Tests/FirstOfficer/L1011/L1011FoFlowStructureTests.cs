@@ -69,8 +69,8 @@ public class L1011FoFlowStructureTests
             "PU_CHK_FIRE_HANDLES", "PU_CHK_GEAR", "PU_CHK_SPEED_BRAKE", "PU_CHK_FLAPS", "PU_CHK_FUEL_IGN",
             "PU_CONT_IGN", "PU_RADIO_MASTERS", "PU_XPDR", "PU_RADAR", "PU_ATMS", "PU_AC_PUMPS", "PU_FUEL_PUMPS",
             "PU_JETTISON", "PU_PAX_OXY", "PU_GALLEY",
-            "PU_STBY_CHECK", "PU_BATTERY", "PU_STBY_ARMED", "PU_AC_ESS", "PU_EXT_PWR", "PU_EXT_PWR_CPT", "PU_INS_ALIGN",
-            "PU_INS_POSITION",
+            "PU_STBY_CHECK", "PU_BATTERY", "PU_STBY_ARMED", "PU_AC_ESS", "PU_EXT_PWR", "PU_EXT_PWR_CPT", "PU_FIRE_TEST",
+            "PU_INS_ALIGN", "PU_INS_POSITION",
         }, PowerUp.Steps.Select(s => s.Id));
 
     [Fact]
@@ -208,6 +208,7 @@ public class L1011FoFlowStructureTests
         ("PU_STBY_ARMED", "Standby power: armed", new[] { ("GUARD_STBY_POWER", 1), ("TOGGLE_STBY_POWER", 1), ("GUARD_STBY_POWER", 0) }),
         ("PU_AC_ESS", "AC essential bus selector: bus 3, generator 1", new[] { ("ROTARY_AC_ESS_BUS", 4) }),
         ("PU_EXT_PWR", "External power: on", new[] { (X.ExternalPower, 1) }),
+        ("PU_FIRE_TEST", "Engine and APU fire test", new[] { (X.FireTest, 1) }),
         // One composite: it writes ALIGN to each unit not already at ALIGN or NAV.
         ("PU_INS_ALIGN", "INS 1, 2 and 3: align", new[] { (X.InsAlign, 1) }),
     };
@@ -233,13 +234,14 @@ public class L1011FoFlowStructureTests
         Assert.Equal(expected, actual);
     }
 
-    /// <summary>Every switch step but the standby power check says "Already set" on its own state.</summary>
+    /// <summary>Every switch step but the two tests (the standby power check, the engine and APU fire test) says
+    /// "Already set" on its own state: the test is the point.</summary>
     [Fact]
-    public void EveryWrite_HasASkipCondition_ExceptTheStandbyPowerCheck()
+    public void EveryWrite_HasASkipCondition_ExceptTheTests()
     {
         foreach (var s in PowerUp.Steps.Where(IsSwitch))
         {
-            if (s.Id == "PU_STBY_CHECK")
+            if (s.Id is "PU_STBY_CHECK" or "PU_FIRE_TEST")
                 Assert.Null(s.SkipCondition);
             else
                 Assert.NotNull(s.SkipCondition);
@@ -283,9 +285,11 @@ public class L1011FoFlowStructureTests
         var s = Of("PU_STBY_CHECK");
         Assert.Equal(X.StandbyPowerCheck, s.EventName);
         Assert.Equal(new[] { "PU_STBY_CHECK", "PUC_STBY_CHECK" }, s.LinkedChecklistItemIds);
-        // The electrical meter selector lines are the pilot's (FO-7): no step of the flow links them.
+        // The electrical meter selector lines are the pilot's (FO-7): no step of the flow links them. The fire test's
+        // loop selectors are its own, set by the test.
         Assert.DoesNotContain(PowerUp.Steps.SelectMany(x => x.LinkedChecklistItemIds),
-            id => id.Contains("METER", StringComparison.OrdinalIgnoreCase) || id.Contains("SELECTOR", StringComparison.OrdinalIgnoreCase));
+            id => id.Contains("METER", StringComparison.OrdinalIgnoreCase)
+                || (id.Contains("SELECTOR", StringComparison.OrdinalIgnoreCase) && id != "PUC_LOOP_SELECTORS"));
     }
 
     /// <summary>The battery on and standby power armed follow the check, each its own step and line, so a pilot ticking
@@ -414,6 +418,24 @@ public class L1011FoFlowStructureTests
         Assert.Equal(on.Id, PowerUp.Steps[PowerUp.Steps.IndexOf(captain) - 1].Id);
     }
 
+    /// <summary>
+    /// The engine and APU fire test is the manual's cockpit preparation, after the standby power check and before the
+    /// APU, as the aircraft's own checklist has it. It runs after external power and the ground power reminder: it has
+    /// been checked live only with power on. It delivers its action line and the inspection's loop selector and fire
+    /// test lines.
+    /// </summary>
+    [Fact]
+    public void TheFireTest_RunsAfterExternalPowerAndBeforeTheInsAlign_LinkingItsLines()
+    {
+        var ids = PowerUp.Steps.Select(s => s.Id).ToList();
+        Assert.Equal(new[] { "PU_EXT_PWR", "PU_EXT_PWR_CPT", "PU_FIRE_TEST", "PU_INS_ALIGN" },
+            ids.Skip(ids.IndexOf("PU_EXT_PWR")).Take(4));
+        var s = Of("PU_FIRE_TEST");
+        Assert.Equal(X.FireTest, s.EventName);
+        Assert.Equal(FlowStepFailurePolicy.Skip, s.FailurePolicy);   // a failed test never stops the flow
+        Assert.Equal(new[] { "PU_FIRE_TEST", "PUC_FIRE_TEST", "PUC_LOOP_SELECTORS" }, s.LinkedChecklistItemIds);
+    }
+
     [Fact]
     public void TheInsAlignStep_LinksItsOwnLines_AndTheCaptainEntersThePosition()
     {
@@ -521,7 +543,7 @@ public class L1011FoFlowStructureTests
 
     [Fact]
     public void OnlyTheCompositesArePseudoKeys()
-        => Assert.Equal(new[] { X.StandbyPowerCheck, X.ExternalPower, X.InsAlign }.OrderBy(k => k, StringComparer.Ordinal),
+        => Assert.Equal(new[] { X.StandbyPowerCheck, X.ExternalPower, X.FireTest, X.InsAlign }.OrderBy(k => k, StringComparer.Ordinal),
             EveryWrittenKey().Select(w => w.Key).Where(X.IsPseudoKey).Distinct().OrderBy(k => k, StringComparer.Ordinal));
 
     /// <summary>

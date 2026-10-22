@@ -594,8 +594,11 @@ jettison master and dump switches off with their guards closed, passenger oxygen
 galley power off. It runs the standby power check, sets the AC essential bus selector to bus 3
 (generator 1), connects external power and closes any AC tie that reads open when the external power
 available light is lit (otherwise the Captain hears "Connect ground power on the tablet's Ground page,
-or the Preflight flow starts the APU."), turns the three INS mode selectors to Align, and reminds the
-Captain to enter present position on each unit (input Shift+M, then Alt+P).
+or the Preflight flow starts the APU."), runs the engine and APU fire test, turns the three INS mode
+selectors to Align, and reminds the Captain to enter present position on each unit (input Shift+M, then
+Alt+P). The manual's cockpit preparation and the aircraft's own checklist both put the fire test after
+the standby power check and before the APU start; it runs after external power on purpose, since it has
+only been checked live with power on.
 
 The standby power check is the aircraft's own check as one step: battery off, the guard open,
 standby power On; the lights read (the flowbar lit, both standby bus fail lights out, and both
@@ -613,8 +616,8 @@ is a cut, so neither is left alone.
 
 Power Up writes no lever, no typed value and no control whose click carries a toggle K: event. A hand
 tick on an action line runs the same write as its flow step; the ATM, AC hydraulic pump and fuel pump
-lines and the standby power check are left alone unless the aircraft reads on the ground with every
-engine stopped (FO-25), and the fuel pump line also while the APU turns (FOL-6). The universal
+lines, the standby power check and the fire test are left alone unless the aircraft reads on the ground
+with every engine stopped (FO-25), and the fuel pump line also while the APU turns (FOL-6). The universal
 autopilot engage presses engage paddle A to Command through the same entry, CWS notch included, and
 works closed loop on the two paddles (`IsAutopilotEngaged`, FO-18); it never sends the stock
 `AUTOPILOT_ON`, which the paddle-driven autopilot ignores.
@@ -627,17 +630,17 @@ read-only Stop wait of up to two minutes for it to run. A master that does not r
 once, with the real reason ("Preflight flow stopped. Unable to complete: APU master: on"), instead of a
 two-minute wait for an APU that cannot start. It puts the APU generator on line (the field,
 then the breaker, each verified on its relay, never on the button) and closes the AC ties, puts the
-bleed air and packs on the APU, runs the engine and APU fire test and the wheel well fire test, sets
-the engine hydraulic pumps and runs the hydraulic check, then sets the meters, the fuel panel (transfers
+bleed air and packs on the APU, runs the wheel well fire test, sets the engine hydraulic pumps and runs
+the hydraulic check, then sets the meters, the fuel panel (transfers
 off, crossfeeds closed, tank valves on, only the APU's pump running), the rest of the engineer's
 station, the pressurization mode and the cabin altitude selector for the cruise, and the overhead, main
 panel and centre console. It checks, read only, what Power Up left, and ends with the Captain's items:
 the INS route, the PMS, the NAV radios (Ctrl+N), the altimeters (Ctrl+B), the autopilot, the take-off
 data and the radios.
 
-The tests are the ones whose result BA can read (FOL-7): Power Up's standby power check, and
-Preflight's engine and APU fire test (the loop selectors to Both, tests A and B on together: A alone
-lit nothing), wheel well fire test (A and B together) and hydraulic check (B's AC pump, C's, both power
+The tests are the ones whose result BA can read (FOL-7): Power Up's standby power check and engine and
+APU fire test (the loop selectors to Both, tests A and B on together: A alone lit nothing), and
+Preflight's wheel well fire test (A and B together) and hydraulic check (B's AC pump, C's, both power
 transfer units, each pressure read up, then everything off and read down). Each keeps the dispatch gate
 for its whole run, re-arms the lamp mute before every phase and always puts its switches back. It
 speaks one verdict: the first wrong light or pressure always ("Hydraulic check: system B pressure did

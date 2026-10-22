@@ -11,9 +11,10 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// <summary>
 /// The iniBuilds L-1011 TriStar First Officer flows, following the aircraft's manual checklist: Power Up, Preflight,
 /// Before Start, Engine Start, After Start, Before Takeoff, After Takeoff, Descent, Before Landing, After Landing,
-/// Parking and Shutdown. Every switch step but the standby power check and Preflight's three tests carries a
-/// SkipCondition on its own state ("Already set"; a check or a test is the point, so it always runs), and
-/// the executor re-reads before acting anyway. Captain steps are spoken reminders, never automated.
+/// Parking and Shutdown. Every switch step but Power Up's standby power check and engine and APU fire test and
+/// Preflight's two tests carries a SkipCondition on its own state ("Already set"; a check or a test is the point,
+/// so it always runs), and the executor re-reads before acting anyway. Captain steps are spoken reminders, never
+/// automated.
 ///
 /// Power Up is a cold-and-dark flow that switches the fuel pumps and hydraulic pumps off and, in its
 /// standby power check, turns the battery off for a moment ([FO-25]): it opens with BOTH guards, engines
@@ -21,7 +22,9 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// with an engine turning or in flight stops whole instead of working through its steps one by one. The
 /// guards stay first; the standby power check stays linked to its own two lines and never to the electrical
 /// meter selector lines, which are the pilot's ([FO-7]); the battery on and standby power armed follow it as
-/// steps and lines of their own, so the action group ticked line by line still turns the battery on.
+/// steps and lines of their own, so the action group ticked line by line still turns the battery on. The engine
+/// and APU fire test is Power Up's, as the manual's cockpit preparation and the aircraft's own checklist have it
+/// (before the APU), run after external power, since it has only been checked live with power on.
 ///
 /// Every read-back (PUC_*) line the flow latches has a delivering step ([FO-6], [FO-7]): a write completes
 /// its own action line and the read-back line it sets (<see cref="Also"/>), and a read-only
@@ -29,8 +32,8 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// and no control whose click replay carries a toggle K: event, which the definition refuses from an
 /// unknown position ([L1011-4]); the tests pin all three.
 ///
-/// Preflight starts the APU, puts the bleed air and packs on it, runs the fire, wheel well and hydraulic
-/// tests and sets the engineer's, overhead, main panel and console switches for departure. It switches the
+/// Preflight starts the APU, puts the bleed air and packs on it, runs the wheel well fire test and the hydraulic
+/// check and sets the engineer's, overhead, main panel and console switches for departure. It switches the
 /// packs, the AC hydraulic pumps and the power transfer units off on the way, so it opens with the same two
 /// guards ([FO-25]); its packs step is also left alone off the ground, as its tick is. A master that does not read on
 /// stops the flow at once, aloud, instead of a two-minute wait for an APU that cannot start. Its toggle-carrying writes
@@ -148,7 +151,8 @@ public static class L1011FoFlowDefinitions
     {
         Id = "POWER_UP", Name = "Power Up",
         Description = "Fire handle, gear, speed brake, flap and fuel checks; radios, transponder, radar, pumps, jettison, "
-            + "passenger oxygen and galley switches; standby power check; essential bus selector; external power; INS align.",
+            + "passenger oxygen and galley switches; standby power check, battery on and standby power armed; essential bus "
+            + "selector; external power; engine and APU fire test; INS align.",
         RelatedChecklistGroupIds = new[] { "POWER_UP", "POWER_UP_CL" },
         Steps = new()
         {
@@ -229,6 +233,13 @@ public static class L1011FoFlowDefinitions
             Skip(Captain("PU_EXT_PWR_CPT", "Ground power",
                     "Connect ground power on the tablet's Ground page, or the Preflight flow starts the APU."),
                 s => s.IsOn("FO_EXT_POWER_ON")),
+            // The manual's cockpit preparation and the aircraft's own checklist run the engine and APU fire test
+            // after the standby power check and before the APU. It runs here, after external power, on purpose: the
+            // test has only been checked live with power on. One verdict, every switch put back, the loop selectors
+            // left at Both (which its read-back line reads); no SkipCondition, the test is the point, and a failed
+            // test never stops the flow (Skip).
+            Also(Done(SW("PU_FIRE_TEST", "Engine and APU fire test", X.FireTest, 1), "PU_FIRE_TEST"),
+                "PUC_FIRE_TEST", "PUC_LOOP_SELECTORS"),
             // One composite that goes unit by unit: a unit already at ALIGN or NAV is never rewritten.
             Also(Done(Skip(SW("PU_INS_ALIGN", "INS 1, 2 and 3: align", X.InsAlign, 1),
                 s => s.IsOn("FO_INS_ALIGN_OR_NAV")), "PU_INS_ALIGN"), "PUC_INS_ALIGN"),
@@ -279,7 +290,7 @@ public static class L1011FoFlowDefinitions
     private static Flow BuildPreflight() => new()
     {
         Id = "PREFLIGHT", Name = "Preflight",
-        Description = "APU start and generator, bleed air and packs, fire, wheel well and hydraulic tests, fuel, "
+        Description = "APU start and generator, bleed air and packs, wheel well fire test and hydraulic check, fuel, "
             + "pressurization, overhead, main panel and console set for departure.",
         RelatedChecklistGroupIds = new[] { "PREFLIGHT", "PREFLIGHT_FE_CL", "PREFLIGHT_OVHD_CL", "PREFLIGHT_MAIN_CL", "PREFLIGHT_CONSOLE_CL" },
         Steps = new()
@@ -339,10 +350,8 @@ public static class L1011FoFlowDefinitions
                 s => s.IsOn("FO_HOT_AIR_ON")), "PF_HOT_AIR_ON"), "PFC_HOT_AIR"),
 
             // ---- the tests: each composite speaks one verdict and puts every switch back; a failed test
-            // never stops the flow (Skip). No SkipCondition: the test is the point. The fire test leaves the
-            // loop selectors at Both, which its read-back line reads.
-            Also(Done(SW("PF_FIRE_TEST", "Engine and APU fire test", X.FireTest, 1), "PF_FIRE_TEST"),
-                "PFC_FIRE_TEST", "PFC_LOOP_SELECTORS"),
+            // never stops the flow (Skip). No SkipCondition: the test is the point. The engine and APU fire test
+            // is Power Up's, before the APU, as the manual and the aircraft's own checklist have it.
             Also(Done(SW("PF_WHEEL_WELL_TEST", "Wheel well fire test", X.WheelWellFireTest, 1), "PF_WHEEL_WELL_TEST"),
                 "PFC_WHEEL_WELL_TEST"),
 

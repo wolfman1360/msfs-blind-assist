@@ -21,19 +21,21 @@ using CheckFn = System.Func<L1011FoActionExecutor, L1011FoStateEvaluator, System
 ///
 /// Preflight has one action group (<c>PREFLIGHT</c>, the same shape: its conditional cabin altitude prompt
 /// stays flow-only) and four read-backs in the aircraft's words: the flight engineer station (opening with
-/// the safety inspection's APU start, air conditioning and fire test lines, which Preflight delivers), the
-/// overhead, the main panel and the centre console. The three tests and the hydraulic cut are parked-only
-/// ticks, as Power Up's pump lines are; the packs line is left alone off the ground.
+/// the safety inspection's APU start and air conditioning lines, which Preflight delivers), the overhead, the
+/// main panel and the centre console. The two tests and the hydraulic cut are parked-only ticks, as Power Up's
+/// pump lines are; the packs line is left alone off the ground.
 ///
 /// The READ-BACK group (<c>POWER_UP_CL</c>, [FO-3]: action-free) is the aircraft's cockpit safety inspection
 /// in its own words and order. Each line reads the field and value its delivering flow step checks or skips
 /// on: a single switch its own key at the target, a multi-switch line the matching synthetic. The standby
-/// power check's line is judged by no state; the flow's composite step delivers it ([FO-7]). The inspection
-/// has no galley line, so none is invented: the galley step completes its action line only.
+/// power check's and the fire test's lines are judged by no state; the flow's composite steps deliver them
+/// ([FO-7]). The inspection has no galley line, so none is invented: the galley step completes its action line
+/// only.
 ///
-/// Four hand ticks are left alone unless the aircraft reads on the ground with every engine stopped
-/// ([FO-25]): the ATM switches, the AC hydraulic pumps and the fuel pumps off, and the standby power check,
-/// which turns the battery off for a moment. Unread refuses, as the flow's guards do. The fuel pump tick is
+/// Five hand ticks are left alone unless the aircraft reads on the ground with every engine stopped
+/// ([FO-25]): the ATM switches, the AC hydraulic pumps and the fuel pumps off, the standby power check, which
+/// turns the battery off for a moment, and the engine and APU fire test, which lights the fire warnings. Unread
+/// refuses, as the flow's guards do. The fuel pump tick is
 /// also left alone while the APU runs or is still spooling up, as its flow step is: the tank 2 left pump
 /// feeds the APU from the moment it starts turning.
 ///
@@ -196,6 +198,9 @@ public static class L1011FoChecklistDefinitions
                 Auto("PU_AC_ESS", G, "AC essential bus selector: bus 3, generator 1", AcEssBus, v => Is(v, AcEssNormal),
                     Set(AcEssBus, AcEssNormal)),
                 Auto("PU_EXT_PWR", G, "External power: on", "FO_EXT_POWER_ON", On, Set(X.ExternalPower, 1)),
+                // The test lights the fire warnings: parked only (FO-25), as it was in Preflight.
+                LeaveAlone(ActionManual("PU_FIRE_TEST", G, "Engine and APU fire test", Set(X.FireTest, 1)),
+                    NotParked, ParkedOnlyText),
                 // One composite, unit by unit: a unit already at ALIGN or NAV is left alone, never rewritten.
                 Auto("PU_INS_ALIGN", G, "INS 1, 2 and 3: align", "FO_INS_ALIGN_OR_NAV", On, Set(X.InsAlign, 1)),
                 Reminder("PU_INS_POSITION", G,
@@ -234,6 +239,10 @@ public static class L1011FoChecklistDefinitions
                 Read("PUC_BATTERY", G, "Battery: on", Battery, v => Is(v, 1)),
                 Read("PUC_STBY_ARMED", G, "Standby power: armed", "FO_STBY_ARMED", On),
                 Read("PUC_AC_ESS", G, "AC essential power selector: normal, bus 3 (generator 1)", AcEssBus, v => Is(v, AcEssNormal)),
+                // The page's fire tests, between the AC essential selector and external power; Power Up's fire test
+                // delivers both.
+                Read("PUC_LOOP_SELECTORS", G, "Detection loop selectors: both", "FO_FIRE_LOOPS_BOTH", On),
+                Manual("PUC_FIRE_TEST", G, "Engine and APU fire test: complete"),
                 Read("PUC_INS_ALIGN", G, "All INS: align", "FO_INS_ALIGN_OR_NAV", On),
             }
         };
@@ -323,9 +332,7 @@ public static class L1011FoChecklistDefinitions
                 Auto("PF_PACKS_ON", G, "Packs: on", "FO_PACKS_ON", On, SetAll(All(1, PackKeys))),
                 Auto("PF_APU_MODE_NORM", G, "APU compressor mode: normal", ApuMode, v => Is(v, 1), Set(ApuMode, 1)),
                 Auto("PF_HOT_AIR_ON", G, "Hot air and hot air isolation valves: on", "FO_HOT_AIR_ON", On, SetAll(All(1, HotAirKeys))),
-                // The tests light fire warnings and run hydraulic pumps: parked only (FO-25).
-                LeaveAlone(ActionManual("PF_FIRE_TEST", G, "Engine and APU fire test", Set(X.FireTest, 1)),
-                    NotParked, ParkedOnlyText),
+                // The tests light a fire warning and run hydraulic pumps: parked only (FO-25).
                 LeaveAlone(ActionManual("PF_WHEEL_WELL_TEST", G, "Wheel well fire test", Set(X.WheelWellFireTest, 1)),
                     NotParked, ParkedOnlyText),
                 Auto("PF_HYD_ENGINE_PUMPS", G, "Engine hydraulic pumps: on and guarded", "FO_HYD_ENGINE_PUMPS_ON", On,
@@ -417,9 +424,10 @@ public static class L1011FoChecklistDefinitions
     // ================================================================== Preflight: the read-backs (the aircraft's words)
 
     /// <summary>
-    /// The flight engineer station preparation, opening with the cockpit safety inspection's APU start, air
-    /// conditioning and fire test lines: Preflight delivers them, and Power Up's read-back holds only lines Power
-    /// Up delivers (FO-7). The tests' own lines are judged by no state; their composites deliver them. The page's
+    /// The flight engineer station preparation, opening with the cockpit safety inspection's APU start and air
+    /// conditioning lines: Preflight delivers them, and Power Up's read-back holds only lines Power Up delivers
+    /// (FO-7); the inspection's fire test lines are Power Up's. The tests' own lines are judged by no state; their
+    /// composites deliver them. The page's
     /// drain mast heater line is left out: the aircraft puts both switches back to off within seconds, by hand too.
     /// </summary>
     private static Group PreflightEngineerCL()
@@ -443,8 +451,6 @@ public static class L1011FoChecklistDefinitions
                 Read("PFC_PACKS", G, "Pack flow control valve switches: latch in", "FO_PACKS_ON", On),
                 Read("PFC_APU_MODE_NORM", G, "APU mode selector: norm", ApuMode, v => Is(v, 1)),
                 Read("PFC_HOT_AIR", G, "Hot air valve and hot air isolation valve switches: latch in", "FO_HOT_AIR_ON", On),
-                Read("PFC_LOOP_SELECTORS", G, "Detection loop selectors: both", "FO_FIRE_LOOPS_BOTH", On),
-                Manual("PFC_FIRE_TEST", G, "Engine and APU fire test: complete"),
                 Manual("PFC_WHEEL_WELL_TEST", G, "Wheel well fire panel check: complete"),
                 Read("PFC_HYD_ENGINE_PUMPS", G, "Engine pump shut off switches: latched", "FO_HYD_ENGINE_PUMPS_ON", On),
                 Read("PFC_ATMS", G, "ATM switches: off", "FO_ATMS_OFF", On),

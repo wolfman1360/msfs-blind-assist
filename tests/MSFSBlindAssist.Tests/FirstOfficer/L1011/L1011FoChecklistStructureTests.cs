@@ -213,7 +213,7 @@ public class L1011FoChecklistStructureTests
         {
             "PU_CONT_IGN", "PU_RADIO_MASTERS", "PU_XPDR", "PU_RADAR", "PU_ATMS", "PU_AC_PUMPS", "PU_FUEL_PUMPS",
             "PU_JETTISON", "PU_PAX_OXY", "PU_GALLEY", "PU_STBY_CHECK", "PU_BATTERY", "PU_STBY_ARMED", "PU_AC_ESS",
-            "PU_EXT_PWR", "PU_INS_ALIGN", "PU_INS_POSITION",
+            "PU_EXT_PWR", "PU_FIRE_TEST", "PU_INS_ALIGN", "PU_INS_POSITION",
         }, Group("POWER_UP").Items.Select(i => i.Id));
         Assert.DoesNotContain(Groups.SelectMany(g => g.Items), i => i.Id == "PU_EXT_PWR_CPT");
     }
@@ -235,7 +235,8 @@ public class L1011FoChecklistStructureTests
             switch (i.Id)
             {
                 case "PU_STBY_CHECK":
-                    // The composite: a manual line that runs the check, judged by no state.
+                case "PU_FIRE_TEST":
+                    // A test composite: a manual line that runs the test, judged by no state.
                     Assert.Equal(ChecklistItemType.Actionable, i.Type);
                     Assert.Null(i.StateFieldName);
                     Assert.NotNull(i.CheckAction);
@@ -302,6 +303,9 @@ public class L1011FoChecklistStructureTests
             ("PUC_BATTERY", "Battery: on"),
             ("PUC_STBY_ARMED", "Standby power: armed"),
             ("PUC_AC_ESS", "AC essential power selector: normal, bus 3 (generator 1)"),
+            // The page's fire tests come between the AC essential selector and external power.
+            ("PUC_LOOP_SELECTORS", "Detection loop selectors: both"),
+            ("PUC_FIRE_TEST", "Engine and APU fire test: complete"),
             ("PUC_INS_ALIGN", "All INS: align"),
         };
         Assert.Equal(expected, Group("POWER_UP_CL").Items.Select(i => (i.Id, i.Label)).ToArray());
@@ -330,6 +334,7 @@ public class L1011FoChecklistStructureTests
     [InlineData("PUC_BATTERY", "TOGGLE_BATTERY", 1)]
     [InlineData("PUC_STBY_ARMED", "FO_STBY_ARMED", 1)]
     [InlineData("PUC_AC_ESS", "ROTARY_AC_ESS_BUS", 4)]
+    [InlineData("PUC_LOOP_SELECTORS", "FO_FIRE_LOOPS_BOTH", 1)]
     [InlineData("PUC_INS_ALIGN", "FO_INS_ALIGN_OR_NAV", 1)]
     public void ReadLine_ReadsItsFieldAtItsValue(string id, string field, double done)
     {
@@ -383,21 +388,22 @@ public class L1011FoChecklistStructureTests
     public static IEnumerable<object[]> GuardedLines() => new[]
     {
         new object[] { "PU_ATMS" }, new object[] { "PU_AC_PUMPS" }, new object[] { "PU_FUEL_PUMPS" },
-        new object[] { "PU_STBY_CHECK" },
+        new object[] { "PU_STBY_CHECK" }, new object[] { "PU_FIRE_TEST" },
     };
 
     /// <summary>
-    /// The four lines that cut hydraulic or fuel pumps or the battery carry the guard; no other line does.
-    /// The ATM switches are the air-turbine hydraulic pumps of systems B and C, left in AUTO through the flight:
-    /// off in the air or with an engine turning cuts backup hydraulic power, and the fleet's cut sweep cannot see
-    /// them by their label, so the line carries the guard itself.
+    /// The four lines that cut hydraulic or fuel pumps or the battery carry the guard, and the fire test, which
+    /// lights the fire warnings, as it did in Preflight; no other line does. The ATM switches are the air-turbine
+    /// hydraulic pumps of systems B and C, left in AUTO through the flight: off in the air or with an engine turning
+    /// cuts backup hydraulic power, and the fleet's cut sweep cannot see them by their label, so the line carries
+    /// the guard itself.
     /// </summary>
     [Fact]
-    public void OnlyThePumpAndStandbyCheckLines_AreLeftAlone()
+    public void OnlyThePumpStandbyCheckAndFireTestLines_AreLeftAlone()
     {
         // Power Up's own lines: Preflight's are pinned in L1011FoPreflightTests.
         var guarded = Group("POWER_UP").Items.Where(i => i.LeaveAloneWhen != null).Select(i => i.Id).ToArray();
-        Assert.Equal(new[] { "PU_ATMS", "PU_AC_PUMPS", "PU_FUEL_PUMPS", "PU_STBY_CHECK" }, guarded);
+        Assert.Equal(new[] { "PU_ATMS", "PU_AC_PUMPS", "PU_FUEL_PUMPS", "PU_STBY_CHECK", "PU_FIRE_TEST" }, guarded);
     }
 
     [Theory]
@@ -509,6 +515,7 @@ public class L1011FoChecklistStructureTests
     [InlineData("PU_ATMS")]
     [InlineData("PU_AC_PUMPS")]
     [InlineData("PU_STBY_CHECK")]
+    [InlineData("PU_FIRE_TEST")]
     public void The_other_guarded_ticks_ignore_the_APU(string id)
     {
         Assert.False(Line(id).LeaveAloneWhen!(State(ParkedWithTheApu(100))));

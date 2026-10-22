@@ -85,7 +85,7 @@ public class L1011FoPreflightTests
         "PF_ENGINES_STOPPED", "PF_ON_GROUND",
         "PF_APU_MASTER", "PF_APU_MODE_MIN", "PF_APU_FUEL", "PF_APU_START", "PF_APU_RUNNING", "PF_APU_GEN", "PF_AC_TIES",
         "PF_APU_AIR", "PF_PACKS_OFF", "PF_PACKS_AUTO", "PF_HOT_AIR_OFF", "PF_ZONE_TRIMS", "PF_APU_BLEED", "PF_PACKS_ON",
-        "PF_APU_MODE_NORM", "PF_HOT_AIR_ON", "PF_FIRE_TEST", "PF_WHEEL_WELL_TEST", "PF_HYD_ENGINE_PUMPS", "PF_CHK_ATMS",
+        "PF_APU_MODE_NORM", "PF_HOT_AIR_ON", "PF_WHEEL_WELL_TEST", "PF_HYD_ENGINE_PUMPS", "PF_CHK_ATMS",
         "PF_AC_PUMPS_PTUS_OFF", "PF_HYD_CHECK", "PF_AC_METER", "PF_DC_METER", "PF_CHK_AC_ESS", "PF_TRANSFERS_OFF",
         "PF_CROSSFEEDS", "PF_TANK_VALVES", "PF_CHK_APU_PUMP", "PF_CHK_JETTISON", "PF_FUEL_CTRL",
         "PF_MOVIE", "PF_SLAT_MONITOR", "PF_HI_PRESS", "PF_ISLN_VALVES", "PF_ECS", "PF_PRESS_MODE", "PF_CABIN_ALT",
@@ -161,7 +161,6 @@ public class L1011FoPreflightTests
         ("PF_PACKS_ON", "Packs: on", All(1, Packs)),
         ("PF_APU_MODE_NORM", "APU compressor mode: normal", All(1, "SWITCH_APU_MODE")),
         ("PF_HOT_AIR_ON", "Hot air and hot air isolation valves: on", All(1, HotAir)),
-        ("PF_FIRE_TEST", "Engine and APU fire test", All(1, X.FireTest)),
         ("PF_WHEEL_WELL_TEST", "Wheel well fire test", All(1, X.WheelWellFireTest)),
         ("PF_HYD_ENGINE_PUMPS", "Engine hydraulic pumps: on and guarded",
             All(1, "SWITCH_HYD_PUMP_A1", "SWITCH_HYD_PUMP_B1", "SWITCH_HYD_PUMP_C1", "SWITCH_HYD_PUMP_D1")
@@ -243,7 +242,16 @@ public class L1011FoPreflightTests
             Preflight.Steps.Where(IsSwitch).Select(s => s.Id).OrderBy(x => x, StringComparer.Ordinal));
 
     /// <summary>The three tests have no state to be "already set" on: the test is the point.</summary>
-    private static readonly string[] Tests = { "PF_FIRE_TEST", "PF_WHEEL_WELL_TEST", "PF_HYD_CHECK" };
+    private static readonly string[] Tests = { "PF_WHEEL_WELL_TEST", "PF_HYD_CHECK" };
+
+    /// <summary>The engine and APU fire test is Power Up's (the manual's cockpit preparation and the aircraft's own
+    /// checklist put it before the APU start): Preflight keeps the wheel well test and the hydraulic check.</summary>
+    [Fact]
+    public void The_engine_and_APU_fire_test_is_Power_Ups_not_Preflights()
+    {
+        Assert.DoesNotContain(Preflight.Steps, s => s.EventName == X.FireTest);
+        Assert.DoesNotContain(Groups.SelectMany(g => g.Items), i => i.Id is "PF_FIRE_TEST" or "PFC_FIRE_TEST" or "PFC_LOOP_SELECTORS");
+    }
 
     [Fact]
     public void Every_write_but_the_tests_has_a_skip_condition()
@@ -289,7 +297,6 @@ public class L1011FoPreflightTests
         ["PF_PACKS_ON"] = new[] { "PF_PACKS_ON", "PFC_PACKS" },
         ["PF_APU_MODE_NORM"] = new[] { "PF_APU_MODE_NORM", "PFC_APU_MODE_NORM" },
         ["PF_HOT_AIR_ON"] = new[] { "PF_HOT_AIR_ON", "PFC_HOT_AIR" },
-        ["PF_FIRE_TEST"] = new[] { "PF_FIRE_TEST", "PFC_FIRE_TEST", "PFC_LOOP_SELECTORS" },
         ["PF_WHEEL_WELL_TEST"] = new[] { "PF_WHEEL_WELL_TEST", "PFC_WHEEL_WELL_TEST" },
         ["PF_HYD_ENGINE_PUMPS"] = new[] { "PF_HYD_ENGINE_PUMPS", "PFC_HYD_ENGINE_PUMPS" },
         ["PF_CHK_ATMS"] = new[] { "PFC_ATMS" },
@@ -724,7 +731,7 @@ public class L1011FoPreflightTests
     [Fact]
     public void TheCompositesArePseudoKeys_AndOnlyTwoLeversAreWritten()
     {
-        Assert.Equal(new[] { X.ApuStart, X.ApuGenerator, X.AcTies, X.FireTest, X.WheelWellFireTest, X.HydraulicCheck, X.CabinAltitudeSelect }
+        Assert.Equal(new[] { X.ApuStart, X.ApuGenerator, X.AcTies, X.WheelWellFireTest, X.HydraulicCheck, X.CabinAltitudeSelect }
                 .OrderBy(k => k, StringComparer.Ordinal),
             EveryWrittenKey().Select(w => w.Key).Where(X.IsPseudoKey).Distinct().OrderBy(k => k, StringComparer.Ordinal));
         Assert.Equal(new[] { L1011Levers.ParkingBrakeKey, L1011Levers.SpeedBrakeKey }.OrderBy(k => k, StringComparer.Ordinal),
@@ -811,7 +818,7 @@ public class L1011FoPreflightTests
     {
         "PF_APU_MASTER", "PF_APU_MODE_MIN", "PF_APU_FUEL", "PF_APU_START", "PF_APU_GEN", "PF_AC_TIES", "PF_APU_AIR",
         "PF_PACKS_OFF", "PF_PACKS_AUTO", "PF_HOT_AIR_OFF", "PF_ZONE_TRIMS", "PF_APU_BLEED", "PF_PACKS_ON", "PF_APU_MODE_NORM",
-        "PF_HOT_AIR_ON", "PF_FIRE_TEST", "PF_WHEEL_WELL_TEST", "PF_HYD_ENGINE_PUMPS", "PF_AC_PUMPS_PTUS_OFF", "PF_HYD_CHECK",
+        "PF_HOT_AIR_ON", "PF_WHEEL_WELL_TEST", "PF_HYD_ENGINE_PUMPS", "PF_AC_PUMPS_PTUS_OFF", "PF_HYD_CHECK",
         "PF_AC_METER", "PF_DC_METER", "PF_TRANSFERS_OFF", "PF_CROSSFEEDS", "PF_TANK_VALVES", "PF_FUEL_CTRL",
         "PF_MOVIE", "PF_SLAT_MONITOR", "PF_HI_PRESS", "PF_ISLN_VALVES", "PF_ECS", "PF_PRESS_MODE", "PF_CABIN_ALT",
         "PF_COMPASSES", "PF_WIPERS", "PF_ANTI_ICE", "PF_WINDSHIELD", "PF_SIDE_WINDOWS", "PF_AIR_DATA", "PF_MACH_FEEL",
@@ -1019,14 +1026,14 @@ public class L1011FoPreflightTests
 
     private const string ParkedOnlyText = "Left alone: the aircraft must be on the ground with the engines stopped.";
 
-    /// <summary>The three tests light fire warnings and run hydraulic pumps, and the AC pumps and PTUs line cuts
+    /// <summary>The two tests light a fire warning and run hydraulic pumps, and the AC pumps and PTUs line cuts
     /// hydraulic power: parked only, as Power Up's pump lines. The packs line: on the ground only.</summary>
     [Fact]
     public void ThePreflightTicksLeftAlone_AreTheTestsTheHydraulicCutAndThePacks()
     {
-        Assert.Equal(new[] { "PF_PACKS_OFF", "PF_FIRE_TEST", "PF_WHEEL_WELL_TEST", "PF_AC_PUMPS_PTUS_OFF", "PF_HYD_CHECK" },
+        Assert.Equal(new[] { "PF_PACKS_OFF", "PF_WHEEL_WELL_TEST", "PF_AC_PUMPS_PTUS_OFF", "PF_HYD_CHECK" },
             Group("PREFLIGHT").Items.Where(i => i.LeaveAloneWhen != null).Select(i => i.Id));
-        foreach (var id in new[] { "PF_FIRE_TEST", "PF_WHEEL_WELL_TEST", "PF_AC_PUMPS_PTUS_OFF", "PF_HYD_CHECK" })
+        foreach (var id in new[] { "PF_WHEEL_WELL_TEST", "PF_AC_PUMPS_PTUS_OFF", "PF_HYD_CHECK" })
         {
             var when = Line(id).LeaveAloneWhen!;
             Assert.Equal(ParkedOnlyText, Line(id).LeaveAloneText);
@@ -1156,8 +1163,6 @@ public class L1011FoPreflightTests
         new("PFC_PACKS", "Pack flow control valve switches: latch in", "FO_PACKS_ON"),
         new("PFC_APU_MODE_NORM", "APU mode selector: norm", "SWITCH_APU_MODE"),
         new("PFC_HOT_AIR", "Hot air valve and hot air isolation valve switches: latch in", "FO_HOT_AIR_ON"),
-        new("PFC_LOOP_SELECTORS", "Detection loop selectors: both", "FO_FIRE_LOOPS_BOTH"),
-        new("PFC_FIRE_TEST", "Engine and APU fire test: complete"),
         new("PFC_WHEEL_WELL_TEST", "Wheel well fire panel check: complete"),
         new("PFC_HYD_ENGINE_PUMPS", "Engine pump shut off switches: latched", "FO_HYD_ENGINE_PUMPS_ON"),
         new("PFC_ATMS", "ATM switches: off", "FO_ATMS_OFF"),
