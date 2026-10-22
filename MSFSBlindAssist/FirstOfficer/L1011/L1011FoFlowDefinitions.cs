@@ -20,15 +20,17 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// standby power check, turns the battery off for a moment ([FO-25]): it opens with BOTH guards, engines
 /// stopped and on the ground, each a read-only Stop that links no line and fails unread, so a flow started
 /// with an engine turning or in flight stops whole instead of working through its steps one by one. The
-/// guards stay first; the standby power check stays linked to its own two lines and never to the electrical
+/// guards stay first; the standby power check stays linked to its own line and never to the electrical
 /// meter selector lines, which are the pilot's ([FO-7]); the battery on and standby power armed follow it as
 /// steps and lines of their own, so the action group ticked line by line still turns the battery on. The engine
 /// and APU fire test is Power Up's, as the manual's cockpit preparation and the aircraft's own checklist have it
 /// (before the APU), run after external power, since it has only been checked live with power on.
 ///
-/// Every read-back (PUC_*) line the flow latches has a delivering step ([FO-6], [FO-7]): a write completes
-/// its own action line and the read-back line it sets (<see cref="Also"/>), and a read-only
-/// <see cref="Check"/> completes a line no write of the flow sets. Power Up writes no lever, no typed value
+/// Each flow latches its own group only, one group per flow, with no read-back group. Every line the flow latches has
+/// a delivering step ([FO-6], [FO-7]): a write completes its own line, a read-only <see cref="Check"/> (or a wait)
+/// completes the line of the aircraft's own checklist page it reads, under the check's id, and a composite completes
+/// any further line it sets (<see cref="Also"/>: only Power Up's fire test, the loop selectors it leaves at Both, and
+/// After Start's generator check, the fields and the breakers). Power Up writes no lever, no typed value
 /// and no control whose click replay carries a toggle K: event, which the definition refuses from an
 /// unknown position ([L1011-4]); the tests pin all three.
 ///
@@ -68,7 +70,8 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// exported trim. The APU is shut down last, and only once all three engine generators read on line: a Skip wait that,
 /// timed out, skips the APU steps, each saying the APU stays running. The stop holds until the APU reads stopped, and the
 /// two-minute cool-down follows it only when this run sent it; the master goes off only once the stop is done or found
-/// done, and otherwise stays on, saying the APU did not stop. The APU bleed carries a toggle: its single-switch step
+/// done, and otherwise stays on, saying the APU did not stop. The aircraft's taxi page closes the flow: two Captain
+/// reminders, the parking brake released and the brakes checked. The APU bleed carries a toggle: its single-switch step
 /// reads its own position first.
 ///
 /// Before Takeoff is the manual's line-up: pack 2 only, anti-skid on, the take-off autobrake ([FO-14] leaves it to the
@@ -91,8 +94,9 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// destination QNH (a standard or unread altimeter gives no value, and a Captain step asks: [FO-20]; the aircraft moves
 /// the cabin baro with the captain's altimeter, so the step usually reads already set, and still catches a cabin baro
 /// moved on its own), the fuel set for landing, the nose, taxi and turnoff lights and continuous ignition on, the gear
-/// lever down, the Captain's flap schedule, and the gear confirmed down last ([FO-13]). The landing autobrake stays the
-/// Captain's ([FO-14]).
+/// lever down, the approach page's "Autobrake: set" as a Captain reminder that names the panel and no setting (the
+/// landing autobrake stays the Captain's: [FO-14]), the Captain's flap schedule, and the gear confirmed down last
+/// ([FO-13]).
 ///
 /// After Landing is the manual's after landing, cleared off the runway. It opens with the ground guard (read only, Stop):
 /// started in the air by mistake it would turn the air data heat and anti-skid off, zero the trim and stow the speed
@@ -153,7 +157,7 @@ public static class L1011FoFlowDefinitions
         Description = "Fire handle, gear, speed brake, flap and fuel checks; radios, transponder, radar, pumps, jettison, "
             + "passenger oxygen and galley switches; standby power check, battery on and standby power armed; essential bus "
             + "selector; external power; engine and APU fire test; INS align.",
-        RelatedChecklistGroupIds = new[] { "POWER_UP", "POWER_UP_CL" },
+        RelatedChecklistGroupIds = new[] { "POWER_UP" },
         Steps = new()
         {
             // A cold-and-dark flow: started with an engine turning, the next steps would switch pumps off
@@ -162,50 +166,50 @@ public static class L1011FoFlowDefinitions
             // ...and never airborne (FO-25). Links no line.
             OnGroundGuard("PU_ON_GROUND"),
 
-            // What the First Officer finds and never moves: read only. Each completes only its read-back line.
-            Check("PU_CHK_FIRE_HANDLES", "Engine and APU fire handles: in", "FO_FIRE_HANDLES_IN", On, CheckSeconds, "PUC_FIRE_HANDLES"),
-            Check("PU_CHK_GEAR", "Gear lever: down", "FO_GEAR_LEVER_DOWN", On, CheckSeconds, "PUC_GEAR"),
-            Check("PU_CHK_SPEED_BRAKE", "Speed brake handle: forward", "FO_SPEED_BRAKE_FORWARD", On, CheckSeconds, "PUC_SPEED_BRAKE"),
-            Check("PU_CHK_FLAPS", "Flaps and flap handle: agree", "FO_FLAPS_AGREE", On, CheckSeconds, "PUC_FLAPS"),
-            Check("PU_CHK_FUEL_IGN", "Fuel and ignition switches: off", "FO_FUEL_IGNITION_OFF", On, CheckSeconds, "PUC_FUEL_IGN"),
+            // What the First Officer finds and never moves: read only. Each completes only its own line, the cockpit
+            // safety inspection's.
+            Check("PU_CHK_FIRE_HANDLES", "Engine and APU fire handles: in", "FO_FIRE_HANDLES_IN", On, CheckSeconds, "PU_CHK_FIRE_HANDLES"),
+            Check("PU_CHK_GEAR", "Gear lever: down", "FO_GEAR_LEVER_DOWN", On, CheckSeconds, "PU_CHK_GEAR"),
+            Check("PU_CHK_SPEED_BRAKE", "Speed brake handle: forward", "FO_SPEED_BRAKE_FORWARD", On, CheckSeconds, "PU_CHK_SPEED_BRAKE"),
+            Check("PU_CHK_FLAPS", "Flaps and flap handle: agree", "FO_FLAPS_AGREE", On, CheckSeconds, "PU_CHK_FLAPS"),
+            Check("PU_CHK_FUEL_IGN", "Fuel and ignition switches: off", "FO_FUEL_IGNITION_OFF", On, CheckSeconds, "PU_CHK_FUEL_IGN"),
 
-            Also(Done(Skip(SW("PU_CONT_IGN", "Continuous ignition: off", "SWITCH_CONT_IGNITION", 0),
-                s => s.IsPosition("SWITCH_CONT_IGNITION", 0)), "PU_CONT_IGN"), "PUC_CONT_IGN"),
-            Also(Done(Skip(Multi("PU_RADIO_MASTERS", "Radio master switches: on",
+            Done(Skip(SW("PU_CONT_IGN", "Continuous ignition: off", "SWITCH_CONT_IGNITION", 0),
+                s => s.IsPosition("SWITCH_CONT_IGNITION", 0)), "PU_CONT_IGN"),
+            Done(Skip(Multi("PU_RADIO_MASTERS", "Radio master switches: on",
                     ("SWITCH_MASTER_RADIO_ESS", 1), ("SWITCH_MASTER_RADIO_NO2", 1)),
-                s => s.IsOn("FO_RADIO_MASTERS_ON")), "PU_RADIO_MASTERS"), "PUC_RADIO_MASTERS"),
-            Also(Done(Skip(SW("PU_XPDR", "Transponder: standby", "ROTARY_TCAS_MODE", 1),
-                s => s.IsPosition("ROTARY_TCAS_MODE", 1)), "PU_XPDR"), "PUC_XPDR"),
-            Also(Done(Skip(SW("PU_RADAR", "Weather radar: off", "SWITCH_WX_OFF", 1),
-                s => s.IsPosition("SWITCH_WX_OFF", 1)), "PU_RADAR"), "PUC_RADAR"),
-            Also(Done(Skip(Multi("PU_ATMS", "ATM switches: off", ("ROTARY_HYD_B2_MODE", 0), ("ROTARY_HYD_C2_MODE", 0)),
-                s => s.IsOn("FO_ATMS_OFF")), "PU_ATMS"), "PUC_ATMS"),
-            Also(Done(Skip(Multi("PU_AC_PUMPS", "AC hydraulic pumps: off", ("SWITCH_HYD_AC_PUMP_B3", 0), ("SWITCH_HYD_AC_PUMP_C3", 0)),
-                s => s.IsOn("FO_AC_PUMPS_OFF")), "PU_AC_PUMPS"), "PUC_AC_PUMPS"),
+                s => s.IsOn("FO_RADIO_MASTERS_ON")), "PU_RADIO_MASTERS"),
+            Done(Skip(SW("PU_XPDR", "Transponder: standby", "ROTARY_TCAS_MODE", 1),
+                s => s.IsPosition("ROTARY_TCAS_MODE", 1)), "PU_XPDR"),
+            Done(Skip(SW("PU_RADAR", "Weather radar: off", "SWITCH_WX_OFF", 1),
+                s => s.IsPosition("SWITCH_WX_OFF", 1)), "PU_RADAR"),
+            Done(Skip(Multi("PU_ATMS", "ATM switches: off", ("ROTARY_HYD_B2_MODE", 0), ("ROTARY_HYD_C2_MODE", 0)),
+                s => s.IsOn("FO_ATMS_OFF")), "PU_ATMS"),
+            Done(Skip(Multi("PU_AC_PUMPS", "AC hydraulic pumps: off", ("SWITCH_HYD_AC_PUMP_B3", 0), ("SWITCH_HYD_AC_PUMP_C3", 0)),
+                s => s.IsOn("FO_AC_PUMPS_OFF")), "PU_AC_PUMPS"),
             // The tank 2 left pump feeds the APU from the moment it starts turning, not only once it is up to
             // speed (about 50 s after the start press). An APU the pilot started by hand, running or still
             // spooling up, keeps the pumps as they are: the step is left alone, aloud, and its lines stay
             // out of the latch. An unread APU speed does not hold the step back.
-            Also(Done(Skip(LeaveAlone(Multi("PU_FUEL_PUMPS", "Fuel pumps: all off",
+            Done(Skip(LeaveAlone(Multi("PU_FUEL_PUMPS", "Fuel pumps: all off",
                         ("SWITCH_FUEL_PUMP_1_1", 0), ("SWITCH_FUEL_PUMP_1_2", 0),
                         ("SWITCH_FUEL_PUMP_2L_1", 0), ("SWITCH_FUEL_PUMP_2L_2", 0),
                         ("SWITCH_FUEL_PUMP_2R_1", 0), ("SWITCH_FUEL_PUMP_2R_2", 0),
                         ("SWITCH_FUEL_PUMP_3_1", 0), ("SWITCH_FUEL_PUMP_3_2", 0)),
                     s => s.IsOn("FO_APU_STARTING_OR_RUNNING"), "Fuel pumps left on: the APU is running."),
-                s => s.IsOn("FO_FUEL_PUMPS_OFF")), "PU_FUEL_PUMPS"), "PUC_FUEL_PUMPS"),
+                s => s.IsOn("FO_FUEL_PUMPS_OFF")), "PU_FUEL_PUMPS"),
             // The master and the four dump switches off, then their five guards closed: the keys
             // FO_JETTISON_SAFE reads, in its order.
-            Also(Done(Skip(Multi("PU_JETTISON", "Jettison switches: off and guarded",
+            Done(Skip(Multi("PU_JETTISON", "Jettison switches: off and guarded",
                     ("SWITCH_FUEL_DUMP_MASTER", 0), ("SWITCH_FUEL_DUMP_2L", 0), ("SWITCH_FUEL_DUMP_1", 0),
                     ("SWITCH_FUEL_DUMP_3", 0), ("SWITCH_FUEL_DUMP_2R", 0),
                     ("GUARD_FUEL_DUMP_MASTER", 0), ("GUARD_FUEL_DUMP_2L", 0), ("GUARD_FUEL_DUMP_1", 0),
                     ("GUARD_FUEL_DUMP_3", 0), ("GUARD_FUEL_DUMP_2R", 0)),
-                s => s.IsOn("FO_JETTISON_SAFE")), "PU_JETTISON"), "PUC_JETTISON"),
-            Also(Done(Skip(Multi("PU_PAX_OXY", "Passenger oxygen: off and guarded",
+                s => s.IsOn("FO_JETTISON_SAFE")), "PU_JETTISON"),
+            Done(Skip(Multi("PU_PAX_OXY", "Passenger oxygen: off and guarded",
                     ("SWITCH_PAX_OXY_MANUAL", 0), ("GUARD_PAX_OXY_MANUAL", 0)),
-                s => s.IsOn("FO_PAX_OXY_SAFE")), "PU_PAX_OXY"), "PUC_PAX_OXY"),
-            // The aircraft's cockpit safety inspection has no galley line, so POWER_UP_CL has none either and
-            // none is invented: this step completes its action line only.
+                s => s.IsOn("FO_PAX_OXY_SAFE")), "PU_PAX_OXY"),
+            // The aircraft's cockpit safety inspection has no galley line; this step completes its own line.
             Done(Skip(Multi("PU_GALLEY", "Galley power: off",
                     ("SWITCH_GALLEY_BUS_1", 0), ("SWITCH_GALLEY_BUS_2", 0), ("SWITCH_GALLEY_BUS_3", 0)),
                 s => s.IsOn("FO_GALLEY_OFF")), "PU_GALLEY"),
@@ -215,18 +219,17 @@ public static class L1011FoFlowDefinitions
             // is the point. Linked to its own two lines (FO-7, never the meter selectors): the battery and the
             // armed standby power are the next two steps', so a pilot ticking the action group line by line,
             // without the check, still turns the battery on.
-            Also(Done(SW("PU_STBY_CHECK", "Standby power check", X.StandbyPowerCheck, 1), "PU_STBY_CHECK"),
-                "PUC_STBY_CHECK"),
-            Also(Done(Skip(SW("PU_BATTERY", "Battery: on", "TOGGLE_BATTERY", 1),
-                s => s.IsPosition("TOGGLE_BATTERY", 1)), "PU_BATTERY"), "PUC_BATTERY"),
+            Done(SW("PU_STBY_CHECK", "Standby power check", X.StandbyPowerCheck, 1), "PU_STBY_CHECK"),
+            Done(Skip(SW("PU_BATTERY", "Battery: on", "TOGGLE_BATTERY", 1),
+                s => s.IsPosition("TOGGLE_BATTERY", 1)), "PU_BATTERY"),
             // Armed is the switch at Arm under its closed guard, in the check's order: the guard opened (already
             // open, nothing is sent), the switch to Arm, the guard closed. Armed by hand with the guard left open,
             // only the guard is written.
-            Also(Done(Skip(Multi("PU_STBY_ARMED", "Standby power: armed",
+            Done(Skip(Multi("PU_STBY_ARMED", "Standby power: armed",
                     ("GUARD_STBY_POWER", 1), ("TOGGLE_STBY_POWER", 1), ("GUARD_STBY_POWER", 0)),
-                s => s.IsOn("FO_STBY_ARMED")), "PU_STBY_ARMED"), "PUC_STBY_ARMED"),
-            Also(Done(Skip(SW("PU_AC_ESS", "AC essential bus selector: bus 3, generator 1", "ROTARY_AC_ESS_BUS", 4),
-                s => s.IsPosition("ROTARY_AC_ESS_BUS", 4)), "PU_AC_ESS"), "PUC_AC_ESS"),
+                s => s.IsOn("FO_STBY_ARMED")), "PU_STBY_ARMED"),
+            Done(Skip(SW("PU_AC_ESS", "AC essential bus selector: bus 3, generator 1", "ROTARY_AC_ESS_BUS", 4),
+                s => s.IsPosition("ROTARY_AC_ESS_BUS", 4)), "PU_AC_ESS"),
             Done(Skip(SW("PU_EXT_PWR", "External power: on", X.ExternalPower, 1), s => s.IsOn("FO_EXT_POWER_ON")), "PU_EXT_PWR"),
             // A skipped step is announced "Already set: <label>", so the label is a short noun phrase and
             // the instruction lives in the reminder text.
@@ -236,13 +239,13 @@ public static class L1011FoFlowDefinitions
             // The manual's cockpit preparation and the aircraft's own checklist run the engine and APU fire test
             // after the standby power check and before the APU. It runs here, after external power, on purpose: the
             // test has only been checked live with power on. One verdict, every switch put back, the loop selectors
-            // left at Both (which its read-back line reads); no SkipCondition, the test is the point, and a failed
-            // test never stops the flow (Skip).
+            // left at Both (which the inspection's loop selectors line reads); no SkipCondition, the test is the point,
+            // and a failed test never stops the flow (Skip).
             Also(Done(SW("PU_FIRE_TEST", "Engine and APU fire test", X.FireTest, 1), "PU_FIRE_TEST"),
-                "PUC_FIRE_TEST", "PUC_LOOP_SELECTORS"),
+                "PU_LOOP_SELECTORS"),
             // One composite that goes unit by unit: a unit already at ALIGN or NAV is never rewritten.
-            Also(Done(Skip(SW("PU_INS_ALIGN", "INS 1, 2 and 3: align", X.InsAlign, 1),
-                s => s.IsOn("FO_INS_ALIGN_OR_NAV")), "PU_INS_ALIGN"), "PUC_INS_ALIGN"),
+            Done(Skip(SW("PU_INS_ALIGN", "INS 1, 2 and 3: align", X.InsAlign, 1),
+                s => s.IsOn("FO_INS_ALIGN_OR_NAV")), "PU_INS_ALIGN"),
             Captain("PU_INS_POSITION", "Enter present position on INS 1, 2 and 3: input Shift+M, then Alt+P on each unit."),
         }
     };
@@ -292,7 +295,7 @@ public static class L1011FoFlowDefinitions
         Id = "PREFLIGHT", Name = "Preflight",
         Description = "APU start and generator, bleed air and packs, wheel well fire test and hydraulic check, fuel, "
             + "pressurization, overhead, main panel and console set for departure.",
-        RelatedChecklistGroupIds = new[] { "PREFLIGHT", "PREFLIGHT_FE_CL", "PREFLIGHT_OVHD_CL", "PREFLIGHT_MAIN_CL", "PREFLIGHT_CONSOLE_CL" },
+        RelatedChecklistGroupIds = new[] { "PREFLIGHT" },
         Steps = new()
         {
             // The flow switches the packs, the AC hydraulic pumps and the power transfer units off: never with
@@ -303,118 +306,117 @@ public static class L1011FoFlowDefinitions
             // ---- the APU: master, minimum compressor load, fuel, start, generator, ties ----
             // A master that does not read on stops the flow at once, saying so: everything after it runs on the APU, and
             // the start presses nothing without it.
-            Also(Done(Stop(Skip(SW("PF_APU_MASTER", "APU master: on", "TOGGLE_APU_POWER", 1),
-                s => s.IsPosition("TOGGLE_APU_POWER", 1))), "PF_APU_MASTER"), "PFC_APU_MASTER"),
+            Done(Stop(Skip(SW("PF_APU_MASTER", "APU master: on", "TOGGLE_APU_POWER", 1),
+                s => s.IsPosition("TOGGLE_APU_POWER", 1))), "PF_APU_MASTER"),
             Done(Skip(SW("PF_APU_MODE_MIN", "APU compressor mode: minimum", "SWITCH_APU_MODE", 0),
                 s => s.IsPosition("SWITCH_APU_MODE", 0)), "PF_APU_MODE_MIN"),
-            Also(Done(Skip(Multi("PF_APU_FUEL", "APU fuel: tank 2 left pump and engine 2 tank valve on",
+            Done(Skip(Multi("PF_APU_FUEL", "APU fuel: tank 2 left pump and engine 2 tank valve on",
                     ("SWITCH_FUEL_PUMP_2L_1", 1), ("SWITCH_ENG_2_TANK_VALVE", 1), ("GUARD_ENG_2_TANK_VALVE", 0)),
-                s => s.IsOn("FO_ENG2_FUEL_FEED")), "PF_APU_FUEL"), "PFC_APU_FUEL"),
+                s => s.IsOn("FO_ENG2_FUEL_FEED")), "PF_APU_FUEL"),
             // One press, done once the APU turns: a press while it already turns would be a second start.
             Done(Skip(SW("PF_APU_START", "APU: start", X.ApuStart, 1), s => s.IsOn("FO_APU_STARTING_OR_RUNNING")), "PF_APU_START"),
             // About 50 s from the press to 100 %. An APU that never runs stops the flow: everything after it
-            // runs on its air and its generator.
+            // runs on its air and its generator. Completes the engineer station page's start line, which reads it.
             Done(WaitForField("PF_APU_RUNNING", "APU running", "FO_APU_RUNNING", On, ApuRunningSeconds,
-                onTimeout: FlowStepFailurePolicy.Stop), "PFC_APU_START"),
-            Also(Done(Skip(SW("PF_APU_GEN", "APU generator: on line", X.ApuGenerator, 1), s => s.IsOn("FO_APU_GEN_CLOSED")),
-                "PF_APU_GEN"), "PFC_APU_GEN"),
-            Also(Done(Skip(SW("PF_AC_TIES", "AC bus ties: closed", X.AcTies, 1), s => s.IsOn("FO_AC_TIES_CLOSED")),
-                "PF_AC_TIES"), "PFC_AC_TIES"),
+                onTimeout: FlowStepFailurePolicy.Stop), "PF_APU_RUNNING"),
+            Done(Skip(SW("PF_APU_GEN", "APU generator: on line", X.ApuGenerator, 1), s => s.IsOn("FO_APU_GEN_CLOSED")),
+                "PF_APU_GEN"),
+            Done(Skip(SW("PF_AC_TIES", "AC bus ties: closed", X.AcTies, 1), s => s.IsOn("FO_AC_TIES_CLOSED")),
+                "PF_AC_TIES"),
 
             // ---- bleed air onto the APU: the packs off while the valves are set, then on. The packs off, the hot
             // air off and the APU's minimum compressor mode are undone later in this flow, so their action lines are
             // ticked by these steps and read no state.
-            Also(Done(Skip(Multi("PF_APU_AIR", "Fuselage isolation and crossbleed valves: on",
+            Done(Skip(Multi("PF_APU_AIR", "Fuselage isolation and crossbleed valves: on",
                     ("SWITCH_APU_ISLN_VALVE", 1), ("SWITCH_XBLEED_1", 1), ("SWITCH_XBLEED_3", 1)),
-                s => s.IsOn("FO_APU_AIR_ON")), "PF_APU_AIR"), "PFC_FUSELAGE_ISLN", "PFC_XBLEEDS"),
+                s => s.IsOn("FO_APU_AIR_ON")), "PF_APU_AIR"),
             // Behind the ground guard already; left alone off the ground anyway, as its tick is.
             Done(Skip(LeaveAlone(Multi("PF_PACKS_OFF", "Packs: off", AllTo(0, PackKeys)),
                     L1011FoChecklistDefinitions.NotOnGround, L1011FoChecklistDefinitions.PacksStayText),
                 s => s.IsOn("FO_PACKS_OFF")), "PF_PACKS_OFF"),
-            Also(Done(Skip(Multi("PF_PACKS_AUTO", "Pack control: auto",
+            Done(Skip(Multi("PF_PACKS_AUTO", "Pack control: auto",
                     AllTo(1, "SWITCH_BLEED_PLENUM_ENG_1", "SWITCH_BLEED_PLENUM_ENG_2", "SWITCH_BLEED_PLENUM_ENG_3")),
-                s => s.IsOn("FO_PACKS_AUTO")), "PF_PACKS_AUTO"), "PFC_PACK_AUTO"),
+                s => s.IsOn("FO_PACKS_AUTO")), "PF_PACKS_AUTO"),
             Done(Skip(Multi("PF_HOT_AIR_OFF", "Hot air and hot air isolation valves: off", AllTo(0, HotAirKeys)),
                 s => s.IsOn("FO_HOT_AIR_OFF")), "PF_HOT_AIR_OFF"),
-            Also(Done(Skip(Multi("PF_ZONE_TRIMS", "Zone trim switches: on",
+            Done(Skip(Multi("PF_ZONE_TRIMS", "Zone trim switches: on",
                     AllTo(1, "SWITCH_FLT_STA_CLOSE", "SWITCH_FWD_CAB_CLOSE", "SWITCH_MID_CAB_CLOSE", "SWITCH_AFT_CAB_CLOSE")),
-                s => s.IsOn("FO_ZONE_TRIMS_ON")), "PF_ZONE_TRIMS"), "PFC_ZONE_TRIMS"),
+                s => s.IsOn("FO_ZONE_TRIMS_ON")), "PF_ZONE_TRIMS"),
             // A toggle-carrying switch: written only over its own position read (L1011-4).
-            Also(Done(Skip(SW("PF_APU_BLEED", "APU bleed: on", "SWITCH_APU_BLEED", 1),
-                s => s.IsPosition("SWITCH_APU_BLEED", 1)), "PF_APU_BLEED"), "PFC_APU_BLEED"),
-            Also(Done(Skip(Multi("PF_PACKS_ON", "Packs: on", AllTo(1, PackKeys)),
-                s => s.IsOn("FO_PACKS_ON")), "PF_PACKS_ON"), "PFC_PACKS"),
-            Also(Done(Skip(SW("PF_APU_MODE_NORM", "APU compressor mode: normal", "SWITCH_APU_MODE", 1),
-                s => s.IsPosition("SWITCH_APU_MODE", 1)), "PF_APU_MODE_NORM"), "PFC_APU_MODE_NORM"),
-            Also(Done(Skip(Multi("PF_HOT_AIR_ON", "Hot air and hot air isolation valves: on", AllTo(1, HotAirKeys)),
-                s => s.IsOn("FO_HOT_AIR_ON")), "PF_HOT_AIR_ON"), "PFC_HOT_AIR"),
+            Done(Skip(SW("PF_APU_BLEED", "APU bleed: on", "SWITCH_APU_BLEED", 1),
+                s => s.IsPosition("SWITCH_APU_BLEED", 1)), "PF_APU_BLEED"),
+            Done(Skip(Multi("PF_PACKS_ON", "Packs: on", AllTo(1, PackKeys)),
+                s => s.IsOn("FO_PACKS_ON")), "PF_PACKS_ON"),
+            Done(Skip(SW("PF_APU_MODE_NORM", "APU compressor mode: normal", "SWITCH_APU_MODE", 1),
+                s => s.IsPosition("SWITCH_APU_MODE", 1)), "PF_APU_MODE_NORM"),
+            Done(Skip(Multi("PF_HOT_AIR_ON", "Hot air and hot air isolation valves: on", AllTo(1, HotAirKeys)),
+                s => s.IsOn("FO_HOT_AIR_ON")), "PF_HOT_AIR_ON"),
 
             // ---- the tests: each composite speaks one verdict and puts every switch back; a failed test
             // never stops the flow (Skip). No SkipCondition: the test is the point. The engine and APU fire test
             // is Power Up's, before the APU, as the manual and the aircraft's own checklist have it.
-            Also(Done(SW("PF_WHEEL_WELL_TEST", "Wheel well fire test", X.WheelWellFireTest, 1), "PF_WHEEL_WELL_TEST"),
-                "PFC_WHEEL_WELL_TEST"),
+            Done(SW("PF_WHEEL_WELL_TEST", "Wheel well fire test", X.WheelWellFireTest, 1), "PF_WHEEL_WELL_TEST"),
 
             // ---- hydraulics ----
-            Also(Done(Skip(Multi("PF_HYD_ENGINE_PUMPS", "Engine hydraulic pumps: on and guarded",
+            Done(Skip(Multi("PF_HYD_ENGINE_PUMPS", "Engine hydraulic pumps: on and guarded",
                     AllTo(1, "SWITCH_HYD_PUMP_A1", "SWITCH_HYD_PUMP_B1", "SWITCH_HYD_PUMP_C1", "SWITCH_HYD_PUMP_D1")
                         .Concat(AllTo(0, "GUARD_HYD_PUMP_A1", "GUARD_HYD_PUMP_B1", "GUARD_HYD_PUMP_C1", "GUARD_HYD_PUMP_D1")).ToArray()),
-                s => s.IsOn("FO_HYD_ENGINE_PUMPS_ON")), "PF_HYD_ENGINE_PUMPS"), "PFC_HYD_ENGINE_PUMPS"),
+                s => s.IsOn("FO_HYD_ENGINE_PUMPS_ON")), "PF_HYD_ENGINE_PUMPS"),
             // Power Up left the ATMs off: read only.
-            Check("PF_CHK_ATMS", "ATM switches: off", "FO_ATMS_OFF", On, CheckSeconds, "PFC_ATMS"),
-            Also(Done(Skip(Multi("PF_AC_PUMPS_PTUS_OFF", "AC hydraulic pumps and PTUs: off",
+            Check("PF_CHK_ATMS", "ATM switches: off", "FO_ATMS_OFF", On, CheckSeconds, "PF_CHK_ATMS"),
+            Done(Skip(Multi("PF_AC_PUMPS_PTUS_OFF", "AC hydraulic pumps and PTUs: off",
                     AllTo(0, "SWITCH_HYD_AC_PUMP_B3", "SWITCH_HYD_AC_PUMP_C3", "SWITCH_PTU_AB", "SWITCH_PTU_CD")),
-                s => s.IsOn("FO_AC_PUMPS_OFF") && s.IsOn("FO_PTUS_OFF")), "PF_AC_PUMPS_PTUS_OFF"), "PFC_PTUS"),
-            Also(Done(SW("PF_HYD_CHECK", "Hydraulic check", X.HydraulicCheck, 1), "PF_HYD_CHECK"), "PFC_HYD_CHECK"),
+                s => s.IsOn("FO_AC_PUMPS_OFF") && s.IsOn("FO_PTUS_OFF")), "PF_AC_PUMPS_PTUS_OFF"),
+            Done(SW("PF_HYD_CHECK", "Hydraulic check", X.HydraulicCheck, 1), "PF_HYD_CHECK"),
 
             // ---- electrical meters ----
-            Also(Done(Skip(SW("PF_AC_METER", "AC meter: APU generator", "ROTARY_PWR_SOURCE", 4),
-                s => s.IsPosition("ROTARY_PWR_SOURCE", 4)), "PF_AC_METER"), "PFC_AC_METER"),
-            Also(Done(Skip(SW("PF_DC_METER", "DC meter: battery", "ROTARY_STBY_DC_BUS", 4),
-                s => s.IsPosition("ROTARY_STBY_DC_BUS", 4)), "PF_DC_METER"), "PFC_DC_METER"),
+            Done(Skip(SW("PF_AC_METER", "AC meter: APU generator", "ROTARY_PWR_SOURCE", 4),
+                s => s.IsPosition("ROTARY_PWR_SOURCE", 4)), "PF_AC_METER"),
+            Done(Skip(SW("PF_DC_METER", "DC meter: battery", "ROTARY_STBY_DC_BUS", 4),
+                s => s.IsPosition("ROTARY_STBY_DC_BUS", 4)), "PF_DC_METER"),
             // Power Up set it: read only.
             Check("PF_CHK_AC_ESS", "AC essential power selector: bus 3, generator 1", "ROTARY_AC_ESS_BUS",
-                v => Math.Abs(v - AcEssNormal) < 0.5, CheckSeconds, "PFC_AC_ESS"),
+                v => Math.Abs(v - AcEssNormal) < 0.5, CheckSeconds, "PF_CHK_AC_ESS"),
 
             // ---- fuel ----
-            Also(Done(Skip(Multi("PF_TRANSFERS_OFF", "1A and 3A transfers: off", AllTo(0, "SWITCH_FUEL_XFR_1A", "SWITCH_FUEL_XFR_3A")),
-                s => s.IsOn("FO_TRANSFERS_OFF")), "PF_TRANSFERS_OFF"), "PFC_TRANSFERS"),
-            Also(Done(Skip(Multi("PF_CROSSFEEDS", "Crossfeed valves: closed",
+            Done(Skip(Multi("PF_TRANSFERS_OFF", "1A and 3A transfers: off", AllTo(0, "SWITCH_FUEL_XFR_1A", "SWITCH_FUEL_XFR_3A")),
+                s => s.IsOn("FO_TRANSFERS_OFF")), "PF_TRANSFERS_OFF"),
+            Done(Skip(Multi("PF_CROSSFEEDS", "Crossfeed valves: closed",
                     AllTo(0, "SWITCH_FUEL_LEFT_XFEED", "SWITCH_FUEL_CTR_XFEED", "SWITCH_FUEL_RIGHT_XFEED")),
-                s => s.IsOn("FO_CROSSFEEDS_CLOSED")), "PF_CROSSFEEDS"), "PFC_CROSSFEEDS"),
-            Also(Done(Skip(Multi("PF_TANK_VALVES", "Engine tank valves: on and guarded",
+                s => s.IsOn("FO_CROSSFEEDS_CLOSED")), "PF_CROSSFEEDS"),
+            Done(Skip(Multi("PF_TANK_VALVES", "Engine tank valves: on and guarded",
                     AllTo(1, "SWITCH_ENG_1_TANK_VALVE", "SWITCH_ENG_2_TANK_VALVE", "SWITCH_ENG_3_TANK_VALVE")
                         .Concat(AllTo(0, "GUARD_ENG_1_TANK_VALVE", "GUARD_ENG_2_TANK_VALVE", "GUARD_ENG_3_TANK_VALVE")).ToArray()),
-                s => s.IsOn("FO_TANK_VALVES_ON")), "PF_TANK_VALVES"), "PFC_TANK_VALVES"),
+                s => s.IsOn("FO_TANK_VALVES_ON")), "PF_TANK_VALVES"),
             // Only the pump the APU needs: read only.
-            Check("PF_CHK_APU_PUMP", "Fuel pumps: tank 2 left pump only", "FO_ONLY_APU_PUMP_ON", On, CheckSeconds, "PFC_APU_PUMP_ONLY"),
-            Check("PF_CHK_JETTISON", "Jettison switches: off and guarded", "FO_JETTISON_SAFE", On, CheckSeconds, "PFC_JETTISON"),
-            Also(Done(Skip(Multi("PF_FUEL_CTRL", "Fuel control amplifier switches: off",
+            Check("PF_CHK_APU_PUMP", "Fuel pumps: tank 2 left pump only", "FO_ONLY_APU_PUMP_ON", On, CheckSeconds, "PF_CHK_APU_PUMP"),
+            Check("PF_CHK_JETTISON", "Jettison switches: off and guarded", "FO_JETTISON_SAFE", On, CheckSeconds, "PF_CHK_JETTISON"),
+            Done(Skip(Multi("PF_FUEL_CTRL", "Fuel control amplifier switches: off",
                     AllTo(0, "SWITCH_FUEL_CTRL_OVRD_ENG_1", "SWITCH_FUEL_CTRL_OVRD_ENG_2", "SWITCH_FUEL_CTRL_OVRD_ENG_3")),
-                s => s.IsOn("FO_FUEL_CTRL_OVRD_OFF")), "PF_FUEL_CTRL"), "PFC_FUEL_CTRL"),
+                s => s.IsOn("FO_FUEL_CTRL_OVRD_OFF")), "PF_FUEL_CTRL"),
 
             // ---- the rest of the engineer's station. The drain mast heaters are left to the aircraft: it puts both
             // switches back to off within seconds, by hand too, so a step could never be done.
-            Also(Done(Skip(Multi("PF_MOVIE", "Movie interrupt: off and guarded", AllTo(0, "MOVIES_OFF", "GUARD_MOVIES_OFF")),
-                s => s.IsOn("FO_MOVIE_OFF")), "PF_MOVIE"), "PFC_MOVIE"),
-            Also(Done(Skip(SW("PF_SLAT_MONITOR", "Slat monitor: off", "SWITCH_SLAT_MONITOR", 0),
-                s => s.IsPosition("SWITCH_SLAT_MONITOR", 0)), "PF_SLAT_MONITOR"), "PFC_SLAT_MONITOR"),
-            Also(Done(Skip(Multi("PF_HI_PRESS", "High pressure bleed valves: on",
+            Done(Skip(Multi("PF_MOVIE", "Movie interrupt: off and guarded", AllTo(0, "MOVIES_OFF", "GUARD_MOVIES_OFF")),
+                s => s.IsOn("FO_MOVIE_OFF")), "PF_MOVIE"),
+            Done(Skip(SW("PF_SLAT_MONITOR", "Slat monitor: off", "SWITCH_SLAT_MONITOR", 0),
+                s => s.IsPosition("SWITCH_SLAT_MONITOR", 0)), "PF_SLAT_MONITOR"),
+            Done(Skip(Multi("PF_HI_PRESS", "High pressure bleed valves: on",
                     AllTo(1, "SWITCH_HI_PRESS_ENG_1", "SWITCH_HI_PRESS_ENG_2", "SWITCH_HI_PRESS_ENG_3")),
-                s => s.IsOn("FO_HI_PRESS_ON")), "PF_HI_PRESS"), "PFC_HI_PRESS"),
-            Also(Done(Skip(Multi("PF_ISLN_VALVES", "Engine isolation valves: on",
+                s => s.IsOn("FO_HI_PRESS_ON")), "PF_HI_PRESS"),
+            Done(Skip(Multi("PF_ISLN_VALVES", "Engine isolation valves: on",
                     AllTo(1, "SWITCH_ISLN_VALVE_ENG_1", "SWITCH_ISLN_VALVE_ENG_2", "SWITCH_ISLN_VALVE_ENG_3")),
-                s => s.IsOn("FO_ISLN_VALVES_ON")), "PF_ISLN_VALVES"), "PFC_ISLN_VALVES"),
-            Also(Done(Skip(Multi("PF_ECS", "Overboard cooling and cargo heat: on",
+                s => s.IsOn("FO_ISLN_VALVES_ON")), "PF_ISLN_VALVES"),
+            Done(Skip(Multi("PF_ECS", "Overboard cooling and cargo heat: on",
                     AllTo(1, "SWITCH_COOL_AIR_OVBD", "SWITCH_CARGO_HEAT_FWD", "SWITCH_CARGO_HEAT_MID", "SWITCH_CARGO_HEAT_AFT")),
-                s => s.IsOn("FO_ECS_ON")), "PF_ECS"), "PFC_ECS"),
-            Also(Done(Skip(SW("PF_PRESS_MODE", "Pressurization mode: normal", "ROTARY_CAB_PRESS_MODE", 1),
-                s => s.IsPosition("ROTARY_CAB_PRESS_MODE", 1)), "PF_PRESS_MODE"), "PFC_PRESS_MODE"),
+                s => s.IsOn("FO_ECS_ON")), "PF_ECS"),
+            Done(Skip(SW("PF_PRESS_MODE", "Pressurization mode: normal", "ROTARY_CAB_PRESS_MODE", 1),
+                s => s.IsPosition("ROTARY_CAB_PRESS_MODE", 1)), "PF_PRESS_MODE"),
             // The cabin altitude that holds the maximum differential at the plan's cruise. No plan: nothing is
             // sent or spoken (FO-20), and the Captain step below asks for it.
-            Also(Done(Skip(Provider("PF_CABIN_ALT", "Cabin altitude selector: cruise cabin altitude", X.CabinAltitudeSelect,
+            Done(Skip(Provider("PF_CABIN_ALT", "Cabin altitude selector: cruise cabin altitude", X.CabinAltitudeSelect,
                     s => s.CruiseCabinAltitudeFt()),
-                s => s.IsOn("FO_CABIN_ALT_AT_CRUISE")), "PF_CABIN_ALT"), "PFC_CABIN_ALT"),
+                s => s.IsOn("FO_CABIN_ALT_AT_CRUISE")), "PF_CABIN_ALT"),
             // Keyed on the selector, never on the plan: without a plan, or with a write that did not take, the
             // selector does not read the cruise setting and the Captain is asked.
             Skip(Captain("PF_CABIN_ALT_CPT", "Cabin altitude selector",
@@ -422,85 +424,85 @@ public static class L1011FoFlowDefinitions
                 s => s.IsOn("FO_CABIN_ALT_AT_CRUISE")),
 
             // ---- overhead ----
-            Also(Done(Skip(Multi("PF_COMPASSES", "Compasses: magnetic", AllTo(1, "SWITCH_COMPASS_1_MAG", "SWITCH_COMPASS_2_MAG")),
-                s => s.IsOn("FO_COMPASSES_MAG")), "PF_COMPASSES"), "PFO_COMPASSES"),
-            Also(Done(Skip(Multi("PF_WIPERS", "Wipers: off", AllTo(0, "ROTARY_CPT_WIPER", "ROTARY_FO_WIPER")),
-                s => s.IsOn("FO_WIPERS_OFF")), "PF_WIPERS"), "PFO_WIPERS"),
-            Also(Done(Skip(Multi("PF_ANTI_ICE", "Engine and wing anti-ice: off",
+            Done(Skip(Multi("PF_COMPASSES", "Compasses: magnetic", AllTo(1, "SWITCH_COMPASS_1_MAG", "SWITCH_COMPASS_2_MAG")),
+                s => s.IsOn("FO_COMPASSES_MAG")), "PF_COMPASSES"),
+            Done(Skip(Multi("PF_WIPERS", "Wipers: off", AllTo(0, "ROTARY_CPT_WIPER", "ROTARY_FO_WIPER")),
+                s => s.IsOn("FO_WIPERS_OFF")), "PF_WIPERS"),
+            Done(Skip(Multi("PF_ANTI_ICE", "Engine and wing anti-ice: off",
                     AllTo(0, "SWITCH_ANTI_ICE_ENG_1", "SWITCH_ANTI_ICE_ENG_2", "SWITCH_ANTI_ICE_ENG_3", "SWITCH_ANTI_ICE_LEFT_AUTO",
                         "SWITCH_ANTI_ICE_LEFT_MAN", "SWITCH_ANTI_ICE_RIGHT_AUTO", "SWITCH_ANTI_ICE_RIGHT_MAN")),
-                s => s.IsOn("FO_ANTI_ICE_OFF")), "PF_ANTI_ICE"), "PFO_ANTI_ICE"),
-            Also(Done(Skip(Multi("PF_WINDSHIELD", "Windshield heat: normal", AllTo(1, "SWITCH_ANTI_ICE_CPT", "SWITCH_ANTI_ICE_FO")),
-                s => s.IsOn("FO_WINDSHIELD_NORMAL")), "PF_WINDSHIELD"), "PFO_WINDSHIELD"),
-            Also(Done(Skip(Multi("PF_SIDE_WINDOWS", "Side window heat: on",
+                s => s.IsOn("FO_ANTI_ICE_OFF")), "PF_ANTI_ICE"),
+            Done(Skip(Multi("PF_WINDSHIELD", "Windshield heat: normal", AllTo(1, "SWITCH_ANTI_ICE_CPT", "SWITCH_ANTI_ICE_FO")),
+                s => s.IsOn("FO_WINDSHIELD_NORMAL")), "PF_WINDSHIELD"),
+            Done(Skip(Multi("PF_SIDE_WINDOWS", "Side window heat: on",
                     AllTo(1, "SWITCH_ANTI_ICE_L_FWD", "SWITCH_ANTI_ICE_L_REAR", "SWITCH_ANTI_ICE_R_FWD", "SWITCH_ANTI_ICE_R_REAR")),
-                s => s.IsOn("FO_SIDE_WINDOWS_ON")), "PF_SIDE_WINDOWS"), "PFO_SIDE_WINDOWS"),
-            Also(Done(Skip(Multi("PF_AIR_DATA", "Air data heat: off",
+                s => s.IsOn("FO_SIDE_WINDOWS_ON")), "PF_SIDE_WINDOWS"),
+            Done(Skip(Multi("PF_AIR_DATA", "Air data heat: off",
                     AllTo(0, "SWITCH_CPT_PITOT_HEAT", "SWITCH_FO_PITOT_HEAT", "SWITCH_PROBE_HEAT", "SWITCH_ALPHA_HEAT")),
-                s => s.IsOn("FO_AIR_DATA_HEAT_OFF")), "PF_AIR_DATA"), "PFO_AIR_DATA"),
-            Also(Done(Skip(Multi("PF_MACH_FEEL", "Mach feel and rudder limiter: on",
+                s => s.IsOn("FO_AIR_DATA_HEAT_OFF")), "PF_AIR_DATA"),
+            Done(Skip(Multi("PF_MACH_FEEL", "Mach feel and rudder limiter: on",
                     AllTo(1, "SWITCH_MACH_FEEL_1", "SWITCH_MACH_FEEL_2", "SWITCH_RUDDER_LIMITER")),
-                s => s.IsOn("FO_MACH_FEEL_RUDDER_ON")), "PF_MACH_FEEL"), "PFO_MACH_FEEL"),
+                s => s.IsOn("FO_MACH_FEEL_RUDDER_ON")), "PF_MACH_FEEL"),
             // System A or B is already set: the selector is turned to A only off both systems.
-            Also(Done(Skip(SW("PF_IGNITION", "Ignition selector: A or B", "ROTARY_ENG_START_SEL", 0),
-                s => s.IsOn("FO_IGNITION_SELECTED")), "PF_IGNITION"), "PFO_IGNITION"),
-            Also(Done(Skip(SW("PF_STBY_LIGHTS", "Instrument standby lights: bright", "TOGGLE_INSTR_STBY_LIGHTS", 1),
-                s => s.IsPosition("TOGGLE_INSTR_STBY_LIGHTS", 1)), "PF_STBY_LIGHTS"), "PFO_STBY_LIGHTS"),
-            Also(Done(Skip(Multi("PF_PFCS", "Primary flight control switches: on", AllTo(1, PfcsKeys)),
-                s => s.IsOn("FO_PFCS_ON")), "PF_PFCS"), "PFO_PFCS"),
-            Also(Done(Skip(Multi("PF_FCES", "Flight control electronics switches: on", AllTo(1, FcesKeys)),
-                s => s.IsOn("FO_FCES_ON")), "PF_FCES"), "PFO_FCES"),
-            Also(Done(Skip(SW("PF_BRAKE_SEL", "Brake system: B", "TOGGLE_BRAKE_SYS_SEL", 0),
-                s => s.IsPosition("TOGGLE_BRAKE_SYS_SEL", 0)), "PF_BRAKE_SEL"), "PFO_BRAKE_SEL", "PFM_BRAKE_SYS"),
+            Done(Skip(SW("PF_IGNITION", "Ignition selector: A or B", "ROTARY_ENG_START_SEL", 0),
+                s => s.IsOn("FO_IGNITION_SELECTED")), "PF_IGNITION"),
+            Done(Skip(SW("PF_STBY_LIGHTS", "Instrument standby lights: bright", "TOGGLE_INSTR_STBY_LIGHTS", 1),
+                s => s.IsPosition("TOGGLE_INSTR_STBY_LIGHTS", 1)), "PF_STBY_LIGHTS"),
+            Done(Skip(Multi("PF_PFCS", "Primary flight control switches: on", AllTo(1, PfcsKeys)),
+                s => s.IsOn("FO_PFCS_ON")), "PF_PFCS"),
+            Done(Skip(Multi("PF_FCES", "Flight control electronics switches: on", AllTo(1, FcesKeys)),
+                s => s.IsOn("FO_FCES_ON")), "PF_FCES"),
+            Done(Skip(SW("PF_BRAKE_SEL", "Brake system: B", "TOGGLE_BRAKE_SYS_SEL", 0),
+                s => s.IsPosition("TOGGLE_BRAKE_SYS_SEL", 0)), "PF_BRAKE_SEL"),
             // A toggle-carrying switch: written only over its own position read (L1011-4).
-            Also(Done(Skip(SW("PF_ANTISKID_OFF", "Anti-skid: off", "SWITCH_ANTISKID_ON", 0),
-                s => s.IsPosition("SWITCH_ANTISKID_ON", 0)), "PF_ANTISKID_OFF"), "PFO_ANTISKID"),
-            Also(Done(Skip(SW("PF_PARKING_BRAKE", "Parking brake: set", L1011Levers.ParkingBrakeKey, 1),
-                s => s.IsPosition(L1011Levers.ParkingBrakeKey, 1)), "PF_PARKING_BRAKE"), "PFO_PARKING_BRAKE", "PFX_PARKING_BRAKE"),
-            Also(Done(Skip(SW("PF_AUTOBRAKE", "Autobrake: off", "ROTARY_AUTO_BRAKE_MODE", 1),
-                s => s.IsPosition("ROTARY_AUTO_BRAKE_MODE", 1)), "PF_AUTOBRAKE"), "PFO_AUTOBRAKE"),
+            Done(Skip(SW("PF_ANTISKID_OFF", "Anti-skid: off", "SWITCH_ANTISKID_ON", 0),
+                s => s.IsPosition("SWITCH_ANTISKID_ON", 0)), "PF_ANTISKID_OFF"),
+            Done(Skip(SW("PF_PARKING_BRAKE", "Parking brake: set", L1011Levers.ParkingBrakeKey, 1),
+                s => s.IsPosition(L1011Levers.ParkingBrakeKey, 1)), "PF_PARKING_BRAKE"),
+            Done(Skip(SW("PF_AUTOBRAKE", "Autobrake: off", "ROTARY_AUTO_BRAKE_MODE", 1),
+                s => s.IsPosition("ROTARY_AUTO_BRAKE_MODE", 1)), "PF_AUTOBRAKE"),
             // The wing (flood) and wheel well lights read 1 OFF.
-            Also(Done(Skip(Multi("PF_EXT_LIGHTS", "Exterior lights: logo and position on, the rest off",
+            Done(Skip(Multi("PF_EXT_LIGHTS", "Exterior lights: logo and position on, the rest off",
                     ("TOGGLE_LOGO_LIGHT", 1), ("SWITCH_POSITION_LIGHT", 1),
                     ("TOGGLE_LANDING_LEFT", 0), ("TOGGLE_LANDING_RIGHT", 0), ("TOGGLE_LANDING_NOSE", 0), ("TOGGLE_RWY_TURNOFF", 0),
                     ("SWITCH_STROBE_LIGHT", 0), ("SWITCH_ANTICOL_LIGHT", 0),
                     ("SWITCH_FLOOD_LIGHT", 1), ("SWITCH_WHEEL_LIGHT", 1)),
-                s => s.IsOn("FO_EXT_LIGHTS_PREFLIGHT")), "PF_EXT_LIGHTS"), "PFO_EXT_LIGHTS"),
-            Also(Done(Skip(Multi("PF_EMER_LIGHTS", "Emergency lights: armed", ("TOGGLE_EMER_LIGHTING", 1), ("GUARD_EMER_LIGHTING", 0)),
-                s => s.IsOn("FO_EMER_LIGHTS_ARMED")), "PF_EMER_LIGHTS"), "PFO_EMER_LIGHTS"),
+                s => s.IsOn("FO_EXT_LIGHTS_PREFLIGHT")), "PF_EXT_LIGHTS"),
+            Done(Skip(Multi("PF_EMER_LIGHTS", "Emergency lights: armed", ("TOGGLE_EMER_LIGHTING", 1), ("GUARD_EMER_LIGHTING", 0)),
+                s => s.IsOn("FO_EMER_LIGHTS_ARMED")), "PF_EMER_LIGHTS"),
             // Power Up's standby power check left it armed: read only.
-            Check("PF_CHK_STBY_ARMED", "Standby power: armed", "FO_STBY_ARMED", On, CheckSeconds, "PFO_STBY_POWER"),
+            Check("PF_CHK_STBY_ARMED", "Standby power: armed", "FO_STBY_ARMED", On, CheckSeconds, "PF_CHK_STBY_ARMED"),
             // A toggle-carrying switch: written only over its own position read (L1011-4).
-            Also(Done(Skip(SW("PF_NO_SMOKING", "No smoking signs: on", "SWITCH_SMOKING_LIGHT", 1),
-                s => s.IsPosition("SWITCH_SMOKING_LIGHT", 1)), "PF_NO_SMOKING"), "PFO_NO_SMOKING"),
+            Done(Skip(SW("PF_NO_SMOKING", "No smoking signs: on", "SWITCH_SMOKING_LIGHT", 1),
+                s => s.IsPosition("SWITCH_SMOKING_LIGHT", 1)), "PF_NO_SMOKING"),
 
             // ---- main panel ----
-            Also(Done(Skip(Multi("PF_INSTR_SOURCES", "Instrument source selectors: normal", AllTo(0, InstrumentSourceKeys)),
-                s => s.IsOn("FO_INSTR_SOURCES_NORMAL")), "PF_INSTR_SOURCES"), "PFM_INSTR_SOURCE"),
-            Also(Done(Skip(Multi("PF_DME", "DME 1 and 2: normal", AllTo(1, "ROTARY_NAV_1_MODE", "ROTARY_NAV_2_MODE")),
-                s => s.IsOn("FO_DME_NORMAL")), "PF_DME"), "PFM_DME"),
-            Also(Done(Skip(Multi("PF_FLIGHT_DIRECTORS", "Flight directors: on", AllTo(1, "SWITCH_AFCS_FD_A", "SWITCH_AFCS_FD_B")),
-                s => s.IsOn("FO_FLIGHT_DIRECTORS_ON")), "PF_FLIGHT_DIRECTORS"), "PFM_FLIGHT_DIRECTORS"),
+            Done(Skip(Multi("PF_INSTR_SOURCES", "Instrument source selectors: normal", AllTo(0, InstrumentSourceKeys)),
+                s => s.IsOn("FO_INSTR_SOURCES_NORMAL")), "PF_INSTR_SOURCES"),
+            Done(Skip(Multi("PF_DME", "DME 1 and 2: normal", AllTo(1, "ROTARY_NAV_1_MODE", "ROTARY_NAV_2_MODE")),
+                s => s.IsOn("FO_DME_NORMAL")), "PF_DME"),
+            Done(Skip(Multi("PF_FLIGHT_DIRECTORS", "Flight directors: on", AllTo(1, "SWITCH_AFCS_FD_A", "SWITCH_AFCS_FD_B")),
+                s => s.IsOn("FO_FLIGHT_DIRECTORS_ON")), "PF_FLIGHT_DIRECTORS"),
             // An engage paddle reads 2 OFF.
-            Also(Done(Skip(Multi("PF_PADDLES_OFF", "Autopilot paddles: off", AllTo(2, "SWITCH_AFCS_AP_A", "SWITCH_AFCS_AP_B")),
-                s => s.IsOn("FO_PADDLES_OFF")), "PF_PADDLES_OFF"), "PFM_AUTOPILOT_MASTERS"),
+            Done(Skip(Multi("PF_PADDLES_OFF", "Autopilot paddles: off", AllTo(2, "SWITCH_AFCS_AP_A", "SWITCH_AFCS_AP_B")),
+                s => s.IsOn("FO_PADDLES_OFF")), "PF_PADDLES_OFF"),
 
             // ---- centre console ----
             Check("PF_CHK_DISCONNECT", "Pitch and roll disconnect handles: stowed", "FO_DISCONNECT_HANDLES_STOWED", On,
-                CheckSeconds, "PFX_DISCONNECT"),
-            Also(Done(Skip(SW("PF_SPEED_BRAKE", "Speed brake lever: forward", L1011Levers.SpeedBrakeKey, 0),
-                s => s.IsOn("FO_SPEED_BRAKE_FORWARD")), "PF_SPEED_BRAKE"), "PFX_SPEED_BRAKE"),
-            Check("PF_CHK_FUEL_IGN", "Fuel and ignition switches: off", "FO_FUEL_IGNITION_OFF", On, CheckSeconds, "PFX_FUEL_IGN"),
-            Also(Done(Skip(SW("PF_XPDR", "Transponder: standby", "ROTARY_TCAS_MODE", 1),
-                s => s.IsPosition("ROTARY_TCAS_MODE", 1)), "PF_XPDR"), "PFX_XPDR"),
+                CheckSeconds, "PF_CHK_DISCONNECT"),
+            Done(Skip(SW("PF_SPEED_BRAKE", "Speed brake lever: forward", L1011Levers.SpeedBrakeKey, 0),
+                s => s.IsOn("FO_SPEED_BRAKE_FORWARD")), "PF_SPEED_BRAKE"),
+            Check("PF_CHK_FUEL_IGN", "Fuel and ignition switches: off", "FO_FUEL_IGNITION_OFF", On, CheckSeconds, "PF_CHK_FUEL_IGN"),
+            Done(Skip(SW("PF_XPDR", "Transponder: standby", "ROTARY_TCAS_MODE", 1),
+                s => s.IsPosition("ROTARY_TCAS_MODE", 1)), "PF_XPDR"),
 
-            // ---- what Power Up left, read only, each completing only its read-back line ----
-            Check("PF_CHK_INS", "INS 1, 2 and 3: aligning or navigating", "FO_INS_ALIGN_OR_NAV", On, CheckSeconds, "PFO_INS"),
-            Check("PF_CHK_FIRE_HANDLES", "Fire handles: in", "FO_FIRE_HANDLES_IN", On, CheckSeconds, "PFO_FIRE_HANDLES"),
-            Check("PF_CHK_RADIO_MASTERS", "Radio master switches: on", "FO_RADIO_MASTERS_ON", On, CheckSeconds, "PFO_RADIO_MASTERS"),
-            Check("PF_CHK_START_LIGHTS", "Engine start lights: out", "FO_START_LIGHTS_OUT", On, CheckSeconds, "PFO_START_LIGHTS"),
+            // ---- what Power Up left, read only, each completing only its own line ----
+            Check("PF_CHK_INS", "INS 1, 2 and 3: aligning or navigating", "FO_INS_ALIGN_OR_NAV", On, CheckSeconds, "PF_CHK_INS"),
+            Check("PF_CHK_FIRE_HANDLES", "Fire handles: in", "FO_FIRE_HANDLES_IN", On, CheckSeconds, "PF_CHK_FIRE_HANDLES"),
+            Check("PF_CHK_RADIO_MASTERS", "Radio master switches: on", "FO_RADIO_MASTERS_ON", On, CheckSeconds, "PF_CHK_RADIO_MASTERS"),
+            Check("PF_CHK_START_LIGHTS", "Engine start lights: out", "FO_START_LIGHTS_OUT", On, CheckSeconds, "PF_CHK_START_LIGHTS"),
             // The lever down and every leg out: read only, never a gear write.
-            Check("PF_CHK_GEAR", "Landing gear: down, three green", L1011GearConfirmation.DownField, On, CheckSeconds, "PFM_GEAR"),
+            Check("PF_CHK_GEAR", "Landing gear: down, three green", L1011GearConfirmation.DownField, On, CheckSeconds, "PF_CHK_GEAR"),
 
             // ---- the Captain's: each ticks its own reminder line ----
             Done(Captain("PF_CPT_INS_ROUTE", "Load the route and set the initial track on INS 1, 2 and 3"), "PF_CPT_INS_ROUTE"),
@@ -541,7 +543,7 @@ public static class L1011FoFlowDefinitions
         Id = "BEFORE_START", Name = "Before Start",
         Description = "External power off once the APU generator is on line; seat belts, anti-collision lights, doors, "
             + "galley; APU air for the start; cabin barometric setting; INS to NAV; transponder TA/RA.",
-        RelatedChecklistGroupIds = new[] { "BEFORE_START", "BEFORE_START_CL" },
+        RelatedChecklistGroupIds = new[] { "BEFORE_START" },
         Steps = new()
         {
             // The flow switches packs 1 and 3 off: never airborne (FO-25). Links no line.
@@ -555,27 +557,27 @@ public static class L1011FoFlowDefinitions
             Done(Skip(SW("BS_EXT_OFF", "External power: off", X.ExternalPower, 0), s => s.GetValue("FO_EXT_POWER_ON") < 0.5),
                 "BS_EXT_OFF"),
             // A toggle-carrying switch: written only over its own position read (L1011-4).
-            Also(Done(Skip(SW("BS_SEAT_BELTS", "Seat belt signs: on", "SWITCH_SEATBELT_LIGHT", 1),
-                s => s.IsPosition("SWITCH_SEATBELT_LIGHT", 1)), "BS_SEAT_BELTS"), "BSC_SEAT_BELTS"),
-            Also(Done(Skip(SW("BS_ANTICOL", "Anti-collision lights: on", "SWITCH_ANTICOL_LIGHT", 1),
-                s => s.IsPosition("SWITCH_ANTICOL_LIGHT", 1)), "BS_ANTICOL"), "BSC_ANTICOL"),
+            Done(Skip(SW("BS_SEAT_BELTS", "Seat belt signs: on", "SWITCH_SEATBELT_LIGHT", 1),
+                s => s.IsPosition("SWITCH_SEATBELT_LIGHT", 1)), "BS_SEAT_BELTS"),
+            Done(Skip(SW("BS_ANTICOL", "Anti-collision lights: on", "SWITCH_ANTICOL_LIGHT", 1),
+                s => s.IsPosition("SWITCH_ANTICOL_LIGHT", 1)), "BS_ANTICOL"),
             // The doors are the tablet's: the Captain is asked while any door position reads open or unread. The
             // stock door positions are read because the main panel's door light does not follow the doors, so the
             // check is worded on the doors, never the light.
             Skip(Captain("BS_DOORS_CPT", "Doors", "Close the doors on the tablet."), s => s.IsOn("FO_DOORS_CLOSED")),
-            Check("BS_CHK_DOORS", "Doors: closed", "FO_DOORS_CLOSED", On, CheckSeconds, "BSC_DOORS"),
-            Also(Done(Skip(Multi("BS_GALLEY", "Galley power: off", AllTo(0, GalleyKeys)),
-                s => s.IsOn("FO_GALLEY_OFF")), "BS_GALLEY"), "BSC_GALLEY"),
-            Check("BS_CHK_FUEL_PUMP", "Fuel pump: at least one on", "FO_ANY_FUEL_PUMP_ON", On, CheckSeconds, "BSC_FUEL_PUMP"),
+            Check("BS_CHK_DOORS", "Doors: closed", "FO_DOORS_CLOSED", On, CheckSeconds, "BS_CHK_DOORS"),
+            Done(Skip(Multi("BS_GALLEY", "Galley power: off", AllTo(0, GalleyKeys)),
+                s => s.IsOn("FO_GALLEY_OFF")), "BS_GALLEY"),
+            Check("BS_CHK_FUEL_PUMP", "Fuel pump: at least one on", "FO_ANY_FUEL_PUMP_ON", On, CheckSeconds, "BS_CHK_FUEL_PUMP"),
 
             // ---- APU air for the start: minimum compressor load, pack 2 only, the valves open, APU bleed on ----
-            Also(Done(Skip(SW("BS_APU_MODE_MIN", "APU compressor mode: minimum", "SWITCH_APU_MODE", 0),
-                s => s.IsPosition("SWITCH_APU_MODE", 0)), "BS_APU_MODE_MIN"), "BSC_APU_MODE"),
-            Also(Done(Skip(Multi("BS_PACK_2", "Packs: pack 2 on, packs 1 and 3 off",
+            Done(Skip(SW("BS_APU_MODE_MIN", "APU compressor mode: minimum", "SWITCH_APU_MODE", 0),
+                s => s.IsPosition("SWITCH_APU_MODE", 0)), "BS_APU_MODE_MIN"),
+            Done(Skip(Multi("BS_PACK_2", "Packs: pack 2 on, packs 1 and 3 off",
                     (PackKeys[0], 0), (PackKeys[1], 1), (PackKeys[2], 0)),
-                s => s.IsOn("FO_PACK_2_ONLY")), "BS_PACK_2"), "BSC_PACK_2"),
-            Also(Done(Skip(Multi("BS_ISLN_XBLEEDS", "Engine isolation and crossbleed valves: on", AllTo(1, StartAirKeys)),
-                s => s.IsOn("FO_START_AIR_VALVES_ON")), "BS_ISLN_XBLEEDS"), "BSC_ISLN_VALVES"),
+                s => s.IsOn("FO_PACK_2_ONLY")), "BS_PACK_2"),
+            Done(Skip(Multi("BS_ISLN_XBLEEDS", "Engine isolation and crossbleed valves: on", AllTo(1, StartAirKeys)),
+                s => s.IsOn("FO_START_AIR_VALVES_ON")), "BS_ISLN_XBLEEDS"),
             // A toggle-carrying switch: written only over its own position read (L1011-4).
             Done(Skip(SW("BS_APU_BLEED", "APU bleed: on", "SWITCH_APU_BLEED", 1),
                 s => s.IsPosition("SWITCH_APU_BLEED", 1)), "BS_APU_BLEED"),
@@ -591,18 +593,18 @@ public static class L1011FoFlowDefinitions
                     "Set the cabin barometric setting to the QNH on the engineer's pressurization panel."),
                 s => s.IsOn("FO_CABIN_BARO_SET")),
             // Preflight set system A or B: read only.
-            Check("BS_CHK_IGNITION", "Ignition selector: system A or B", "FO_IGNITION_SELECTED", On, CheckSeconds, "BSC_IGNITION"),
+            Check("BS_CHK_IGNITION", "Ignition selector: system A or B", "FO_IGNITION_SELECTED", On, CheckSeconds, "BS_CHK_IGNITION"),
 
             // ---- INS to NAV, unit by unit, then all three navigating ----
             InsToNav(1), InsNotInNav(1),
             InsToNav(2), InsNotInNav(2),
             InsToNav(3), InsNotInNav(3),
             Check("BS_CHK_INS_NAV", "INS 1, 2 and 3: navigating", "FO_INS_NAVIGATING", On, InsNavigatingCheckSeconds,
-                "BSC_INS_NAV"),
+                "BS_CHK_INS_NAV"),
 
             // The manual's place for TA/RA: before start.
-            Also(Done(Skip(SW("BS_XPDR", "Transponder: TA/RA", "ROTARY_TCAS_MODE", TransponderTaRa),
-                s => s.IsPosition("ROTARY_TCAS_MODE", TransponderTaRa)), "BS_XPDR"), "BSC_XPDR"),
+            Done(Skip(SW("BS_XPDR", "Transponder: TA/RA", "ROTARY_TCAS_MODE", TransponderTaRa),
+                s => s.IsPosition("ROTARY_TCAS_MODE", TransponderTaRa)), "BS_XPDR"),
 
             // ---- the fleet's tail: each ticks its own reminder line ----
             Done(Captain("BS_ACARS", "Start ACARS"), "BS_ACARS"),
@@ -677,14 +679,14 @@ public static class L1011FoFlowDefinitions
             steps.AddRange(StartEngine(engine, previous));
         // Every field relay closed, then every breaker: a relay already closed is not pressed (an engine's field closed
         // by itself once it ran). One that does not close does not stop the flow.
-        steps.Add(Also(Done(Skip(SW("ES_GENERATORS", "Engine generator fields and breakers: closed", X.EngineGenerators, 1),
-            s => s.IsOn("FO_ENGINE_GENERATORS_ON")), "ES_GENERATORS"), "ESC_GEN_FIELDS", "ESC_GEN_BREAKERS"));
+        steps.Add(Done(Skip(SW("ES_GENERATORS", "Engine generator fields and breakers: closed", X.EngineGenerators, 1),
+            s => s.IsOn("FO_ENGINE_GENERATORS_ON")), "ES_GENERATORS"));
         return new Flow
         {
             Id = "ENGINE_START", Name = "Engine Start",
             Description = "Engines 2, 1 and 3 on APU air: tank pump and valve, ground start, fuel and ignition at "
                 + "20 percent N3, the switch released at 55 percent, stable idle; then the engine generators on line.",
-            RelatedChecklistGroupIds = new[] { "ENGINE_START", "ENGINE_START_CL" },
+            RelatedChecklistGroupIds = new[] { "ENGINE_START" },
             Steps = steps,
         };
     }
@@ -705,15 +707,14 @@ public static class L1011FoFlowDefinitions
         {
             string prev = p.ToString(CultureInfo.InvariantCulture);
             string isolation = $"SWITCH_ISLN_VALVE_ENG_{prev}";
-            yield return Also(Done(Skip(SW(e + "PREV_ISLN_OFF", $"Engine {prev} isolation valve: off", isolation, 0),
-                s => s.IsPosition(isolation, 0)), e + "PREV_ISLN_OFF"), $"ESC_E{prev}_ISLN_OFF");
+            yield return Done(Skip(SW(e + "PREV_ISLN_OFF", $"Engine {prev} isolation valve: off", isolation, 0),
+                s => s.IsPosition(isolation, 0)), e + "PREV_ISLN_OFF");
         }
-        // Engine 2's feed is the APU's, set in Preflight: already set there. It also delivers the read-back's pump line.
+        // Engine 2's feed is the APU's, set in Preflight: already set there.
         // A feed not done stops the flow: no ground start and no fuel on an engine its feed did not reach.
-        var feed = Done(Stop(Skip(Multi(e + "FUEL_FEED", $"Engine {num} fuel: tank pump and tank valve on",
+        yield return Done(Stop(Skip(Multi(e + "FUEL_FEED", $"Engine {num} fuel: tank pump and tank valve on",
                 (TankPump(n), 1), ($"SWITCH_ENG_{num}_TANK_VALVE", 1), ($"GUARD_ENG_{num}_TANK_VALVE", 0)),
             s => s.IsOn($"FO_ENG{num}_FUEL_FEED"))), e + "FUEL_FEED");
-        yield return n == 2 ? Also(feed, "ESC_FUEL_PUMP") : feed;
         yield return WaitForField(e + "ISLN", $"Engine {num} isolation valve: on", $"SWITCH_ISLN_VALVE_ENG_{num}", On,
             StartReadySeconds, onTimeout: FlowStepFailurePolicy.Stop);
         // Never linked to its StayComplete line (latched on the engine running): a start marked it, a failed light-off
@@ -726,12 +727,14 @@ public static class L1011FoFlowDefinitions
         // A toggle-carrying switch, written only over its own position read ([L1011-4]). Refused, the flow stops with
         // the ground start on, and the Stop clean-up releases it over fuel read off.
         string fuel = X.FuelIgnitionKey(n);
-        yield return Also(Done(Stop(Skip(SW(e + "FUEL_IGN", $"Engine {num} fuel and ignition: on", fuel, 1),
-            s => s.IsPosition(fuel, 1))), e + "FUEL_IGN"), $"ESC_E{num}_FUEL_IGN");
-        // The aircraft's own release: a switch that never releases is a hung start, the Captain's.
+        yield return Done(Stop(Skip(SW(e + "FUEL_IGN", $"Engine {num} fuel and ignition: on", fuel, 1),
+            s => s.IsPosition(fuel, 1))), e + "FUEL_IGN");
+        // The aircraft's own release: a switch that never releases is a hung start, the Captain's. Completes the
+        // engine start page's release line, which reads the switch off over the engine running.
         yield return Done(WaitForField(e + "RELEASED", $"Engine {num} ground start switch released", X.GroundStartKey(n),
-            v => v < 0.5, GroundStartReleaseSeconds, onTimeout: FlowStepFailurePolicy.Stop), $"ESC_E{num}_RELEASED");
-        yield return Done(Stop(SW(e + "IDLE", $"Engine {num}: stable idle", X.EngineIdle(n), 1)), $"ESC_E{num}_RUNNING");
+            v => v < 0.5, GroundStartReleaseSeconds, onTimeout: FlowStepFailurePolicy.Stop), e + "RELEASED");
+        // Links no line: an engine running is what its ground start line latches on, the one line that reads it.
+        yield return Stop(SW(e + "IDLE", $"Engine {num}: stable idle", X.EngineIdle(n), 1));
     }
 
     // ------------------------------------------------------------------ After Start (set up for taxi, then the APU off)
@@ -767,76 +770,76 @@ public static class L1011FoFlowDefinitions
     {
         Id = "AFTER_START", Name = "After Start",
         Description = "Bleeds, packs, ATMs and galley for taxi; electrical checks; all fuel pumps on, the 1A and 3A "
-            + "transfers with fuel in both tanks; probe heat; ignition both; take-off flaps; taxi light; then the APU shut "
-            + "down once the engine generators are on line.",
-        RelatedChecklistGroupIds = new[] { "AFTER_START", "AFTER_START_CL", "TAXI_CL" },
+            + "transfers with fuel in both tanks; probe heat; ignition both; take-off flaps; taxi light; the APU shut "
+            + "down once the engine generators are on line; then the Captain's parking brake and brakes.",
+        RelatedChecklistGroupIds = new[] { "AFTER_START" },
         Steps = new()
         {
             // ---- air: bleeds, isolation valves and crossbleeds, packs ----
-            Also(Done(Skip(Multi("AS_HI_PRESS", "High pressure bleed valves: on",
+            Done(Skip(Multi("AS_HI_PRESS", "High pressure bleed valves: on",
                     AllTo(1, "SWITCH_HI_PRESS_ENG_1", "SWITCH_HI_PRESS_ENG_2", "SWITCH_HI_PRESS_ENG_3")),
-                s => s.IsOn("FO_HI_PRESS_ON")), "AS_HI_PRESS"), "ASC_HI_PRESS"),
-            Also(Done(Skip(Multi("AS_ISLN_VALVES", "Engine isolation valves: on",
+                s => s.IsOn("FO_HI_PRESS_ON")), "AS_HI_PRESS"),
+            Done(Skip(Multi("AS_ISLN_VALVES", "Engine isolation valves: on",
                     AllTo(1, "SWITCH_ISLN_VALVE_ENG_1", "SWITCH_ISLN_VALVE_ENG_2", "SWITCH_ISLN_VALVE_ENG_3")),
-                s => s.IsOn("FO_ISLN_VALVES_ON")), "AS_ISLN_VALVES"), "ASC_ISLN_VALVES"),
-            Also(Done(Skip(Multi("AS_APU_AIR", "Fuselage isolation and crossbleed valves: on",
+                s => s.IsOn("FO_ISLN_VALVES_ON")), "AS_ISLN_VALVES"),
+            Done(Skip(Multi("AS_APU_AIR", "Fuselage isolation and crossbleed valves: on",
                     AllTo(1, "SWITCH_APU_ISLN_VALVE", "SWITCH_XBLEED_1", "SWITCH_XBLEED_3")),
-                s => s.IsOn("FO_APU_AIR_ON")), "AS_APU_AIR"), "ASC_FUSELAGE_ISLN", "ASC_XBLEEDS"),
-            Also(Done(Skip(Multi("AS_PACKS_ON", "Packs: on", AllTo(1, PackKeys)),
-                s => s.IsOn("FO_PACKS_ON")), "AS_PACKS_ON"), "ASC_PACKS"),
+                s => s.IsOn("FO_APU_AIR_ON")), "AS_APU_AIR"),
+            Done(Skip(Multi("AS_PACKS_ON", "Packs: on", AllTo(1, PackKeys)),
+                s => s.IsOn("FO_PACKS_ON")), "AS_PACKS_ON"),
 
             // ---- the ATMs on, then to auto. The on position is the step, so it always runs, and its line reads no
             // state: the next step undoes it.
             Done(Multi("AS_ATMS_ON", "ATM switches: on", AllTo(AtmOn, AtmKeys)), "AS_ATMS_ON"),
-            Also(Done(Skip(Multi("AS_ATMS_AUTO", "ATM switches: auto", AllTo(AtmAuto, AtmKeys)),
-                s => s.IsOn("FO_ATMS_AUTO")), "AS_ATMS_AUTO"), "ASC_ATMS"),
-            Also(Done(Skip(Multi("AS_GALLEY_ON", "Galley power: on", AllTo(1, GalleyKeys)),
-                s => s.IsOn("FO_GALLEY_ON")), "AS_GALLEY_ON"), "ASC_GALLEY"),
+            Done(Skip(Multi("AS_ATMS_AUTO", "ATM switches: auto", AllTo(AtmAuto, AtmKeys)),
+                s => s.IsOn("FO_ATMS_AUTO")), "AS_ATMS_AUTO"),
+            Done(Skip(Multi("AS_GALLEY_ON", "Galley power: on", AllTo(1, GalleyKeys)),
+                s => s.IsOn("FO_GALLEY_ON")), "AS_GALLEY_ON"),
 
             // ---- electrical: what Engine Start left, read only; the generator check reads all six relays, which is
-            // both of its read-back lines.
+            // both of the after start page's generator lines, the fields and the breakers.
             Check("AS_CHK_GENERATORS", "Engine generators: on line", "FO_ENGINE_GENERATORS_ON", On, CheckSeconds,
-                "ASC_GEN_FIELDS", "ASC_GEN_BREAKERS"),
-            Check("AS_CHK_IDG", "IDG low pressure lights: out", "FO_IDG_LIGHTS_OUT", On, CheckSeconds, "ASC_IDG"),
-            Check("AS_CHK_BUS_FAIL", "Bus fail lights: out", "FO_BUS_FAIL_LIGHTS_OUT", On, CheckSeconds, "ASC_BUS_FAIL"),
-            Also(Done(Skip(SW("AS_AC_METER", "AC meter: generator 3", "ROTARY_PWR_SOURCE", AcMeterGen3),
-                s => s.IsPosition("ROTARY_PWR_SOURCE", AcMeterGen3)), "AS_AC_METER"), "ASC_AC_METER"),
-            Also(Done(Skip(SW("AS_DC_METER", "DC meter: battery", "ROTARY_STBY_DC_BUS", DcMeterBattery),
-                s => s.IsPosition("ROTARY_STBY_DC_BUS", DcMeterBattery)), "AS_DC_METER"), "ASC_DC_METER"),
+                "AS_GEN_FIELDS", "AS_GEN_BREAKERS"),
+            Check("AS_CHK_IDG", "IDG low pressure lights: out", "FO_IDG_LIGHTS_OUT", On, CheckSeconds, "AS_CHK_IDG"),
+            Check("AS_CHK_BUS_FAIL", "Bus fail lights: out", "FO_BUS_FAIL_LIGHTS_OUT", On, CheckSeconds, "AS_CHK_BUS_FAIL"),
+            Done(Skip(SW("AS_AC_METER", "AC meter: generator 3", "ROTARY_PWR_SOURCE", AcMeterGen3),
+                s => s.IsPosition("ROTARY_PWR_SOURCE", AcMeterGen3)), "AS_AC_METER"),
+            Done(Skip(SW("AS_DC_METER", "DC meter: battery", "ROTARY_STBY_DC_BUS", DcMeterBattery),
+                s => s.IsPosition("ROTARY_STBY_DC_BUS", DcMeterBattery)), "AS_DC_METER"),
             Check("AS_CHK_AC_ESS", "AC essential power selector: bus 3, generator 1", "ROTARY_AC_ESS_BUS",
-                v => Math.Abs(v - AcEssNormal) < 0.5, CheckSeconds, "ASC_AC_ESS"),
+                v => Math.Abs(v - AcEssNormal) < 0.5, CheckSeconds, "AS_CHK_AC_ESS"),
 
             // ---- fuel ----
-            Also(Done(Skip(Multi("AS_FUEL_PUMPS", "Fuel pumps: all on", AllTo(1, FuelPumpKeys)),
-                s => s.IsOn("FO_FUEL_PUMPS_ON")), "AS_FUEL_PUMPS"), "ASC_FUEL_PUMPS"),
-            Also(Done(Skip(Multi("AS_CROSSFEEDS", "Crossfeed valves: closed",
+            Done(Skip(Multi("AS_FUEL_PUMPS", "Fuel pumps: all on", AllTo(1, FuelPumpKeys)),
+                s => s.IsOn("FO_FUEL_PUMPS_ON")), "AS_FUEL_PUMPS"),
+            Done(Skip(Multi("AS_CROSSFEEDS", "Crossfeed valves: closed",
                     AllTo(0, "SWITCH_FUEL_LEFT_XFEED", "SWITCH_FUEL_CTR_XFEED", "SWITCH_FUEL_RIGHT_XFEED")),
-                s => s.IsOn("FO_CROSSFEEDS_CLOSED")), "AS_CROSSFEEDS"), "ASC_CROSSFEEDS"),
-            // On only with fuel in both tanks 1A and 3A; otherwise left alone, aloud, and its lines stay out of the latch.
-            Also(Done(Skip(LeaveAlone(Multi("AS_TRANSFERS", "1A and 3A transfers: on", AllTo(1, "SWITCH_FUEL_XFR_1A", "SWITCH_FUEL_XFR_3A")),
+                s => s.IsOn("FO_CROSSFEEDS_CLOSED")), "AS_CROSSFEEDS"),
+            // On only with fuel in both tanks 1A and 3A; otherwise left alone, aloud, and its line stays out of the latch.
+            Done(Skip(LeaveAlone(Multi("AS_TRANSFERS", "1A and 3A transfers: on", AllTo(1, "SWITCH_FUEL_XFR_1A", "SWITCH_FUEL_XFR_3A")),
                     L1011FoChecklistDefinitions.TransferTanksNotFueled, L1011FoChecklistDefinitions.TransfersStayText),
-                s => s.IsOn("FO_TRANSFERS_ON")), "AS_TRANSFERS"), "ASC_TRANSFERS"),
+                s => s.IsOn("FO_TRANSFERS_ON")), "AS_TRANSFERS"),
 
             // ---- probe heat and ignition ----
-            Also(Done(Skip(Multi("AS_PITOT_HEAT", "Pitot and alpha probe heat: on",
+            Done(Skip(Multi("AS_PITOT_HEAT", "Pitot and alpha probe heat: on",
                     AllTo(1, "SWITCH_CPT_PITOT_HEAT", "SWITCH_FO_PITOT_HEAT", "SWITCH_ALPHA_HEAT")),
-                s => s.IsOn("FO_PITOT_ALPHA_HEAT_ON")), "AS_PITOT_HEAT"), "ASC_PITOT_HEAT", "ASC_ALPHA_HEAT"),
-            Also(Done(Skip(SW("AS_IGNITION_BOTH", "Ignition selector: both", "ROTARY_ENG_START_SEL", IgnitionBoth),
-                s => s.IsPosition("ROTARY_ENG_START_SEL", IgnitionBoth)), "AS_IGNITION_BOTH"), "ASC_IGNITION"),
+                s => s.IsOn("FO_PITOT_ALPHA_HEAT_ON")), "AS_PITOT_HEAT"),
+            Done(Skip(SW("AS_IGNITION_BOTH", "Ignition selector: both", "ROTARY_ENG_START_SEL", IgnitionBoth),
+                s => s.IsPosition("ROTARY_ENG_START_SEL", IgnitionBoth)), "AS_IGNITION_BOTH"),
 
             // ---- the take-off flaps: the tablet's export, else SimBrief's. With neither, nothing is sent or spoken
             // (FO-20) and the Captain step below asks. The flaps move on the ground only.
-            Also(Done(Skip(LeaveAlone(Provider("AS_FLAPS", "Flaps: take-off setting", L1011Levers.FlapHandleKey,
+            Done(Skip(LeaveAlone(Provider("AS_FLAPS", "Flaps: take-off setting", L1011Levers.FlapHandleKey,
                         s => s.TakeoffFlapIndex()),
                     L1011FoChecklistDefinitions.NotOnGround, L1011FoChecklistDefinitions.FlapsStayText),
-                s => s.IsOn("FO_FLAPS_TAKEOFF")), "AS_FLAPS"), "ASC_FLAPS"),
+                s => s.IsOn("FO_FLAPS_TAKEOFF")), "AS_FLAPS"),
             // Keyed on the handle, never on the data: with no data, or with a write that did not take, the handle does
             // not read the take-off index and the Captain is asked.
             Skip(Captain("AS_FLAPS_CPT", "Take-off flaps",
                     "Set the take-off flaps: enter the take-off data on the tablet, or move the flap handle yourself."),
                 s => s.IsOn("FO_FLAPS_TAKEOFF")),
-            Also(Done(Skip(SW("AS_TAXI_LIGHT", "Nose taxi light: on", "TOGGLE_TAXI_LIGHT", 1),
-                s => s.IsPosition("TOGGLE_TAXI_LIGHT", 1)), "AS_TAXI_LIGHT"), "TXC_TAXI_LIGHT"),
+            Done(Skip(SW("AS_TAXI_LIGHT", "Nose taxi light: on", "TOGGLE_TAXI_LIGHT", 1),
+                s => s.IsPosition("TOGGLE_TAXI_LIGHT", 1)), "AS_TAXI_LIGHT"),
 
             // ---- the Captain's: each ticks its own reminder line. The stabilizer trim is never automated; its
             // reminder names the tablet's exported trim once there is one.
@@ -851,25 +854,30 @@ public static class L1011FoFlowDefinitions
             // APU step with one sentence, and the APU keeps running.
             WaitForField("AS_GENS_ON_LINE", "Engine generators on line", "FO_ENGINE_GENERATORS_ON", On,
                 EngineGeneratorsOnLineSeconds),
-            Also(Done(Skip(Requires(SW("AS_APU_GEN_TRIP", "APU generator breaker: trip", X.ApuGenerator, 0),
+            Done(Skip(Requires(SW("AS_APU_GEN_TRIP", "APU generator breaker: trip", X.ApuGenerator, 0),
                     "AS_GENS_ON_LINE", ApuStaysText),
-                s => s.IsOn("FO_APU_GEN_OFF_LINE")), "AS_APU_GEN_TRIP"), "ASC_APU_GEN_TRIP"),
+                s => s.IsOn("FO_APU_GEN_OFF_LINE")), "AS_APU_GEN_TRIP"),
             // A toggle-carrying switch: written only over its own position read (L1011-4).
-            Also(Done(Skip(Requires(SW("AS_APU_BLEED_OFF", "APU bleed: off", "SWITCH_APU_BLEED", 0),
+            Done(Skip(Requires(SW("AS_APU_BLEED_OFF", "APU bleed: off", "SWITCH_APU_BLEED", 0),
                     "AS_GENS_ON_LINE", ApuStaysText),
-                s => s.IsPosition("SWITCH_APU_BLEED", 0)), "AS_APU_BLEED_OFF"), "ASC_APU_BLEED"),
+                s => s.IsPosition("SWITCH_APU_BLEED", 0)), "AS_APU_BLEED_OFF"),
             // One press, then the composite holds until the APU reads stopped (about a minute). Already set once its
             // speed reads below 5 %.
-            Also(Done(Skip(Requires(SW("AS_APU_STOP", "APU: stop", X.ApuStop, 1),
+            Done(Skip(Requires(SW("AS_APU_STOP", "APU: stop", X.ApuStop, 1),
                     "AS_GENS_ON_LINE", ApuStaysText),
-                s => s.IsOn("FO_APU_OFF")), "AS_APU_STOP"), "ASC_APU_STOP"),
+                s => s.IsOn("FO_APU_OFF")), "AS_APU_STOP"),
             // Only after a stop this run sent: an APU found stopped costs no wait.
             Sent(WaitSecondsStep("AS_APU_COOLDOWN", "APU cool-down: two minutes", ApuCooldownSeconds), "AS_APU_STOP"),
             // Only once the stop is done or found done ("Already set" is not a skip): a stop skipped, by the generator
             // wait or because the APU never read stopped, leaves the master on.
-            Also(Done(Skip(Requires(SW("AS_APU_MASTER_OFF", "APU master: off", "TOGGLE_APU_POWER", 0),
+            Done(Skip(Requires(SW("AS_APU_MASTER_OFF", "APU master: off", "TOGGLE_APU_POWER", 0),
                     "AS_APU_STOP", ApuMasterStaysText),
-                s => s.IsPosition("TOGGLE_APU_POWER", 0)), "AS_APU_MASTER_OFF"), "ASC_APU_MASTER"),
+                s => s.IsPosition("TOGGLE_APU_POWER", 0)), "AS_APU_MASTER_OFF"),
+
+            // ---- the taxi page's Captain lines: each ticks its own reminder line. Its nose taxi light is the taxi
+            // light step's line.
+            Done(Captain("AS_CPT_PARKING_BRAKE", "Parking brake: release"), "AS_CPT_PARKING_BRAKE"),
+            Done(Captain("AS_CPT_BRAKES", "Brakes: check"), "AS_CPT_BRAKES"),
         }
     };
 
@@ -883,33 +891,33 @@ public static class L1011FoFlowDefinitions
         Id = "BEFORE_TAKEOFF", Name = "Before Takeoff",
         Description = "Line-up: pack 2 only, anti-skid on, take-off autobrake, strobe and landing lights, continuous "
             + "ignition and probe heat on, the transponder checked at TA/RA, weather radar on.",
-        RelatedChecklistGroupIds = new[] { "BEFORE_TAKEOFF", "BEFORE_TAKEOFF_CL" },
+        RelatedChecklistGroupIds = new[] { "BEFORE_TAKEOFF" },
         Steps = new()
         {
             // Packs 1 and 3 off in the air would cut two of the three packs: left alone off the ground, as its tick is.
-            Also(Done(Skip(LeaveAlone(Multi("BT_PACK_2", "Packs: pack 2 on, packs 1 and 3 off",
+            Done(Skip(LeaveAlone(Multi("BT_PACK_2", "Packs: pack 2 on, packs 1 and 3 off",
                         (PackKeys[0], 0), (PackKeys[1], 1), (PackKeys[2], 0)),
                     L1011FoChecklistDefinitions.NotOnGround, L1011FoChecklistDefinitions.PacksStayText),
-                s => s.IsOn("FO_PACK_2_ONLY")), "BT_PACK_2"), "BTC_PACKS"),
+                s => s.IsOn("FO_PACK_2_ONLY")), "BT_PACK_2"),
             // A toggle-carrying switch: written only over its own position read (L1011-4).
-            Also(Done(Skip(SW("BT_ANTISKID", "Anti-skid: on", "SWITCH_ANTISKID_ON", 1),
-                s => s.IsPosition("SWITCH_ANTISKID_ON", 1)), "BT_ANTISKID"), "BTC_ANTISKID"),
+            Done(Skip(SW("BT_ANTISKID", "Anti-skid: on", "SWITCH_ANTISKID_ON", 1),
+                s => s.IsPosition("SWITCH_ANTISKID_ON", 1)), "BT_ANTISKID"),
             // The take-off setting is the First Officer's (FO-14); the landing setting is the Captain's.
-            Also(Done(Skip(SW("BT_AUTOBRAKE", "Autobrake: takeoff", "ROTARY_AUTO_BRAKE_MODE", AutobrakeTakeoff),
-                s => s.IsPosition("ROTARY_AUTO_BRAKE_MODE", AutobrakeTakeoff)), "BT_AUTOBRAKE"), "BTC_AUTOBRAKE"),
-            Also(Done(Skip(SW("BT_STROBES", "Strobe lights: on", "SWITCH_STROBE_LIGHT", 1),
-                s => s.IsPosition("SWITCH_STROBE_LIGHT", 1)), "BT_STROBES"), "BTC_STROBES"),
-            Also(Done(Skip(Multi("BT_LANDING_LIGHTS", "Landing lights: on", AllTo(1, "TOGGLE_LANDING_LEFT", "TOGGLE_LANDING_RIGHT")),
-                s => s.IsOn("FO_LANDING_LIGHTS_ON")), "BT_LANDING_LIGHTS"), "BTC_LANDING_LIGHTS"),
-            Also(Done(Skip(SW("BT_CONT_IGN", "Continuous ignition: on", "SWITCH_CONT_IGNITION", 1),
-                s => s.IsPosition("SWITCH_CONT_IGNITION", 1)), "BT_CONT_IGN"), "BTC_CONT_IGN"),
-            Also(Done(Skip(SW("BT_PROBE_HEAT", "Temperature probe heat: on", "SWITCH_PROBE_HEAT", 1),
-                s => s.IsPosition("SWITCH_PROBE_HEAT", 1)), "BT_PROBE_HEAT"), "BTC_PROBE_HEAT"),
-            // Before Start set TA/RA: read only.
+            Done(Skip(SW("BT_AUTOBRAKE", "Autobrake: takeoff", "ROTARY_AUTO_BRAKE_MODE", AutobrakeTakeoff),
+                s => s.IsPosition("ROTARY_AUTO_BRAKE_MODE", AutobrakeTakeoff)), "BT_AUTOBRAKE"),
+            Done(Skip(SW("BT_STROBES", "Strobe lights: on", "SWITCH_STROBE_LIGHT", 1),
+                s => s.IsPosition("SWITCH_STROBE_LIGHT", 1)), "BT_STROBES"),
+            Done(Skip(Multi("BT_LANDING_LIGHTS", "Landing lights: on", AllTo(1, "TOGGLE_LANDING_LEFT", "TOGGLE_LANDING_RIGHT")),
+                s => s.IsOn("FO_LANDING_LIGHTS_ON")), "BT_LANDING_LIGHTS"),
+            Done(Skip(SW("BT_CONT_IGN", "Continuous ignition: on", "SWITCH_CONT_IGNITION", 1),
+                s => s.IsPosition("SWITCH_CONT_IGNITION", 1)), "BT_CONT_IGN"),
+            Done(Skip(SW("BT_PROBE_HEAT", "Temperature probe heat: on", "SWITCH_PROBE_HEAT", 1),
+                s => s.IsPosition("SWITCH_PROBE_HEAT", 1)), "BT_PROBE_HEAT"),
+            // Before Start set TA/RA: read only. Completes the line-up page's transponder line.
             Check("BT_CHK_XPDR", "Transponder: TA/RA", "ROTARY_TCAS_MODE", v => Math.Abs(v - TransponderTaRa) < 0.5,
-                CheckSeconds, "BTC_XPDR"),
-            Also(Done(Skip(SW("BT_RADAR", "Weather radar: on", "SWITCH_WX_WX", 1),
-                s => s.IsPosition("SWITCH_WX_WX", 1)), "BT_RADAR"), "BTC_RADAR"),
+                CheckSeconds, "BT_CHK_XPDR"),
+            Done(Skip(SW("BT_RADAR", "Weather radar: on", "SWITCH_WX_WX", 1),
+                s => s.IsPosition("SWITCH_WX_WX", 1)), "BT_RADAR"),
         }
     };
 
@@ -928,31 +936,33 @@ public static class L1011FoFlowDefinitions
         Id = "AFTER_TAKEOFF", Name = "After Takeoff",
         Description = "Gear up; the Captain's flap schedule; autobrake off, nose, taxi and turnoff lights off, continuous "
             + "ignition off, packs on; then the flaps and the gear confirmed up.",
-        RelatedChecklistGroupIds = new[] { "AFTER_TAKEOFF", "AFTER_TAKEOFF_CL", "CLIMB_CL" },
+        RelatedChecklistGroupIds = new[] { "AFTER_TAKEOFF" },
         Steps = new()
         {
             // Already set once the lever reads up. Written only with the aircraft read airborne: on the ground, or with
             // the on-ground flag unread, it is left alone, aloud, as its tick is. The gauge's script refuses gear up on the
-            // ground, but no live check has seen it, so nothing relies on it. Its read-back line is the legs', which
-            // the gear check last delivers.
+            // ground, but no live check has seen it, so nothing relies on it. The take-off page's gear line is the
+            // legs', which the gear check last delivers.
             Done(Skip(LeaveAlone(SW("AT_GEAR", "Landing gear: up", L1011Levers.GearLeverKey, GearUp),
                     L1011FoChecklistDefinitions.NotAirborne, L1011FoChecklistDefinitions.GearStaysDownText),
                 s => s.IsOn("FO_GEAR_LEVER_UP")), "AT_GEAR"),
             // The flaps stay the Captain's in flight.
             Done(Captain("AT_CPT_FLAPS", "Flaps up on schedule",
                 "Retract the flaps on schedule: 10 at V2 plus 10, 4 at V2 plus 20, up at V2 plus 60."), "AT_CPT_FLAPS"),
-            Also(Done(Skip(SW("AT_AUTOBRAKE", "Autobrake: off", "ROTARY_AUTO_BRAKE_MODE", AutobrakeOff),
-                s => s.IsPosition("ROTARY_AUTO_BRAKE_MODE", AutobrakeOff)), "AT_AUTOBRAKE"), "CLC_AUTOBRAKE"),
-            Also(Done(Skip(Multi("AT_GROUND_LIGHTS", "Nose, taxi and runway turnoff lights: off", AllTo(0, GroundLightKeys)),
-                s => s.IsOn("FO_GROUND_LIGHTS_OFF")), "AT_GROUND_LIGHTS"), "CLC_GROUND_LIGHTS"),
-            Also(Done(Skip(SW("AT_CONT_IGN", "Continuous ignition: off", "SWITCH_CONT_IGNITION", 0),
-                s => s.IsPosition("SWITCH_CONT_IGNITION", 0)), "AT_CONT_IGN"), "CLC_CONT_IGN"),
-            Also(Done(Skip(Multi("AT_PACKS_ON", "Packs: on", AllTo(1, PackKeys)),
-                s => s.IsOn("FO_PACKS_ON")), "AT_PACKS_ON"), "CLC_PACKS"),
-            // The Captain's flaps, read only: up to five minutes, then skipped aloud.
-            Check("AT_CHK_FLAPS_UP", "Flaps: up", "FO_FLAPS_UP", On, FlapsUpCheckSeconds, "ATC_FLAPS"),
-            // LAST (FO-13): the gear confirmed up, the lever and every leg, read only. 20 s, then skipped aloud.
-            Check("AT_GEAR_UP_CHECK", "Landing gear: up", L1011GearConfirmation.UpField, On, GearCheckSeconds, "ATC_GEAR"),
+            Done(Skip(SW("AT_AUTOBRAKE", "Autobrake: off", "ROTARY_AUTO_BRAKE_MODE", AutobrakeOff),
+                s => s.IsPosition("ROTARY_AUTO_BRAKE_MODE", AutobrakeOff)), "AT_AUTOBRAKE"),
+            Done(Skip(Multi("AT_GROUND_LIGHTS", "Nose, taxi and runway turnoff lights: off", AllTo(0, GroundLightKeys)),
+                s => s.IsOn("FO_GROUND_LIGHTS_OFF")), "AT_GROUND_LIGHTS"),
+            Done(Skip(SW("AT_CONT_IGN", "Continuous ignition: off", "SWITCH_CONT_IGNITION", 0),
+                s => s.IsPosition("SWITCH_CONT_IGNITION", 0)), "AT_CONT_IGN"),
+            Done(Skip(Multi("AT_PACKS_ON", "Packs: on", AllTo(1, PackKeys)),
+                s => s.IsOn("FO_PACKS_ON")), "AT_PACKS_ON"),
+            // The Captain's flaps, read only: up to five minutes, then skipped aloud. Completes the take-off page's flaps
+            // line.
+            Check("AT_CHK_FLAPS_UP", "Flaps: up", "FO_FLAPS_UP", On, FlapsUpCheckSeconds, "AT_CHK_FLAPS_UP"),
+            // LAST (FO-13): the gear confirmed up, the lever and every leg, read only. 20 s, then skipped aloud. Completes
+            // the take-off page's gear line, the group's last.
+            Check("AT_GEAR_UP_CHECK", "Landing gear: up", L1011GearConfirmation.UpField, On, GearCheckSeconds, "AT_GEAR_UP_CHECK"),
         }
     };
 
@@ -963,12 +973,12 @@ public static class L1011FoFlowDefinitions
         Id = "DESCENT", Name = "Descent",
         Description = "Seat belt signs on; the Captain's landing data, landing autobrake and QNH; the cabin altitude "
             + "selector to the destination elevation.",
-        RelatedChecklistGroupIds = new[] { "DESCENT", "DESCENT_CL" },
+        RelatedChecklistGroupIds = new[] { "DESCENT" },
         Steps = new()
         {
             // A toggle-carrying switch: written only over its own position read (L1011-4).
-            Also(Done(Skip(SW("DS_SEAT_BELTS", "Seat belt signs: on", "SWITCH_SEATBELT_LIGHT", 1),
-                s => s.IsPosition("SWITCH_SEATBELT_LIGHT", 1)), "DS_SEAT_BELTS"), "DSC_SEAT_BELTS"),
+            Done(Skip(SW("DS_SEAT_BELTS", "Seat belt signs: on", "SWITCH_SEATBELT_LIGHT", 1),
+                s => s.IsPosition("SWITCH_SEATBELT_LIGHT", 1)), "DS_SEAT_BELTS"),
             Done(Captain("DS_CPT_LANDING_DATA", "Prepare the landing data on the tablet"), "DS_CPT_LANDING_DATA"),
             // The landing autobrake is the Captain's (FO-14): the panel named, no setting.
             Done(Captain("DS_CPT_AUTOBRAKE", "Set the landing autobrake on the overhead Antiskid and Autobrake panel"),
@@ -976,9 +986,9 @@ public static class L1011FoFlowDefinitions
             Done(Captain("DS_CPT_QNH", "Set the altimeters to QNH at the transition level: Ctrl+B"), "DS_CPT_QNH"),
             // The plan's destination elevation, clamped to the selector's end stops. No plan: nothing is sent or spoken
             // (FO-20), and the Captain step below asks for it.
-            Also(Done(Skip(Provider("DS_CABIN_ALT", "Cabin altitude selector: destination elevation", X.CabinAltitudeSelect,
+            Done(Skip(Provider("DS_CABIN_ALT", "Cabin altitude selector: destination elevation", X.CabinAltitudeSelect,
                     s => s.DestinationCabinAltitudeFt()),
-                s => s.IsOn("FO_CABIN_ALT_AT_DEST")), "DS_CABIN_ALT"), "DSC_CABIN_ALT"),
+                s => s.IsOn("FO_CABIN_ALT_AT_DEST")), "DS_CABIN_ALT"),
             // Keyed on the selector, never on the plan: without a plan, or with a write that did not take, the selector
             // does not read the destination and the Captain is asked.
             Skip(Captain("DS_CABIN_ALT_CPT", "Cabin altitude selector",
@@ -996,17 +1006,17 @@ public static class L1011FoFlowDefinitions
     {
         Id = "BEFORE_LANDING", Name = "Before Landing",
         Description = "Cabin barometric setting to the captain's altimeter; 1A and 3A transfers off, all fuel pumps on, "
-            + "crossfeeds closed; nose, taxi and turnoff lights and continuous ignition on; gear down; the Captain's flap "
-            + "schedule; then the gear confirmed down.",
-        RelatedChecklistGroupIds = new[] { "BEFORE_LANDING", "BEFORE_LANDING_CL" },
+            + "crossfeeds closed; nose, taxi and turnoff lights and continuous ignition on; gear down; the Captain's landing "
+            + "autobrake and flap schedule; then the gear confirmed down.",
+        RelatedChecklistGroupIds = new[] { "BEFORE_LANDING" },
         Steps = new()
         {
             // The captain's altimeter holds the destination QNH by now. Standard or unread: nothing is sent or spoken
             // (FO-20), and the Captain step below asks for it. The aircraft moves the cabin baro with the captain's
             // altimeter, so this usually reads already set; it still catches a cabin baro moved on its own.
-            Also(Done(Skip(Provider("BL_CABIN_BARO", "Cabin barometric setting: captain's altimeter", X.CabinBaro,
+            Done(Skip(Provider("BL_CABIN_BARO", "Cabin barometric setting: captain's altimeter", X.CabinBaro,
                     s => s.CabinBaroTargetHundredths()),
-                s => s.IsOn("FO_CABIN_BARO_SET")), "BL_CABIN_BARO"), "BLC_CABIN_BARO"),
+                s => s.IsOn("FO_CABIN_BARO_SET")), "BL_CABIN_BARO"),
             // Keyed on the setting, never on the altimeter: without a value, or with a write that did not take, the
             // cabin baro does not read the captain's setting and the Captain is asked.
             Skip(Captain("BL_CABIN_BARO_CPT", "Cabin barometric setting",
@@ -1014,27 +1024,34 @@ public static class L1011FoFlowDefinitions
                 s => s.IsOn("FO_CABIN_BARO_SET")),
 
             // ---- fuel for landing ----
-            Also(Done(Skip(Multi("BL_TRANSFERS_OFF", "1A and 3A transfers: off", AllTo(0, "SWITCH_FUEL_XFR_1A", "SWITCH_FUEL_XFR_3A")),
-                s => s.IsOn("FO_TRANSFERS_OFF")), "BL_TRANSFERS_OFF"), "BLC_TRANSFERS"),
-            Also(Done(Skip(Multi("BL_FUEL_PUMPS", "Fuel pumps: all on", AllTo(1, FuelPumpKeys)),
-                s => s.IsOn("FO_FUEL_PUMPS_ON")), "BL_FUEL_PUMPS"), "BLC_PUMPS"),
-            Also(Done(Skip(Multi("BL_CROSSFEEDS", "Crossfeed valves: closed",
+            Done(Skip(Multi("BL_TRANSFERS_OFF", "1A and 3A transfers: off", AllTo(0, "SWITCH_FUEL_XFR_1A", "SWITCH_FUEL_XFR_3A")),
+                s => s.IsOn("FO_TRANSFERS_OFF")), "BL_TRANSFERS_OFF"),
+            Done(Skip(Multi("BL_FUEL_PUMPS", "Fuel pumps: all on", AllTo(1, FuelPumpKeys)),
+                s => s.IsOn("FO_FUEL_PUMPS_ON")), "BL_FUEL_PUMPS"),
+            Done(Skip(Multi("BL_CROSSFEEDS", "Crossfeed valves: closed",
                     AllTo(0, "SWITCH_FUEL_LEFT_XFEED", "SWITCH_FUEL_CTR_XFEED", "SWITCH_FUEL_RIGHT_XFEED")),
-                s => s.IsOn("FO_CROSSFEEDS_CLOSED")), "BL_CROSSFEEDS"), "BLC_CROSSFEEDS"),
+                s => s.IsOn("FO_CROSSFEEDS_CLOSED")), "BL_CROSSFEEDS"),
 
-            Also(Done(Skip(Multi("BL_GROUND_LIGHTS", "Nose, taxi and runway turnoff lights: on", AllTo(1, GroundLightKeys)),
-                s => s.IsOn("FO_GROUND_LIGHTS_ON")), "BL_GROUND_LIGHTS"), "BLC_GROUND_LIGHTS"),
-            Also(Done(Skip(SW("BL_CONT_IGN", "Continuous ignition: on", "SWITCH_CONT_IGNITION", 1),
-                s => s.IsPosition("SWITCH_CONT_IGNITION", 1)), "BL_CONT_IGN"), "BLC_CONT_IGN"),
-            // Already set once the lever reads down. Its read-back line is the legs', which the gear check last delivers.
-            Done(Skip(SW("BL_GEAR", "Landing gear: down", L1011Levers.GearLeverKey, GearDown),
+            Done(Skip(Multi("BL_GROUND_LIGHTS", "Nose, taxi and runway turnoff lights: on", AllTo(1, GroundLightKeys)),
+                s => s.IsOn("FO_GROUND_LIGHTS_ON")), "BL_GROUND_LIGHTS"),
+            Done(Skip(SW("BL_CONT_IGN", "Continuous ignition: on", "SWITCH_CONT_IGNITION", 1),
+                s => s.IsPosition("SWITCH_CONT_IGNITION", 1)), "BL_CONT_IGN"),
+            // Already set once the lever reads down. Worded on the lever: "Landing gear: down" is the gear check's line,
+            // the lever and every leg, which it delivers last.
+            Done(Skip(SW("BL_GEAR", "Gear lever: down", L1011Levers.GearLeverKey, GearDown),
                 s => s.IsOn("FO_GEAR_LEVER_DOWN")), "BL_GEAR"),
+            // The approach page's "Autobrake: set", after the gear as on the page: the Captain's, the panel named and no
+            // setting (FO-14). Never a write.
+            Done(Captain("BL_CPT_AUTOBRAKE", "Autobrake: set", L1011FoChecklistDefinitions.LandingAutobrakeCheckText),
+                "BL_CPT_AUTOBRAKE"),
             // The flaps stay the Captain's.
             Done(Captain("BL_CPT_FLAPS", "Flaps on schedule",
                 "Extend the flaps on schedule: 4 at Vref plus 60, 10 at Vref plus 40, 22 at Vref plus 30, 33 at Vref plus 20."),
                 "BL_CPT_FLAPS"),
             // LAST (FO-13): the gear confirmed down, the lever and every leg, read only. 20 s, then skipped aloud.
-            Check("BL_GEAR_DOWN_CHECK", "Landing gear: down", L1011GearConfirmation.DownField, On, GearCheckSeconds, "BLC_GEAR"),
+            // Completes the approach page's gear line, the group's last.
+            Check("BL_GEAR_DOWN_CHECK", "Landing gear: down", L1011GearConfirmation.DownField, On, GearCheckSeconds,
+                "BL_GEAR_DOWN_CHECK"),
         }
     };
 
@@ -1056,48 +1073,48 @@ public static class L1011FoFlowDefinitions
         Description = "Anti-skid and autobrake off; landing and strobe lights, continuous ignition and probe and window heat "
             + "off; stabilizer trim zero, speed brake forward, flaps up; weather radar and transfers off; then the APU master "
             + "on and the APU started.",
-        RelatedChecklistGroupIds = new[] { "AFTER_LANDING", "AFTER_LANDING_CL" },
+        RelatedChecklistGroupIds = new[] { "AFTER_LANDING" },
         Steps = new()
         {
             // Started airborne by mistake, the flow would turn the air data heat and anti-skid off, zero the trim and stow
             // the speed brake lever: never in the air. Read only, fails unread, links no line.
             OnGroundGuard("AL_ON_GROUND"),
             // A toggle-carrying switch: written only over its own position read (L1011-4).
-            Also(Done(Skip(SW("AL_ANTISKID", "Anti-skid: off", "SWITCH_ANTISKID_ON", 0),
-                s => s.IsPosition("SWITCH_ANTISKID_ON", 0)), "AL_ANTISKID"), "ALC_ANTISKID"),
-            Also(Done(Skip(SW("AL_AUTOBRAKE", "Autobrake: off", "ROTARY_AUTO_BRAKE_MODE", AutobrakeOff),
-                s => s.IsPosition("ROTARY_AUTO_BRAKE_MODE", AutobrakeOff)), "AL_AUTOBRAKE"), "ALC_AUTOBRAKE"),
-            Also(Done(Skip(Multi("AL_LANDING_LIGHTS", "Landing lights: off", AllTo(0, LandingLightKeys)),
-                s => s.IsOn("FO_LANDING_LIGHTS_OFF")), "AL_LANDING_LIGHTS"), "ALC_LANDING_LIGHTS"),
-            Also(Done(Skip(SW("AL_STROBES", "Strobe lights: off", "SWITCH_STROBE_LIGHT", 0),
-                s => s.IsPosition("SWITCH_STROBE_LIGHT", 0)), "AL_STROBES"), "ALC_STROBES"),
-            Also(Done(Skip(SW("AL_CONT_IGN", "Continuous ignition: off", "SWITCH_CONT_IGNITION", 0),
-                s => s.IsPosition("SWITCH_CONT_IGNITION", 0)), "AL_CONT_IGN"), "ALC_CONT_IGN"),
-            Also(Done(Skip(Multi("AL_AIR_DATA", "Air data heat: off", AllTo(0, AirDataHeatKeys)),
-                s => s.IsOn("FO_AIR_DATA_HEAT_OFF")), "AL_AIR_DATA"), "ALC_AIR_DATA"),
-            Also(Done(Skip(Multi("AL_WINDSHIELD", "Windshield heat: idle", AllTo(0, WindshieldKeys)),
-                s => s.IsOn("FO_WINDSHIELD_IDLE")), "AL_WINDSHIELD"), "ALC_WINDSHIELD"),
-            Also(Done(Skip(Multi("AL_SIDE_WINDOWS", "Side window heat: off", AllTo(0, SideWindowKeys)),
-                s => s.IsOn("FO_SIDE_WINDOWS_OFF")), "AL_SIDE_WINDOWS"), "ALC_SIDE_WINDOWS"),
+            Done(Skip(SW("AL_ANTISKID", "Anti-skid: off", "SWITCH_ANTISKID_ON", 0),
+                s => s.IsPosition("SWITCH_ANTISKID_ON", 0)), "AL_ANTISKID"),
+            Done(Skip(SW("AL_AUTOBRAKE", "Autobrake: off", "ROTARY_AUTO_BRAKE_MODE", AutobrakeOff),
+                s => s.IsPosition("ROTARY_AUTO_BRAKE_MODE", AutobrakeOff)), "AL_AUTOBRAKE"),
+            Done(Skip(Multi("AL_LANDING_LIGHTS", "Landing lights: off", AllTo(0, LandingLightKeys)),
+                s => s.IsOn("FO_LANDING_LIGHTS_OFF")), "AL_LANDING_LIGHTS"),
+            Done(Skip(SW("AL_STROBES", "Strobe lights: off", "SWITCH_STROBE_LIGHT", 0),
+                s => s.IsPosition("SWITCH_STROBE_LIGHT", 0)), "AL_STROBES"),
+            Done(Skip(SW("AL_CONT_IGN", "Continuous ignition: off", "SWITCH_CONT_IGNITION", 0),
+                s => s.IsPosition("SWITCH_CONT_IGNITION", 0)), "AL_CONT_IGN"),
+            Done(Skip(Multi("AL_AIR_DATA", "Air data heat: off", AllTo(0, AirDataHeatKeys)),
+                s => s.IsOn("FO_AIR_DATA_HEAT_OFF")), "AL_AIR_DATA"),
+            Done(Skip(Multi("AL_WINDSHIELD", "Windshield heat: idle", AllTo(0, WindshieldKeys)),
+                s => s.IsOn("FO_WINDSHIELD_IDLE")), "AL_WINDSHIELD"),
+            Done(Skip(Multi("AL_SIDE_WINDOWS", "Side window heat: off", AllTo(0, SideWindowKeys)),
+                s => s.IsOn("FO_SIDE_WINDOWS_OFF")), "AL_SIDE_WINDOWS"),
             // The typed entry is write-only: the executor verifies it on the trim readout, and "Already set" reads it.
-            Also(Done(Skip(SW("AL_STAB_TRIM", "Stabilizer trim: zero", L1011Levers.StabTrimKey, 0),
-                s => s.IsOn("FO_STAB_TRIM_ZERO")), "AL_STAB_TRIM"), "ALC_STAB_TRIM"),
-            Also(Done(Skip(SW("AL_SPEED_BRAKE", "Speed brake lever: forward", L1011Levers.SpeedBrakeKey, 0),
-                s => s.IsOn("FO_SPEED_BRAKE_FORWARD")), "AL_SPEED_BRAKE"), "ALC_SPEED_BRAKE"),
+            Done(Skip(SW("AL_STAB_TRIM", "Stabilizer trim: zero", L1011Levers.StabTrimKey, 0),
+                s => s.IsOn("FO_STAB_TRIM_ZERO")), "AL_STAB_TRIM"),
+            Done(Skip(SW("AL_SPEED_BRAKE", "Speed brake lever: forward", L1011Levers.SpeedBrakeKey, 0),
+                s => s.IsOn("FO_SPEED_BRAKE_FORWARD")), "AL_SPEED_BRAKE"),
             // The flaps move on the ground only: left alone, aloud, airborne or with the ground unread.
-            Also(Done(Skip(LeaveAlone(SW("AL_FLAPS_UP", "Flaps: up", L1011Levers.FlapHandleKey, 0),
+            Done(Skip(LeaveAlone(SW("AL_FLAPS_UP", "Flaps: up", L1011Levers.FlapHandleKey, 0),
                     L1011FoChecklistDefinitions.NotOnGround, L1011FoChecklistDefinitions.FlapsStayText),
-                s => s.IsOn("FO_FLAPS_UP")), "AL_FLAPS_UP"), "ALC_FLAPS"),
-            Also(Done(Skip(SW("AL_RADAR", "Weather radar: off", "SWITCH_WX_OFF", 1),
-                s => s.IsPosition("SWITCH_WX_OFF", 1)), "AL_RADAR"), "ALC_RADAR"),
-            Also(Done(Skip(Multi("AL_TRANSFERS_OFF", "1A and 3A transfers: off", AllTo(0, "SWITCH_FUEL_XFR_1A", "SWITCH_FUEL_XFR_3A")),
-                s => s.IsOn("FO_TRANSFERS_OFF")), "AL_TRANSFERS_OFF"), "ALC_TRANSFERS"),
-            Also(Done(Skip(SW("AL_APU_MASTER", "APU master: on", "TOGGLE_APU_POWER", 1),
-                s => s.IsPosition("TOGGLE_APU_POWER", 1)), "AL_APU_MASTER"), "ALC_APU_MASTER"),
+                s => s.IsOn("FO_FLAPS_UP")), "AL_FLAPS_UP"),
+            Done(Skip(SW("AL_RADAR", "Weather radar: off", "SWITCH_WX_OFF", 1),
+                s => s.IsPosition("SWITCH_WX_OFF", 1)), "AL_RADAR"),
+            Done(Skip(Multi("AL_TRANSFERS_OFF", "1A and 3A transfers: off", AllTo(0, "SWITCH_FUEL_XFR_1A", "SWITCH_FUEL_XFR_3A")),
+                s => s.IsOn("FO_TRANSFERS_OFF")), "AL_TRANSFERS_OFF"),
+            Done(Skip(SW("AL_APU_MASTER", "APU master: on", "TOGGLE_APU_POWER", 1),
+                s => s.IsPosition("TOGGLE_APU_POWER", 1)), "AL_APU_MASTER"),
             // One press, done once the APU turns: a press while it already turns would be a second start. Parking
             // waits for it to run.
-            Also(Done(Skip(SW("AL_APU_START", "APU: start", X.ApuStart, 1),
-                s => s.IsOn("FO_APU_STARTING_OR_RUNNING")), "AL_APU_START"), "ALC_APU"),
+            Done(Skip(SW("AL_APU_START", "APU: start", X.ApuStart, 1),
+                s => s.IsOn("FO_APU_STARTING_OR_RUNNING")), "AL_APU_START"),
         }
     };
 
@@ -1134,61 +1151,62 @@ public static class L1011FoFlowDefinitions
         Description = "Aircraft stopped; ground lights off, parking brake set; the APU generator or external power on line "
             + "before the fuel and ignition go off; once the engines stop, anti-collision lights and seat belts off, INS off, "
             + "transponder standby, ATMs and AC pumps off, the fuel panel set for the APU; APU bleed on.",
-        RelatedChecklistGroupIds = new[] { "PARKING", "PARKING_CL" },
+        RelatedChecklistGroupIds = new[] { "PARKING" },
         Steps = new()
         {
             // The ground guard: read only, the stock ground speed, unread failing it. Links no line.
             WaitForField("PK_STOPPED", "Aircraft stopped", "GROUND_VELOCITY", v => v < StoppedBelowKnots, ParkingWaitSeconds,
                 onTimeout: FlowStepFailurePolicy.Stop),
-            Also(Done(Skip(Multi("PK_GROUND_LIGHTS", "Nose, taxi and runway turnoff lights: off", AllTo(0, GroundLightKeys)),
-                s => s.IsOn("FO_GROUND_LIGHTS_OFF")), "PK_GROUND_LIGHTS"), "PKC_GROUND_LIGHTS"),
-            Also(Done(Skip(SW("PK_PARKING_BRAKE", "Parking brake: set", L1011Levers.ParkingBrakeKey, 1),
-                s => s.IsPosition(L1011Levers.ParkingBrakeKey, 1)), "PK_PARKING_BRAKE"), "PKC_PARKING_BRAKE"),
+            Done(Skip(Multi("PK_GROUND_LIGHTS", "Nose, taxi and runway turnoff lights: off", AllTo(0, GroundLightKeys)),
+                s => s.IsOn("FO_GROUND_LIGHTS_OFF")), "PK_GROUND_LIGHTS"),
+            Done(Skip(SW("PK_PARKING_BRAKE", "Parking brake: set", L1011Levers.ParkingBrakeKey, 1),
+                s => s.IsPosition(L1011Levers.ParkingBrakeKey, 1)), "PK_PARKING_BRAKE"),
 
             // ---- a power source before the fuel cut: the APU After Landing started, else external power ----
             // Up to two minutes for the APU to run; an APU not turning is not waited for.
             LeaveAlone(Skip(WaitForField("PK_APU_RUNNING", "APU running", "FO_APU_RUNNING", On, ParkingWaitSeconds),
                     s => s.IsOn("FO_APU_RUNNING")),
                 s => !s.IsOn("FO_APU_STARTING_OR_RUNNING"), ApuNotStartedText),
-            Also(Done(Skip(LeaveAlone(SW("PK_APU_GEN", "APU generator: on line", X.ApuGenerator, 1),
+            Done(Skip(LeaveAlone(SW("PK_APU_GEN", "APU generator: on line", X.ApuGenerator, 1),
                     L1011FoChecklistDefinitions.ApuNotRunning, L1011FoChecklistDefinitions.ApuGenStaysOffText),
-                s => s.IsOn("FO_APU_GEN_ON_LINE")), "PK_APU_GEN"), "PKC_POWER"),
+                s => s.IsOn("FO_APU_GEN_ON_LINE")), "PK_APU_GEN"),
             Done(Skip(LeaveAlone(SW("PK_EXT_PWR", "External power: on", X.ExternalPower, 1),
                     L1011FoChecklistDefinitions.ExtPowerNotWanted, L1011FoChecklistDefinitions.ExtPowerStaysOffText),
                 s => s.IsOn("FO_EXT_POWER_ON")), "PK_EXT_PWR"),
             // The fuel cut takes the engine generators off the buses: the APU generator or external power must be on line
             // first, or the aircraft drops to its battery. Read only; nothing on line stops the flow with the engines running.
-            Skip(WaitForField("PK_POWER_SOURCE", "APU generator or external power on", "FO_POWER_SOURCE_ON", On,
+            // Completes the parking page's power line, which reads the same either-source field.
+            Done(Skip(WaitForField("PK_POWER_SOURCE", "APU generator or external power on", "FO_POWER_SOURCE_ON", On,
                     ParkingWaitSeconds, onTimeout: FlowStepFailurePolicy.Stop),
-                s => s.IsOn("FO_POWER_SOURCE_ON")),
+                s => s.IsOn("FO_POWER_SOURCE_ON")), "PK_POWER_SOURCE"),
             // Toggle-carrying switches: each key read before it is written, and refused from an unknown position (L1011-4).
-            Also(Done(Skip(Multi("PK_FUEL_IGN_OFF", "Fuel and ignition switches: off", AllTo(0, FuelIgnitionKeys)),
-                s => s.IsOn("FO_FUEL_IGNITION_OFF")), "PK_FUEL_IGN_OFF"), "PKC_FUEL_IGN"),
+            Done(Skip(Multi("PK_FUEL_IGN_OFF", "Fuel and ignition switches: off", AllTo(0, FuelIgnitionKeys)),
+                s => s.IsOn("FO_FUEL_IGNITION_OFF")), "PK_FUEL_IGN_OFF"),
 
             // ---- the engines stopped before anything else (FO-25): the beacon, the ground crew's sign that engines turn,
             // goes off only once they stop, as the MD-11's does, and an engine that does not stop ends the flow here,
             // with the beacon on and before a tank pump goes off under it. Read only; links no line.
             WaitForField("PK_SPOOL_DOWN", "Engines stopped", "FO_ENGINES_STOPPED", On, ParkingWaitSeconds,
                 onTimeout: FlowStepFailurePolicy.Stop),
-            Also(Done(Skip(SW("PK_ANTICOL", "Anti-collision lights: off", "SWITCH_ANTICOL_LIGHT", 0),
-                s => s.IsPosition("SWITCH_ANTICOL_LIGHT", 0)), "PK_ANTICOL"), "PKC_ANTICOL"),
+            Done(Skip(SW("PK_ANTICOL", "Anti-collision lights: off", "SWITCH_ANTICOL_LIGHT", 0),
+                s => s.IsPosition("SWITCH_ANTICOL_LIGHT", 0)), "PK_ANTICOL"),
             // A toggle-carrying switch: written only over its own position read (L1011-4).
-            Also(Done(Skip(SW("PK_SEAT_BELTS", "Seat belt signs: off", "SWITCH_SEATBELT_LIGHT", 0),
-                s => s.IsPosition("SWITCH_SEATBELT_LIGHT", 0)), "PK_SEAT_BELTS"), "PKC_SEAT_BELTS"),
-            Also(Done(Skip(Multi("PK_INS_OFF", "INS: all off", AllTo(0, InsModeKeys)),
-                s => s.IsOn("FO_INS_OFF")), "PK_INS_OFF"), "PKC_INS"),
-            Also(Done(Skip(SW("PK_XPDR", "Transponder: standby", "ROTARY_TCAS_MODE", 1),
-                s => s.IsPosition("ROTARY_TCAS_MODE", 1)), "PK_XPDR"), "PKC_XPDR"),
-            Also(Done(Skip(Multi("PK_ATMS_AC_PUMPS", "ATMs and AC hydraulic pumps: off",
+            Done(Skip(SW("PK_SEAT_BELTS", "Seat belt signs: off", "SWITCH_SEATBELT_LIGHT", 0),
+                s => s.IsPosition("SWITCH_SEATBELT_LIGHT", 0)), "PK_SEAT_BELTS"),
+            Done(Skip(Multi("PK_INS_OFF", "INS: all off", AllTo(0, InsModeKeys)),
+                s => s.IsOn("FO_INS_OFF")), "PK_INS_OFF"),
+            Done(Skip(SW("PK_XPDR", "Transponder: standby", "ROTARY_TCAS_MODE", 1),
+                s => s.IsPosition("ROTARY_TCAS_MODE", 1)), "PK_XPDR"),
+            Done(Skip(Multi("PK_ATMS_AC_PUMPS", "ATMs and AC hydraulic pumps: off",
                     AllTo(0, "ROTARY_HYD_B2_MODE", "ROTARY_HYD_C2_MODE", "SWITCH_HYD_AC_PUMP_B3", "SWITCH_HYD_AC_PUMP_C3")),
-                s => s.IsOn("FO_ATMS_AC_PUMPS_OFF")), "PK_ATMS_AC_PUMPS"), "PKC_ATMS_PUMPS"),
+                s => s.IsOn("FO_ATMS_AC_PUMPS_OFF")), "PK_ATMS_AC_PUMPS"),
             // The manual's after landing fuel panel, done here once the engines are cut. The APU keeps its feed.
-            Also(Done(Skip(Multi("PK_FUEL_PANEL", "Fuel pumps: off except tank 2 left for the APU", ApuFuelPanel),
+            Done(Skip(Multi("PK_FUEL_PANEL", "Fuel pumps: off except tank 2 left for the APU", ApuFuelPanel),
                 s => s.IsOn("FO_ONLY_APU_PUMP_ON") && s.IsOn("FO_ENG2_FUEL_FEED") && s.IsOn("FO_CROSSFEEDS_CLOSED")),
-                "PK_FUEL_PANEL"), "PKC_TANK_PUMPS"),
+                "PK_FUEL_PANEL"),
             // A toggle-carrying switch: written only over its own position read (L1011-4).
-            Also(Done(Skip(SW("PK_APU_BLEED", "APU bleed: on", "SWITCH_APU_BLEED", 1),
-                s => s.IsPosition("SWITCH_APU_BLEED", 1)), "PK_APU_BLEED"), "PKC_APU_BLEED"),
+            Done(Skip(SW("PK_APU_BLEED", "APU bleed: on", "SWITCH_APU_BLEED", 1),
+                s => s.IsPosition("SWITCH_APU_BLEED", 1)), "PK_APU_BLEED"),
             Done(Captain("PK_CPT_GROUND_POWER", "Connect ground power on the tablet's Ground page if required"),
                 "PK_CPT_GROUND_POWER"),
         }
@@ -1211,27 +1229,27 @@ public static class L1011FoFlowDefinitions
         Description = "Emergency lights and galley off; the APU shut down: generator breaker, bleed, stop, then master; "
             + "packs and external power off; fuel pumps off with the APU stopped; standby power, radio masters and the "
             + "battery off last.",
-        RelatedChecklistGroupIds = new[] { "SHUTDOWN", "SHUTDOWN_CL" },
+        RelatedChecklistGroupIds = new[] { "SHUTDOWN" },
         Steps = new()
         {
             // It cuts the pumps and the battery: never airborne, never with an engine turning (FO-25). Each guard links
             // no line and fails unread.
             OnGroundGuard("SD_ON_GROUND"),
             EnginesStoppedGuard("SD_ENGINES_STOPPED"),
-            Also(Done(Skip(Multi("SD_EMER_LIGHTS", "Emergency lights: off", ("GUARD_EMER_LIGHTING", 1), ("TOGGLE_EMER_LIGHTING", 0)),
-                s => s.IsOn("FO_EMER_LIGHTS_OFF")), "SD_EMER_LIGHTS"), "SDC_EMER_LIGHTS"),
-            Also(Done(Skip(Multi("SD_GALLEY", "Galley power: off", AllTo(0, GalleyKeys)),
-                s => s.IsOn("FO_GALLEY_OFF")), "SD_GALLEY"), "SDC_GALLEY"),
+            Done(Skip(Multi("SD_EMER_LIGHTS", "Emergency lights: off", ("GUARD_EMER_LIGHTING", 1), ("TOGGLE_EMER_LIGHTING", 0)),
+                s => s.IsOn("FO_EMER_LIGHTS_OFF")), "SD_EMER_LIGHTS"),
+            Done(Skip(Multi("SD_GALLEY", "Galley power: off", AllTo(0, GalleyKeys)),
+                s => s.IsOn("FO_GALLEY_OFF")), "SD_GALLEY"),
 
             // ---- the APU, in the manual's order ----
-            Also(Done(Skip(SW("SD_APU_GEN_TRIP", "APU generator breaker: trip", X.ApuGenerator, 0),
-                s => s.IsOn("FO_APU_GEN_OFF_LINE")), "SD_APU_GEN_TRIP"), "SDC_APU_GEN_TRIP"),
+            Done(Skip(SW("SD_APU_GEN_TRIP", "APU generator breaker: trip", X.ApuGenerator, 0),
+                s => s.IsOn("FO_APU_GEN_OFF_LINE")), "SD_APU_GEN_TRIP"),
             // A toggle-carrying switch: written only over its own position read (L1011-4).
-            Also(Done(Skip(SW("SD_APU_BLEED_OFF", "APU bleed: off", "SWITCH_APU_BLEED", 0),
-                s => s.IsPosition("SWITCH_APU_BLEED", 0)), "SD_APU_BLEED_OFF"), "SDC_APU_BLEED"),
+            Done(Skip(SW("SD_APU_BLEED_OFF", "APU bleed: off", "SWITCH_APU_BLEED", 0),
+                s => s.IsPosition("SWITCH_APU_BLEED", 0)), "SD_APU_BLEED_OFF"),
             // One press, then the composite holds until the APU reads stopped (below 5 %). Already set below 5 %.
-            Also(Done(Skip(SW("SD_APU_STOP", "APU: stop", X.ApuStop, 1),
-                s => s.IsOn("FO_APU_OFF")), "SD_APU_STOP"), "SDC_APU_STOP"),
+            Done(Skip(SW("SD_APU_STOP", "APU: stop", X.ApuStop, 1),
+                s => s.IsOn("FO_APU_OFF")), "SD_APU_STOP"),
             // On to a standstill, below the 1 % the pump cut keeps the pumps for, so the two agree. Already set below it,
             // so an APU found stopped costs no wait; otherwise it runs, unread included, whether or not this run sent the
             // stop: an APU found coasting between 1 and 5 % (stopped to the stop step) is waited out before the master and
@@ -1240,37 +1258,37 @@ public static class L1011FoFlowDefinitions
                     v => v < L1011FoStateEvaluator.ApuStartingRpm, ApuStandstillSeconds),
                 s => s.GetValue("L1011_RO_APU_RPM") < L1011FoStateEvaluator.ApuStartingRpm),
             // Only once the stop is done or found done ("Already set" is not a skip).
-            Also(Done(Skip(Requires(SW("SD_APU_MASTER_OFF", "APU master: off", "TOGGLE_APU_POWER", 0),
+            Done(Skip(Requires(SW("SD_APU_MASTER_OFF", "APU master: off", "TOGGLE_APU_POWER", 0),
                     "SD_APU_STOP", ApuMasterStaysText),
-                s => s.IsPosition("TOGGLE_APU_POWER", 0)), "SD_APU_MASTER_OFF"), "SDC_APU_MASTER"),
+                s => s.IsPosition("TOGGLE_APU_POWER", 0)), "SD_APU_MASTER_OFF"),
 
             // Behind the ground guard already; left alone off the ground anyway, as its tick is.
             Done(Skip(LeaveAlone(Multi("SD_PACKS_OFF", "Packs: off", AllTo(0, PackKeys)),
                     L1011FoChecklistDefinitions.NotOnGround, L1011FoChecklistDefinitions.PacksStayText),
                 s => s.IsOn("FO_PACKS_OFF")), "SD_PACKS_OFF"),
             // Ground power, when it was used: a breaker read open is already set.
-            Also(Done(Skip(SW("SD_EXT_PWR_OFF", "External power: off", X.ExternalPower, 0),
-                s => s.IsOn("FO_EXT_POWER_OFF")), "SD_EXT_PWR_OFF"), "SDC_EXT_PWR"),
+            Done(Skip(SW("SD_EXT_PWR_OFF", "External power: off", X.ExternalPower, 0),
+                s => s.IsOn("FO_EXT_POWER_OFF")), "SD_EXT_PWR_OFF"),
             // The tank 2 left pump feeds the APU from the moment it turns: left alone, aloud, while it reads 1 % or more.
             // An unread APU speed does not hold the cut back.
-            Also(Done(Skip(LeaveAlone(Multi("SD_FUEL_PUMPS", "Fuel pumps: all off", AllTo(0, FuelPumpKeys)),
+            Done(Skip(LeaveAlone(Multi("SD_FUEL_PUMPS", "Fuel pumps: all off", AllTo(0, FuelPumpKeys)),
                     s => s.IsOn("FO_APU_STARTING_OR_RUNNING"), PumpsStayForApuText),
-                s => s.IsOn("FO_FUEL_PUMPS_OFF")), "SD_FUEL_PUMPS"), "SDC_FUEL_PUMPS"),
+                s => s.IsOn("FO_FUEL_PUMPS_OFF")), "SD_FUEL_PUMPS"),
 
             // ---- last: standby power, the radio masters, the battery ----
-            Also(Done(Skip(Multi("SD_STBY_POWER_OFF", "Standby power: off", ("GUARD_STBY_POWER", 1), ("TOGGLE_STBY_POWER", 0)),
-                s => s.IsPosition("TOGGLE_STBY_POWER", 0)), "SD_STBY_POWER_OFF"), "SDC_STBY_POWER"),
-            Also(Done(Skip(Multi("SD_RADIO_MASTERS_OFF", "Radio master switches: off",
+            Done(Skip(Multi("SD_STBY_POWER_OFF", "Standby power: off", ("GUARD_STBY_POWER", 1), ("TOGGLE_STBY_POWER", 0)),
+                s => s.IsPosition("TOGGLE_STBY_POWER", 0)), "SD_STBY_POWER_OFF"),
+            Done(Skip(Multi("SD_RADIO_MASTERS_OFF", "Radio master switches: off",
                     AllTo(0, "SWITCH_MASTER_RADIO_ESS", "SWITCH_MASTER_RADIO_NO2")),
-                s => s.IsOn("FO_RADIO_MASTERS_OFF")), "SD_RADIO_MASTERS_OFF"), "SDC_RADIO_MASTERS"),
+                s => s.IsOn("FO_RADIO_MASTERS_OFF")), "SD_RADIO_MASTERS_OFF"),
             // Only once the APU master went off or was found off: a master left on (the APU did not stop) leaves the
             // battery on, as the PMDG 777's battery waits on its APU. And never while the APU reads turning, as its tick:
             // a master found off over an APU still turning is "Already set", not skipped, so the dependency alone would
             // let the battery go. An unread APU speed does not hold it back.
-            Also(Done(Skip(Requires(LeaveAlone(SW("SD_BATTERY_OFF", "Battery: off", "TOGGLE_BATTERY", 0),
+            Done(Skip(Requires(LeaveAlone(SW("SD_BATTERY_OFF", "Battery: off", "TOGGLE_BATTERY", 0),
                         s => s.IsOn("FO_APU_STARTING_OR_RUNNING"), L1011FoChecklistDefinitions.ParkedApuOffText),
                     "SD_APU_MASTER_OFF", BatteryStaysText),
-                s => s.IsPosition("TOGGLE_BATTERY", 0)), "SD_BATTERY_OFF"), "SDC_BATTERY"),
+                s => s.IsPosition("TOGGLE_BATTERY", 0)), "SD_BATTERY_OFF"),
         }
     };
 
@@ -1294,14 +1312,15 @@ public static class L1011FoFlowDefinitions
     /// <summary>
     /// A read-only check (FO-6, FO-7): "Already set" when <paramref name="field"/> already satisfies
     /// <paramref name="ok"/>, else a wait of <paramref name="timeoutSec"/> that is skipped aloud. It
-    /// never writes, and it completes the read-back lines that read the same state, so a line no
-    /// write of the flow sets is latched only when the aircraft shows it; a timed-out check keeps
-    /// its lines out of the latch, mirroring the aircraft.
+    /// never writes, and it completes the lines that read the same state (its own, under its id; After
+    /// Start's generator check the fields' and the breakers'), so a line no write of the flow sets is
+    /// latched only when the aircraft shows it; a timed-out check keeps its lines out of the latch,
+    /// mirroring the aircraft.
     /// </summary>
     private static Step Check(string id, string label, string field, Func<double, bool> ok, int timeoutSec,
-        string readBackItemId, params string[] moreReadBackItemIds)
-        => Also(Done(Skip(WaitForField(id, label, field, ok, timeoutSec), s => ok(s.GetValue(field))), readBackItemId),
-            moreReadBackItemIds);
+        string lineId, params string[] moreLineIds)
+        => Also(Done(Skip(WaitForField(id, label, field, ok, timeoutSec), s => ok(s.GetValue(field))), lineId),
+            moreLineIds);
 
     private static Step SW(string id, string label, string eventName, int target) => new()
     {
@@ -1426,10 +1445,10 @@ public static class L1011FoFlowDefinitions
         return step;
     }
 
-    /// <summary>The read-back line this step also delivers: ticked with it, and kept unticked when it is skipped (FO-6).</summary>
-    private static Step Also(Step step, params string[] readBackItemIds)
+    /// <summary>The further lines this step also delivers: ticked with it, and kept unticked when it is skipped (FO-6).</summary>
+    private static Step Also(Step step, params string[] lineIds)
     {
-        step.AlsoCompletesChecklistItemIds = readBackItemIds;
+        step.AlsoCompletesChecklistItemIds = lineIds;
         return step;
     }
 }

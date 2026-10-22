@@ -10,8 +10,8 @@ using Step = MSFSBlindAssist.FirstOfficer.Models.FlowStep<MSFSBlindAssist.FirstO
 namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 
 /// <summary>
-/// The TriStar First Officer's Before Start flow, its action group and its read-back (the aircraft's "Before engine
-/// start" page up to its first ground start), pinned by structure and by behaviour: the step ids and their order; the
+/// The TriStar First Officer's Before Start flow and its group (its writes, the read-only checks it completes from the
+/// aircraft's "Before engine start" page, and the fleet's tail), pinned by structure and by behaviour: the step ids and their order; the
 /// ground guard and the two Stop waits that open it, so external power goes off only once the APU generator is on
 /// line; every write's label, keys and targets word for word, with its "Already set" on its own state; the doors
 /// prompt while a door position reads open or unread; each INS unit turned to NAV only from ALIGN once it reads
@@ -78,7 +78,7 @@ public class L1011FoBeforeStartTests
     public void BeforeStart_NamesItselfAndItsChecklistGroups()
     {
         Assert.Equal("Before Start", BeforeStart.Name);
-        Assert.Equal(new[] { "BEFORE_START", "BEFORE_START_CL" }, BeforeStart.RelatedChecklistGroupIds);
+        Assert.Equal(new[] { "BEFORE_START" }, BeforeStart.RelatedChecklistGroupIds);
         Assert.False(string.IsNullOrWhiteSpace(BeforeStart.Description));
     }
 
@@ -201,36 +201,36 @@ public class L1011FoBeforeStartTests
     public void Every_write_has_a_skip_condition()
         => Assert.All(BeforeStart.Steps.Where(IsSwitch), s => Assert.True(s.SkipCondition != null, $"{s.Id} has no SkipCondition"));
 
-    /// <summary>Every step's lines, from the table: a write its action line then the read-back lines it sets, a check
-    /// the read-back line it reads, an unconditional Captain step its reminder line; the guard, the waits and the
-    /// conditional Captain prompts link nothing.</summary>
+    /// <summary>Every step's lines, from the table: a write its own line, a check the line it reads (its own id), an
+    /// unconditional Captain step its reminder line; the guard, the waits and the conditional Captain prompts link
+    /// nothing.</summary>
     private static readonly Dictionary<string, string[]> Links = new(StringComparer.Ordinal)
     {
         ["BS_ON_GROUND"] = Array.Empty<string>(),
         ["BS_APU_RUNNING"] = Array.Empty<string>(),
         ["BS_APU_GEN_ON_LINE"] = Array.Empty<string>(),
         ["BS_EXT_OFF"] = new[] { "BS_EXT_OFF" },
-        ["BS_SEAT_BELTS"] = new[] { "BS_SEAT_BELTS", "BSC_SEAT_BELTS" },
-        ["BS_ANTICOL"] = new[] { "BS_ANTICOL", "BSC_ANTICOL" },
+        ["BS_SEAT_BELTS"] = new[] { "BS_SEAT_BELTS" },
+        ["BS_ANTICOL"] = new[] { "BS_ANTICOL" },
         ["BS_DOORS_CPT"] = Array.Empty<string>(),
-        ["BS_CHK_DOORS"] = new[] { "BSC_DOORS" },
-        ["BS_GALLEY"] = new[] { "BS_GALLEY", "BSC_GALLEY" },
-        ["BS_CHK_FUEL_PUMP"] = new[] { "BSC_FUEL_PUMP" },
-        ["BS_APU_MODE_MIN"] = new[] { "BS_APU_MODE_MIN", "BSC_APU_MODE" },
-        ["BS_PACK_2"] = new[] { "BS_PACK_2", "BSC_PACK_2" },
-        ["BS_ISLN_XBLEEDS"] = new[] { "BS_ISLN_XBLEEDS", "BSC_ISLN_VALVES" },
+        ["BS_CHK_DOORS"] = new[] { "BS_CHK_DOORS" },
+        ["BS_GALLEY"] = new[] { "BS_GALLEY" },
+        ["BS_CHK_FUEL_PUMP"] = new[] { "BS_CHK_FUEL_PUMP" },
+        ["BS_APU_MODE_MIN"] = new[] { "BS_APU_MODE_MIN" },
+        ["BS_PACK_2"] = new[] { "BS_PACK_2" },
+        ["BS_ISLN_XBLEEDS"] = new[] { "BS_ISLN_XBLEEDS" },
         ["BS_APU_BLEED"] = new[] { "BS_APU_BLEED" },
         ["BS_CABIN_BARO"] = new[] { "BS_CABIN_BARO" },
         ["BS_CABIN_BARO_CPT"] = Array.Empty<string>(),
-        ["BS_CHK_IGNITION"] = new[] { "BSC_IGNITION" },
+        ["BS_CHK_IGNITION"] = new[] { "BS_CHK_IGNITION" },
         ["BS_INS_1_NAV"] = new[] { "BS_INS_1_NAV" },
         ["BS_INS_1_CPT"] = Array.Empty<string>(),
         ["BS_INS_2_NAV"] = new[] { "BS_INS_2_NAV" },
         ["BS_INS_2_CPT"] = Array.Empty<string>(),
         ["BS_INS_3_NAV"] = new[] { "BS_INS_3_NAV" },
         ["BS_INS_3_CPT"] = Array.Empty<string>(),
-        ["BS_CHK_INS_NAV"] = new[] { "BSC_INS_NAV" },
-        ["BS_XPDR"] = new[] { "BS_XPDR", "BSC_XPDR" },
+        ["BS_CHK_INS_NAV"] = new[] { "BS_CHK_INS_NAV" },
+        ["BS_XPDR"] = new[] { "BS_XPDR" },
         ["BS_ACARS"] = new[] { "BS_ACARS" },
         ["BS_CLEARANCE"] = new[] { "BS_CLEARANCE" },
     };
@@ -298,10 +298,10 @@ public class L1011FoBeforeStartTests
     private static readonly (string Id, string Label, string Field, int Seconds, string Line)[] Checks =
     {
         // The four door positions, never the light, which does not follow the doors: the label says what is read.
-        ("BS_CHK_DOORS", "Doors: closed", "FO_DOORS_CLOSED", 5, "BSC_DOORS"),
-        ("BS_CHK_FUEL_PUMP", "Fuel pump: at least one on", "FO_ANY_FUEL_PUMP_ON", 5, "BSC_FUEL_PUMP"),
-        ("BS_CHK_IGNITION", "Ignition selector: system A or B", "FO_IGNITION_SELECTED", 5, "BSC_IGNITION"),
-        ("BS_CHK_INS_NAV", "INS 1, 2 and 3: navigating", "FO_INS_NAVIGATING", 15, "BSC_INS_NAV"),
+        ("BS_CHK_DOORS", "Doors: closed", "FO_DOORS_CLOSED", 5, "BS_CHK_DOORS"),
+        ("BS_CHK_FUEL_PUMP", "Fuel pump: at least one on", "FO_ANY_FUEL_PUMP_ON", 5, "BS_CHK_FUEL_PUMP"),
+        ("BS_CHK_IGNITION", "Ignition selector: system A or B", "FO_IGNITION_SELECTED", 5, "BS_CHK_IGNITION"),
+        ("BS_CHK_INS_NAV", "INS 1, 2 and 3: navigating", "FO_INS_NAVIGATING", 15, "BS_CHK_INS_NAV"),
     };
 
     [Fact]
@@ -324,16 +324,17 @@ public class L1011FoBeforeStartTests
         }
     }
 
-    /// <summary>A read-only check completes only the read-back line that reads its own field, under the same rule.</summary>
+    /// <summary>A read-only check completes only its own line, which reads its own field under the same rule.</summary>
     [Fact]
     public void Every_check_completes_only_the_line_reading_its_field()
     {
-        var readBack = Group("BEFORE_START_CL").Items.ToDictionary(i => i.Id, StringComparer.Ordinal);
+        var lines = Group("BEFORE_START").Items.ToDictionary(i => i.Id, StringComparer.Ordinal);
         foreach (var (id, _, field, _, line) in Checks)
         {
             var s = Of(id);
             Assert.Equal(new[] { line }, s.LinkedChecklistItemIds);
-            Assert.True(readBack.TryGetValue(line, out var item), $"{id}: {line} is not a read-back line");
+            Assert.True(lines.TryGetValue(line, out var item), $"{id}: {line} is not a Before Start line");
+            Assert.Null(item!.CheckAction);
             Assert.Equal(field, item!.StateFieldName);
             foreach (double v in new[] { double.NaN, 0, 1 })
                 Assert.Equal(s.Condition!(v), item.StateCondition!(v));
@@ -341,14 +342,14 @@ public class L1011FoBeforeStartTests
     }
 
     /// <summary>A unit set to NAV reads aligned for about a second before it reads navigating: the check waits 15 s,
-    /// after the three units are turned, and ticks only the read-back's nav line.</summary>
+    /// after the three units are turned, and ticks only its own "All INS: NAV" line.</summary>
     [Fact]
     public void The_navigating_check_waits_fifteen_seconds_and_completes_the_nav_line()
     {
         var s = Of("BS_CHK_INS_NAV");
         Assert.Equal(15, s.TimeoutSeconds);
         Assert.Equal(FlowStepFailurePolicy.Skip, s.FailurePolicy);
-        Assert.Equal(new[] { "BSC_INS_NAV" }, s.LinkedChecklistItemIds);
+        Assert.Equal(new[] { "BS_CHK_INS_NAV" }, s.LinkedChecklistItemIds);
         var ids = BeforeStart.Steps.Select(x => x.Id).ToList();
         Assert.Equal(ids.IndexOf("BS_INS_3_CPT") + 1, ids.IndexOf("BS_CHK_INS_NAV"));
 
@@ -363,7 +364,7 @@ public class L1011FoBeforeStartTests
 
     /// <summary>The doors are the tablet's: the Captain is asked while any of the four door positions reads open
     /// (5 percent or more) or is unread, never while all read closed; the main panel's door light decides nothing,
-    /// because it stayed out with the main door open. The check that follows ticks the read-back's door line.</summary>
+    /// because it stayed out with the main door open. The check that follows ticks the "Doors: closed" line.</summary>
     [Fact]
     public void The_doors_prompt_speaks_while_a_door_position_is_open_or_unread()
     {
@@ -529,33 +530,25 @@ public class L1011FoBeforeStartTests
     // ================================================================== the checklists
 
     [Fact]
-    public void TheBeforeStartGroups_FollowPreflight_Named()
+    public void TheBeforeStartGroup_FollowsPreflight_Named()
     {
-        Assert.Equal(new[] { "BEFORE_START", "BEFORE_START_CL" },
-            Groups.Select(g => g.Id).SkipWhile(id => id != "BEFORE_START").Take(2));
-        Assert.Equal("PREFLIGHT_CONSOLE_CL", Groups.Select(g => g.Id).TakeWhile(id => id != "BEFORE_START").Last());
+        Assert.Equal(new[] { "PREFLIGHT", "BEFORE_START", "ENGINE_START" },
+            Groups.Select(g => g.Id).SkipWhile(id => id != "PREFLIGHT").Take(3));
         Assert.Equal("Before Start", Group("BEFORE_START").Name);
-        Assert.Equal("Before Engine Start", Group("BEFORE_START_CL").Name);
     }
 
     [Fact]
-    public void EveryBeforeStartGroup_IsDeparture_AndNeverArrival()
+    public void TheBeforeStartGroup_IsDeparture_AndNeverArrival()
     {
-        foreach (var id in BeforeStart.RelatedChecklistGroupIds)
-        {
-            Assert.True(FoDepartureGroups.Departure.Contains(id), $"{id} is not a departure group");
-            Assert.False(FoDepartureGroups.Arrival.Contains(id), $"{id} is an arrival group too");
-        }
+        Assert.True(FoDepartureGroups.Departure.Contains("BEFORE_START"));
+        Assert.False(FoDepartureGroups.Arrival.Contains("BEFORE_START"));
     }
 
-    [Fact]
-    public void The_read_back_has_no_check_action()
-        => Assert.All(Group("BEFORE_START_CL").Items, i => Assert.True(i.CheckAction == null, $"{i.Id} has a CheckAction"));
-
-    private static readonly string[] ActionLineIds =
+    private static readonly string[] LineIds =
     {
-        "BS_EXT_OFF", "BS_SEAT_BELTS", "BS_ANTICOL", "BS_GALLEY", "BS_APU_MODE_MIN", "BS_PACK_2", "BS_ISLN_XBLEEDS",
-        "BS_APU_BLEED", "BS_CABIN_BARO", "BS_INS_1_NAV", "BS_INS_2_NAV", "BS_INS_3_NAV", "BS_XPDR", "BS_ACARS", "BS_CLEARANCE",
+        "BS_EXT_OFF", "BS_SEAT_BELTS", "BS_ANTICOL", "BS_CHK_DOORS", "BS_GALLEY", "BS_CHK_FUEL_PUMP", "BS_APU_MODE_MIN",
+        "BS_PACK_2", "BS_ISLN_XBLEEDS", "BS_APU_BLEED", "BS_CABIN_BARO", "BS_CHK_IGNITION", "BS_INS_1_NAV", "BS_INS_2_NAV",
+        "BS_INS_3_NAV", "BS_CHK_INS_NAV", "BS_XPDR", "BS_ACARS", "BS_CLEARANCE",
     };
 
     /// <summary>The conditional Captain prompts (doors, cabin baro, the three INS units), spoken only when the aircraft
@@ -564,9 +557,9 @@ public class L1011FoBeforeStartTests
         { "BS_DOORS_CPT", "BS_CABIN_BARO_CPT", "BS_INS_1_CPT", "BS_INS_2_CPT", "BS_INS_3_CPT" };
 
     [Fact]
-    public void BeforeStart_ActionLines_InTheFlowsOrder()
+    public void BeforeStart_Lines_InTheFlowsOrder()
     {
-        Assert.Equal(ActionLineIds, Group("BEFORE_START").Items.Select(i => i.Id));
+        Assert.Equal(LineIds, Group("BEFORE_START").Items.Select(i => i.Id));
         foreach (var id in FlowOnlyPrompts)
         {
             Assert.NotNull(Of(id).SkipCondition);
@@ -574,17 +567,53 @@ public class L1011FoBeforeStartTests
         }
     }
 
+    /// <summary>The "Before engine start" page's lines no write of the flow reads, moved in under the id of the check
+    /// that completes each, with its label. The page's "Start ACARS" is the group's own, already its tail: it went, as
+    /// did every other page line that read the same state as a Before Start line.</summary>
+    private static readonly (string Id, string Label, string Field)[] ReadOnlyLines =
+    {
+        ("BS_CHK_DOORS", "Doors: closed", "FO_DOORS_CLOSED"),
+        ("BS_CHK_FUEL_PUMP", "Fuel pump: minimum one on", "FO_ANY_FUEL_PUMP_ON"),
+        ("BS_CHK_IGNITION", "Start ignition: A or B", "FO_IGNITION_SELECTED"),
+        ("BS_CHK_INS_NAV", "All INS: NAV", "FO_INS_NAVIGATING"),
+    };
+
+    [Fact]
+    public void TheMovedLines_KeepTheirLabels_AndReadTheirField()
+    {
+        foreach (var (id, label, field) in ReadOnlyLines)
+        {
+            var line = Line(id);
+            Assert.Equal("BEFORE_START", line.GroupId);
+            Assert.Equal(label, line.Label);
+            Assert.Equal(ChecklistItemType.AutoDetectable, line.Type);
+            Assert.Equal(RevertBehavior.RevertToState, line.RevertBehavior);
+            Assert.Null(line.CheckAction);
+            Assert.Null(line.LeaveAloneWhen);
+            Assert.Empty(line.AdditionalStateFields);
+            Assert.Equal(field, line.StateFieldName);
+            Assert.True(line.StateCondition!(1), $"{id}: {field} at 1 must read done");
+            Assert.False(line.StateCondition!(0), $"{id}: {field} at 0 must not read done");
+            Assert.False(line.StateCondition!(double.NaN), $"{id}: unread must not read done");
+        }
+    }
+
+    /// <summary>"Start ACARS" once, the group's own tail line.</summary>
+    [Fact]
+    public void Start_ACARS_is_one_line()
+        => Assert.Single(Group("BEFORE_START").Items, i => i.Label == "Start ACARS");
+
     [Fact]
     public void BeforeStart_ActionLabels_AreTheFlowStepLabels()
     {
-        foreach (var i in Group("BEFORE_START").Items)
+        foreach (var i in Group("BEFORE_START").Items.Where(i => ReadOnlyLines.All(r => r.Id != i.Id)))
             Assert.Equal(Of(i.Id).Label, i.Label);
     }
 
     [Fact]
     public void BeforeStart_LineKinds()
     {
-        foreach (var i in Group("BEFORE_START").Items)
+        foreach (var i in Group("BEFORE_START").Items.Where(i => ReadOnlyLines.All(r => r.Id != i.Id)))
         {
             if (i.Id is "BS_ACARS" or "BS_CLEARANCE")
             {
@@ -828,65 +857,10 @@ public class L1011FoBeforeStartTests
         Assert.DoesNotContain(ac.Io, e => e.Kind != FakeL1011IoKind.FreshRead);
     }
 
-    // ---- the read-back, word for word ------------------------------------------------------------------------------
-
-    /// <summary>A read-back line: its label, and its field and done value, or a Captain's reminder.</summary>
-    private sealed record ReadBack(string Id, string Label, string? Field = null, double Done = 1, bool Reminder = false);
-
-    private static readonly ReadBack[] BeforeEngineStart =
-    {
-        new("BSC_INS_NAV", "All INS: NAV", "FO_INS_NAVIGATING"),
-        new("BSC_XPDR", "Transponder: TA/RA", "ROTARY_TCAS_MODE", 5),
-        new("BSC_SEAT_BELTS", "Seatbelt sign: on", "SWITCH_SEATBELT_LIGHT"),
-        new("BSC_ANTICOL", "Anti coll light: on", "SWITCH_ANTICOL_LIGHT"),
-        new("BSC_IGNITION", "Start ignition: A or B", "FO_IGNITION_SELECTED"),
-        // The page says "Door lights ... OUT"; the line reads the four door positions, not the light (it does not follow
-        // the doors), so it says what it reads.
-        new("BSC_DOORS", "Doors: closed", "FO_DOORS_CLOSED"),
-        new("BSC_GALLEY", "Galley power: off", "FO_GALLEY_OFF"),
-        new("BSC_FUEL_PUMP", "Fuel pump: minimum one on", "FO_ANY_FUEL_PUMP_ON"),
-        new("BSC_APU_MODE", "APU: min mode", "SWITCH_APU_MODE", 0),
-        new("BSC_PACK_2", "Packs: pack 2 on", "FO_PACK_2_ONLY"),
-        new("BSC_ISLN_VALVES", "All engine isolation valves: latched", "FO_START_AIR_VALVES_ON"),
-        new("BSC_ACARS", "Start ACARS", Reminder: true),
-    };
-
+    /// <summary>A finished run latches its own group, and nothing else.</summary>
     [Fact]
-    public void The_read_back_is_word_for_word_and_ends_with_Start_ACARS()
-    {
-        Assert.Equal(BeforeEngineStart.Select(l => (l.Id, l.Label)), Group("BEFORE_START_CL").Items.Select(i => (i.Id, i.Label)));
-        Assert.Equal("BSC_ACARS", Group("BEFORE_START_CL").Items[^1].Id);
-    }
-
-    [Fact]
-    public void EveryReadBackLine_ReadsItsFieldAtItsValue()
-    {
-        foreach (var rb in BeforeEngineStart)
-        {
-            var line = Line(rb.Id);
-            Assert.Null(line.CheckAction);
-            Assert.Empty(line.AdditionalStateFields);
-            if (rb.Reminder)
-            {
-                Assert.Equal(ChecklistItemType.CaptainReminder, line.Type);
-                Assert.Equal(rb.Label, line.ReminderText);
-                continue;
-            }
-            Assert.Equal(ChecklistItemType.AutoDetectable, line.Type);
-            Assert.Equal(RevertBehavior.RevertToState, line.RevertBehavior);
-            Assert.Equal(rb.Field, line.StateFieldName);
-            Assert.True(line.StateCondition!(rb.Done), $"{rb.Id}: {rb.Field} at {rb.Done} must read done");
-            Assert.False(line.StateCondition!(double.NaN), $"{rb.Id}: unread must not read done");
-            var others = L1011FoStateEvaluator.SyntheticKeys.Contains(rb.Field!) ? new[] { 0.0 } : new[] { 0.0, 1, 2, 3, 4, 5 };
-            foreach (double other in others.Where(v => v != rb.Done))
-                Assert.False(line.StateCondition!(other), $"{rb.Id}: {rb.Field} at {other} must not read done");
-        }
-    }
-
-    /// <summary>A finished run latches the action group and the read-back, and nothing else.</summary>
-    [Fact]
-    public void BeforeStart_LatchesItsTwoGroups()
-        => Assert.Equal(BeforeStart.RelatedChecklistGroupIds, BeforeStart.CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
+    public void BeforeStart_LatchesItsOwnGroup()
+        => Assert.Equal(new[] { "BEFORE_START" }, BeforeStart.CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
 
     // ================================================================== what Before Start writes
 

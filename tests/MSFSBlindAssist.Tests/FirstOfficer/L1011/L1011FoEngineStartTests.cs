@@ -11,7 +11,8 @@ using Step = MSFSBlindAssist.FirstOfficer.Models.FlowStep<MSFSBlindAssist.FirstO
 namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 
 /// <summary>
-/// The TriStar First Officer's Engine Start flow, its action group and its read-back, pinned by structure and by
+/// The TriStar First Officer's Engine Start flow and its group (its writes and the aircraft's own release of each
+/// ground start switch, from the engine start page), pinned by structure and by
 /// behaviour: engines 2, 1 and 3 on APU air, each fed by its own tank pump and tank valve, the previous engine's
 /// isolation valve off before engines 1 and 3, the ground start turned on and watched to 20 percent N3, the fuel and
 /// ignition on, the ground start released by the aircraft, a stable idle, then the engine generators on line. The
@@ -82,7 +83,7 @@ public class L1011FoEngineStartTests
     public void EngineStart_NamesItselfAndItsChecklistGroups()
     {
         Assert.Equal("Engine Start", EngineStart.Name);
-        Assert.Equal(new[] { "ENGINE_START", "ENGINE_START_CL" }, EngineStart.RelatedChecklistGroupIds);
+        Assert.Equal(new[] { "ENGINE_START" }, EngineStart.RelatedChecklistGroupIds);
         Assert.False(string.IsNullOrWhiteSpace(EngineStart.Description));
     }
 
@@ -218,7 +219,7 @@ public class L1011FoEngineStartTests
         Assert.True(fuel.SkipCondition!(State((FuelIgnition(n), 1))));
         Assert.False(fuel.SkipCondition!(State((FuelIgnition(n), 0))));
         Assert.False(fuel.SkipCondition!(State()));
-        Assert.Equal(new[] { e + "FUEL_IGN", $"ESC_E{n}_FUEL_IGN" }, fuel.LinkedChecklistItemIds);
+        Assert.Equal(new[] { e + "FUEL_IGN" }, fuel.LinkedChecklistItemIds);
 
         // The release: the aircraft's own, as N3 passes about 55 percent.
         var released = Of(e + "RELEASED");
@@ -231,9 +232,10 @@ public class L1011FoEngineStartTests
         Assert.True(released.Condition!(0));
         Assert.False(released.Condition!(1));
         Assert.False(released.Condition!(double.NaN), "unread must fail the wait");
-        Assert.Equal(new[] { $"ESC_E{n}_RELEASED" }, released.LinkedChecklistItemIds);
+        Assert.Equal(new[] { e + "RELEASED" }, released.LinkedChecklistItemIds);
 
-        // The idle wait.
+        // The idle wait: it links no line. An engine running is what its ground start line latches on, so no second
+        // line reads it.
         var idle = Of(e + "IDLE");
         Assert.Equal($"Engine {n}: stable idle", idle.Label);
         Assert.Equal(FlowStepActionType.SetSwitch, idle.ActionType);
@@ -241,7 +243,7 @@ public class L1011FoEngineStartTests
         Assert.Equal(1, idle.TargetValue);
         Assert.Equal(FlowStepFailurePolicy.Stop, idle.FailurePolicy);
         Assert.Null(idle.SkipCondition);
-        Assert.Equal(new[] { $"ESC_E{n}_RUNNING" }, idle.LinkedChecklistItemIds);
+        Assert.Empty(idle.LinkedChecklistItemIds);
     }
 
     /// <summary>A ground start marked its line, a failed light-off stopped the flow, and the line stayed ticked over an
@@ -276,7 +278,7 @@ public class L1011FoEngineStartTests
             Assert.True(s.SkipCondition!(State((Isolation(prev), 0))), "already off");
             Assert.False(s.SkipCondition!(State((Isolation(prev), 1))));
             Assert.False(s.SkipCondition!(State()), "unread: not already set");
-            Assert.Equal(new[] { $"ES_E{n}_PREV_ISLN_OFF", $"ESC_E{prev}_ISLN_OFF" }, s.LinkedChecklistItemIds);
+            Assert.Equal(new[] { $"ES_E{n}_PREV_ISLN_OFF" }, s.LinkedChecklistItemIds);
             Assert.Equal(ids.IndexOf($"ES_E{prev}_IDLE") + 1, ids.IndexOf(s.Id));
             Assert.Equal(ids.IndexOf(s.Id) + 1, ids.IndexOf($"ES_E{n}_FUEL_FEED"));
         }
@@ -286,8 +288,7 @@ public class L1011FoEngineStartTests
 
     /// <summary>Each engine's own feed: its tank pump (1, 2 left and 3, each the first pump of its tank), its engine
     /// tank valve on and the valve's guard closed, already set only when all three read so. A feed that is not done
-    /// stops the flow: no ground start and no fuel on an engine its feed did not reach. Engine 2's also delivers the
-    /// read-back's "minimum one pump on" line.</summary>
+    /// stops the flow: no ground start and no fuel on an engine its feed did not reach. Each links its own line only.</summary>
     [Theory]
     [InlineData(1, "SWITCH_FUEL_PUMP_1_1")]
     [InlineData(2, "SWITCH_FUEL_PUMP_2L_1")]
@@ -311,8 +312,7 @@ public class L1011FoEngineStartTests
             Assert.False(s.SkipCondition!(State(done.Where((_, j) => j != i).ToArray())), $"{done[i].Key} unread");
         }
 
-        Assert.Equal(n == 2 ? new[] { "ES_E2_FUEL_FEED", "ESC_FUEL_PUMP" } : new[] { $"ES_E{n}_FUEL_FEED" },
-            s.LinkedChecklistItemIds);
+        Assert.Equal(new[] { $"ES_E{n}_FUEL_FEED" }, s.LinkedChecklistItemIds);
     }
 
     /// <summary>The generators last: every field relay closed, then every breaker relay. Already set only when all six
@@ -338,12 +338,11 @@ public class L1011FoEngineStartTests
             Assert.False(s.SkipCondition!(State(open)), $"{closed[i].Item1} open");
             Assert.False(s.SkipCondition!(State(closed.Where((_, j) => j != i).ToArray())), $"{closed[i].Item1} unread");
         }
-        Assert.Equal(new[] { "ES_GENERATORS", "ESC_GEN_FIELDS", "ESC_GEN_BREAKERS" }, s.LinkedChecklistItemIds);
+        Assert.Equal(new[] { "ES_GENERATORS" }, s.LinkedChecklistItemIds);
     }
 
-    /// <summary>Every step's lines, from the table: a write its action line then the read-back lines it sets; the
-    /// release wait and the idle wait the read-back line each delivers; the guard, the waits, the ground start and the
-    /// light-off watch nothing.</summary>
+    /// <summary>Every step's lines, from the table: a write its own line; the release wait its own line; the guard, the
+    /// waits, the ground start, the light-off watch and the idle watch nothing.</summary>
     private static readonly Dictionary<string, string[]> Links = BuildLinks();
 
     private static Dictionary<string, string[]> BuildLinks()
@@ -355,20 +354,20 @@ public class L1011FoEngineStartTests
             ["ES_APU_RUNNING"] = Array.Empty<string>(),
             ["ES_APU_BLEED"] = Array.Empty<string>(),
             ["ES_CROSSBLEEDS"] = Array.Empty<string>(),
-            ["ES_GENERATORS"] = new[] { "ES_GENERATORS", "ESC_GEN_FIELDS", "ESC_GEN_BREAKERS" },
+            ["ES_GENERATORS"] = new[] { "ES_GENERATORS" },
         };
         foreach (int n in new[] { 2, 1, 3 })
         {
             string e = $"ES_E{n}_";
-            if (Prev(n) is int prev)
-                links[e + "PREV_ISLN_OFF"] = new[] { e + "PREV_ISLN_OFF", $"ESC_E{prev}_ISLN_OFF" };
-            links[e + "FUEL_FEED"] = n == 2 ? new[] { e + "FUEL_FEED", "ESC_FUEL_PUMP" } : new[] { e + "FUEL_FEED" };
+            if (Prev(n) is int)
+                links[e + "PREV_ISLN_OFF"] = new[] { e + "PREV_ISLN_OFF" };
+            links[e + "FUEL_FEED"] = new[] { e + "FUEL_FEED" };
             links[e + "ISLN"] = Array.Empty<string>();
             links[e + "GND_START"] = Array.Empty<string>();
             links[e + "N3_20"] = Array.Empty<string>();
-            links[e + "FUEL_IGN"] = new[] { e + "FUEL_IGN", $"ESC_E{n}_FUEL_IGN" };
-            links[e + "RELEASED"] = new[] { $"ESC_E{n}_RELEASED" };
-            links[e + "IDLE"] = new[] { $"ESC_E{n}_RUNNING" };
+            links[e + "FUEL_IGN"] = new[] { e + "FUEL_IGN" };
+            links[e + "RELEASED"] = new[] { e + "RELEASED" };
+            links[e + "IDLE"] = Array.Empty<string>();
         }
         return links;
     }
@@ -591,57 +590,74 @@ public class L1011FoEngineStartTests
     // ================================================================== the checklists
 
     [Fact]
-    public void TheEngineStartGroups_FollowBeforeStart_Named()
+    public void TheEngineStartGroup_FollowsBeforeStart_Named()
     {
-        Assert.Equal(new[] { "ENGINE_START", "ENGINE_START_CL" },
-            Groups.Select(g => g.Id).SkipWhile(id => id != "ENGINE_START").Take(2));
-        Assert.Equal("BEFORE_START_CL", Groups.Select(g => g.Id).TakeWhile(id => id != "ENGINE_START").Last());
+        Assert.Equal(new[] { "BEFORE_START", "ENGINE_START", "AFTER_START" },
+            Groups.Select(g => g.Id).SkipWhile(id => id != "BEFORE_START").Take(3));
         Assert.Equal("Engine Start", Group("ENGINE_START").Name);
-        Assert.Equal("Engine Start", Group("ENGINE_START_CL").Name);
     }
 
     [Fact]
-    public void EveryEngineStartGroup_IsDeparture_AndNeverArrival()
+    public void TheEngineStartGroup_IsDeparture_AndNeverArrival()
     {
-        foreach (var id in EngineStart.RelatedChecklistGroupIds)
-        {
-            Assert.True(FoDepartureGroups.Departure.Contains(id), $"{id} is not a departure group");
-            Assert.False(FoDepartureGroups.Arrival.Contains(id), $"{id} is an arrival group too");
-        }
+        Assert.True(FoDepartureGroups.Departure.Contains("ENGINE_START"));
+        Assert.False(FoDepartureGroups.Arrival.Contains("ENGINE_START"));
     }
 
-    [Fact]
-    public void The_read_back_has_no_check_action()
-        => Assert.All(Group("ENGINE_START_CL").Items, i => Assert.True(i.CheckAction == null, $"{i.Id} has a CheckAction"));
-
-    private static readonly string[] ActionLineIds =
+    private static readonly string[] LineIds =
     {
-        "ES_E2_FUEL_FEED", "ES_E2_GND_START", "ES_E2_FUEL_IGN",
-        "ES_E1_PREV_ISLN_OFF", "ES_E1_FUEL_FEED", "ES_E1_GND_START", "ES_E1_FUEL_IGN",
-        "ES_E3_PREV_ISLN_OFF", "ES_E3_FUEL_FEED", "ES_E3_GND_START", "ES_E3_FUEL_IGN",
+        "ES_E2_FUEL_FEED", "ES_E2_GND_START", "ES_E2_FUEL_IGN", "ES_E2_RELEASED",
+        "ES_E1_PREV_ISLN_OFF", "ES_E1_FUEL_FEED", "ES_E1_GND_START", "ES_E1_FUEL_IGN", "ES_E1_RELEASED",
+        "ES_E3_PREV_ISLN_OFF", "ES_E3_FUEL_FEED", "ES_E3_GND_START", "ES_E3_FUEL_IGN", "ES_E3_RELEASED",
         "ES_GENERATORS",
     };
 
     private static readonly string[] GroundStartLines = { "ES_E2_GND_START", "ES_E1_GND_START", "ES_E3_GND_START" };
 
-    [Fact]
-    public void EngineStart_ActionLines_InTheFlowsOrder()
-        => Assert.Equal(ActionLineIds, Group("ENGINE_START").Items.Select(i => i.Id));
+    /// <summary>The engine start page's release lines, moved in under their wait's ids with their labels: no write of
+    /// the flow reads the switch released over a running engine. Every other line of the page read the same state as a
+    /// line of the group (the fuel and ignition, the isolation valves, the generator relays, the engine running the
+    /// ground start lines latch on), and went.</summary>
+    private static readonly string[] ReleaseLines = { "ES_E2_RELEASED", "ES_E1_RELEASED", "ES_E3_RELEASED" };
 
-    /// <summary>Ticked or run, a line says the same thing.</summary>
+    [Fact]
+    public void EngineStart_Lines_InTheFlowsOrder()
+        => Assert.Equal(LineIds, Group("ENGINE_START").Items.Select(i => i.Id));
+
+    /// <summary>Ticked or run, a write's line says what its step says; a release line keeps its own words.</summary>
     [Fact]
     public void EngineStart_ActionLabels_AreTheFlowStepLabels()
     {
-        foreach (var i in Group("ENGINE_START").Items)
+        foreach (var i in Group("ENGINE_START").Items.Where(i => !ReleaseLines.Contains(i.Id)))
             Assert.Equal(Of(i.Id).Label, i.Label);
     }
 
-    /// <summary>Every line is a state line with a tick that does its step's write; the ground start lines latch on the
-    /// engine running (N3 at 50), every other line mirrors the aircraft. None is left alone: nothing here cuts.</summary>
+    /// <summary>Each release line keeps its label and reads its engine's switch released with the engine running, a
+    /// live mirror with no action.</summary>
+    [Theory]
+    [MemberData(nameof(StartOrder))]
+    public void The_release_lines_keep_their_labels(int n)
+    {
+        var line = Line($"ES_E{n}_RELEASED");
+        Assert.Equal("ENGINE_START", line.GroupId);
+        Assert.Equal($"Engine {n} at 55 percent N3: ground start switch released", line.Label);
+        Assert.Equal(ChecklistItemType.AutoDetectable, line.Type);
+        Assert.Equal(RevertBehavior.RevertToState, line.RevertBehavior);
+        Assert.Equal($"FO_ENG{n}_START_RELEASED", line.StateFieldName);
+        Assert.Null(line.CheckAction);
+        Assert.Null(line.LeaveAloneWhen);
+        Assert.Empty(line.AdditionalStateFields);
+        Assert.True(line.StateCondition!(1));
+        Assert.False(line.StateCondition!(0));
+        Assert.False(line.StateCondition!(double.NaN));
+    }
+
+    /// <summary>Every write's line is a state line with a tick that does its step's write; the ground start lines latch
+    /// on the engine running (N3 at 50), every other line mirrors the aircraft. None is left alone: nothing here cuts.</summary>
     [Fact]
     public void EngineStart_LineKinds()
     {
-        foreach (var i in Group("ENGINE_START").Items)
+        foreach (var i in Group("ENGINE_START").Items.Where(i => !ReleaseLines.Contains(i.Id)))
         {
             Assert.Equal(ChecklistItemType.AutoDetectable, i.Type);
             Assert.NotNull(i.CheckAction);
@@ -743,51 +759,6 @@ public class L1011FoEngineStartTests
         Assert.Equal(Sent(byStep), Sent(byTick));
     }
 
-    // ---- the read-back, word for word ------------------------------------------------------------------------------
-
-    private sealed record ReadBack(string Id, string Label, string Field, double Done);
-
-    private static readonly ReadBack[] EngineStartReadBack =
-    {
-        new("ESC_FUEL_PUMP", "Fuel pump: minimum one on", "FO_ANY_FUEL_PUMP_ON", 1),
-        new("ESC_E2_FUEL_IGN", "Engine 2 at 20 percent N3: fuel and ignition on", "TOGGLE_CUTOFF_ENG_2", 1),
-        new("ESC_E2_RELEASED", "Engine 2 at 55 percent N3: ground start switch released", "FO_ENG2_START_RELEASED", 1),
-        new("ESC_E2_RUNNING", "Engine 2: running", "FO_ENG2_RUNNING", 1),
-        new("ESC_E2_ISLN_OFF", "Engine 2 isln valve: unlatch", "SWITCH_ISLN_VALVE_ENG_2", 0),
-        new("ESC_E1_FUEL_IGN", "Engine 1 at 20 percent N3: fuel and ignition on", "TOGGLE_CUTOFF_ENG_1", 1),
-        new("ESC_E1_RELEASED", "Engine 1 at 55 percent N3: ground start switch released", "FO_ENG1_START_RELEASED", 1),
-        new("ESC_E1_RUNNING", "Engine 1: running", "FO_ENG1_RUNNING", 1),
-        new("ESC_E1_ISLN_OFF", "Engine 1 isln valve: unlatch", "SWITCH_ISLN_VALVE_ENG_1", 0),
-        new("ESC_E3_FUEL_IGN", "Engine 3 at 20 percent N3: fuel and ignition on", "TOGGLE_CUTOFF_ENG_3", 1),
-        new("ESC_E3_RELEASED", "Engine 3 at 55 percent N3: ground start switch released", "FO_ENG3_START_RELEASED", 1),
-        new("ESC_E3_RUNNING", "Engine 3: running", "FO_ENG3_RUNNING", 1),
-        new("ESC_GEN_FIELDS", "Engine generator field: close", "FO_GEN_FIELDS_CLOSED", 1),
-        new("ESC_GEN_BREAKERS", "Engine generator breaker: close", "FO_GEN_BREAKERS_CLOSED", 1),
-    };
-
-    [Fact]
-    public void The_read_back_is_word_for_word()
-        => Assert.Equal(EngineStartReadBack.Select(l => (l.Id, l.Label)), Group("ENGINE_START_CL").Items.Select(i => (i.Id, i.Label)));
-
-    [Fact]
-    public void EveryReadBackLine_ReadsItsFieldAtItsValue()
-    {
-        foreach (var rb in EngineStartReadBack)
-        {
-            var line = Line(rb.Id);
-            Assert.Null(line.CheckAction);
-            Assert.Empty(line.AdditionalStateFields);
-            Assert.Equal(ChecklistItemType.AutoDetectable, line.Type);
-            Assert.Equal(RevertBehavior.RevertToState, line.RevertBehavior);
-            Assert.Equal(rb.Field, line.StateFieldName);
-            Assert.True(line.StateCondition!(rb.Done), $"{rb.Id}: {rb.Field} at {rb.Done} must read done");
-            Assert.False(line.StateCondition!(double.NaN), $"{rb.Id}: unread must not read done");
-            var others = L1011FoStateEvaluator.SyntheticKeys.Contains(rb.Field) ? new[] { 0.0 } : new[] { 0.0, 1, 2, 3, 4 };
-            foreach (double other in others.Where(v => v != rb.Done))
-                Assert.False(line.StateCondition!(other), $"{rb.Id}: {rb.Field} at {other} must not read done");
-        }
-    }
-
     /// <summary>
     /// The release line ticks only after a start: a cold aircraft has every ground start switch off too, so a line on
     /// the switch alone ticked before any engine turned. It reads the switch off with its engine running; the flow's
@@ -797,7 +768,7 @@ public class L1011FoEngineStartTests
     [MemberData(nameof(StartOrder))]
     public void The_release_line_ticks_only_after_a_start(int n)
     {
-        var line = Line($"ESC_E{n}_RELEASED");
+        var line = Line($"ES_E{n}_RELEASED");
         bool Ticks(params (string, double)[] seeds)
             => line.StateCondition!(State(seeds).GetValue(line.StateFieldName!));
         Assert.False(Ticks((GroundStartSwitch(n), 0), (N3(n), Cold)), "cold: no start yet");
@@ -808,13 +779,13 @@ public class L1011FoEngineStartTests
 
         var wait = Of($"ES_E{n}_RELEASED");
         Assert.Equal(GroundStartSwitch(n), wait.ConditionFieldName);
-        Assert.Equal(new[] { $"ESC_E{n}_RELEASED" }, wait.LinkedChecklistItemIds);
+        Assert.Equal(new[] { $"ES_E{n}_RELEASED" }, wait.LinkedChecklistItemIds);
     }
 
-    /// <summary>A finished run latches the action group and the read-back, and nothing else.</summary>
+    /// <summary>A finished run latches its own group, and nothing else.</summary>
     [Fact]
-    public void EngineStart_LatchesItsTwoGroups()
-        => Assert.Equal(EngineStart.RelatedChecklistGroupIds, EngineStart.CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
+    public void EngineStart_LatchesItsOwnGroup()
+        => Assert.Equal(new[] { "ENGINE_START" }, EngineStart.CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
 
     /// <summary>The spoken labels with an engine number or a percentage read the same under a comma-decimal culture.</summary>
     [Theory]
@@ -829,7 +800,7 @@ public class L1011FoEngineStartTests
                 .ToList());
         Assert.Contains("Engine 2 N3 twenty percent", labels);
         Assert.Contains("Engine 2 isolation valve: off", labels);
-        Assert.Contains("Engine 1 at 20 percent N3: fuel and ignition on", labels);
+        Assert.Contains("Engine 1 fuel and ignition: on", labels);
         Assert.Contains("Engine 3 at 55 percent N3: ground start switch released", labels);
         Assert.Contains("Engine 3 fuel: tank pump and tank valve on", labels);
     }

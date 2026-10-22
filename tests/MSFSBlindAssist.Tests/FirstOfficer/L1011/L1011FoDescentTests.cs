@@ -11,8 +11,8 @@ using Step = MSFSBlindAssist.FirstOfficer.Models.FlowStep<MSFSBlindAssist.FirstO
 namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 
 /// <summary>
-/// The TriStar First Officer's Descent flow, its action group and its read-back (the aircraft's descent page), pinned by
-/// structure and by behaviour: the step ids and their order; the seat belt signs, written over their own position read
+/// The TriStar First Officer's Descent flow and its group, pinned by structure and by behaviour (the descent page's lines
+/// all read the same state as the group's, so it adds none): the step ids and their order; the seat belt signs, written over their own position read
 /// ([L1011-4]); the Captain's landing data, landing autobrake (the panel named, no setting: [FO-14]) and QNH; the cabin
 /// altitude selector set to the plan's destination elevation, clamped to the selector's end stops, or with no plan a
 /// silent skip and the Captain asked ([FO-20]); the lines each step delivers ([FO-6], [FO-7]); and that the groups are
@@ -57,7 +57,7 @@ public class L1011FoDescentTests
     public void Descent_NamesItselfAndItsChecklistGroups()
     {
         Assert.Equal("Descent", Descent.Name);
-        Assert.Equal(new[] { "DESCENT", "DESCENT_CL" }, Descent.RelatedChecklistGroupIds);
+        Assert.Equal(new[] { "DESCENT" }, Descent.RelatedChecklistGroupIds);
         Assert.False(string.IsNullOrWhiteSpace(Descent.Description));
     }
 
@@ -70,15 +70,15 @@ public class L1011FoDescentTests
     public void Descent_StepIdsAreInOrder()
         => Assert.Equal(StepIds, Descent.Steps.Select(s => s.Id));
 
-    /// <summary>Every step's lines: a write its action line then the read-back line it sets, an unconditional Captain
-    /// step its reminder line, the conditional cabin altitude prompt nothing.</summary>
+    /// <summary>Every step's lines: a write its own line, an unconditional Captain step its reminder line, the
+    /// conditional cabin altitude prompt nothing.</summary>
     private static readonly Dictionary<string, string[]> Links = new(StringComparer.Ordinal)
     {
-        ["DS_SEAT_BELTS"] = new[] { "DS_SEAT_BELTS", "DSC_SEAT_BELTS" },
+        ["DS_SEAT_BELTS"] = new[] { "DS_SEAT_BELTS" },
         ["DS_CPT_LANDING_DATA"] = new[] { "DS_CPT_LANDING_DATA" },
         ["DS_CPT_AUTOBRAKE"] = new[] { "DS_CPT_AUTOBRAKE" },
         ["DS_CPT_QNH"] = new[] { "DS_CPT_QNH" },
-        ["DS_CABIN_ALT"] = new[] { "DS_CABIN_ALT", "DSC_CABIN_ALT" },
+        ["DS_CABIN_ALT"] = new[] { "DS_CABIN_ALT" },
         ["DS_CABIN_ALT_CPT"] = Array.Empty<string>(),
     };
 
@@ -147,8 +147,7 @@ public class L1011FoDescentTests
             Assert.DoesNotContain(setting, text, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(Descent.Steps, s => s.EventName == "ROTARY_AUTO_BRAKE_MODE"
             || s.MultiActions.Any(a => a.EventName == "ROTARY_AUTO_BRAKE_MODE"));
-        Assert.DoesNotContain(Group("DESCENT").Items.Concat(Group("DESCENT_CL").Items),
-            i => i.StateFieldName == "ROTARY_AUTO_BRAKE_MODE");
+        Assert.DoesNotContain(Group("DESCENT").Items, i => i.StateFieldName == "ROTARY_AUTO_BRAKE_MODE");
     }
 
     // ------------------------------------------------------------------ the cabin altitude ([FO-20])
@@ -229,7 +228,7 @@ public class L1011FoDescentTests
         var vars = new IniL1011Definition().GetVariables();
         var synthetic = L1011FoStateEvaluator.SyntheticKeys.ToHashSet();
         var polled = new L1011FoStateEvaluator().OnRequestPollFields.ToHashSet();
-        var fields = Groups.Where(g => g.Id is "DESCENT" or "DESCENT_CL").SelectMany(g => g.Items)
+        var fields = Groups.Where(g => g.Id is "DESCENT").SelectMany(g => g.Items)
             .Select(i => i.StateFieldName).OfType<string>().Append(CabinAltReadout).Distinct().ToList();
         foreach (var field in fields)
         {
@@ -239,34 +238,26 @@ public class L1011FoDescentTests
             if (def.UpdateFrequency == UpdateFrequency.OnRequest)
                 Assert.True(polled.Contains(field), $"OnRequest field {field} is not polled");
         }
-        Assert.True(fields.Count >= 3, $"only {fields.Count} fields enumerated");
+        Assert.True(fields.Count >= 2, $"only {fields.Count} fields enumerated");
     }
 
     // ================================================================== the checklists
 
     [Fact]
-    public void TheDescentGroups_FollowClimb_Named()
+    public void TheDescentGroup_FollowsAfterTakeoff_Named()
     {
-        Assert.Equal(new[] { "DESCENT", "DESCENT_CL" }, Groups.Select(g => g.Id).SkipWhile(id => id != "DESCENT").Take(2));
-        Assert.Equal("CLIMB_CL", Groups.Select(g => g.Id).TakeWhile(id => id != "DESCENT").Last());
+        Assert.Equal(new[] { "AFTER_TAKEOFF", "DESCENT", "BEFORE_LANDING" },
+            Groups.Select(g => g.Id).SkipWhile(id => id != "AFTER_TAKEOFF").Take(3));
         Assert.Equal("Descent", Group("DESCENT").Name);
-        Assert.Equal("Descent", Group("DESCENT_CL").Name);
     }
 
     /// <summary>[FO-22]: Descent onwards is the arrival, never marked by an in-flight start.</summary>
     [Fact]
-    public void EveryDescentGroup_IsArrival_AndNeverDeparture()
+    public void TheDescentGroup_IsArrival_AndNeverDeparture()
     {
-        foreach (var id in Descent.RelatedChecklistGroupIds)
-        {
-            Assert.True(FoDepartureGroups.Arrival.Contains(id), $"{id} is not an arrival group");
-            Assert.False(FoDepartureGroups.Departure.Contains(id), $"{id} is a departure group too");
-        }
+        Assert.True(FoDepartureGroups.Arrival.Contains("DESCENT"));
+        Assert.False(FoDepartureGroups.Departure.Contains("DESCENT"));
     }
-
-    [Fact]
-    public void The_read_back_has_no_check_action()
-        => Assert.All(Group("DESCENT_CL").Items, i => Assert.True(i.CheckAction == null, $"{i.Id} has a CheckAction"));
 
     private static readonly string[] ActionLineIds =
         { "DS_SEAT_BELTS", "DS_CPT_LANDING_DATA", "DS_CPT_AUTOBRAKE", "DS_CPT_QNH", "DS_CABIN_ALT" };
@@ -363,54 +354,12 @@ public class L1011FoDescentTests
         Assert.DoesNotContain(ac.Io, e => e.Kind != FakeL1011IoKind.FreshRead);
     }
 
-    // ---- the read-back, word for word ------------------------------------------------------------------------------
-
-    /// <summary>A read-back line: its label, and its field and done value, or a Captain's reminder.</summary>
-    private sealed record ReadBack(string Id, string Label, string? Field = null, double Done = 1, bool Reminder = false);
-
-    private static readonly ReadBack[] DescentReadBack =
-    {
-        new("DSC_LANDING_DATA", "Landing data: prepared", Reminder: true),
-        new("DSC_SEAT_BELTS", "30 mins before landing: seatbelt signs on", SeatBelts),
-        new("DSC_QNH", "At transition level, altimeters: set QNH", Reminder: true),
-        new("DSC_CABIN_ALT", "At transition level, flt cab alt sel: set destination elevation", "FO_CABIN_ALT_AT_DEST"),
-    };
-
+    /// <summary>A finished run latches its own group, and nothing else.</summary>
     [Fact]
-    public void The_read_back_is_word_for_word()
-        => Assert.Equal(DescentReadBack.Select(l => (l.Id, l.Label)), Group("DESCENT_CL").Items.Select(i => (i.Id, i.Label)));
+    public void Descent_LatchesItsOwnGroup()
+        => Assert.Equal(new[] { "DESCENT" }, Descent.CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
 
-    [Fact]
-    public void EveryReadBackLine_ReadsItsFieldAtItsValue()
-    {
-        foreach (var rb in DescentReadBack)
-        {
-            var line = Line(rb.Id);
-            Assert.Null(line.CheckAction);
-            Assert.Empty(line.AdditionalStateFields);
-            if (rb.Reminder)
-            {
-                Assert.Equal(ChecklistItemType.CaptainReminder, line.Type);
-                Assert.Equal(rb.Label, line.ReminderText);
-                continue;
-            }
-            Assert.Equal(ChecklistItemType.AutoDetectable, line.Type);
-            Assert.Equal(RevertBehavior.RevertToState, line.RevertBehavior);
-            Assert.Equal(rb.Field, line.StateFieldName);
-            Assert.True(line.StateCondition!(rb.Done), $"{rb.Id}: {rb.Field} at {rb.Done} must read done");
-            Assert.False(line.StateCondition!(double.NaN), $"{rb.Id}: unread must not read done");
-            var others = L1011FoStateEvaluator.SyntheticKeys.Contains(rb.Field!) ? new[] { 0.0 } : new[] { 0.0, 2, 3 };
-            foreach (double other in others)
-                Assert.False(line.StateCondition!(other), $"{rb.Id}: {rb.Field} at {other} must not read done");
-        }
-    }
-
-    /// <summary>A finished run latches the action group and the read-back, and nothing else.</summary>
-    [Fact]
-    public void Descent_LatchesItsTwoGroups()
-        => Assert.Equal(Descent.RelatedChecklistGroupIds, Descent.CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
-
-    /// <summary>The read-back's 30 minutes and the provider's figure read the same under a comma-decimal culture.</summary>
+    /// <summary>The Captain's QNH line and the provider's figure read the same under a comma-decimal culture.</summary>
     [Theory]
     [InlineData("de-DE")]
     [InlineData("sv-SE")]
@@ -423,7 +372,7 @@ public class L1011FoDescentTests
                 .Concat(L1011FoChecklistDefinitions.Build().SelectMany(g => g.Items).Select(i => i.Label)).ToList();
             return (all, flow.Steps.Single(s => s.Id == "DS_CABIN_ALT").TargetValueProvider!(State(9000)));
         });
-        Assert.Contains("30 mins before landing: seatbelt signs on", labels);
+        Assert.Contains("Set the altimeters to QNH at the transition level: Ctrl+B", labels);
         Assert.Equal(8000, target);
     }
 

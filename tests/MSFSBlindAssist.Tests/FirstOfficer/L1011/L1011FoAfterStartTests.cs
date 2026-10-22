@@ -12,9 +12,9 @@ using Step = MSFSBlindAssist.FirstOfficer.Models.FlowStep<MSFSBlindAssist.FirstO
 namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 
 /// <summary>
-/// The TriStar First Officer's After Start flow, its action group and its two read-backs (the aircraft's after start
-/// page, with the engine start page's APU shutdown lines, and its taxi page), pinned by structure and by behaviour:
-/// the step ids and their order; every write's label, keys and targets word for word, with its "Already set" on its
+/// The TriStar First Officer's After Start flow and its group (its writes, the read-only checks of the after start page
+/// it completes, its Captain lines, and the taxi page's two Captain lines at its end), pinned by structure and by
+/// behaviour: the step ids and their order; every write's label, keys and targets word for word, with its "Already set" on its
 /// own state; the ATMs to on, then to auto; the read-only checks, each completing only lines that read its field; the
 /// take-off flaps from the tablet, else SimBrief, else the Captain ([FO-20]), left alone off the ground; the 1A and 3A
 /// transfers only with fuel in both tanks; the stabilizer trim reminder naming the tablet's value; the APU shutdown
@@ -91,7 +91,7 @@ public class L1011FoAfterStartTests
     public void AfterStart_NamesItselfAndItsChecklistGroups()
     {
         Assert.Equal("After Start", AfterStart.Name);
-        Assert.Equal(new[] { "AFTER_START", "AFTER_START_CL", "TAXI_CL" }, AfterStart.RelatedChecklistGroupIds);
+        Assert.Equal(new[] { "AFTER_START" }, AfterStart.RelatedChecklistGroupIds);
         Assert.False(string.IsNullOrWhiteSpace(AfterStart.Description));
     }
 
@@ -102,12 +102,13 @@ public class L1011FoAfterStartTests
         "AS_FUEL_PUMPS", "AS_CROSSFEEDS", "AS_TRANSFERS", "AS_PITOT_HEAT", "AS_IGNITION_BOTH", "AS_FLAPS", "AS_FLAPS_CPT",
         "AS_TAXI_LIGHT", "AS_CPT_STAB_TRIM", "AS_CPT_ANTI_ICE", "AS_CPT_CONTROLS",
         "AS_GENS_ON_LINE", "AS_APU_GEN_TRIP", "AS_APU_BLEED_OFF", "AS_APU_STOP", "AS_APU_COOLDOWN", "AS_APU_MASTER_OFF",
+        "AS_CPT_PARKING_BRAKE", "AS_CPT_BRAKES",
     };
 
     [Fact]
     public void AfterStart_StepIdsAreInOrder()
     {
-        Assert.Equal(30, StepIds.Length);
+        Assert.Equal(32, StepIds.Length);
         Assert.Equal(StepIds, AfterStart.Steps.Select(s => s.Id));
     }
 
@@ -166,41 +167,43 @@ public class L1011FoAfterStartTests
             Assert.True((s.SkipCondition != null) == (s.Id != "AS_ATMS_ON"), $"{s.Id}");
     }
 
-    /// <summary>Every step's lines, from the table: a write its action line then the read-back lines it sets, a check
-    /// the read-back lines it reads, an unconditional Captain step its reminder line; the conditional flaps prompt,
-    /// the generator wait and the cool-down link nothing.</summary>
+    /// <summary>Every step's lines, from the table: a write its own line, a check the lines it reads (its own id, or
+    /// for the generator check the fields' and the breakers' lines), an unconditional Captain step its reminder line;
+    /// the conditional flaps prompt, the generator wait and the cool-down link nothing.</summary>
     private static readonly Dictionary<string, string[]> Links = new(StringComparer.Ordinal)
     {
-        ["AS_HI_PRESS"] = new[] { "AS_HI_PRESS", "ASC_HI_PRESS" },
-        ["AS_ISLN_VALVES"] = new[] { "AS_ISLN_VALVES", "ASC_ISLN_VALVES" },
-        ["AS_APU_AIR"] = new[] { "AS_APU_AIR", "ASC_FUSELAGE_ISLN", "ASC_XBLEEDS" },
-        ["AS_PACKS_ON"] = new[] { "AS_PACKS_ON", "ASC_PACKS" },
+        ["AS_HI_PRESS"] = new[] { "AS_HI_PRESS" },
+        ["AS_ISLN_VALVES"] = new[] { "AS_ISLN_VALVES" },
+        ["AS_APU_AIR"] = new[] { "AS_APU_AIR" },
+        ["AS_PACKS_ON"] = new[] { "AS_PACKS_ON" },
         ["AS_ATMS_ON"] = new[] { "AS_ATMS_ON" },
-        ["AS_ATMS_AUTO"] = new[] { "AS_ATMS_AUTO", "ASC_ATMS" },
-        ["AS_GALLEY_ON"] = new[] { "AS_GALLEY_ON", "ASC_GALLEY" },
-        ["AS_CHK_GENERATORS"] = new[] { "ASC_GEN_FIELDS", "ASC_GEN_BREAKERS" },
-        ["AS_CHK_IDG"] = new[] { "ASC_IDG" },
-        ["AS_CHK_BUS_FAIL"] = new[] { "ASC_BUS_FAIL" },
-        ["AS_AC_METER"] = new[] { "AS_AC_METER", "ASC_AC_METER" },
-        ["AS_DC_METER"] = new[] { "AS_DC_METER", "ASC_DC_METER" },
-        ["AS_CHK_AC_ESS"] = new[] { "ASC_AC_ESS" },
-        ["AS_FUEL_PUMPS"] = new[] { "AS_FUEL_PUMPS", "ASC_FUEL_PUMPS" },
-        ["AS_CROSSFEEDS"] = new[] { "AS_CROSSFEEDS", "ASC_CROSSFEEDS" },
-        ["AS_TRANSFERS"] = new[] { "AS_TRANSFERS", "ASC_TRANSFERS" },
-        ["AS_PITOT_HEAT"] = new[] { "AS_PITOT_HEAT", "ASC_PITOT_HEAT", "ASC_ALPHA_HEAT" },
-        ["AS_IGNITION_BOTH"] = new[] { "AS_IGNITION_BOTH", "ASC_IGNITION" },
-        ["AS_FLAPS"] = new[] { "AS_FLAPS", "ASC_FLAPS" },
+        ["AS_ATMS_AUTO"] = new[] { "AS_ATMS_AUTO" },
+        ["AS_GALLEY_ON"] = new[] { "AS_GALLEY_ON" },
+        ["AS_CHK_GENERATORS"] = new[] { "AS_GEN_FIELDS", "AS_GEN_BREAKERS" },
+        ["AS_CHK_IDG"] = new[] { "AS_CHK_IDG" },
+        ["AS_CHK_BUS_FAIL"] = new[] { "AS_CHK_BUS_FAIL" },
+        ["AS_AC_METER"] = new[] { "AS_AC_METER" },
+        ["AS_DC_METER"] = new[] { "AS_DC_METER" },
+        ["AS_CHK_AC_ESS"] = new[] { "AS_CHK_AC_ESS" },
+        ["AS_FUEL_PUMPS"] = new[] { "AS_FUEL_PUMPS" },
+        ["AS_CROSSFEEDS"] = new[] { "AS_CROSSFEEDS" },
+        ["AS_TRANSFERS"] = new[] { "AS_TRANSFERS" },
+        ["AS_PITOT_HEAT"] = new[] { "AS_PITOT_HEAT" },
+        ["AS_IGNITION_BOTH"] = new[] { "AS_IGNITION_BOTH" },
+        ["AS_FLAPS"] = new[] { "AS_FLAPS" },
         ["AS_FLAPS_CPT"] = Array.Empty<string>(),
-        ["AS_TAXI_LIGHT"] = new[] { "AS_TAXI_LIGHT", "TXC_TAXI_LIGHT" },
+        ["AS_TAXI_LIGHT"] = new[] { "AS_TAXI_LIGHT" },
         ["AS_CPT_STAB_TRIM"] = new[] { "AS_CPT_STAB_TRIM" },
         ["AS_CPT_ANTI_ICE"] = new[] { "AS_CPT_ANTI_ICE" },
         ["AS_CPT_CONTROLS"] = new[] { "AS_CPT_CONTROLS" },
         ["AS_GENS_ON_LINE"] = Array.Empty<string>(),
-        ["AS_APU_GEN_TRIP"] = new[] { "AS_APU_GEN_TRIP", "ASC_APU_GEN_TRIP" },
-        ["AS_APU_BLEED_OFF"] = new[] { "AS_APU_BLEED_OFF", "ASC_APU_BLEED" },
-        ["AS_APU_STOP"] = new[] { "AS_APU_STOP", "ASC_APU_STOP" },
+        ["AS_APU_GEN_TRIP"] = new[] { "AS_APU_GEN_TRIP" },
+        ["AS_APU_BLEED_OFF"] = new[] { "AS_APU_BLEED_OFF" },
+        ["AS_APU_STOP"] = new[] { "AS_APU_STOP" },
         ["AS_APU_COOLDOWN"] = Array.Empty<string>(),
-        ["AS_APU_MASTER_OFF"] = new[] { "AS_APU_MASTER_OFF", "ASC_APU_MASTER" },
+        ["AS_APU_MASTER_OFF"] = new[] { "AS_APU_MASTER_OFF" },
+        ["AS_CPT_PARKING_BRAKE"] = new[] { "AS_CPT_PARKING_BRAKE" },
+        ["AS_CPT_BRAKES"] = new[] { "AS_CPT_BRAKES" },
     };
 
     [Fact]
@@ -298,10 +301,10 @@ public class L1011FoAfterStartTests
 
     private static readonly (string Id, string Label, string Field, string[] Lines)[] Checks =
     {
-        ("AS_CHK_GENERATORS", "Engine generators: on line", "FO_ENGINE_GENERATORS_ON", new[] { "ASC_GEN_FIELDS", "ASC_GEN_BREAKERS" }),
-        ("AS_CHK_IDG", "IDG low pressure lights: out", "FO_IDG_LIGHTS_OUT", new[] { "ASC_IDG" }),
-        ("AS_CHK_BUS_FAIL", "Bus fail lights: out", "FO_BUS_FAIL_LIGHTS_OUT", new[] { "ASC_BUS_FAIL" }),
-        ("AS_CHK_AC_ESS", "AC essential power selector: bus 3, generator 1", "ROTARY_AC_ESS_BUS", new[] { "ASC_AC_ESS" }),
+        ("AS_CHK_GENERATORS", "Engine generators: on line", "FO_ENGINE_GENERATORS_ON", new[] { "AS_GEN_FIELDS", "AS_GEN_BREAKERS" }),
+        ("AS_CHK_IDG", "IDG low pressure lights: out", "FO_IDG_LIGHTS_OUT", new[] { "AS_CHK_IDG" }),
+        ("AS_CHK_BUS_FAIL", "Bus fail lights: out", "FO_BUS_FAIL_LIGHTS_OUT", new[] { "AS_CHK_BUS_FAIL" }),
+        ("AS_CHK_AC_ESS", "AC essential power selector: bus 3, generator 1", "ROTARY_AC_ESS_BUS", new[] { "AS_CHK_AC_ESS" }),
     };
 
     [Fact]
@@ -349,7 +352,8 @@ public class L1011FoAfterStartTests
             foreach (var lineId in lines)
             {
                 var line = Line(lineId);
-                Assert.Equal("AFTER_START_CL", line.GroupId);
+                Assert.Equal("AFTER_START", line.GroupId);
+                Assert.Null(line.CheckAction);
                 if (id == "AS_CHK_GENERATORS")
                     continue;
                 Assert.Equal(field, line.StateFieldName);
@@ -359,12 +363,12 @@ public class L1011FoAfterStartTests
         }
 
         var check = Of("AS_CHK_GENERATORS");
-        Assert.Equal("FO_GEN_FIELDS_CLOSED", Line("ASC_GEN_FIELDS").StateFieldName);
-        Assert.Equal("FO_GEN_BREAKERS_CLOSED", Line("ASC_GEN_BREAKERS").StateFieldName);
+        Assert.Equal("FO_GEN_FIELDS_CLOSED", Line("AS_GEN_FIELDS").StateFieldName);
+        Assert.Equal("FO_GEN_BREAKERS_CLOSED", Line("AS_GEN_BREAKERS").StateFieldName);
         bool Reads(L1011FoStateEvaluator st, string lineId) => Line(lineId).StateCondition!(st.GetValue(Line(lineId).StateFieldName!));
         var allClosed = State(GeneratorRelays.Select(r => (r, 1.0)).ToArray());
         Assert.True(check.Condition!(allClosed.GetValue(check.ConditionFieldName!)));
-        Assert.True(Reads(allClosed, "ASC_GEN_FIELDS") && Reads(allClosed, "ASC_GEN_BREAKERS"));
+        Assert.True(Reads(allClosed, "AS_GEN_FIELDS") && Reads(allClosed, "AS_GEN_BREAKERS"));
         foreach (var relay in GeneratorRelays)
         {
             var oneOpen = State(GeneratorRelays.Select(r => (r, r == relay ? 0.0 : 1.0)).ToArray());
@@ -727,6 +731,32 @@ public class L1011FoAfterStartTests
         }
     }
 
+    /// <summary>The aircraft's taxi page closes the flow: its two Captain lines, unconditional, after the APU, each
+    /// ticking its own line with the page's words. Its nose taxi light line is the flow's own taxi light.</summary>
+    [Fact]
+    public void The_taxi_pages_captain_lines_close_the_flow()
+    {
+        var expected = new[] { ("AS_CPT_PARKING_BRAKE", "Parking brake: release"), ("AS_CPT_BRAKES", "Brakes: check") };
+        Assert.Equal(expected.Select(e => e.Item1), AfterStart.Steps.TakeLast(2).Select(s => s.Id));
+        foreach (var (id, label) in expected)
+        {
+            var s = Of(id);
+            Assert.Equal(FlowStepActionType.CaptainReminder, s.ActionType);
+            Assert.Equal(label, s.Label);
+            Assert.Equal(label, s.ReminderText);
+            Assert.Null(s.SkipCondition);
+            Assert.Null(s.RequiresStepId);
+            Assert.Equal(new[] { id }, s.LinkedChecklistItemIds);
+
+            var line = Line(id);
+            Assert.Equal("AFTER_START", line.GroupId);
+            Assert.Equal(ChecklistItemType.CaptainReminder, line.Type);
+            Assert.Equal(label, line.Label);
+            Assert.Equal(label, line.ReminderText);
+            Assert.Null(line.CheckAction);
+        }
+    }
+
     // ------------------------------------------------------------------ the APU shutdown tail
 
     private static readonly string[] ApuTail = { "AS_APU_GEN_TRIP", "AS_APU_BLEED_OFF", "AS_APU_STOP", "AS_APU_MASTER_OFF" };
@@ -755,7 +785,8 @@ public class L1011FoAfterStartTests
         Assert.True(wait.Condition!(1));
 
         var ids = AfterStart.Steps.Select(s => s.Id).ToList();
-        Assert.Equal(new[] { "AS_GENS_ON_LINE" }.Concat(ApuTail.Take(3)).Append("AS_APU_COOLDOWN").Append("AS_APU_MASTER_OFF"),
+        Assert.Equal(new[] { "AS_GENS_ON_LINE" }.Concat(ApuTail.Take(3)).Append("AS_APU_COOLDOWN").Append("AS_APU_MASTER_OFF")
+                .Append("AS_CPT_PARKING_BRAKE").Append("AS_CPT_BRAKES"),
             ids.Skip(ids.IndexOf("AS_GENS_ON_LINE")));
         foreach (var id in ApuTail.Take(3))
         {
@@ -818,7 +849,7 @@ public class L1011FoAfterStartTests
         var polled = new L1011FoStateEvaluator().OnRequestPollFields.ToHashSet();
         var fields = AfterStart.Steps.Select(s => s.ConditionFieldName).OfType<string>()
             .Concat(new[] { TabletFlaps, TabletStabTrim, Tank1A, Tank3A, ApuRpm, ApuGenBreaker, L1011Levers.FlapHandleKey, Ground })
-            .Concat(Groups.Where(g => g.Id is "AFTER_START" or "AFTER_START_CL" or "TAXI_CL").SelectMany(g => g.Items)
+            .Concat(Groups.Where(g => g.Id is "AFTER_START").SelectMany(g => g.Items)
                 .Select(i => i.StateFieldName).OfType<string>())
             .Distinct().ToList();
         foreach (var field in fields)
@@ -959,7 +990,7 @@ public class L1011FoAfterStartTests
         Assert.Equal("left alone", outcome["AS_TRANSFERS"]);
         Assert.Equal("already set", outcome["AS_FLAPS_CPT"]);
         Assert.Equal("waited", outcome["AS_APU_COOLDOWN"]);
-        Assert.Equal(new[] { "AS_CPT_STAB_TRIM", "AS_CPT_ANTI_ICE", "AS_CPT_CONTROLS" },
+        Assert.Equal(new[] { "AS_CPT_STAB_TRIM", "AS_CPT_ANTI_ICE", "AS_CPT_CONTROLS", "AS_CPT_PARKING_BRAKE", "AS_CPT_BRAKES" },
             outcome.Where(o => o.Value == "captain").Select(o => o.Key));
         Assert.Equal("done", outcome["AS_GENS_ON_LINE"]);
 
@@ -990,62 +1021,89 @@ public class L1011FoAfterStartTests
     // ================================================================== the checklists
 
     [Fact]
-    public void TheAfterStartGroups_FollowEngineStart_Named()
+    public void TheAfterStartGroup_FollowsEngineStart_Named()
     {
-        Assert.Equal(new[] { "AFTER_START", "AFTER_START_CL", "TAXI_CL" },
-            Groups.Select(g => g.Id).SkipWhile(id => id != "AFTER_START").Take(3));
-        Assert.Equal("ENGINE_START_CL", Groups.Select(g => g.Id).TakeWhile(id => id != "AFTER_START").Last());
+        Assert.Equal(new[] { "ENGINE_START", "AFTER_START", "BEFORE_TAKEOFF" },
+            Groups.Select(g => g.Id).SkipWhile(id => id != "ENGINE_START").Take(3));
         Assert.Equal("After Start", Group("AFTER_START").Name);
-        Assert.Equal("After Start", Group("AFTER_START_CL").Name);
-        Assert.Equal("Taxi", Group("TAXI_CL").Name);
     }
 
     [Fact]
-    public void EveryAfterStartGroup_IsDeparture_AndNeverArrival()
+    public void TheAfterStartGroup_IsDeparture_AndNeverArrival()
     {
-        foreach (var id in AfterStart.RelatedChecklistGroupIds)
+        Assert.True(FoDepartureGroups.Departure.Contains("AFTER_START"));
+        Assert.False(FoDepartureGroups.Arrival.Contains("AFTER_START"));
+    }
+
+    private static readonly string[] LineIds =
+    {
+        "AS_HI_PRESS", "AS_ISLN_VALVES", "AS_APU_AIR", "AS_PACKS_ON", "AS_ATMS_ON", "AS_ATMS_AUTO", "AS_GALLEY_ON",
+        "AS_GEN_FIELDS", "AS_GEN_BREAKERS", "AS_CHK_IDG", "AS_CHK_BUS_FAIL", "AS_AC_METER", "AS_DC_METER", "AS_CHK_AC_ESS",
+        "AS_FUEL_PUMPS", "AS_CROSSFEEDS", "AS_TRANSFERS", "AS_PITOT_HEAT", "AS_IGNITION_BOTH",
+        "AS_FLAPS", "AS_TAXI_LIGHT", "AS_CPT_STAB_TRIM", "AS_CPT_ANTI_ICE", "AS_CPT_CONTROLS",
+        "AS_APU_GEN_TRIP", "AS_APU_BLEED_OFF", "AS_APU_STOP", "AS_APU_MASTER_OFF",
+        "AS_CPT_PARKING_BRAKE", "AS_CPT_BRAKES",
+    };
+
+    private static readonly string[] Reminders =
+        { "AS_CPT_STAB_TRIM", "AS_CPT_ANTI_ICE", "AS_CPT_CONTROLS", "AS_CPT_PARKING_BRAKE", "AS_CPT_BRAKES" };
+
+    /// <summary>The after start page's lines no write of the flow reads, moved in under the id of the check that completes
+    /// each (the generator check completes two), with their labels. Every other line of the page, and the taxi page's
+    /// taxi light, read the same state as an After Start line, and went; so did the page's stabilizer trim, speed brake
+    /// and flight control reminders, which are the flow's own Captain lines.</summary>
+    private static readonly (string Id, string Label, string Field, double Done)[] ReadOnlyLines =
+    {
+        ("AS_GEN_FIELDS", "Engine generator field: close", "FO_GEN_FIELDS_CLOSED", 1),
+        ("AS_GEN_BREAKERS", "Engine generator breaker: close", "FO_GEN_BREAKERS_CLOSED", 1),
+        ("AS_CHK_IDG", "IDG low pressure lights: out", "FO_IDG_LIGHTS_OUT", 1),
+        ("AS_CHK_BUS_FAIL", "All bus fail lights: out", "FO_BUS_FAIL_LIGHTS_OUT", 1),
+        ("AS_CHK_AC_ESS", "Essential power selector: normal b3 (g1)", "ROTARY_AC_ESS_BUS", 4),
+    };
+
+    [Fact]
+    public void TheMovedLines_KeepTheirLabels_AndReadTheirFieldAtTheirValue()
+    {
+        foreach (var (id, label, field, done) in ReadOnlyLines)
         {
-            Assert.True(FoDepartureGroups.Departure.Contains(id), $"{id} is not a departure group");
-            Assert.False(FoDepartureGroups.Arrival.Contains(id), $"{id} is an arrival group too");
+            var line = Line(id);
+            Assert.Equal("AFTER_START", line.GroupId);
+            Assert.Equal(label, line.Label);
+            Assert.Equal(ChecklistItemType.AutoDetectable, line.Type);
+            Assert.Equal(RevertBehavior.RevertToState, line.RevertBehavior);
+            Assert.Null(line.CheckAction);
+            Assert.Null(line.LeaveAloneWhen);
+            Assert.Empty(line.AdditionalStateFields);
+            Assert.Equal(field, line.StateFieldName);
+            Assert.True(line.StateCondition!(done), $"{id}: {field} at {done} must read done");
+            Assert.False(line.StateCondition!(double.NaN), $"{id}: unread must not read done");
+            var others = L1011FoStateEvaluator.SyntheticKeys.Contains(field) ? new[] { 0.0 } : new[] { 0.0, 1, 2, 3, 5 };
+            foreach (double other in others.Where(v => v != done))
+                Assert.False(line.StateCondition!(other), $"{id}: {field} at {other} must not read done");
         }
     }
 
-    [Fact]
-    public void The_read_backs_have_no_check_action()
-        => Assert.All(Group("AFTER_START_CL").Items.Concat(Group("TAXI_CL").Items),
-            i => Assert.True(i.CheckAction == null, $"{i.Id} has a CheckAction"));
-
-    private static readonly string[] ActionLineIds =
-    {
-        "AS_HI_PRESS", "AS_ISLN_VALVES", "AS_APU_AIR", "AS_PACKS_ON", "AS_ATMS_ON", "AS_ATMS_AUTO", "AS_GALLEY_ON",
-        "AS_AC_METER", "AS_DC_METER", "AS_FUEL_PUMPS", "AS_CROSSFEEDS", "AS_TRANSFERS", "AS_PITOT_HEAT", "AS_IGNITION_BOTH",
-        "AS_FLAPS", "AS_TAXI_LIGHT", "AS_CPT_STAB_TRIM", "AS_CPT_ANTI_ICE", "AS_CPT_CONTROLS",
-        "AS_APU_GEN_TRIP", "AS_APU_BLEED_OFF", "AS_APU_STOP", "AS_APU_MASTER_OFF",
-    };
-
-    private static readonly string[] Reminders = { "AS_CPT_STAB_TRIM", "AS_CPT_ANTI_ICE", "AS_CPT_CONTROLS" };
-
     /// <summary>The conditional flaps prompt, spoken only while the handle is not at the take-off setting, is flow-only.</summary>
     [Fact]
-    public void AfterStart_ActionLines_InTheFlowsOrder()
+    public void AfterStart_Lines_InTheFlowsOrder()
     {
-        Assert.Equal(ActionLineIds, Group("AFTER_START").Items.Select(i => i.Id));
+        Assert.Equal(LineIds, Group("AFTER_START").Items.Select(i => i.Id));
         Assert.NotNull(Of("AS_FLAPS_CPT").SkipCondition);
         Assert.DoesNotContain(Groups.SelectMany(g => g.Items), i => i.Id == "AS_FLAPS_CPT");
     }
 
-    /// <summary>Ticked or run, a line says the same thing.</summary>
+    /// <summary>Ticked or run, a write's line says what its step says; a read-only line keeps its own words.</summary>
     [Fact]
     public void AfterStart_ActionLabels_AreTheFlowStepLabels()
     {
-        foreach (var i in Group("AFTER_START").Items)
+        foreach (var i in Group("AFTER_START").Items.Where(i => ReadOnlyLines.All(r => r.Id != i.Id)))
             Assert.Equal(Of(i.Id).Label, i.Label);
     }
 
     [Fact]
     public void AfterStart_LineKinds()
     {
-        foreach (var i in Group("AFTER_START").Items)
+        foreach (var i in Group("AFTER_START").Items.Where(i => ReadOnlyLines.All(r => r.Id != i.Id)))
         {
             if (Reminders.Contains(i.Id))
             {
@@ -1169,87 +1227,10 @@ public class L1011FoAfterStartTests
         Assert.DoesNotContain(ac.Io, e => e.Kind != FakeL1011IoKind.FreshRead);
     }
 
-    // ---- the read-backs, word for word -----------------------------------------------------------------------------
-
-    /// <summary>A read-back line: its label, and its field and done value, or a Captain's reminder.</summary>
-    private sealed record ReadBack(string Id, string Label, string? Field = null, double Done = 1, bool Reminder = false);
-
-    private static readonly ReadBack[] AfterStartReadBack =
-    {
-        new("ASC_HI_PRESS", "All engines hi press switches: latched", "FO_HI_PRESS_ON"),
-        new("ASC_ISLN_VALVES", "All eng isol valve: latch", "FO_ISLN_VALVES_ON"),
-        new("ASC_FUSELAGE_ISLN", "Fuselage isolation valve switch: latched", "SWITCH_APU_ISLN_VALVE"),
-        new("ASC_XBLEEDS", "All cross bleed switches: latched", "FO_CROSSBLEEDS_ON"),
-        new("ASC_PACKS", "Pack flow control switches: latch", "FO_PACKS_ON"),
-        new("ASC_ATMS", "ATMs: auto", "FO_ATMS_AUTO"),
-        new("ASC_GALLEY", "Galley power: on", "FO_GALLEY_ON"),
-        new("ASC_GEN_FIELDS", "Engine generator field: close", "FO_GEN_FIELDS_CLOSED"),
-        new("ASC_GEN_BREAKERS", "Engine generator breaker: close", "FO_GEN_BREAKERS_CLOSED"),
-        new("ASC_IDG", "IDG low pressure lights: out", "FO_IDG_LIGHTS_OUT"),
-        new("ASC_BUS_FAIL", "All bus fail lights: out", "FO_BUS_FAIL_LIGHTS_OUT"),
-        new("ASC_AC_METER", "AC meter selector: gen 3", "ROTARY_PWR_SOURCE", 3),
-        new("ASC_DC_METER", "DC meter selector: bat", "ROTARY_STBY_DC_BUS", 4),
-        new("ASC_AC_ESS", "Essential power selector: normal b3 (g1)", "ROTARY_AC_ESS_BUS", 4),
-        new("ASC_FUEL_PUMPS", "Fuel tank pumps: all on", "FO_FUEL_PUMPS_ON"),
-        new("ASC_CROSSFEEDS", "Crossfeed valves: closed", "FO_CROSSFEEDS_CLOSED"),
-        new("ASC_TRANSFERS", "If there is fuel in tanks 1A and 3A: latch xfr", "FO_TRANSFERS_ON"),
-        new("ASC_PITOT_HEAT", "Capt and F/O pitot heat: on", "FO_PITOT_ALPHA_HEAT_ON"),
-        new("ASC_ALPHA_HEAT", "Alpha probe heat: on", "FO_PITOT_ALPHA_HEAT_ON"),
-        new("ASC_IGNITION", "Engine ignition: both", "ROTARY_ENG_START_SEL"),
-        new("ASC_STAB_TRIM", "Stabilizer trim: set for take off", Reminder: true),
-        new("ASC_SPEED_BRAKES", "Speed brakes: check", Reminder: true),
-        new("ASC_FLAPS", "Flaps: set for take off", "FO_FLAPS_TAKEOFF"),
-        new("ASC_CONTROLS", "Flight controls: check", Reminder: true),
-        new("ASC_APU_GEN_TRIP", "APU generator breaker: trip", "FO_APU_GEN_OFF_LINE"),
-        new("ASC_APU_BLEED", "APU bleed air shut off switch: unlatch", "SWITCH_APU_BLEED", 0),
-        new("ASC_APU_STOP", "APU stop button: press", "FO_APU_OFF"),
-        new("ASC_APU_MASTER", "APU master power: off", "TOGGLE_APU_POWER", 0),
-    };
-
-    private static readonly ReadBack[] TaxiReadBack =
-    {
-        new("TXC_TAXI_LIGHT", "Nose wheel taxi light: on", "TOGGLE_TAXI_LIGHT"),
-        new("TXC_PARKING_BRAKE", "Parking brake: release", Reminder: true),
-        new("TXC_BRAKES", "Brakes: check", Reminder: true),
-    };
-
+    /// <summary>A finished run latches its own group, and nothing else.</summary>
     [Fact]
-    public void The_after_start_read_back_is_word_for_word()
-        => Assert.Equal(AfterStartReadBack.Select(l => (l.Id, l.Label)), Group("AFTER_START_CL").Items.Select(i => (i.Id, i.Label)));
-
-    [Fact]
-    public void The_taxi_read_back_is_word_for_word()
-        => Assert.Equal(TaxiReadBack.Select(l => (l.Id, l.Label)), Group("TAXI_CL").Items.Select(i => (i.Id, i.Label)));
-
-    [Fact]
-    public void EveryReadBackLine_ReadsItsFieldAtItsValue()
-    {
-        foreach (var rb in AfterStartReadBack.Concat(TaxiReadBack))
-        {
-            var line = Line(rb.Id);
-            Assert.Null(line.CheckAction);
-            Assert.Empty(line.AdditionalStateFields);
-            if (rb.Reminder)
-            {
-                Assert.Equal(ChecklistItemType.CaptainReminder, line.Type);
-                Assert.Equal(rb.Label, line.ReminderText);
-                continue;
-            }
-            Assert.Equal(ChecklistItemType.AutoDetectable, line.Type);
-            Assert.Equal(RevertBehavior.RevertToState, line.RevertBehavior);
-            Assert.Equal(rb.Field, line.StateFieldName);
-            Assert.True(line.StateCondition!(rb.Done), $"{rb.Id}: {rb.Field} at {rb.Done} must read done");
-            Assert.False(line.StateCondition!(double.NaN), $"{rb.Id}: unread must not read done");
-            var others = L1011FoStateEvaluator.SyntheticKeys.Contains(rb.Field!) ? new[] { 0.0 } : new[] { 0.0, 1, 2, 3, 4, 5 };
-            foreach (double other in others.Where(v => v != rb.Done))
-                Assert.False(line.StateCondition!(other), $"{rb.Id}: {rb.Field} at {other} must not read done");
-        }
-    }
-
-    /// <summary>A finished run latches the action group and both read-backs, and nothing else.</summary>
-    [Fact]
-    public void AfterStart_LatchesItsThreeGroups()
-        => Assert.Equal(AfterStart.RelatedChecklistGroupIds, AfterStart.CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
+    public void AfterStart_LatchesItsOwnGroup()
+        => Assert.Equal(new[] { "AFTER_START" }, AfterStart.CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
 
     /// <summary>The spoken labels with a figure read the same under a comma-decimal culture.</summary>
     [Theory]

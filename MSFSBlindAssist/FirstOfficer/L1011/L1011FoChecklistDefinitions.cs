@@ -10,112 +10,94 @@ using Group = Models.ChecklistGroup<L1011FoActionExecutor, L1011FoStateEvaluator
 using CheckFn = System.Func<L1011FoActionExecutor, L1011FoStateEvaluator, System.Threading.Tasks.Task>;
 
 /// <summary>
-/// The iniBuilds L-1011 TriStar First Officer checklists, the MD-11's two layers, for its twelve flows: Power Up,
-/// Preflight, Before Start, Engine Start, After Start, Before Takeoff, After Takeoff, Descent, Before Landing, After
-/// Landing, Parking and Shutdown.
+/// The iniBuilds L-1011 TriStar First Officer checklists: one group per flow, with the flow's id and name, and no
+/// read-back group: Power Up, Preflight, Before Start, Engine Start, After Start, Before Takeoff, After Takeoff,
+/// Descent, Before Landing, After Landing, Parking and Shutdown.
 ///
-/// The ACTION group (<c>POWER_UP</c>) lists the Power Up flow's writes and its unconditional Captain step,
-/// in the flow's order and with the flow's labels: ticking a line runs the same write as its flow step,
-/// through the executor, and a state line ticks itself from the aircraft (<c>RevertToState</c>, [FOB-1]).
-/// The conditional ground power prompt stays flow-only, as the MD-11's conditional Captain prompts do.
+/// Each group lists its flow's lines in the flow's order ([FO-6]): the writes and the unconditional Captain steps,
+/// with the flow's labels (ticking a write's line runs the same write as its flow step, through the executor, and a
+/// state line ticks itself from the aircraft: <c>RevertToState</c>, [FOB-1]), and the lines of the aircraft's own
+/// checklist pages that no write of the flow reads: each a read-only line under the id of the flow step that
+/// completes it (a <c>Check</c>, a wait, or for Power Up's loop selectors the fire test), with the page's words, or a
+/// Captain reminder with a step of its own. A page line that read the same state as one of the group's lines went:
+/// no two lines in a group read the same thing. Conditional Captain prompts (ground power, cabin altitude, cabin baro,
+/// doors, INS not in NAV, take-off flaps) stay flow-only, as the MD-11's do.
 ///
-/// Preflight has one action group (<c>PREFLIGHT</c>, the same shape: its conditional cabin altitude prompt
-/// stays flow-only) and four read-backs in the aircraft's words: the flight engineer station (opening with
-/// the safety inspection's APU start and air conditioning lines, which Preflight delivers), the overhead, the
-/// main panel and the centre console. The two tests and the hydraulic cut are parked-only ticks, as Power Up's
-/// pump lines are; the packs line is left alone off the ground.
+/// Power Up opens with the cockpit safety inspection's five read-only checks (fire handles, gear lever, speed brake,
+/// flaps agree, fuel and ignition off) and keeps its loop selectors line after the fire test. The inspection has no
+/// galley line, so none is invented. Five of its hand ticks are left alone unless the aircraft reads on the ground with
+/// every engine stopped ([FO-25]): the ATM switches, the AC hydraulic pumps and the fuel pumps off, the standby power
+/// check, which turns the battery off for a moment, and the engine and APU fire test, which lights the fire warnings.
+/// Unread refuses, as the flow's guards do. The fuel pump tick is also left alone while the APU runs or is still
+/// spooling up, as its flow step is: the tank 2 left pump feeds the APU from the moment it starts turning.
 ///
-/// The READ-BACK group (<c>POWER_UP_CL</c>, [FO-3]: action-free) is the aircraft's cockpit safety inspection
-/// in its own words and order. Each line reads the field and value its delivering flow step checks or skips
-/// on: a single switch its own key at the target, a multi-switch line the matching synthetic. The standby
-/// power check's and the fire test's lines are judged by no state; the flow's composite steps deliver them
-/// ([FO-7]). The inspection has no galley line, so none is invented: the galley step completes its action line
-/// only.
+/// Preflight keeps, from the engineer station, overhead, main panel and console pages, the APU running (its
+/// "APU start switch: press and release", which the APU running wait completes) and the read-only checks: ATMs off,
+/// AC essential selector, the APU's one tank pump, jettison, standby power armed, the disconnect handles, fuel and
+/// ignition off, INS aligning, fire handles, radio masters, start lights and the gear down. The two tests and the
+/// hydraulic cut are parked-only ticks, as Power Up's pump lines are; the packs line is left alone off the ground.
 ///
-/// Five hand ticks are left alone unless the aircraft reads on the ground with every engine stopped
-/// ([FO-25]): the ATM switches, the AC hydraulic pumps and the fuel pumps off, the standby power check, which
-/// turns the battery off for a moment, and the engine and APU fire test, which lights the fire warnings. Unread
-/// refuses, as the flow's guards do. The fuel pump tick is
-/// also left alone while the APU runs or is still spooling up, as its flow step is: the tank 2 left pump
-/// feeds the APU from the moment it starts turning.
+/// Before Start (the flow's writes and the fleet's tail, "Start ACARS" then the clearance) keeps the "Before engine
+/// start" page's doors, one fuel pump on, ignition A or B and all INS navigating, each a read-only check. The cabin
+/// baro and INS lines write their provider's value, or nothing without one, as their steps do. The pack 2 line switches
+/// packs 1 and 3 off, so its tick is left alone off the ground, as Preflight's packs line is; the external power line is
+/// left alone until the APU generator reads on line, as its flow step waits for it.
 ///
-/// Before Start has one action group (<c>BEFORE_START</c>: the flow's writes and the fleet's Before Start tail; its
-/// conditional doors, cabin baro and INS prompts stay flow-only) and one read-back, the aircraft's "Before engine
-/// start" page up to its first ground start, ending with the fleet's "Start ACARS". The cabin baro and INS lines
-/// write their provider's value, or nothing without one, as their steps do. The pack 2 line switches packs 1 and 3
-/// off, so its tick is left alone off the ground, as Preflight's packs line is; the external power line is left
-/// alone until the APU generator reads on line, as its flow step waits for it.
+/// Engine Start lists per engine, 2, 1 then 3, the previous engine's isolation valve off, its feed, its ground start,
+/// its fuel and ignition and the aircraft's release of its ground start switch (the engine start page's line, which
+/// the release wait completes); then the generators. The three ground start lines are the profile's only
+/// <c>StayComplete</c> lines ([FOB-1]): the aircraft releases the switch itself at about 55 % N3, so each latches on its
+/// engine running and no flow step links it. No other line reads an engine running.
 ///
-/// Engine Start has one action group (<c>ENGINE_START</c>: per engine, 2, 1 then 3, the previous engine's isolation
-/// valve off, its feed, its ground start and its fuel and ignition; then the generators) and one read-back, the
-/// aircraft's engine start page in its own words. The three ground start lines are the profile's only
-/// <c>StayComplete</c> lines ([FOB-1]): the aircraft releases the switch itself at about 55 % N3, so each latches on
-/// its engine running and no flow step links it. Every other line mirrors the aircraft.
+/// After Start keeps the after start page's generator fields and breakers, IDG and bus fail lights and essential power
+/// selector, each read only, and ends with the taxi page's two Captain lines, the parking brake released and the brakes
+/// checked. The flaps line writes the take-off index (the tablet's, else SimBrief's) or nothing without one, and is left
+/// alone off the ground; the transfers line is left alone unless tanks 1A and 3A both hold fuel. The generator trip,
+/// bleed and stop lines are left alone until all three engine generators read on line, as the flow's APU steps wait for
+/// them, and the stop line's tick holds until the APU reads stopped; the master line is left alone until the APU reads
+/// stopped, as the flow's master waits on its stop. The ATMs-on line reads no state: the flow puts them to auto right
+/// after. The stabilizer trim line shows the tablet's exported trim as its live value.
 ///
-/// After Start has one action group (<c>AFTER_START</c>: the flow's writes and its three unconditional Captain lines;
-/// its conditional flaps prompt stays flow-only) and two read-backs: the aircraft's after start page, ending with the
-/// engine start page's APU shutdown lines, which After Start delivers, and its taxi page. The flaps line writes the
-/// take-off index (the tablet's, else SimBrief's) or nothing without one, and is left alone off the ground; the
-/// transfers line is left alone unless tanks 1A and 3A both hold fuel. The generator trip, bleed and stop lines are left
-/// alone until all three engine generators read on line, as the flow's APU steps wait for them, and the stop line's tick
-/// holds until the APU reads stopped; the master line is left alone until the APU reads stopped, as the flow's master
-/// waits on its stop. The ATMs-on line reads no state: the flow puts them to auto right after. The stabilizer trim
-/// line shows the tablet's exported trim as its live value.
+/// Before Takeoff (the flow's eight writes) keeps the line-up page's transponder at TA/RA, read only. The pack 2 line
+/// switches packs 1 and 3 off, so its tick is left alone off the ground, as Before Start's is.
 ///
-/// Before Takeoff has one action group (<c>BEFORE_TAKEOFF</c>: the flow's eight writes) and one read-back, the
-/// aircraft's line-up page. The pack 2 line switches packs 1 and 3 off, so its tick is left alone off the ground, as
-/// Before Start's is.
+/// After Takeoff (the gear lever up, the Captain's flap schedule, the climb's writes) ends with the take-off page's flaps
+/// up and gear up (the lever and every leg), read only, the gear last ([FO-13]). The gear lever line is left alone
+/// unless the aircraft reads airborne, as its step is.
 ///
-/// After Takeoff has one action group (<c>AFTER_TAKEOFF</c>: the gear lever up, the Captain's flap schedule, then the
-/// climb's writes) and two read-backs, the aircraft's take-off page (the gear confirmed up by the lever and every leg,
-/// the flaps up) and its climb page. The page's fuel balance, 10,000 ft and transition lines are the Captain's and the
-/// phase monitor's and are left out. The gear line is left alone unless the aircraft reads airborne, as its step is.
-///
-/// Descent has one action group (<c>DESCENT</c>: the seat belt signs, the Captain's landing data, landing autobrake and
-/// QNH, and the cabin altitude for the destination; its conditional cabin altitude prompt stays flow-only) and one
-/// read-back, the aircraft's descent page. The cabin altitude line writes the plan's destination elevation, clamped to
+/// Descent (the seat belt signs, the Captain's landing data, landing autobrake and QNH, and the cabin altitude for the
+/// destination) adds nothing from its page. The cabin altitude line writes the plan's destination elevation, clamped to
 /// the selector's end stops, or nothing without a plan, as its step does.
 ///
-/// Before Landing has one action group (<c>BEFORE_LANDING</c>: the flow's writes and the Captain's flap schedule; its
-/// conditional cabin baro prompt stays flow-only) and one read-back, the aircraft's approach page, which carries the
-/// descent page's baro set line too. The cabin baro line writes the captain's altimeter, or nothing when it reads
-/// standard or unread. The landing autobrake line is the Captain's reminder, with no setting ([FO-14]).
+/// Before Landing (the flow's writes and the Captain's flap schedule) keeps the approach page's "Autobrake: set", a
+/// Captain reminder that names the panel and no setting ([FO-14]), after the gear lever, and its gear line, last, read
+/// only ([FO-13]). The lever's own line reads "Gear lever: down" so the two gear lines are told apart. The cabin baro line
+/// writes the captain's altimeter, or nothing when it reads standard or unread.
 ///
-/// After Landing has one action group (<c>AFTER_LANDING</c>: the flow's fifteen writes) and one read-back, the aircraft's
-/// after landing page. The stabilizer trim line reads the trim readout at zero, the typed entry being write-only; the
-/// flaps line is left alone off the ground, as After Start's is, and so are the anti-skid, air data heat, stabilizer trim
-/// and speed brake lines, which the flow's ground guard covers; the APU start line holds until the APU turns ([FO-11]).
+/// After Landing (the flow's fifteen writes) adds nothing from its page. The stabilizer trim line reads the trim readout
+/// at zero, the typed entry being write-only; the flaps line is left alone off the ground, as After Start's is, and so
+/// are the anti-skid, air data heat, stabilizer trim and speed brake lines, which the flow's ground guard covers; the
+/// APU start line holds until the APU turns ([FO-11]).
 ///
-/// Parking has one action group (<c>PARKING</c>: the flow's writes and the Captain's ground power line; its waits stay
-/// flow-only) and one read-back, the aircraft's parking page. The APU generator line is left alone unless the APU runs,
-/// and the external power line while the APU generator is on line or no ground power is available, as their steps are.
-/// The fuel and ignition line is an engine cut that takes the engine generators off the buses: left alone unless the
-/// aircraft reads on the ground with the APU generator or external power on line, as the flow's power source wait (and
-/// the MD-11's fuel line) refuses it; the INS, the ATMs and AC pumps and the fuel panel lines are left alone unless the
+/// Parking (the flow's writes and the Captain's ground power line) keeps the parking page's "APU generator or external
+/// power: on", which the power source wait completes. The APU generator line is left alone unless the APU runs, and the
+/// external power line while the APU generator is on line or no ground power is available, as their steps are. The fuel
+/// and ignition line is an engine cut that takes the engine generators off the buses: left alone unless the aircraft
+/// reads on the ground with the APU generator or external power on line, as the flow's power source wait (and the
+/// MD-11's fuel line) refuses it; the INS, the ATMs and AC pumps and the fuel panel lines are left alone unless the
 /// aircraft reads on the ground with every engine stopped ([FO-25]).
 ///
-/// Shutdown has one action group (<c>SHUTDOWN</c>: the flow's writes; its guards and APU wait stay flow-only) and one
-/// read-back, the aircraft's securing page. The APU stop line's tick holds until the APU reads stopped ([FO-11]), and
-/// the master line is left alone until it does. The packs line is left alone off the ground; the fuel pump and battery
-/// lines unless the aircraft reads parked with every engine stopped and the APU not turning (the pumps as Power Up's,
-/// the battery as the PMDG 777's waits on its APU); the standby power line unless parked ([FO-25]).
+/// Shutdown (the flow's writes) adds nothing from the securing page. The APU stop line's tick holds until the APU reads
+/// stopped ([FO-11]), and the master line is left alone until it does. The packs line is left alone off the ground; the
+/// fuel pump and battery lines unless the aircraft reads parked with every engine stopped and the APU not turning (the
+/// pumps as Power Up's, the battery as the PMDG 777's waits on its APU); the standby power line unless parked ([FO-25]).
 /// </summary>
 public static class L1011FoChecklistDefinitions
 {
     public static List<Group> Build() => new()
     {
-        PowerUp(), PowerUpCL(),
-        Preflight(), PreflightEngineerCL(), PreflightOverheadCL(), PreflightMainPanelCL(), PreflightConsoleCL(),
-        BeforeStart(), BeforeStartCL(),
-        EngineStart(), EngineStartCL(),
-        AfterStart(), AfterStartCL(), TaxiCL(),
-        BeforeTakeoff(), BeforeTakeoffCL(),
-        AfterTakeoff(), AfterTakeoffCL(), ClimbCL(),
-        Descent(), DescentCL(),
-        BeforeLanding(), BeforeLandingCL(),
-        AfterLanding(), AfterLandingCL(),
-        Parking(), ParkingCL(),
-        Shutdown(), ShutdownCL(),
+        PowerUp(), Preflight(), BeforeStart(), EngineStart(), AfterStart(), BeforeTakeoff(), AfterTakeoff(),
+        Descent(), BeforeLanding(), AfterLanding(), Parking(), Shutdown(),
     };
 
     private const string ContIgnition = "SWITCH_CONT_IGNITION";
@@ -153,7 +135,7 @@ public static class L1011FoChecklistDefinitions
     private static (string Key, int Target)[] All(int target, params string[] keys)
         => keys.Select(k => (k, target)).ToArray();
 
-    // ================================================================== action group
+    // ================================================================== Power Up
 
     private static Group PowerUp()
     {
@@ -163,6 +145,13 @@ public static class L1011FoChecklistDefinitions
             Id = G, Name = "Power Up",
             Items = new()
             {
+                // The cockpit safety inspection's checks: what the First Officer finds and never moves, read only, each
+                // completed by its own flow check.
+                Read("PU_CHK_FIRE_HANDLES", G, "Engine and APU fire handles: in", "FO_FIRE_HANDLES_IN", On),
+                Read("PU_CHK_GEAR", G, "Gear lever: down", "FO_GEAR_LEVER_DOWN", On),
+                Read("PU_CHK_SPEED_BRAKE", G, "Speed brake handle: forward", "FO_SPEED_BRAKE_FORWARD", On),
+                Read("PU_CHK_FLAPS", G, "Flaps and flap handle: agree", "FO_FLAPS_AGREE", On),
+                Read("PU_CHK_FUEL_IGN", G, "Fuel and ignition switches: off", "FO_FUEL_IGNITION_OFF", On),
                 Auto("PU_CONT_IGN", G, "Continuous ignition: off", ContIgnition, v => Is(v, 0), Set(ContIgnition, 0)),
                 Auto("PU_RADIO_MASTERS", G, "Radio master switches: on", "FO_RADIO_MASTERS_ON", On,
                     SetAll(("SWITCH_MASTER_RADIO_ESS", 1), ("SWITCH_MASTER_RADIO_NO2", 1))),
@@ -201,49 +190,12 @@ public static class L1011FoChecklistDefinitions
                 // The test lights the fire warnings: parked only (FO-25), as it was in Preflight.
                 LeaveAlone(ActionManual("PU_FIRE_TEST", G, "Engine and APU fire test", Set(X.FireTest, 1)),
                     NotParked, ParkedOnlyText),
+                // The inspection's loop selectors line, read only: the fire test leaves them at Both and delivers it.
+                Read("PU_LOOP_SELECTORS", G, "Detection loop selectors: both", "FO_FIRE_LOOPS_BOTH", On),
                 // One composite, unit by unit: a unit already at ALIGN or NAV is left alone, never rewritten.
                 Auto("PU_INS_ALIGN", G, "INS 1, 2 and 3: align", "FO_INS_ALIGN_OR_NAV", On, Set(X.InsAlign, 1)),
                 Reminder("PU_INS_POSITION", G,
                     "Enter present position on INS 1, 2 and 3: input Shift+M, then Alt+P on each unit."),
-            }
-        };
-    }
-
-    // ================================================================== read-back group (the aircraft's words)
-
-    private static Group PowerUpCL()
-    {
-        const string G = "POWER_UP_CL";
-        return new Group
-        {
-            Id = G, Name = "Cockpit Safety Inspection",
-            Items = new()
-            {
-                Read("PUC_FIRE_HANDLES", G, "Engine and APU fire handles: in", "FO_FIRE_HANDLES_IN", On),
-                Read("PUC_CONT_IGN", G, "Continuous ignition: unlatched", ContIgnition, v => Is(v, 0)),
-                Read("PUC_RADIO_MASTERS", G, "Essential and no. 2 radio master switches: latched", "FO_RADIO_MASTERS_ON", On),
-                Read("PUC_GEAR", G, "Gear lever: down", "FO_GEAR_LEVER_DOWN", On),
-                Read("PUC_SPEED_BRAKE", G, "Speed brake handle: forward", "FO_SPEED_BRAKE_FORWARD", On),
-                Read("PUC_FLAPS", G, "Flaps and flap handle: agree", "FO_FLAPS_AGREE", On),
-                Read("PUC_FUEL_IGN", G, "Fuel and ignition switches: off", "FO_FUEL_IGNITION_OFF", On),
-                Read("PUC_XPDR", G, "Transponder: standby", Transponder, v => Is(v, 1)),
-                Read("PUC_RADAR", G, "Radar: off", RadarOff, v => Is(v, 1)),
-                Read("PUC_ATMS", G, "ATM switches: off", "FO_ATMS_OFF", On),
-                Read("PUC_AC_PUMPS", G, "AC hydraulic pump switches: unlatched", "FO_AC_PUMPS_OFF", On),
-                Read("PUC_FUEL_PUMPS", G, "Fuel tank pump switches: unlatched", "FO_FUEL_PUMPS_OFF", On),
-                Read("PUC_JETTISON", G, "Master jettison and dump switches: unlatched", "FO_JETTISON_SAFE", On),
-                Read("PUC_PAX_OXY", G, "Passenger oxygen manual switch: guarded and unlatched", "FO_PAX_OXY_SAFE", On),
-                // Judged by no state: the flow's standby power check delivers it; the two lines after it, its own
-                // steps.
-                Manual("PUC_STBY_CHECK", G, "Standby power check: complete"),
-                Read("PUC_BATTERY", G, "Battery: on", Battery, v => Is(v, 1)),
-                Read("PUC_STBY_ARMED", G, "Standby power: armed", "FO_STBY_ARMED", On),
-                Read("PUC_AC_ESS", G, "AC essential power selector: normal, bus 3 (generator 1)", AcEssBus, v => Is(v, AcEssNormal)),
-                // The page's fire tests, between the AC essential selector and external power; Power Up's fire test
-                // delivers both.
-                Read("PUC_LOOP_SELECTORS", G, "Detection loop selectors: both", "FO_FIRE_LOOPS_BOTH", On),
-                Manual("PUC_FIRE_TEST", G, "Engine and APU fire test: complete"),
-                Read("PUC_INS_ALIGN", G, "All INS: align", "FO_INS_ALIGN_OR_NAV", On),
             }
         };
     }
@@ -294,13 +246,14 @@ public static class L1011FoChecklistDefinitions
             .ToArray();
 
     /// <summary>
-    /// The Preflight flow's writes and its seven unconditional Captain steps, in the flow's order and with its
-    /// labels: a single switch reads its key at the target (the ignition selector, A or B, as its step's
-    /// "Already set" does), a multi-switch line its synthetic, a composite the state it delivers. The three
+    /// The Preflight flow's writes, the read-only lines it completes and its seven unconditional Captain steps, in the
+    /// flow's order: a single switch reads its key at the target (the ignition selector, A or B, as its step's
+    /// "Already set" does), a multi-switch line its synthetic, a composite the state it delivers. The two
     /// tests have no state and run every tick; the cabin altitude writes the plan's value, or nothing without one.
     /// The packs off, the hot air off and the APU's minimum compressor mode read no state either: the flow undoes
     /// each later (packs on, hot air on, compressor mode normal), so a state line would untick itself after a good
-    /// run. Each is ticked when its step completes, and a hand tick does its step's write.
+    /// run. Each is ticked when its step completes, and a hand tick does its step's write. The read-only lines keep the
+    /// aircraft's preparation pages' words, under the ids of the steps that complete them.
     /// </summary>
     private static Group Preflight()
     {
@@ -316,6 +269,8 @@ public static class L1011FoChecklistDefinitions
                     SetAll(("SWITCH_FUEL_PUMP_2L_1", 1), ("SWITCH_ENG_2_TANK_VALVE", 1), ("GUARD_ENG_2_TANK_VALVE", 0))),
                 // The composite holds until the APU turns, a slow condition (FO-11): the 10 s grace would not cover it.
                 Auto("PF_APU_START", G, "APU: start", "FO_APU_STARTING_OR_RUNNING", On, Set(X.ApuStart, 1)),
+                // The engineer station page's start line reads the APU running, which the flow's wait completes.
+                Read("PF_APU_RUNNING", G, "APU start switch: press and release", "FO_APU_RUNNING", On),
                 Auto("PF_APU_GEN", G, "APU generator: on line", "FO_APU_GEN_CLOSED", On, Set(X.ApuGenerator, 1)),
                 Auto("PF_AC_TIES", G, "AC bus ties: closed", "FO_AC_TIES_CLOSED", On, Set(X.AcTies, 1)),
                 Auto("PF_APU_AIR", G, "Fuselage isolation and crossbleed valves: on", "FO_APU_AIR_ON", On,
@@ -338,6 +293,7 @@ public static class L1011FoChecklistDefinitions
                 Auto("PF_HYD_ENGINE_PUMPS", G, "Engine hydraulic pumps: on and guarded", "FO_HYD_ENGINE_PUMPS_ON", On,
                     SetAll(All(1, "SWITCH_HYD_PUMP_A1", "SWITCH_HYD_PUMP_B1", "SWITCH_HYD_PUMP_C1", "SWITCH_HYD_PUMP_D1")
                         .Concat(All(0, "GUARD_HYD_PUMP_A1", "GUARD_HYD_PUMP_B1", "GUARD_HYD_PUMP_C1", "GUARD_HYD_PUMP_D1")).ToArray())),
+                Read("PF_CHK_ATMS", G, "ATM switches: off", "FO_ATMS_OFF", On),
                 // Cuts hydraulic power: parked only, as Power Up's AC pump line (FO-25). Reads both halves of
                 // its step's "Already set".
                 LeaveAlone(Auto("PF_AC_PUMPS_PTUS_OFF", G, "AC hydraulic pumps and PTUs: off", "FO_AC_PUMPS_OFF", On,
@@ -348,6 +304,7 @@ public static class L1011FoChecklistDefinitions
                     NotParked, ParkedOnlyText),
                 Auto("PF_AC_METER", G, "AC meter: APU generator", AcMeter, v => Is(v, AcMeterApu), Set(AcMeter, AcMeterApu)),
                 Auto("PF_DC_METER", G, "DC meter: battery", DcMeter, v => Is(v, DcMeterBattery), Set(DcMeter, DcMeterBattery)),
+                Read("PF_CHK_AC_ESS", G, "AC ESS power selector: norm b3 (g1)", AcEssBus, v => Is(v, AcEssNormal)),
                 Auto("PF_TRANSFERS_OFF", G, "1A and 3A transfers: off", "FO_TRANSFERS_OFF", On,
                     SetAll(All(0, "SWITCH_FUEL_XFR_1A", "SWITCH_FUEL_XFR_3A"))),
                 Auto("PF_CROSSFEEDS", G, "Crossfeed valves: closed", "FO_CROSSFEEDS_CLOSED", On,
@@ -355,6 +312,8 @@ public static class L1011FoChecklistDefinitions
                 Auto("PF_TANK_VALVES", G, "Engine tank valves: on and guarded", "FO_TANK_VALVES_ON", On,
                     SetAll(All(1, "SWITCH_ENG_1_TANK_VALVE", "SWITCH_ENG_2_TANK_VALVE", "SWITCH_ENG_3_TANK_VALVE")
                         .Concat(All(0, "GUARD_ENG_1_TANK_VALVE", "GUARD_ENG_2_TANK_VALVE", "GUARD_ENG_3_TANK_VALVE")).ToArray())),
+                Read("PF_CHK_APU_PUMP", G, "Tank pump switches: one on for the APU", "FO_ONLY_APU_PUMP_ON", On),
+                Read("PF_CHK_JETTISON", G, "Master and tank jettison switches: unlatched", "FO_JETTISON_SAFE", On),
                 Auto("PF_FUEL_CTRL", G, "Fuel control amplifier switches: off", "FO_FUEL_CTRL_OVRD_OFF", On,
                     SetAll(All(0, "SWITCH_FUEL_CTRL_OVRD_ENG_1", "SWITCH_FUEL_CTRL_OVRD_ENG_2", "SWITCH_FUEL_CTRL_OVRD_ENG_3"))),
                 Auto("PF_MOVIE", G, "Movie interrupt: off and guarded", "FO_MOVIE_OFF", On, SetAll(All(0, "MOVIES_OFF", "GUARD_MOVIES_OFF"))),
@@ -400,6 +359,7 @@ public static class L1011FoChecklistDefinitions
                         ("SWITCH_FLOOD_LIGHT", 1), ("SWITCH_WHEEL_LIGHT", 1))),
                 Auto("PF_EMER_LIGHTS", G, "Emergency lights: armed", "FO_EMER_LIGHTS_ARMED", On,
                     SetAll(("TOGGLE_EMER_LIGHTING", 1), ("GUARD_EMER_LIGHTING", 0))),
+                Read("PF_CHK_STBY_ARMED", G, "Standby power: armed", "FO_STBY_ARMED", On),
                 Auto("PF_NO_SMOKING", G, "No smoking signs: on", NoSmoking, v => Is(v, 1), Set(NoSmoking, 1)),
                 Auto("PF_INSTR_SOURCES", G, "Instrument source selectors: normal", "FO_INSTR_SOURCES_NORMAL", On,
                     SetAll(All(0, InstrumentSourceKeys))),
@@ -408,8 +368,16 @@ public static class L1011FoChecklistDefinitions
                     SetAll(All(1, "SWITCH_AFCS_FD_A", "SWITCH_AFCS_FD_B"))),
                 Auto("PF_PADDLES_OFF", G, "Autopilot paddles: off", "FO_PADDLES_OFF", On,
                     SetAll(All(2, "SWITCH_AFCS_AP_A", "SWITCH_AFCS_AP_B"))),
+                Read("PF_CHK_DISCONNECT", G, "Pitch and roll disconnect handles: normal", "FO_DISCONNECT_HANDLES_STOWED", On),
                 Auto("PF_SPEED_BRAKE", G, "Speed brake lever: forward", "FO_SPEED_BRAKE_FORWARD", On, Set(L1011Levers.SpeedBrakeKey, 0)),
+                Read("PF_CHK_FUEL_IGN", G, "Fuel and ignition switches: off", "FO_FUEL_IGNITION_OFF", On),
                 Auto("PF_XPDR", G, "Transponder: standby", Transponder, v => Is(v, 1), Set(Transponder, 1)),
+                // What Power Up left, read only.
+                Read("PF_CHK_INS", G, "INS 1, 2 and 3: check alignment", "FO_INS_ALIGN_OR_NAV", On),
+                Read("PF_CHK_FIRE_HANDLES", G, "Fire pull handles: in", "FO_FIRE_HANDLES_IN", On),
+                Read("PF_CHK_RADIO_MASTERS", G, "Master radio switches: on", "FO_RADIO_MASTERS_ON", On),
+                Read("PF_CHK_START_LIGHTS", G, "Engine start lights: all out", "FO_START_LIGHTS_OUT", On),
+                Read("PF_CHK_GEAR", G, "Landing gear: down, 3 green", L1011GearConfirmation.DownField, On),
                 Reminder("PF_CPT_INS_ROUTE", G, "Load the route and set the initial track on INS 1, 2 and 3"),
                 Reminder("PF_CPT_PMS", G, "Set the PMS"),
                 Reminder("PF_CPT_NAV", G, "Set NAV 1 and 2 and the courses: Ctrl+N"),
@@ -417,138 +385,6 @@ public static class L1011FoChecklistDefinitions
                 Reminder("PF_CPT_AFCS", G, "Set the speed, heading and altitude on the autopilot"),
                 Reminder("PF_CPT_TAKEOFF_DATA", G, "Enter the take-off data on the tablet"),
                 Reminder("PF_CPT_RADIOS", G, "Set the radios"),
-            }
-        };
-    }
-
-    // ================================================================== Preflight: the read-backs (the aircraft's words)
-
-    /// <summary>
-    /// The flight engineer station preparation, opening with the cockpit safety inspection's APU start and air
-    /// conditioning lines: Preflight delivers them, and Power Up's read-back holds only lines Power Up delivers
-    /// (FO-7); the inspection's fire test lines are Power Up's. The tests' own lines are judged by no state; their
-    /// composites deliver them. The page's
-    /// drain mast heater line is left out: the aircraft puts both switches back to off within seconds, by hand too.
-    /// </summary>
-    private static Group PreflightEngineerCL()
-    {
-        const string G = "PREFLIGHT_FE_CL";
-        return new Group
-        {
-            Id = G, Name = "Flight Engineer Station Preparation",
-            Items = new()
-            {
-                Read("PFC_APU_MASTER", G, "APU master power switch: on", ApuMaster, v => Is(v, 1)),
-                Read("PFC_APU_FUEL", G, "One tank boost pump and engine 2 tank valve switch: on", "FO_ENG2_FUEL_FEED", On),
-                Read("PFC_APU_START", G, "APU start switch: press and release", "FO_APU_RUNNING", On),
-                Read("PFC_APU_GEN", G, "APU generator field and breaker switches: latch", "FO_APU_GEN_CLOSED", On),
-                Read("PFC_AC_TIES", G, "Bus tie breakers: close", "FO_AC_TIES_CLOSED", On),
-                Read("PFC_FUSELAGE_ISLN", G, "Fuselage isolation valve switch: latch", FuselageIsolation, v => Is(v, 1)),
-                Read("PFC_XBLEEDS", G, "Crossbleed valve switches: latch", "FO_CROSSBLEEDS_ON", On),
-                Read("PFC_PACK_AUTO", G, "Pack auto/manual control switches: auto", "FO_PACKS_AUTO", On),
-                Read("PFC_ZONE_TRIMS", G, "Zone trim switches: latched", "FO_ZONE_TRIMS_ON", On),
-                Read("PFC_APU_BLEED", G, "APU bleed air shut off switch: latch in", ApuBleed, v => Is(v, 1)),
-                Read("PFC_PACKS", G, "Pack flow control valve switches: latch in", "FO_PACKS_ON", On),
-                Read("PFC_APU_MODE_NORM", G, "APU mode selector: norm", ApuMode, v => Is(v, 1)),
-                Read("PFC_HOT_AIR", G, "Hot air valve and hot air isolation valve switches: latch in", "FO_HOT_AIR_ON", On),
-                Manual("PFC_WHEEL_WELL_TEST", G, "Wheel well fire panel check: complete"),
-                Read("PFC_HYD_ENGINE_PUMPS", G, "Engine pump shut off switches: latched", "FO_HYD_ENGINE_PUMPS_ON", On),
-                Read("PFC_ATMS", G, "ATM switches: off", "FO_ATMS_OFF", On),
-                Read("PFC_PTUS", G, "PTU switches: unlatched", "FO_PTUS_OFF", On),
-                Manual("PFC_HYD_CHECK", G, "Hydraulic panel check: complete"),
-                Read("PFC_AC_METER", G, "AC meter selector: APU", AcMeter, v => Is(v, AcMeterApu)),
-                Read("PFC_DC_METER", G, "DC meter: bat", DcMeter, v => Is(v, DcMeterBattery)),
-                Read("PFC_AC_ESS", G, "AC ESS power selector: norm b3 (g1)", AcEssBus, v => Is(v, AcEssNormal)),
-                Read("PFC_TRANSFERS", G, "1A and 3A transfer switches: unlatched", "FO_TRANSFERS_OFF", On),
-                Read("PFC_CROSSFEEDS", G, "Crossfeed switches: close", "FO_CROSSFEEDS_CLOSED", On),
-                Read("PFC_TANK_VALVES", G, "All engine tank valve switches: latched", "FO_TANK_VALVES_ON", On),
-                Read("PFC_APU_PUMP_ONLY", G, "Tank pump switches: one on for the APU", "FO_ONLY_APU_PUMP_ON", On),
-                Read("PFC_JETTISON", G, "Master and tank jettison switches: unlatched", "FO_JETTISON_SAFE", On),
-                Read("PFC_FUEL_CTRL", G, "Fuel control amplifier switches: unlatched", "FO_FUEL_CTRL_OVRD_OFF", On),
-                Read("PFC_MOVIE", G, "Movie interrupt switch: unlatched", "FO_MOVIE_OFF", On),
-                Read("PFC_SLAT_MONITOR", G, "Slat monitor switch: unlatch", SlatMonitor, v => Is(v, 0)),
-                Read("PFC_HI_PRESS", G, "Hi pressure bleed switches: latched", "FO_HI_PRESS_ON", On),
-                Read("PFC_ISLN_VALVES", G, "Engine isolation valve switches: latched", "FO_ISLN_VALVES_ON", On),
-                Read("PFC_ECS", G, "Cool air overboard and cargo heat switches: latched", "FO_ECS_ON", On),
-                Read("PFC_PRESS_MODE", G, "Mode sel: norm", PressMode, v => Is(v, 1)),
-                Read("PFC_CABIN_ALT", G, "Alt sel control: set cruise altitude", "FO_CABIN_ALT_AT_CRUISE", On),
-            }
-        };
-    }
-
-    /// <summary>The overhead preparation. The page's "Seat belts: on" belongs to Before Start and is left out.</summary>
-    private static Group PreflightOverheadCL()
-    {
-        const string G = "PREFLIGHT_OVHD_CL";
-        return new Group
-        {
-            Id = G, Name = "Overhead Preparation",
-            Items = new()
-            {
-                Read("PFO_INS", G, "INS 1, 2 and 3: check alignment", "FO_INS_ALIGN_OR_NAV", On),
-                Read("PFO_FIRE_HANDLES", G, "Fire pull handles: in", "FO_FIRE_HANDLES_IN", On),
-                Read("PFO_COMPASSES", G, "Compass 1 and 2: mag", "FO_COMPASSES_MAG", On),
-                Read("PFO_RADIO_MASTERS", G, "Master radio switches: on", "FO_RADIO_MASTERS_ON", On),
-                Read("PFO_WIPERS", G, "Captain and F/O wipers: off", "FO_WIPERS_OFF", On),
-                Read("PFO_ANTI_ICE", G, "Engine and wing anti-ice switches: unlatched", "FO_ANTI_ICE_OFF", On),
-                Read("PFO_WINDSHIELD", G, "Capt and F/O windshield heat switches: latched", "FO_WINDSHIELD_NORMAL", On),
-                Read("PFO_SIDE_WINDOWS", G, "Side window switches: latch in", "FO_SIDE_WINDOWS_ON", On),
-                Read("PFO_AIR_DATA", G, "Air data sensor heat switches: all off", "FO_AIR_DATA_HEAT_OFF", On),
-                Read("PFO_MACH_FEEL", G, "Mach feel switches and rudder travel limiter: latched", "FO_MACH_FEEL_RUDDER_ON", On),
-                Read("PFO_START_LIGHTS", G, "Engine start lights: all out", "FO_START_LIGHTS_OUT", On),
-                Read("PFO_IGNITION", G, "Ignition: A or B", "FO_IGNITION_SELECTED", On),
-                Read("PFO_STBY_LIGHTS", G, "Instrument standby lights: brt", StandbyLights, v => Is(v, 1)),
-                Read("PFO_PFCS", G, "All PFCS switches: latched", "FO_PFCS_ON", On),
-                Read("PFO_FCES", G, "All FCES switches: latched", "FO_FCES_ON", On),
-                Read("PFO_BRAKE_SEL", G, "Brake selector switch: norm sys B", BrakeSelector, v => Is(v, 0)),
-                Read("PFO_ANTISKID", G, "Anti-skid switch: unlatch", AntiSkid, v => Is(v, 0)),
-                Read("PFO_PARKING_BRAKE", G, "Parking brake: set", L1011Levers.ParkingBrakeKey, v => Is(v, 1)),
-                Read("PFO_AUTOBRAKE", G, "Auto brake: off", Autobrake, v => Is(v, AutobrakeOff)),
-                Read("PFO_EXT_LIGHTS", G, "Exterior lights: logo and position on, the rest off", "FO_EXT_LIGHTS_PREFLIGHT", On),
-                Read("PFO_EMER_LIGHTS", G, "Emergency lighting switch: arm", "FO_EMER_LIGHTS_ARMED", On),
-                Read("PFO_STBY_POWER", G, "Standby power: armed", "FO_STBY_ARMED", On),
-                Read("PFO_NO_SMOKING", G, "No smoking: on", NoSmoking, v => Is(v, 1)),
-            }
-        };
-    }
-
-    private static Group PreflightMainPanelCL()
-    {
-        const string G = "PREFLIGHT_MAIN_CL";
-        return new Group
-        {
-            Id = G, Name = "Main Panel Preparation",
-            Items = new()
-            {
-                Reminder("PFM_NAV", G, "Nav 1 and Nav 2: set"),
-                Read("PFM_DME", G, "Nav 1 and Nav 2 DME: norm", "FO_DME_NORMAL", On),
-                Reminder("PFM_AUTOPILOT", G, "Autopilot: IAS, heading, courses and altitude set"),
-                Read("PFM_FLIGHT_DIRECTORS", G, "Flight directors: on", "FO_FLIGHT_DIRECTORS_ON", On),
-                Read("PFM_AUTOPILOT_MASTERS", G, "Autopilot masters: off", "FO_PADDLES_OFF", On),
-                Reminder("PFM_ALTIMETERS", G, "Altimeters: set QNH"),
-                Read("PFM_INSTR_SOURCE", G, "Instrument source selector: normal", "FO_INSTR_SOURCES_NORMAL", On),
-                Read("PFM_GEAR", G, "Landing gear: down, 3 green", L1011GearConfirmation.DownField, On),
-                Read("PFM_BRAKE_SYS", G, "Brake system: norm sys B", BrakeSelector, v => Is(v, 0)),
-            }
-        };
-    }
-
-    private static Group PreflightConsoleCL()
-    {
-        const string G = "PREFLIGHT_CONSOLE_CL";
-        return new Group
-        {
-            Id = G, Name = "Center Console Preparation",
-            Items = new()
-            {
-                Reminder("PFX_INS", G, "INS 1, 2 and 3: set"),
-                Reminder("PFX_PMS", G, "PMS: set"),
-                Read("PFX_DISCONNECT", G, "Pitch and roll disconnect handles: normal", "FO_DISCONNECT_HANDLES_STOWED", On),
-                Read("PFX_PARKING_BRAKE", G, "Parking brake: set", L1011Levers.ParkingBrakeKey, v => Is(v, 1)),
-                Read("PFX_SPEED_BRAKE", G, "Speed brake lever: forward", "FO_SPEED_BRAKE_FORWARD", On),
-                Read("PFX_FUEL_IGN", G, "Fuel and ignition switches: off", "FO_FUEL_IGNITION_OFF", On),
-                Reminder("PFX_RADIOS", G, "Communication radios: set"),
-                Read("PFX_XPDR", G, "Transponder: set and STBY", Transponder, v => Is(v, 1)),
             }
         };
     }
@@ -571,10 +407,11 @@ public static class L1011FoChecklistDefinitions
         { "SWITCH_ISLN_VALVE_ENG_1", "SWITCH_ISLN_VALVE_ENG_2", "SWITCH_ISLN_VALVE_ENG_3", "SWITCH_XBLEED_1", "SWITCH_XBLEED_3" };
 
     /// <summary>
-    /// The Before Start flow's writes and the fleet's tail, in the flow's order and with its labels: a single switch
-    /// reads its key at the target, a multi-switch line its synthetic, external power its breaker read open. The
-    /// cabin baro and each INS line write their provider's value (the captain's altimeter; NAV for a unit at ALIGN read
-    /// aligned, or already at NAV) and nothing without one, and read the state their step sets.
+    /// The Before Start flow's writes, the "Before engine start" page's read-only checks and the fleet's tail, in the
+    /// flow's order: a single switch reads its key at the target, a multi-switch line its synthetic, external power its
+    /// breaker read open. The cabin baro and each INS line write their provider's value (the captain's altimeter; NAV
+    /// for a unit at ALIGN read aligned, or already at NAV) and nothing without one, and read the state their step sets.
+    /// The page's "Start ACARS" is the tail's own line, so it is there once.
     /// </summary>
     private static Group BeforeStart()
     {
@@ -590,7 +427,11 @@ public static class L1011FoChecklistDefinitions
                     s => !s.IsOn("FO_APU_GEN_ON_LINE"), ExtPowerStaysText),
                 Auto("BS_SEAT_BELTS", G, "Seat belt signs: on", SeatBelts, v => Is(v, 1), Set(SeatBelts, 1)),
                 Auto("BS_ANTICOL", G, "Anti-collision lights: on", AntiCollision, v => Is(v, 1), Set(AntiCollision, 1)),
+                // The page's "Door lights ... OUT": the line reads the four door positions, never the light (it does not
+                // follow the doors), so it is worded on what it reads.
+                Read("BS_CHK_DOORS", G, "Doors: closed", "FO_DOORS_CLOSED", On),
                 Auto("BS_GALLEY", G, "Galley power: off", "FO_GALLEY_OFF", On, SetAll(All(0, GalleyBuses))),
+                Read("BS_CHK_FUEL_PUMP", G, "Fuel pump: minimum one on", "FO_ANY_FUEL_PUMP_ON", On),
                 Auto("BS_APU_MODE_MIN", G, "APU compressor mode: minimum", ApuMode, v => Is(v, 0), Set(ApuMode, 0)),
                 // Packs 1 and 3 off in the air cut two of the three packs: on the ground only (FO-25).
                 LeaveAlone(Auto("BS_PACK_2", G, "Packs: pack 2 on, packs 1 and 3 off", "FO_PACK_2_ONLY", On,
@@ -602,7 +443,9 @@ public static class L1011FoChecklistDefinitions
                 // A standard or unread captain's altimeter gives no value: the tick writes nothing (FO-20).
                 Auto("BS_CABIN_BARO", G, "Cabin barometric setting: captain's altimeter", "FO_CABIN_BARO_SET", On,
                     Provided(X.CabinBaro, s => s.CabinBaroTargetHundredths())),
+                Read("BS_CHK_IGNITION", G, "Start ignition: A or B", "FO_IGNITION_SELECTED", On),
                 InsNav(G, 1), InsNav(G, 2), InsNav(G, 3),
+                Read("BS_CHK_INS_NAV", G, "All INS: NAV", "FO_INS_NAVIGATING", On),
                 Auto("BS_XPDR", G, "Transponder: TA/RA", Transponder, v => Is(v, TransponderTaRa), Set(Transponder, TransponderTaRa)),
                 Reminder("BS_ACARS", G, "Start ACARS"),
                 Reminder("BS_CLEARANCE", G, "Obtain pushback and start clearance"),
@@ -618,34 +461,6 @@ public static class L1011FoChecklistDefinitions
         string n = unit.ToString(CultureInfo.InvariantCulture);
         return Auto($"BS_INS_{n}_NAV", groupId, $"INS {n}: nav", key, v => Is(v, L1011FoStateEvaluator.InsNav),
             Provided(key, s => s.InsNavTarget(unit)));
-    }
-
-    /// <summary>The aircraft's "Before engine start" page, up to its first ground start, in its own words; the fleet's
-    /// "Start ACARS" last.</summary>
-    private static Group BeforeStartCL()
-    {
-        const string G = "BEFORE_START_CL";
-        return new Group
-        {
-            Id = G, Name = "Before Engine Start",
-            Items = new()
-            {
-                Read("BSC_INS_NAV", G, "All INS: NAV", "FO_INS_NAVIGATING", On),
-                Read("BSC_XPDR", G, "Transponder: TA/RA", Transponder, v => Is(v, TransponderTaRa)),
-                Read("BSC_SEAT_BELTS", G, "Seatbelt sign: on", SeatBelts, v => Is(v, 1)),
-                Read("BSC_ANTICOL", G, "Anti coll light: on", AntiCollision, v => Is(v, 1)),
-                Read("BSC_IGNITION", G, "Start ignition: A or B", "FO_IGNITION_SELECTED", On),
-                // The page's "Door lights ... OUT": the line reads the four door positions, never the light (it does not
-                // follow the doors), so it is worded on what it reads.
-                Read("BSC_DOORS", G, "Doors: closed", "FO_DOORS_CLOSED", On),
-                Read("BSC_GALLEY", G, "Galley power: off", "FO_GALLEY_OFF", On),
-                Read("BSC_FUEL_PUMP", G, "Fuel pump: minimum one on", "FO_ANY_FUEL_PUMP_ON", On),
-                Read("BSC_APU_MODE", G, "APU: min mode", ApuMode, v => Is(v, 0)),
-                Read("BSC_PACK_2", G, "Packs: pack 2 on", "FO_PACK_2_ONLY", On),
-                Read("BSC_ISLN_VALVES", G, "All engine isolation valves: latched", "FO_START_AIR_VALVES_ON", On),
-                Reminder("BSC_ACARS", G, "Start ACARS"),
-            }
-        };
     }
 
     // ================================================================== Engine Start
@@ -669,7 +484,8 @@ public static class L1011FoChecklistDefinitions
     /// The Engine Start flow's writes, in its order and with its labels: a single switch reads its key at the target, the
     /// feed its synthetic, the generators all six relays. A ground start line latches on its engine running (N3 at 50 %),
     /// never on the switch, which the aircraft releases at about 55 %; its tick turns the switch on and watches N3 rise,
-    /// as the flow step does.
+    /// as the flow step does. Each engine's release line, the engine start page's, reads the switch off with the engine
+    /// running (the switch alone reads off before any start too), and the flow's release wait completes it.
     /// </summary>
     private static Group EngineStart()
     {
@@ -687,32 +503,11 @@ public static class L1011FoChecklistDefinitions
                 v => v >= L1011FoStateEvaluator.EngineRunningN3, Set(X.GroundStart(n), 1)));
             string fuel = X.FuelIgnitionKey(n);
             items.Add(Auto(e + "FUEL_IGN", G, $"Engine {Num(n)} fuel and ignition: on", fuel, v => Is(v, 1), Set(fuel, 1)));
+            items.Add(Read(e + "RELEASED", G, $"Engine {Num(n)} at 55 percent N3: ground start switch released",
+                $"FO_ENG{Num(n)}_START_RELEASED", On));
         }
         items.Add(Auto("ES_GENERATORS", G, "Engine generator fields and breakers: closed", "FO_ENGINE_GENERATORS_ON", On,
             Set(X.EngineGenerators, 1)));
-        return new Group { Id = G, Name = "Engine Start", Items = items };
-    }
-
-    /// <summary>The aircraft's engine start page on APU air, in its own words, engines 2, 1 then 3. The page's engine
-    /// parameters check and its ground-air and crossbleed alternatives are left out, and its APU shutdown lines belong to
-    /// After Start.</summary>
-    private static Group EngineStartCL()
-    {
-        const string G = "ENGINE_START_CL";
-        var items = new List<Item> { Read("ESC_FUEL_PUMP", G, "Fuel pump: minimum one on", "FO_ANY_FUEL_PUMP_ON", On) };
-        foreach (var (n, previous) in StartOrder)
-        {
-            if (previous is int p)
-                items.Add(Read($"ESC_E{Num(p)}_ISLN_OFF", G, $"Engine {Num(p)} isln valve: unlatch", IsolationValve(p), v => Is(v, 0)));
-            items.Add(Read($"ESC_E{Num(n)}_FUEL_IGN", G, $"Engine {Num(n)} at 20 percent N3: fuel and ignition on",
-                X.FuelIgnitionKey(n), v => Is(v, 1)));
-            // The switch off with the engine running: the switch alone reads off before any start too.
-            items.Add(Read($"ESC_E{Num(n)}_RELEASED", G, $"Engine {Num(n)} at 55 percent N3: ground start switch released",
-                $"FO_ENG{Num(n)}_START_RELEASED", On));
-            items.Add(Read($"ESC_E{Num(n)}_RUNNING", G, $"Engine {Num(n)}: running", $"FO_ENG{Num(n)}_RUNNING", On));
-        }
-        items.Add(Read("ESC_GEN_FIELDS", G, "Engine generator field: close", "FO_GEN_FIELDS_CLOSED", On));
-        items.Add(Read("ESC_GEN_BREAKERS", G, "Engine generator breaker: close", "FO_GEN_BREAKERS_CLOSED", On));
         return new Group { Id = G, Name = "Engine Start", Items = items };
     }
 
@@ -760,10 +555,11 @@ public static class L1011FoChecklistDefinitions
         => s.TakeoffStabTrimUnits() is double units ? $"{units.ToString("0.00", CultureInfo.InvariantCulture)} units" : null;
 
     /// <summary>
-    /// The After Start flow's writes and its three unconditional Captain lines, in the flow's order and with its labels:
-    /// a single switch reads its key at the target, a multi-switch line its synthetic, the APU generator line its breaker
-    /// read open, the stop line the APU stopped, the flaps line the handle at the take-off index. The ATMs-on line reads
-    /// no state, the flow putting them to auto right after; a tick does its step's write.
+    /// The After Start flow's writes, the after start page's read-only checks, its three unconditional Captain lines and
+    /// the taxi page's two, in the flow's order: a single switch reads its key at the target, a multi-switch line its
+    /// synthetic, the APU generator line its breaker read open, the stop line the APU stopped, the flaps line the handle
+    /// at the take-off index. The ATMs-on line reads no state, the flow putting them to auto right after; a tick does its
+    /// step's write. The generator check completes the page's two generator lines, the fields and the breakers.
     /// </summary>
     private static Group AfterStart()
     {
@@ -783,8 +579,14 @@ public static class L1011FoChecklistDefinitions
                 ActionManual("AS_ATMS_ON", G, "ATM switches: on", SetAll(All(AtmOn, AtmB, AtmC))),
                 Auto("AS_ATMS_AUTO", G, "ATM switches: auto", "FO_ATMS_AUTO", On, SetAll(All(AtmAuto, AtmB, AtmC))),
                 Auto("AS_GALLEY_ON", G, "Galley power: on", "FO_GALLEY_ON", On, SetAll(All(1, GalleyBuses))),
+                // What Engine Start left, read only.
+                Read("AS_GEN_FIELDS", G, "Engine generator field: close", "FO_GEN_FIELDS_CLOSED", On),
+                Read("AS_GEN_BREAKERS", G, "Engine generator breaker: close", "FO_GEN_BREAKERS_CLOSED", On),
+                Read("AS_CHK_IDG", G, "IDG low pressure lights: out", "FO_IDG_LIGHTS_OUT", On),
+                Read("AS_CHK_BUS_FAIL", G, "All bus fail lights: out", "FO_BUS_FAIL_LIGHTS_OUT", On),
                 Auto("AS_AC_METER", G, "AC meter: generator 3", AcMeter, v => Is(v, AcMeterGen3), Set(AcMeter, AcMeterGen3)),
                 Auto("AS_DC_METER", G, "DC meter: battery", DcMeter, v => Is(v, DcMeterBattery), Set(DcMeter, DcMeterBattery)),
+                Read("AS_CHK_AC_ESS", G, "Essential power selector: normal b3 (g1)", AcEssBus, v => Is(v, AcEssNormal)),
                 Auto("AS_FUEL_PUMPS", G, "Fuel pumps: all on", "FO_FUEL_PUMPS_ON", On, SetAll(All(1, FuelPumps))),
                 Auto("AS_CROSSFEEDS", G, "Crossfeed valves: closed", "FO_CROSSFEEDS_CLOSED", On,
                     SetAll(All(0, "SWITCH_FUEL_LEFT_XFEED", "SWITCH_FUEL_CTR_XFEED", "SWITCH_FUEL_RIGHT_XFEED"))),
@@ -817,65 +619,9 @@ public static class L1011FoChecklistDefinitions
                 // The master only over an APU read stopped, as the flow's master waits on its stop.
                 LeaveAlone(Auto("AS_APU_MASTER_OFF", G, "APU master: off", ApuMaster, v => Is(v, 0), Set(ApuMaster, 0)),
                     ApuNotStopped, ApuMasterStaysText),
-            }
-        };
-    }
-
-    /// <summary>The aircraft's after start page in its own words, then the engine start page's APU shutdown lines, which
-    /// After Start delivers once the engine generators are on line.</summary>
-    private static Group AfterStartCL()
-    {
-        const string G = "AFTER_START_CL";
-        return new Group
-        {
-            Id = G, Name = "After Start",
-            Items = new()
-            {
-                Read("ASC_HI_PRESS", G, "All engines hi press switches: latched", "FO_HI_PRESS_ON", On),
-                Read("ASC_ISLN_VALVES", G, "All eng isol valve: latch", "FO_ISLN_VALVES_ON", On),
-                Read("ASC_FUSELAGE_ISLN", G, "Fuselage isolation valve switch: latched", FuselageIsolation, v => Is(v, 1)),
-                Read("ASC_XBLEEDS", G, "All cross bleed switches: latched", "FO_CROSSBLEEDS_ON", On),
-                Read("ASC_PACKS", G, "Pack flow control switches: latch", "FO_PACKS_ON", On),
-                Read("ASC_ATMS", G, "ATMs: auto", "FO_ATMS_AUTO", On),
-                Read("ASC_GALLEY", G, "Galley power: on", "FO_GALLEY_ON", On),
-                Read("ASC_GEN_FIELDS", G, "Engine generator field: close", "FO_GEN_FIELDS_CLOSED", On),
-                Read("ASC_GEN_BREAKERS", G, "Engine generator breaker: close", "FO_GEN_BREAKERS_CLOSED", On),
-                Read("ASC_IDG", G, "IDG low pressure lights: out", "FO_IDG_LIGHTS_OUT", On),
-                Read("ASC_BUS_FAIL", G, "All bus fail lights: out", "FO_BUS_FAIL_LIGHTS_OUT", On),
-                Read("ASC_AC_METER", G, "AC meter selector: gen 3", AcMeter, v => Is(v, AcMeterGen3)),
-                Read("ASC_DC_METER", G, "DC meter selector: bat", DcMeter, v => Is(v, DcMeterBattery)),
-                Read("ASC_AC_ESS", G, "Essential power selector: normal b3 (g1)", AcEssBus, v => Is(v, AcEssNormal)),
-                Read("ASC_FUEL_PUMPS", G, "Fuel tank pumps: all on", "FO_FUEL_PUMPS_ON", On),
-                Read("ASC_CROSSFEEDS", G, "Crossfeed valves: closed", "FO_CROSSFEEDS_CLOSED", On),
-                Read("ASC_TRANSFERS", G, "If there is fuel in tanks 1A and 3A: latch xfr", "FO_TRANSFERS_ON", On),
-                Read("ASC_PITOT_HEAT", G, "Capt and F/O pitot heat: on", "FO_PITOT_ALPHA_HEAT_ON", On),
-                Read("ASC_ALPHA_HEAT", G, "Alpha probe heat: on", "FO_PITOT_ALPHA_HEAT_ON", On),
-                Read("ASC_IGNITION", G, "Engine ignition: both", IgnitionSelector, v => Is(v, IgnitionBoth)),
-                Reminder("ASC_STAB_TRIM", G, "Stabilizer trim: set for take off"),
-                Reminder("ASC_SPEED_BRAKES", G, "Speed brakes: check"),
-                Read("ASC_FLAPS", G, "Flaps: set for take off", "FO_FLAPS_TAKEOFF", On),
-                Reminder("ASC_CONTROLS", G, "Flight controls: check"),
-                Read("ASC_APU_GEN_TRIP", G, "APU generator breaker: trip", "FO_APU_GEN_OFF_LINE", On),
-                Read("ASC_APU_BLEED", G, "APU bleed air shut off switch: unlatch", ApuBleed, v => Is(v, 0)),
-                Read("ASC_APU_STOP", G, "APU stop button: press", "FO_APU_OFF", On),
-                Read("ASC_APU_MASTER", G, "APU master power: off", ApuMaster, v => Is(v, 0)),
-            }
-        };
-    }
-
-    /// <summary>The aircraft's taxi page in its own words: the nose taxi light, which After Start turns on, and the
-    /// Captain's brakes.</summary>
-    private static Group TaxiCL()
-    {
-        const string G = "TAXI_CL";
-        return new Group
-        {
-            Id = G, Name = "Taxi",
-            Items = new()
-            {
-                Read("TXC_TAXI_LIGHT", G, "Nose wheel taxi light: on", TaxiLight, v => Is(v, 1)),
-                Reminder("TXC_PARKING_BRAKE", G, "Parking brake: release"),
-                Reminder("TXC_BRAKES", G, "Brakes: check"),
+                // The taxi page's Captain lines; its nose taxi light is the flow's own taxi light line.
+                Reminder("AS_CPT_PARKING_BRAKE", G, "Parking brake: release"),
+                Reminder("AS_CPT_BRAKES", G, "Brakes: check"),
             }
         };
     }
@@ -889,8 +635,8 @@ public static class L1011FoChecklistDefinitions
     /// <summary>The autobrake selector's TAKEOFF position.</summary>
     private const int AutobrakeTakeoff = 0;
 
-    /// <summary>The Before Takeoff flow's eight writes, in its order and with its labels: a single switch reads its key at
-    /// the target, a multi-switch line its synthetic.</summary>
+    /// <summary>The Before Takeoff flow's eight writes and the line-up page's transponder check, in its order: a single
+    /// switch reads its key at the target, a multi-switch line its synthetic, the transponder TA/RA read only.</summary>
     private static Group BeforeTakeoff()
     {
         const string G = "BEFORE_TAKEOFF";
@@ -910,29 +656,9 @@ public static class L1011FoChecklistDefinitions
                     SetAll(All(1, "TOGGLE_LANDING_LEFT", "TOGGLE_LANDING_RIGHT"))),
                 Auto("BT_CONT_IGN", G, "Continuous ignition: on", ContIgnition, v => Is(v, 1), Set(ContIgnition, 1)),
                 Auto("BT_PROBE_HEAT", G, "Temperature probe heat: on", ProbeHeat, v => Is(v, 1), Set(ProbeHeat, 1)),
+                // Before Start set TA/RA: read only.
+                Read("BT_CHK_XPDR", G, "Transponder: TA/RA", Transponder, v => Is(v, TransponderTaRa)),
                 Auto("BT_RADAR", G, "Weather radar: on", RadarOn, v => Is(v, 1), Set(RadarOn, 1)),
-            }
-        };
-    }
-
-    /// <summary>The aircraft's line-up page in its own words.</summary>
-    private static Group BeforeTakeoffCL()
-    {
-        const string G = "BEFORE_TAKEOFF_CL";
-        return new Group
-        {
-            Id = G, Name = "Line Up",
-            Items = new()
-            {
-                Read("BTC_PACKS", G, "Normal: pack 2 only, packs 1 and 3 off", "FO_PACK_2_ONLY", On),
-                Read("BTC_ANTISKID", G, "Antiskid: on", AntiSkid, v => Is(v, 1)),
-                Read("BTC_AUTOBRAKE", G, "Autobrake: takeoff", Autobrake, v => Is(v, AutobrakeTakeoff)),
-                Read("BTC_STROBES", G, "Strobe lights: on", StrobeLights, v => Is(v, 1)),
-                Read("BTC_LANDING_LIGHTS", G, "Landing lights: on", "FO_LANDING_LIGHTS_ON", On),
-                Read("BTC_CONT_IGN", G, "Continuous ignition: on", ContIgnition, v => Is(v, 1)),
-                Read("BTC_PROBE_HEAT", G, "Temp probe heat: on", ProbeHeat, v => Is(v, 1)),
-                Read("BTC_XPDR", G, "Transponder: TA/RA", Transponder, v => Is(v, TransponderTaRa)),
-                Read("BTC_RADAR", G, "Radar: on", RadarOn, v => Is(v, 1)),
             }
         };
     }
@@ -952,9 +678,9 @@ public static class L1011FoChecklistDefinitions
     internal static bool NotAirborne(L1011FoStateEvaluator s) => !s.IsPosition("SIM_ON_GROUND", 0);
 
     /// <summary>
-    /// The After Takeoff flow's writes and its Captain's flap schedule, in its order and with its labels: the gear line
-    /// reads the lever up (the read-back's gear line reads the legs too), a single switch its key at the target, a
-    /// multi-switch line its synthetic.
+    /// The After Takeoff flow's writes, its Captain's flap schedule and the take-off page's flaps and gear checks, in its
+    /// order: the gear lever line reads the lever up, a single switch its key at the target, a multi-switch line its
+    /// synthetic; the flaps line the handle up and the gear line, LAST ([FO-13]), the lever and every leg, read only.
     /// </summary>
     private static Group AfterTakeoff()
     {
@@ -975,39 +701,9 @@ public static class L1011FoChecklistDefinitions
                     SetAll(All(0, GroundLights))),
                 Auto("AT_CONT_IGN", G, "Continuous ignition: off", ContIgnition, v => Is(v, 0), Set(ContIgnition, 0)),
                 Auto("AT_PACKS_ON", G, "Packs: on", "FO_PACKS_ON", On, SetAll(All(1, PackKeys))),
-            }
-        };
-    }
-
-    /// <summary>The aircraft's take-off page, in its own words: the gear up (lever and every leg), the flaps up.</summary>
-    private static Group AfterTakeoffCL()
-    {
-        const string G = "AFTER_TAKEOFF_CL";
-        return new Group
-        {
-            Id = G, Name = "Take Off",
-            Items = new()
-            {
-                Read("ATC_GEAR", G, "Positive rate of climb: landing gear up", L1011GearConfirmation.UpField, On),
-                Read("ATC_FLAPS", G, "At V2 plus 60: set flaps up", "FO_FLAPS_UP", On),
-            }
-        };
-    }
-
-    /// <summary>The aircraft's climb page, in its own words, without the Captain's fuel balance, 10,000 ft and
-    /// transition lines.</summary>
-    private static Group ClimbCL()
-    {
-        const string G = "CLIMB_CL";
-        return new Group
-        {
-            Id = G, Name = "Climb",
-            Items = new()
-            {
-                Read("CLC_AUTOBRAKE", G, "Autobrake: off", Autobrake, v => Is(v, AutobrakeOff)),
-                Read("CLC_GROUND_LIGHTS", G, "Nose wheel landing, taxi and runway turnoff lights: off", "FO_GROUND_LIGHTS_OFF", On),
-                Read("CLC_CONT_IGN", G, "Continuous ignition: off", ContIgnition, v => Is(v, 0)),
-                Read("CLC_PACKS", G, "Packs: on", "FO_PACKS_ON", On),
+                // The take-off page's lines, read only: the Captain's flaps up, then the gear up, lever and every leg, last.
+                Read("AT_CHK_FLAPS_UP", G, "At V2 plus 60: set flaps up", "FO_FLAPS_UP", On),
+                Read("AT_GEAR_UP_CHECK", G, "Positive rate of climb: landing gear up", L1011GearConfirmation.UpField, On),
             }
         };
     }
@@ -1036,33 +732,19 @@ public static class L1011FoChecklistDefinitions
         };
     }
 
-    /// <summary>The aircraft's descent page in its own words. The page's baro set line is Before Landing's, and its
-    /// 10,000 ft landing lights the phase monitor's.</summary>
-    private static Group DescentCL()
-    {
-        const string G = "DESCENT_CL";
-        return new Group
-        {
-            Id = G, Name = "Descent",
-            Items = new()
-            {
-                Reminder("DSC_LANDING_DATA", G, "Landing data: prepared"),
-                Read("DSC_SEAT_BELTS", G, "30 mins before landing: seatbelt signs on", SeatBelts, v => Is(v, 1)),
-                Reminder("DSC_QNH", G, "At transition level, altimeters: set QNH"),
-                Read("DSC_CABIN_ALT", G, "At transition level, flt cab alt sel: set destination elevation", "FO_CABIN_ALT_AT_DEST", On),
-            }
-        };
-    }
-
     // ================================================================== Before Landing
 
     /// <summary>The gear lever's down position (50 off, 100 up).</summary>
     private const int GearDown = 0;
 
+    /// <summary>The landing autobrake reminder: the Captain's ([FO-14]), the panel named, no setting.</summary>
+    internal const string LandingAutobrakeCheckText = "Check the landing autobrake on the overhead Antiskid and Autobrake panel";
+
     /// <summary>
-    /// The Before Landing flow's writes and the Captain's flap schedule, in its order and with its labels: the cabin baro
-    /// line reads the setting at the captain's altimeter, a multi-switch line its synthetic, a single switch its key at
-    /// the target, the gear line the lever down (the read-back's gear line reads the legs too).
+    /// The Before Landing flow's writes, the approach page's landing autobrake, the Captain's flap schedule and the
+    /// approach page's gear line, in its order: the cabin baro line reads the setting at the captain's altimeter, a
+    /// multi-switch line its synthetic, a single switch its key at the target, the gear lever line the lever down, and
+    /// the gear line, LAST ([FO-13]), the lever and every leg, read only.
     /// </summary>
     private static Group BeforeLanding()
     {
@@ -1083,32 +765,15 @@ public static class L1011FoChecklistDefinitions
                 Auto("BL_GROUND_LIGHTS", G, "Nose, taxi and runway turnoff lights: on", "FO_GROUND_LIGHTS_ON", On,
                     SetAll(All(1, GroundLights))),
                 Auto("BL_CONT_IGN", G, "Continuous ignition: on", ContIgnition, v => Is(v, 1), Set(ContIgnition, 1)),
-                Auto("BL_GEAR", G, "Landing gear: down", "FO_GEAR_LEVER_DOWN", On, Set(L1011Levers.GearLeverKey, GearDown)),
+                // The lever's own words: "Landing gear: down" is the gear line below, the lever and every leg.
+                Auto("BL_GEAR", G, "Gear lever: down", "FO_GEAR_LEVER_DOWN", On, Set(L1011Levers.GearLeverKey, GearDown)),
+                // The approach page's "Autobrake: set", after the gear as on the page: the Captain's (FO-14).
+                Reminder("BL_CPT_AUTOBRAKE", G, LandingAutobrakeCheckText, label: "Autobrake: set"),
                 Reminder("BL_CPT_FLAPS", G,
                     "Extend the flaps on schedule: 4 at Vref plus 60, 10 at Vref plus 40, 22 at Vref plus 30, 33 at Vref plus 20.",
                     label: "Flaps on schedule"),
-            }
-        };
-    }
-
-    /// <summary>The aircraft's approach page in its own words, opening with the descent page's baro set line, which
-    /// Before Landing delivers. Its autobrake line is the Captain's (FO-14).</summary>
-    private static Group BeforeLandingCL()
-    {
-        const string G = "BEFORE_LANDING_CL";
-        return new Group
-        {
-            Id = G, Name = "Approach",
-            Items = new()
-            {
-                Read("BLC_CABIN_BARO", G, "Baro set: set QNH", "FO_CABIN_BARO_SET", On),
-                Read("BLC_TRANSFERS", G, "1A and 3A xfr switches: close", "FO_TRANSFERS_OFF", On),
-                Read("BLC_PUMPS", G, "All tank pumps: on", "FO_FUEL_PUMPS_ON", On),
-                Read("BLC_CROSSFEEDS", G, "All crossfeed valves: close", "FO_CROSSFEEDS_CLOSED", On),
-                Read("BLC_GEAR", G, "Landing gear: down", L1011GearConfirmation.DownField, On),
-                Reminder("BLC_AUTOBRAKE", G, "Autobrake: set"),
-                Read("BLC_GROUND_LIGHTS", G, "Nose wheel landing, taxi and runway turnoff lights: on", "FO_GROUND_LIGHTS_ON", On),
-                Read("BLC_CONT_IGN", G, "Continuous ignition: on", ContIgnition, v => Is(v, 1)),
+                // The approach page's gear line, read only, LAST (FO-13): the gear check completes it.
+                Read("BL_GEAR_DOWN_CHECK", G, "Landing gear: down", L1011GearConfirmation.DownField, On),
             }
         };
     }
@@ -1176,34 +841,6 @@ public static class L1011FoChecklistDefinitions
         };
     }
 
-    /// <summary>The aircraft's after landing page in its own words, ending with the transfers.</summary>
-    private static Group AfterLandingCL()
-    {
-        const string G = "AFTER_LANDING_CL";
-        return new Group
-        {
-            Id = G, Name = "After Landing",
-            Items = new()
-            {
-                Read("ALC_ANTISKID", G, "Antiskid: off", AntiSkid, v => Is(v, 0)),
-                Read("ALC_AUTOBRAKE", G, "Autobrake: off", Autobrake, v => Is(v, AutobrakeOff)),
-                Read("ALC_LANDING_LIGHTS", G, "Landing lights: off", "FO_LANDING_LIGHTS_OFF", On),
-                Read("ALC_STROBES", G, "Strobe lights: off", StrobeLights, v => Is(v, 0)),
-                Read("ALC_CONT_IGN", G, "Continuous ignition: off", ContIgnition, v => Is(v, 0)),
-                Read("ALC_AIR_DATA", G, "Air data sensor heaters: all off", "FO_AIR_DATA_HEAT_OFF", On),
-                Read("ALC_WINDSHIELD", G, "Capt and F/O windshield heat: idle", "FO_WINDSHIELD_IDLE", On),
-                Read("ALC_SIDE_WINDOWS", G, "Side windows: off", "FO_SIDE_WINDOWS_OFF", On),
-                Read("ALC_STAB_TRIM", G, "Stabilizer trim: zero", "FO_STAB_TRIM_ZERO", On),
-                Read("ALC_SPEED_BRAKE", G, "Speedbrake lever: forward", "FO_SPEED_BRAKE_FORWARD", On),
-                Read("ALC_FLAPS", G, "Flaps: up", "FO_FLAPS_UP", On),
-                Read("ALC_RADAR", G, "Radar: off", RadarOff, v => Is(v, 1)),
-                Read("ALC_APU_MASTER", G, "APU master power: on", ApuMaster, v => Is(v, 1)),
-                Read("ALC_APU", G, "APU: start", "FO_APU_STARTING_OR_RUNNING", On),
-                Read("ALC_TRANSFERS", G, "1A and 3A xfr switches: unlatch", "FO_TRANSFERS_OFF", On),
-            }
-        };
-    }
-
     // ================================================================== Parking
 
     /// <summary>The APU generator line's reason, and its flow step's.</summary>
@@ -1245,10 +882,11 @@ public static class L1011FoChecklistDefinitions
             .ToArray();
 
     /// <summary>
-    /// The Parking flow's writes and the Captain's ground power line, in its order and with its labels: a single switch
-    /// reads its key at the target, a multi-switch line its synthetic, the APU generator and external power their breakers
-    /// closed, the parking brake the lever set, the fuel panel the only pump on with the engine 2 feed and the crossfeeds
-    /// closed. The waits are flow-only.
+    /// The Parking flow's writes, the parking page's power source line and the Captain's ground power line, in its order:
+    /// a single switch reads its key at the target, a multi-switch line its synthetic, the APU generator and external
+    /// power their breakers closed, the power source line either of them closed (read only: the flow's power source wait
+    /// completes it), the parking brake the lever set, the fuel panel the only pump on with the engine 2 feed and the
+    /// crossfeeds closed. The other waits are flow-only.
     /// </summary>
     private static Group Parking()
     {
@@ -1266,6 +904,7 @@ public static class L1011FoChecklistDefinitions
                     ApuNotRunning, ApuGenStaysOffText),
                 LeaveAlone(Auto("PK_EXT_PWR", G, "External power: on", "FO_EXT_POWER_ON", On, Set(X.ExternalPower, 1)),
                     ExtPowerNotWanted, ExtPowerStaysOffText),
+                Read("PK_POWER_SOURCE", G, "APU generator or external power: on", "FO_POWER_SOURCE_ON", On),
                 // An engine cut: never airborne, never unread, and never with no power source on line to take the buses
                 // (the flow's power source wait, the MD-11's fuel line); on the ground with a source on line it goes ahead
                 // with the engines running.
@@ -1287,30 +926,6 @@ public static class L1011FoChecklistDefinitions
                     NotParked, ParkedOnlyText),
                 Auto("PK_APU_BLEED", G, "APU bleed: on", ApuBleed, v => Is(v, 1), Set(ApuBleed, 1)),
                 Reminder("PK_CPT_GROUND_POWER", G, "Connect ground power on the tablet's Ground page if required"),
-            }
-        };
-    }
-
-    /// <summary>The aircraft's parking page in its own words.</summary>
-    private static Group ParkingCL()
-    {
-        const string G = "PARKING_CL";
-        return new Group
-        {
-            Id = G, Name = "Parking",
-            Items = new()
-            {
-                Read("PKC_GROUND_LIGHTS", G, "Nose wheel landing, taxi and runway turnoff lights: off", "FO_GROUND_LIGHTS_OFF", On),
-                Read("PKC_PARKING_BRAKE", G, "Parking brake: set", L1011Levers.ParkingBrakeKey, v => Is(v, 1)),
-                Read("PKC_POWER", G, "APU generator or external power: on", "FO_POWER_SOURCE_ON", On),
-                Read("PKC_FUEL_IGN", G, "Fuel and ignition switches: off", "FO_FUEL_IGNITION_OFF", On),
-                Read("PKC_ANTICOL", G, "Anti coll light: off", AntiCollision, v => Is(v, 0)),
-                Read("PKC_SEAT_BELTS", G, "Seatbelts sign: off", SeatBelts, v => Is(v, 0)),
-                Read("PKC_INS", G, "INS: all off", "FO_INS_OFF", On),
-                Read("PKC_XPDR", G, "Transponder: STBY", Transponder, v => Is(v, 1)),
-                Read("PKC_ATMS_PUMPS", G, "ATMs and AC hyd pumps: off", "FO_ATMS_AC_PUMPS_OFF", On),
-                Read("PKC_TANK_PUMPS", G, "Tank pumps: one on", "FO_ONLY_APU_PUMP_ON", On),
-                Read("PKC_APU_BLEED", G, "APU bleed air shut off valve: on", ApuBleed, v => Is(v, 1)),
             }
         };
     }
@@ -1363,30 +978,6 @@ public static class L1011FoChecklistDefinitions
         };
     }
 
-    /// <summary>The aircraft's securing page in its own words.</summary>
-    private static Group ShutdownCL()
-    {
-        const string G = "SHUTDOWN_CL";
-        return new Group
-        {
-            Id = G, Name = "Securing",
-            Items = new()
-            {
-                Read("SDC_EMER_LIGHTS", G, "Emergency exit lights: off", "FO_EMER_LIGHTS_OFF", On),
-                Read("SDC_STBY_POWER", G, "Standby power: off", StandbyPowerSwitch, v => Is(v, 0)),
-                Read("SDC_RADIO_MASTERS", G, "Master radio switches: off", "FO_RADIO_MASTERS_OFF", On),
-                Read("SDC_GALLEY", G, "Galley power: off", "FO_GALLEY_OFF", On),
-                Read("SDC_APU_GEN_TRIP", G, "APU generator breaker: trip", "FO_APU_GEN_OFF_LINE", On),
-                Read("SDC_APU_BLEED", G, "APU bleed air shutoff valve: unlatch", ApuBleed, v => Is(v, 0)),
-                Read("SDC_APU_STOP", G, "APU stop button: press", "FO_APU_OFF", On),
-                Read("SDC_APU_MASTER", G, "APU master power: off", ApuMaster, v => Is(v, 0)),
-                Read("SDC_EXT_PWR", G, "External power switch: off", "FO_EXT_POWER_OFF", On),
-                Read("SDC_FUEL_PUMPS", G, "Fuel tank pumps: off", "FO_FUEL_PUMPS_OFF", On),
-                Read("SDC_BATTERY", G, "Battery switch: off", Battery, v => Is(v, 0)),
-            }
-        };
-    }
-
     // ================================================================== builders (the MD-11's)
 
     /// <summary>A state line; <paramref name="additionalFields"/> must each read done under the same condition too.</summary>
@@ -1413,7 +1004,8 @@ public static class L1011FoChecklistDefinitions
             await e.Set(key, target);
     };
 
-    /// <summary>A read-back (*_CL) item: auto-detected, action-free.</summary>
+    /// <summary>A read-only line: auto-detected, action-free, ticked by the aircraft or by the flow step that reads it
+    /// (a check or a wait), never a write.</summary>
     private static Item Read(string id, string groupId, string label, string field, Func<double, bool> condition)
         => Auto(id, groupId, label, field, condition, action: null);
 
@@ -1439,14 +1031,6 @@ public static class L1011FoChecklistDefinitions
         Type = ChecklistItemType.Actionable,
         ManualCompletionAllowed = true,
         CheckAction = action,
-    };
-
-    /// <summary>A line no state judges and no tick acts on: ticked by hand, or by the flow step that delivers it.</summary>
-    private static Item Manual(string id, string groupId, string label) => new()
-    {
-        Id = id, GroupId = groupId, Label = label,
-        Type = ChecklistItemType.Actionable,
-        ManualCompletionAllowed = true,
     };
 
     /// <summary>A Captain's line; <paramref name="live"/>, when given, is the value the First Officer reads for it,

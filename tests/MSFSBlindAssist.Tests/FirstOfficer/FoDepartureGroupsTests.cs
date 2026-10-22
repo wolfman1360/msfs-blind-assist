@@ -55,6 +55,16 @@ public class FoDepartureGroupsTests
         }
     }
 
+    /// <summary>The other way round: every id the two sets name is a group of some profile, so a group a profile drops
+    /// (the TriStar's read-backs) leaves no stale entry behind.</summary>
+    [Fact]
+    public void Every_classified_id_is_a_group_of_some_profile()
+    {
+        var all = Profiles().SelectMany(p => GroupIds((string)p[0])).ToHashSet();
+        foreach (var id in FoDepartureGroups.Departure.Concat(FoDepartureGroups.Arrival))
+            Assert.True(all.Contains(id), $"{id} is classified but no profile has it");
+    }
+
     [Theory]
     [MemberData(nameof(Profiles))]
     public void After_takeoff_is_departure_and_descent_onwards_is_arrival(string profile)

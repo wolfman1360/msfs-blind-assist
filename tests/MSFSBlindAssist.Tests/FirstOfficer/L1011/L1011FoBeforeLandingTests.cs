@@ -11,12 +11,14 @@ using Step = MSFSBlindAssist.FirstOfficer.Models.FlowStep<MSFSBlindAssist.FirstO
 namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 
 /// <summary>
-/// The TriStar First Officer's Before Landing flow, its action group and its read-back (the aircraft's approach page),
-/// pinned by structure and by behaviour: the step ids and their order; the cabin barometric setting copied from the
+/// The TriStar First Officer's Before Landing flow and its group (its writes, the approach page's landing autobrake
+/// reminder, the Captain's flap schedule, and the approach page's gear line, last), pinned by structure and by
+/// behaviour: the step ids and their order; the cabin barometric setting copied from the
 /// captain's altimeter, or a silent skip and the Captain asked ([FO-20]); the fuel set for landing, the ground lights
-/// and continuous ignition on, the gear lever down; the Captain's flap schedule; the gear confirmed down last, read
-/// only, 20 s, then skipped ([FO-13]); the landing autobrake left to the Captain ([FO-14]); nothing cut; the lines each
-/// step delivers ([FO-6], [FO-7]); the groups arrival groups ([FO-22]); and that every key is one the definition takes.
+/// and continuous ignition on, the gear lever down; the Captain's landing autobrake and flap schedule; the gear
+/// confirmed down last, read only, 20 s, then skipped ([FO-13]); the landing autobrake left to the Captain ([FO-14]);
+/// nothing cut; the lines each step delivers ([FO-6], [FO-7]); the group an arrival group ([FO-22]); and that every key
+/// is one the definition takes.
 /// </summary>
 public class L1011FoBeforeLandingTests
 {
@@ -75,14 +77,14 @@ public class L1011FoBeforeLandingTests
     public void BeforeLanding_NamesItselfAndItsChecklistGroups()
     {
         Assert.Equal("Before Landing", BeforeLanding.Name);
-        Assert.Equal(new[] { "BEFORE_LANDING", "BEFORE_LANDING_CL" }, BeforeLanding.RelatedChecklistGroupIds);
+        Assert.Equal(new[] { "BEFORE_LANDING" }, BeforeLanding.RelatedChecklistGroupIds);
         Assert.False(string.IsNullOrWhiteSpace(BeforeLanding.Description));
     }
 
     private static readonly string[] StepIds =
     {
         "BL_CABIN_BARO", "BL_CABIN_BARO_CPT", "BL_TRANSFERS_OFF", "BL_FUEL_PUMPS", "BL_CROSSFEEDS", "BL_GROUND_LIGHTS",
-        "BL_CONT_IGN", "BL_GEAR", "BL_CPT_FLAPS", "BL_GEAR_DOWN_CHECK",
+        "BL_CONT_IGN", "BL_GEAR", "BL_CPT_AUTOBRAKE", "BL_CPT_FLAPS", "BL_GEAR_DOWN_CHECK",
     };
 
     [Fact]
@@ -101,7 +103,8 @@ public class L1011FoBeforeLandingTests
         ("BL_GROUND_LIGHTS", "Nose, taxi and runway turnoff lights: on",
             All(1, "TOGGLE_LANDING_NOSE", "TOGGLE_TAXI_LIGHT", "TOGGLE_RWY_TURNOFF")),
         ("BL_CONT_IGN", "Continuous ignition: on", All(1, "SWITCH_CONT_IGNITION")),
-        ("BL_GEAR", "Landing gear: down", All(0, GearLever)),
+        // The lever's own words: "Landing gear: down" is the gear check's line, the lever and every leg.
+        ("BL_GEAR", "Gear lever: down", All(0, GearLever)),
     };
 
     [Fact]
@@ -124,21 +127,22 @@ public class L1011FoBeforeLandingTests
         => Assert.Equal(Writes.Select(w => w.Id).OrderBy(x => x, StringComparer.Ordinal),
             BeforeLanding.Steps.Where(IsSwitch).Select(s => s.Id).OrderBy(x => x, StringComparer.Ordinal));
 
-    /// <summary>Every step's lines, from the table: a write its action line then the read-back line it sets (the gear
-    /// write only its action line: the read-back's gear line is the legs', delivered by the gear check), the Captain's
-    /// flaps its reminder line, the gear check the read-back line it reads, the conditional cabin baro prompt nothing.</summary>
+    /// <summary>Every step's lines, from the table: a write its own line (the gear write the lever's; the legs' line is
+    /// the gear check's), each Captain step its reminder line, the gear check its own line, the conditional cabin baro
+    /// prompt nothing.</summary>
     private static readonly Dictionary<string, string[]> Links = new(StringComparer.Ordinal)
     {
-        ["BL_CABIN_BARO"] = new[] { "BL_CABIN_BARO", "BLC_CABIN_BARO" },
+        ["BL_CABIN_BARO"] = new[] { "BL_CABIN_BARO" },
         ["BL_CABIN_BARO_CPT"] = Array.Empty<string>(),
-        ["BL_TRANSFERS_OFF"] = new[] { "BL_TRANSFERS_OFF", "BLC_TRANSFERS" },
-        ["BL_FUEL_PUMPS"] = new[] { "BL_FUEL_PUMPS", "BLC_PUMPS" },
-        ["BL_CROSSFEEDS"] = new[] { "BL_CROSSFEEDS", "BLC_CROSSFEEDS" },
-        ["BL_GROUND_LIGHTS"] = new[] { "BL_GROUND_LIGHTS", "BLC_GROUND_LIGHTS" },
-        ["BL_CONT_IGN"] = new[] { "BL_CONT_IGN", "BLC_CONT_IGN" },
+        ["BL_TRANSFERS_OFF"] = new[] { "BL_TRANSFERS_OFF" },
+        ["BL_FUEL_PUMPS"] = new[] { "BL_FUEL_PUMPS" },
+        ["BL_CROSSFEEDS"] = new[] { "BL_CROSSFEEDS" },
+        ["BL_GROUND_LIGHTS"] = new[] { "BL_GROUND_LIGHTS" },
+        ["BL_CONT_IGN"] = new[] { "BL_CONT_IGN" },
         ["BL_GEAR"] = new[] { "BL_GEAR" },
+        ["BL_CPT_AUTOBRAKE"] = new[] { "BL_CPT_AUTOBRAKE" },
         ["BL_CPT_FLAPS"] = new[] { "BL_CPT_FLAPS" },
-        ["BL_GEAR_DOWN_CHECK"] = new[] { "BLC_GEAR" },
+        ["BL_GEAR_DOWN_CHECK"] = new[] { "BL_GEAR_DOWN_CHECK" },
     };
 
     [Fact]
@@ -249,8 +253,8 @@ public class L1011FoBeforeLandingTests
     // ------------------------------------------------------------------ the gear and the flaps
 
     /// <summary>[FO-13]: the gear is confirmed down by the LAST step, a read-only wait on the lever and every leg, 20 s,
-    /// then skipped aloud; it never writes, and it completes only the read-back's gear line, which reads the same field
-    /// under the same rule.</summary>
+    /// then skipped aloud; it never writes, and it completes only its own gear line, the LAST line of the group, which
+    /// reads the same field under the same rule.</summary>
     [Fact]
     public void The_gear_check_is_last_read_only_twenty_seconds_and_skips()
     {
@@ -272,11 +276,28 @@ public class L1011FoBeforeLandingTests
         Assert.False(check.SkipCondition!(State(Gear(100, 0))), "gear up");
         Assert.False(check.SkipCondition!(State(Gear(0, 100).Take(3).ToArray())), "a leg unread");
 
-        Assert.Equal(new[] { "BLC_GEAR" }, check.LinkedChecklistItemIds);
-        var line = Line("BLC_GEAR");
+        Assert.Equal(new[] { "BL_GEAR_DOWN_CHECK" }, check.LinkedChecklistItemIds);
+        var line = Line("BL_GEAR_DOWN_CHECK");
+        Assert.Equal("BL_GEAR_DOWN_CHECK", Group("BEFORE_LANDING").Items[^1].Id);
+        Assert.Equal("Landing gear: down", line.Label);
+        Assert.Equal(ChecklistItemType.AutoDetectable, line.Type);
+        Assert.Equal(RevertBehavior.RevertToState, line.RevertBehavior);
+        Assert.Null(line.CheckAction);
+        Assert.Null(line.LeaveAloneWhen);
         Assert.Equal(check.ConditionFieldName, line.StateFieldName);
         foreach (double v in new[] { double.NaN, 0, 1 })
             Assert.Equal(check.Condition!(v), line.StateCondition!(v));
+    }
+
+    /// <summary>The group's two gear lines say what each reads: the write's line the lever, the check's line the gear,
+    /// lever and legs. One label each.</summary>
+    [Fact]
+    public void The_two_gear_lines_are_worded_apart()
+    {
+        Assert.Equal("Gear lever: down", Line("BL_GEAR").Label);
+        Assert.Equal("FO_GEAR_LEVER_DOWN", Line("BL_GEAR").StateFieldName);
+        Assert.Equal("Landing gear: down", Line("BL_GEAR_DOWN_CHECK").Label);
+        Assert.Equal(L1011GearConfirmation.DownField, Line("BL_GEAR_DOWN_CHECK").StateFieldName);
     }
 
     /// <summary>The flaps stay the Captain's: an unconditional reminder naming the schedule, right before the gear
@@ -293,16 +314,35 @@ public class L1011FoBeforeLandingTests
         Assert.DoesNotContain(BeforeLanding.Steps.Where(IsSwitch).SelectMany(Actions), a => a.Key == L1011Levers.FlapHandleKey);
     }
 
-    /// <summary>[FO-14]: the landing autobrake is the Captain's; the flow writes no autobrake and the read-back's line is
-    /// his reminder, with no setting.</summary>
+    private const string AutobrakeReminder = "Check the landing autobrake on the overhead Antiskid and Autobrake panel";
+
+    /// <summary>[FO-14]: the landing autobrake is the Captain's. The flow writes no autobrake; the approach page's
+    /// "Autobrake: set" is his reminder, a step and a line, right after the gear lever as on the page, naming the panel
+    /// and no setting.</summary>
     [Fact]
     public void The_landing_autobrake_is_never_automated()
     {
         Assert.DoesNotContain(BeforeLanding.Steps.Where(IsSwitch).SelectMany(Actions), a => a.Key == "ROTARY_AUTO_BRAKE_MODE");
-        var line = Line("BLC_AUTOBRAKE");
+
+        var step = Of("BL_CPT_AUTOBRAKE");
+        Assert.Equal(FlowStepActionType.CaptainReminder, step.ActionType);
+        Assert.Equal("Autobrake: set", step.Label);
+        Assert.Equal(AutobrakeReminder, step.ReminderText);
+        Assert.Null(step.SkipCondition);
+        var ids = BeforeLanding.Steps.Select(s => s.Id).ToList();
+        Assert.Equal(ids.IndexOf("BL_GEAR") + 1, ids.IndexOf("BL_CPT_AUTOBRAKE"));
+
+        var line = Line("BL_CPT_AUTOBRAKE");
+        Assert.Equal("BEFORE_LANDING", line.GroupId);
+        Assert.Equal("Autobrake: set", line.Label);
         Assert.Equal(ChecklistItemType.CaptainReminder, line.Type);
+        Assert.Equal(AutobrakeReminder, line.ReminderText);
         Assert.Null(line.CheckAction);
         Assert.Null(line.StateFieldName);
+
+        Assert.Contains("Antiskid and Autobrake", AutobrakeReminder);
+        foreach (var setting in new[] { "min", "med", "max" })
+            Assert.DoesNotContain(setting, AutobrakeReminder, StringComparison.OrdinalIgnoreCase);
     }
 
     // ------------------------------------------------------------------ nothing cut ([FO-25])
@@ -328,7 +368,7 @@ public class L1011FoBeforeLandingTests
         var polled = new L1011FoStateEvaluator().OnRequestPollFields.ToHashSet();
         var fields = BeforeLanding.Steps.Select(s => s.ConditionFieldName).OfType<string>()
             .Concat(L1011GearConfirmation.Inputs).Append(CabinBaroReadout).Append(CaptainAltimeter)
-            .Concat(Groups.Where(g => g.Id is "BEFORE_LANDING" or "BEFORE_LANDING_CL").SelectMany(g => g.Items)
+            .Concat(Groups.Where(g => g.Id is "BEFORE_LANDING").SelectMany(g => g.Items)
                 .Select(i => i.StateFieldName).OfType<string>())
             .Distinct().ToList();
         foreach (var field in fields)
@@ -345,42 +385,34 @@ public class L1011FoBeforeLandingTests
     // ================================================================== the checklists
 
     [Fact]
-    public void TheBeforeLandingGroups_FollowDescent_Named()
+    public void TheBeforeLandingGroup_FollowsDescent_Named()
     {
-        Assert.Equal(new[] { "BEFORE_LANDING", "BEFORE_LANDING_CL" },
-            Groups.Select(g => g.Id).SkipWhile(id => id != "BEFORE_LANDING").Take(2));
-        Assert.Equal("DESCENT_CL", Groups.Select(g => g.Id).TakeWhile(id => id != "BEFORE_LANDING").Last());
+        Assert.Equal(new[] { "DESCENT", "BEFORE_LANDING", "AFTER_LANDING" },
+            Groups.Select(g => g.Id).SkipWhile(id => id != "DESCENT").Take(3));
         Assert.Equal("Before Landing", Group("BEFORE_LANDING").Name);
-        Assert.Equal("Approach", Group("BEFORE_LANDING_CL").Name);
     }
 
     /// <summary>[FO-22]: the arrival, never marked by an in-flight start.</summary>
     [Fact]
-    public void EveryBeforeLandingGroup_IsArrival_AndNeverDeparture()
+    public void TheBeforeLandingGroup_IsArrival_AndNeverDeparture()
     {
-        foreach (var id in BeforeLanding.RelatedChecklistGroupIds)
-        {
-            Assert.True(FoDepartureGroups.Arrival.Contains(id), $"{id} is not an arrival group");
-            Assert.False(FoDepartureGroups.Departure.Contains(id), $"{id} is a departure group too");
-        }
+        Assert.True(FoDepartureGroups.Arrival.Contains("BEFORE_LANDING"));
+        Assert.False(FoDepartureGroups.Departure.Contains("BEFORE_LANDING"));
     }
 
-    [Fact]
-    public void The_read_back_has_no_check_action()
-        => Assert.All(Group("BEFORE_LANDING_CL").Items, i => Assert.True(i.CheckAction == null, $"{i.Id} has a CheckAction"));
-
-    private static readonly string[] ActionLineIds =
+    private static readonly string[] LineIds =
     {
         "BL_CABIN_BARO", "BL_TRANSFERS_OFF", "BL_FUEL_PUMPS", "BL_CROSSFEEDS", "BL_GROUND_LIGHTS", "BL_CONT_IGN", "BL_GEAR",
-        "BL_CPT_FLAPS",
+        "BL_CPT_AUTOBRAKE", "BL_CPT_FLAPS", "BL_GEAR_DOWN_CHECK",
     };
 
-    /// <summary>The conditional cabin baro prompt, spoken only while the cabin baro does not read the captain's
-    /// altimeter, is flow-only.</summary>
+    /// <summary>The flow's writes and Captain lines, then the approach page's gear line, last ([FO-13]). Every other line
+    /// of the approach page read the same state as a write's line, and went. The conditional cabin baro prompt, spoken
+    /// only while the cabin baro does not read the captain's altimeter, is flow-only.</summary>
     [Fact]
-    public void BeforeLanding_ActionLines_InTheFlowsOrder()
+    public void BeforeLanding_Lines_InTheFlowsOrder()
     {
-        Assert.Equal(ActionLineIds, Group("BEFORE_LANDING").Items.Select(i => i.Id));
+        Assert.Equal(LineIds, Group("BEFORE_LANDING").Items.Select(i => i.Id));
         Assert.DoesNotContain(Groups.SelectMany(g => g.Items), i => i.Id == "BL_CABIN_BARO_CPT");
     }
 
@@ -394,13 +426,13 @@ public class L1011FoBeforeLandingTests
     [Fact]
     public void BeforeLanding_LineKinds()
     {
-        foreach (var i in Group("BEFORE_LANDING").Items)
+        foreach (var i in Group("BEFORE_LANDING").Items.Where(i => i.Id != "BL_GEAR_DOWN_CHECK"))
         {
-            if (i.Id == "BL_CPT_FLAPS")
+            if (i.Id is "BL_CPT_FLAPS" or "BL_CPT_AUTOBRAKE")
             {
                 Assert.Equal(ChecklistItemType.CaptainReminder, i.Type);
                 Assert.Null(i.CheckAction);
-                Assert.Equal(FlapsReminder, i.ReminderText);
+                Assert.Equal(i.Id == "BL_CPT_FLAPS" ? FlapsReminder : AutobrakeReminder, i.ReminderText);
                 continue;
             }
             Assert.Equal(ChecklistItemType.AutoDetectable, i.Type);
@@ -491,56 +523,10 @@ public class L1011FoBeforeLandingTests
         Assert.DoesNotContain(ac.Io, e => e.Kind != FakeL1011IoKind.FreshRead);
     }
 
-    // ---- the read-back, word for word ------------------------------------------------------------------------------
-
-    /// <summary>A read-back line: its label, and its field and done value, or a Captain's reminder.</summary>
-    private sealed record ReadBack(string Id, string Label, string? Field = null, double Done = 1, bool Reminder = false);
-
-    private static readonly ReadBack[] Approach =
-    {
-        new("BLC_CABIN_BARO", "Baro set: set QNH", "FO_CABIN_BARO_SET"),
-        new("BLC_TRANSFERS", "1A and 3A xfr switches: close", "FO_TRANSFERS_OFF"),
-        new("BLC_PUMPS", "All tank pumps: on", "FO_FUEL_PUMPS_ON"),
-        new("BLC_CROSSFEEDS", "All crossfeed valves: close", "FO_CROSSFEEDS_CLOSED"),
-        new("BLC_GEAR", "Landing gear: down", L1011GearConfirmation.DownField),
-        new("BLC_AUTOBRAKE", "Autobrake: set", Reminder: true),
-        new("BLC_GROUND_LIGHTS", "Nose wheel landing, taxi and runway turnoff lights: on", "FO_GROUND_LIGHTS_ON"),
-        new("BLC_CONT_IGN", "Continuous ignition: on", "SWITCH_CONT_IGNITION"),
-    };
-
+    /// <summary>A finished run latches its own group, and nothing else.</summary>
     [Fact]
-    public void The_read_back_is_word_for_word()
-        => Assert.Equal(Approach.Select(l => (l.Id, l.Label)), Group("BEFORE_LANDING_CL").Items.Select(i => (i.Id, i.Label)));
-
-    [Fact]
-    public void EveryReadBackLine_ReadsItsFieldAtItsValue()
-    {
-        foreach (var rb in Approach)
-        {
-            var line = Line(rb.Id);
-            Assert.Null(line.CheckAction);
-            Assert.Empty(line.AdditionalStateFields);
-            if (rb.Reminder)
-            {
-                Assert.Equal(ChecklistItemType.CaptainReminder, line.Type);
-                Assert.Equal(rb.Label, line.ReminderText);
-                continue;
-            }
-            Assert.Equal(ChecklistItemType.AutoDetectable, line.Type);
-            Assert.Equal(RevertBehavior.RevertToState, line.RevertBehavior);
-            Assert.Equal(rb.Field, line.StateFieldName);
-            Assert.True(line.StateCondition!(rb.Done), $"{rb.Id}: {rb.Field} at {rb.Done} must read done");
-            Assert.False(line.StateCondition!(double.NaN), $"{rb.Id}: unread must not read done");
-            var others = L1011FoStateEvaluator.SyntheticKeys.Contains(rb.Field!) ? new[] { 0.0 } : new[] { 0.0, 2, 3, 4, 5 };
-            foreach (double other in others)
-                Assert.False(line.StateCondition!(other), $"{rb.Id}: {rb.Field} at {other} must not read done");
-        }
-    }
-
-    /// <summary>A finished run latches the action group and the read-back, and nothing else.</summary>
-    [Fact]
-    public void BeforeLanding_LatchesItsTwoGroups()
-        => Assert.Equal(BeforeLanding.RelatedChecklistGroupIds, BeforeLanding.CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
+    public void BeforeLanding_LatchesItsOwnGroup()
+        => Assert.Equal(new[] { "BEFORE_LANDING" }, BeforeLanding.CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
 
     /// <summary>The labels and the flap schedule with their figures, and the provider's hectopascals, read the same
     /// under a comma-decimal culture.</summary>
@@ -557,7 +543,7 @@ public class L1011FoBeforeLandingTests
             return (all, flow.Steps.Single(s => s.Id == "BL_CABIN_BARO").TargetValueProvider!(State((CaptainAltimeter, 1002.4))));
         });
         Assert.Contains(FlapsReminder, texts);
-        Assert.Contains("1A and 3A xfr switches: close", texts);
+        Assert.Contains("1A and 3A transfers: off", texts);
         Assert.Equal(100240, target);
     }
 

@@ -11,7 +11,8 @@ using Step = MSFSBlindAssist.FirstOfficer.Models.FlowStep<MSFSBlindAssist.FirstO
 namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 
 /// <summary>
-/// The TriStar First Officer's Parking flow, its action group and its read-back (the aircraft's parking page), pinned
+/// The TriStar First Officer's Parking flow and its group (its writes, the parking page's power source line, which the
+/// power source wait completes, and the Captain's ground power line), pinned
 /// by structure and by behaviour: the step ids and their order; the aircraft stopped first, read only, Stop; the APU
 /// waited for, its generator on line, or external power on when the APU generator is not and ground power is there; a
 /// power source confirmed on line, read only, Stop, before the fuel and ignition go off; the engines read stopped, read
@@ -107,7 +108,7 @@ public class L1011FoParkingTests
     public void Parking_NamesItselfAndItsChecklistGroups()
     {
         Assert.Equal("Parking", Parking.Name);
-        Assert.Equal(new[] { "PARKING", "PARKING_CL" }, Parking.RelatedChecklistGroupIds);
+        Assert.Equal(new[] { "PARKING" }, Parking.RelatedChecklistGroupIds);
         Assert.False(string.IsNullOrWhiteSpace(Parking.Description));
     }
 
@@ -174,27 +175,27 @@ public class L1011FoParkingTests
         => Assert.Equal(Writes.Select(w => w.Id).OrderBy(x => x, StringComparer.Ordinal),
             Parking.Steps.Where(IsSwitch).Select(s => s.Id).OrderBy(x => x, StringComparer.Ordinal));
 
-    /// <summary>Every step's lines, from the table: a write its action line then the read-back line it sets (external
-    /// power its action line only: the read-back's power line is the APU generator's), the Captain's ground power line
-    /// its own, the waits none.</summary>
+    /// <summary>Every step's lines, from the table: a write its own line, the power source wait the parking page's power
+    /// line (either source on line, which is what it waits for: the APU generator's write alone would leave it open when
+    /// external power is the source), the Captain's ground power line its own, the other waits none.</summary>
     private static readonly Dictionary<string, string[]> Links = new(StringComparer.Ordinal)
     {
         ["PK_STOPPED"] = Array.Empty<string>(),
-        ["PK_GROUND_LIGHTS"] = new[] { "PK_GROUND_LIGHTS", "PKC_GROUND_LIGHTS" },
-        ["PK_PARKING_BRAKE"] = new[] { "PK_PARKING_BRAKE", "PKC_PARKING_BRAKE" },
+        ["PK_GROUND_LIGHTS"] = new[] { "PK_GROUND_LIGHTS" },
+        ["PK_PARKING_BRAKE"] = new[] { "PK_PARKING_BRAKE" },
         ["PK_APU_RUNNING"] = Array.Empty<string>(),
-        ["PK_APU_GEN"] = new[] { "PK_APU_GEN", "PKC_POWER" },
+        ["PK_APU_GEN"] = new[] { "PK_APU_GEN" },
         ["PK_EXT_PWR"] = new[] { "PK_EXT_PWR" },
-        ["PK_POWER_SOURCE"] = Array.Empty<string>(),
-        ["PK_FUEL_IGN_OFF"] = new[] { "PK_FUEL_IGN_OFF", "PKC_FUEL_IGN" },
-        ["PK_ANTICOL"] = new[] { "PK_ANTICOL", "PKC_ANTICOL" },
-        ["PK_SEAT_BELTS"] = new[] { "PK_SEAT_BELTS", "PKC_SEAT_BELTS" },
+        ["PK_POWER_SOURCE"] = new[] { "PK_POWER_SOURCE" },
+        ["PK_FUEL_IGN_OFF"] = new[] { "PK_FUEL_IGN_OFF" },
+        ["PK_ANTICOL"] = new[] { "PK_ANTICOL" },
+        ["PK_SEAT_BELTS"] = new[] { "PK_SEAT_BELTS" },
         ["PK_SPOOL_DOWN"] = Array.Empty<string>(),
-        ["PK_INS_OFF"] = new[] { "PK_INS_OFF", "PKC_INS" },
-        ["PK_XPDR"] = new[] { "PK_XPDR", "PKC_XPDR" },
-        ["PK_ATMS_AC_PUMPS"] = new[] { "PK_ATMS_AC_PUMPS", "PKC_ATMS_PUMPS" },
-        ["PK_FUEL_PANEL"] = new[] { "PK_FUEL_PANEL", "PKC_TANK_PUMPS" },
-        ["PK_APU_BLEED"] = new[] { "PK_APU_BLEED", "PKC_APU_BLEED" },
+        ["PK_INS_OFF"] = new[] { "PK_INS_OFF" },
+        ["PK_XPDR"] = new[] { "PK_XPDR" },
+        ["PK_ATMS_AC_PUMPS"] = new[] { "PK_ATMS_AC_PUMPS" },
+        ["PK_FUEL_PANEL"] = new[] { "PK_FUEL_PANEL" },
+        ["PK_APU_BLEED"] = new[] { "PK_APU_BLEED" },
         ["PK_CPT_GROUND_POWER"] = new[] { "PK_CPT_GROUND_POWER" },
     };
 
@@ -372,7 +373,17 @@ public class L1011FoParkingTests
         Assert.Equal(120, source.TimeoutSeconds);
         Assert.Equal(FlowStepFailurePolicy.Stop, source.FailurePolicy);
         Assert.False(source.Condition!(double.NaN));
-        Assert.Empty(source.LinkedChecklistItemIds);
+        Assert.Equal(new[] { "PK_POWER_SOURCE" }, source.LinkedChecklistItemIds);
+        var line = Line("PK_POWER_SOURCE");
+        Assert.Equal("PARKING", line.GroupId);
+        Assert.Equal("APU generator or external power: on", line.Label);
+        Assert.Equal(ChecklistItemType.AutoDetectable, line.Type);
+        Assert.Equal(RevertBehavior.RevertToState, line.RevertBehavior);
+        Assert.Null(line.CheckAction);
+        Assert.Null(line.LeaveAloneWhen);
+        Assert.Equal(source.ConditionFieldName, line.StateFieldName);
+        foreach (double v in new[] { double.NaN, 0, 1 })
+            Assert.Equal(source.Condition!(v), line.StateCondition!(v));
         Assert.NotNull(source.SkipCondition);
         Assert.True(source.SkipCondition!(State((ApuGenBreaker, 1))), "APU generator on line");
         Assert.True(source.SkipCondition!(State((ExtPowerBreaker, 1))), "external power on line");
@@ -551,7 +562,7 @@ public class L1011FoParkingTests
         var polled = new L1011FoStateEvaluator().OnRequestPollFields.ToHashSet();
         var fields = Parking.Steps.Select(s => s.ConditionFieldName).OfType<string>()
             .Concat(new[] { ApuRpm, ApuGenBreaker, ExtPowerBreaker, ExtPowerAvailable, Ground })
-            .Concat(Groups.Where(g => g.Id is "PARKING" or "PARKING_CL").SelectMany(g => g.Items)
+            .Concat(Groups.Where(g => g.Id is "PARKING").SelectMany(g => g.Items)
                 .SelectMany(i => i.AdditionalStateFields.Prepend(i.StateFieldName)).OfType<string>())
             .Distinct().ToList();
         foreach (var field in fields)
@@ -568,48 +579,43 @@ public class L1011FoParkingTests
     // ================================================================== the checklists
 
     [Fact]
-    public void TheParkingGroups_FollowAfterLanding_Named()
+    public void TheParkingGroup_FollowsAfterLanding_Named()
     {
-        Assert.Equal(new[] { "PARKING", "PARKING_CL" }, Groups.Select(g => g.Id).SkipWhile(id => id != "PARKING").Take(2));
-        Assert.Equal("AFTER_LANDING_CL", Groups.Select(g => g.Id).TakeWhile(id => id != "PARKING").Last());
+        Assert.Equal(new[] { "AFTER_LANDING", "PARKING", "SHUTDOWN" },
+            Groups.Select(g => g.Id).SkipWhile(id => id != "AFTER_LANDING").Take(3));
         Assert.Equal("Parking", Group("PARKING").Name);
-        Assert.Equal("Parking", Group("PARKING_CL").Name);
     }
 
     /// <summary>[FO-22]: the arrival, never marked by an in-flight start.</summary>
     [Fact]
-    public void EveryParkingGroup_IsArrival_AndNeverDeparture()
+    public void TheParkingGroup_IsArrival_AndNeverDeparture()
     {
-        foreach (var id in Parking.RelatedChecklistGroupIds)
-        {
-            Assert.True(FoDepartureGroups.Arrival.Contains(id), $"{id} is not an arrival group");
-            Assert.False(FoDepartureGroups.Departure.Contains(id), $"{id} is a departure group too");
-        }
+        Assert.True(FoDepartureGroups.Arrival.Contains("PARKING"));
+        Assert.False(FoDepartureGroups.Departure.Contains("PARKING"));
     }
 
-    [Fact]
-    public void The_read_back_has_no_check_action()
-        => Assert.All(Group("PARKING_CL").Items, i => Assert.True(i.CheckAction == null, $"{i.Id} has a CheckAction"));
-
-    private static readonly string[] ActionLineIds =
+    private static readonly string[] LineIds =
     {
-        "PK_GROUND_LIGHTS", "PK_PARKING_BRAKE", "PK_APU_GEN", "PK_EXT_PWR", "PK_FUEL_IGN_OFF", "PK_ANTICOL", "PK_SEAT_BELTS",
-        "PK_INS_OFF", "PK_XPDR", "PK_ATMS_AC_PUMPS", "PK_FUEL_PANEL", "PK_APU_BLEED", "PK_CPT_GROUND_POWER",
+        "PK_GROUND_LIGHTS", "PK_PARKING_BRAKE", "PK_APU_GEN", "PK_EXT_PWR", "PK_POWER_SOURCE", "PK_FUEL_IGN_OFF", "PK_ANTICOL",
+        "PK_SEAT_BELTS", "PK_INS_OFF", "PK_XPDR", "PK_ATMS_AC_PUMPS", "PK_FUEL_PANEL", "PK_APU_BLEED", "PK_CPT_GROUND_POWER",
     };
 
-    /// <summary>The waits are flow-only.</summary>
+    /// <summary>The flow's writes, the parking page's power line where the power source wait sits, and the Captain's
+    /// ground power line. Every other line of the parking page read the same state as a write's line, and went. The
+    /// other waits are flow-only.</summary>
     [Fact]
-    public void Parking_ActionLines_InTheFlowsOrder()
+    public void Parking_Lines_InTheFlowsOrder()
     {
-        Assert.Equal(ActionLineIds, Group("PARKING").Items.Select(i => i.Id));
-        foreach (var id in new[] { "PK_STOPPED", "PK_APU_RUNNING", "PK_POWER_SOURCE", "PK_SPOOL_DOWN" })
+        Assert.Equal(LineIds, Group("PARKING").Items.Select(i => i.Id));
+        foreach (var id in new[] { "PK_STOPPED", "PK_APU_RUNNING", "PK_SPOOL_DOWN" })
             Assert.DoesNotContain(Groups.SelectMany(g => g.Items), i => i.Id == id);
     }
 
+    /// <summary>Ticked or run, a write's line says what its step says; the power line keeps the parking page's words.</summary>
     [Fact]
     public void Parking_ActionLabels_AreTheFlowStepLabels()
     {
-        foreach (var i in Group("PARKING").Items)
+        foreach (var i in Group("PARKING").Items.Where(i => i.Id != "PK_POWER_SOURCE"))
             Assert.Equal(Of(i.Id).Label, i.Label);
     }
 
@@ -618,7 +624,7 @@ public class L1011FoParkingTests
     {
         foreach (var i in Group("PARKING").Items)
         {
-            if (i.Id == "PK_CPT_GROUND_POWER")
+            if (i.Id is "PK_CPT_GROUND_POWER" or "PK_POWER_SOURCE")
                 continue;
             Assert.Equal(ChecklistItemType.AutoDetectable, i.Type);
             Assert.NotNull(i.CheckAction);
@@ -712,53 +718,10 @@ public class L1011FoParkingTests
         Assert.Equal(Sent(byStep), Sent(byTick));
     }
 
-    // ---- the read-back, word for word ------------------------------------------------------------------------------
-
-    /// <summary>A read-back line: its label, and its field and done value.</summary>
-    private sealed record ReadBack(string Id, string Label, string Field, double Done = 1);
-
-    private static readonly ReadBack[] ParkingReadBack =
-    {
-        new("PKC_GROUND_LIGHTS", "Nose wheel landing, taxi and runway turnoff lights: off", "FO_GROUND_LIGHTS_OFF"),
-        new("PKC_PARKING_BRAKE", "Parking brake: set", ParkingBrake, 1),
-        new("PKC_POWER", "APU generator or external power: on", "FO_POWER_SOURCE_ON"),
-        new("PKC_FUEL_IGN", "Fuel and ignition switches: off", "FO_FUEL_IGNITION_OFF"),
-        new("PKC_ANTICOL", "Anti coll light: off", "SWITCH_ANTICOL_LIGHT", 0),
-        new("PKC_SEAT_BELTS", "Seatbelts sign: off", "SWITCH_SEATBELT_LIGHT", 0),
-        new("PKC_INS", "INS: all off", "FO_INS_OFF"),
-        new("PKC_XPDR", "Transponder: STBY", "ROTARY_TCAS_MODE", 1),
-        new("PKC_ATMS_PUMPS", "ATMs and AC hyd pumps: off", "FO_ATMS_AC_PUMPS_OFF"),
-        new("PKC_TANK_PUMPS", "Tank pumps: one on", "FO_ONLY_APU_PUMP_ON"),
-        new("PKC_APU_BLEED", "APU bleed air shut off valve: on", "SWITCH_APU_BLEED", 1),
-    };
-
+    /// <summary>A finished run latches its own group, and nothing else.</summary>
     [Fact]
-    public void The_read_back_is_word_for_word()
-        => Assert.Equal(ParkingReadBack.Select(l => (l.Id, l.Label)), Group("PARKING_CL").Items.Select(i => (i.Id, i.Label)));
-
-    [Fact]
-    public void EveryReadBackLine_ReadsItsFieldAtItsValue()
-    {
-        foreach (var rb in ParkingReadBack)
-        {
-            var line = Line(rb.Id);
-            Assert.Null(line.CheckAction);
-            Assert.Empty(line.AdditionalStateFields);
-            Assert.Equal(ChecklistItemType.AutoDetectable, line.Type);
-            Assert.Equal(RevertBehavior.RevertToState, line.RevertBehavior);
-            Assert.Equal(rb.Field, line.StateFieldName);
-            Assert.True(line.StateCondition!(rb.Done), $"{rb.Id}: {rb.Field} at {rb.Done} must read done");
-            Assert.False(line.StateCondition!(double.NaN), $"{rb.Id}: unread must not read done");
-            var others = L1011FoStateEvaluator.SyntheticKeys.Contains(rb.Field) ? new[] { 0.0 } : new[] { 0.0, 1, 2, 3, 4, 5 };
-            foreach (double other in others.Where(v => v != rb.Done))
-                Assert.False(line.StateCondition!(other), $"{rb.Id}: {rb.Field} at {other} must not read done");
-        }
-    }
-
-    /// <summary>A finished run latches the action group and the read-back, and nothing else.</summary>
-    [Fact]
-    public void Parking_LatchesItsTwoGroups()
-        => Assert.Equal(Parking.RelatedChecklistGroupIds, Parking.CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
+    public void Parking_LatchesItsOwnGroup()
+        => Assert.Equal(new[] { "PARKING" }, Parking.CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
 
     /// <summary>The labels with a figure, and the stopped test's knot, read the same under a comma-decimal culture.</summary>
     [Theory]
@@ -774,7 +737,7 @@ public class L1011FoParkingTests
             return (all, flow.Steps[0].Condition!(0.5));
         });
         Assert.Contains("Fuel pumps: off except tank 2 left for the APU", labels);
-        Assert.Contains("ATMs and AC hyd pumps: off", labels);
+        Assert.Contains("APU generator or external power: on", labels);
         Assert.True(stopped);
     }
 

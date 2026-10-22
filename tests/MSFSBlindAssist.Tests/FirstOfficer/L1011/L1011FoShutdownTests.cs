@@ -11,7 +11,8 @@ using Step = MSFSBlindAssist.FirstOfficer.Models.FlowStep<MSFSBlindAssist.FirstO
 namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 
 /// <summary>
-/// The TriStar First Officer's Shutdown flow (the manual's securing), its action group and its read-back, pinned by
+/// The TriStar First Officer's Shutdown flow (the manual's securing) and its group (the securing page's lines all read
+/// the same state as the group's, so it adds none), pinned by
 /// structure and by behaviour: both guards first, on the ground and engines stopped, read only, Stop ([FO-25]); the
 /// emergency lights and galley off; the APU shut down in the manual's order, its stop held until the APU reads stopped,
 /// a wait for it to a standstill unless it already reads below 1 %, and its master off only once the stop is done or
@@ -110,7 +111,7 @@ public class L1011FoShutdownTests
     public void Shutdown_NamesItselfAndItsChecklistGroups()
     {
         Assert.Equal("Shutdown", Shutdown.Name);
-        Assert.Equal(new[] { "SHUTDOWN", "SHUTDOWN_CL" }, Shutdown.RelatedChecklistGroupIds);
+        Assert.Equal(new[] { "SHUTDOWN" }, Shutdown.RelatedChecklistGroupIds);
         Assert.False(string.IsNullOrWhiteSpace(Shutdown.Description));
     }
 
@@ -188,25 +189,24 @@ public class L1011FoShutdownTests
         => Assert.Equal(Writes.Select(w => w.Id).OrderBy(x => x, StringComparer.Ordinal),
             Shutdown.Steps.Where(IsSwitch).Select(s => s.Id).OrderBy(x => x, StringComparer.Ordinal));
 
-    /// <summary>Every step's lines, from the table: a write its action line then the read-back line it sets (the packs
-    /// their action line only), the guards and the APU wait none.</summary>
+    /// <summary>Every step's lines, from the table: a write its own line, the guards and the APU wait none.</summary>
     private static readonly Dictionary<string, string[]> Links = new(StringComparer.Ordinal)
     {
         ["SD_ON_GROUND"] = Array.Empty<string>(),
         ["SD_ENGINES_STOPPED"] = Array.Empty<string>(),
-        ["SD_EMER_LIGHTS"] = new[] { "SD_EMER_LIGHTS", "SDC_EMER_LIGHTS" },
-        ["SD_GALLEY"] = new[] { "SD_GALLEY", "SDC_GALLEY" },
-        ["SD_APU_GEN_TRIP"] = new[] { "SD_APU_GEN_TRIP", "SDC_APU_GEN_TRIP" },
-        ["SD_APU_BLEED_OFF"] = new[] { "SD_APU_BLEED_OFF", "SDC_APU_BLEED" },
-        ["SD_APU_STOP"] = new[] { "SD_APU_STOP", "SDC_APU_STOP" },
+        ["SD_EMER_LIGHTS"] = new[] { "SD_EMER_LIGHTS" },
+        ["SD_GALLEY"] = new[] { "SD_GALLEY" },
+        ["SD_APU_GEN_TRIP"] = new[] { "SD_APU_GEN_TRIP" },
+        ["SD_APU_BLEED_OFF"] = new[] { "SD_APU_BLEED_OFF" },
+        ["SD_APU_STOP"] = new[] { "SD_APU_STOP" },
         ["SD_APU_STOPPED"] = Array.Empty<string>(),
-        ["SD_APU_MASTER_OFF"] = new[] { "SD_APU_MASTER_OFF", "SDC_APU_MASTER" },
+        ["SD_APU_MASTER_OFF"] = new[] { "SD_APU_MASTER_OFF" },
         ["SD_PACKS_OFF"] = new[] { "SD_PACKS_OFF" },
-        ["SD_EXT_PWR_OFF"] = new[] { "SD_EXT_PWR_OFF", "SDC_EXT_PWR" },
-        ["SD_FUEL_PUMPS"] = new[] { "SD_FUEL_PUMPS", "SDC_FUEL_PUMPS" },
-        ["SD_STBY_POWER_OFF"] = new[] { "SD_STBY_POWER_OFF", "SDC_STBY_POWER" },
-        ["SD_RADIO_MASTERS_OFF"] = new[] { "SD_RADIO_MASTERS_OFF", "SDC_RADIO_MASTERS" },
-        ["SD_BATTERY_OFF"] = new[] { "SD_BATTERY_OFF", "SDC_BATTERY" },
+        ["SD_EXT_PWR_OFF"] = new[] { "SD_EXT_PWR_OFF" },
+        ["SD_FUEL_PUMPS"] = new[] { "SD_FUEL_PUMPS" },
+        ["SD_STBY_POWER_OFF"] = new[] { "SD_STBY_POWER_OFF" },
+        ["SD_RADIO_MASTERS_OFF"] = new[] { "SD_RADIO_MASTERS_OFF" },
+        ["SD_BATTERY_OFF"] = new[] { "SD_BATTERY_OFF" },
     };
 
     [Fact]
@@ -690,7 +690,7 @@ public class L1011FoShutdownTests
         var polled = new L1011FoStateEvaluator().OnRequestPollFields.ToHashSet();
         var fields = Shutdown.Steps.Select(s => s.ConditionFieldName).OfType<string>()
             .Concat(new[] { ApuRpm, ApuGenBreaker, ExtPowerBreaker, Ground })
-            .Concat(Groups.Where(g => g.Id is "SHUTDOWN" or "SHUTDOWN_CL").SelectMany(g => g.Items)
+            .Concat(Groups.Where(g => g.Id is "SHUTDOWN").SelectMany(g => g.Items)
                 .Select(i => i.StateFieldName).OfType<string>())
             .Distinct().ToList();
         foreach (var field in fields)
@@ -707,29 +707,20 @@ public class L1011FoShutdownTests
     // ================================================================== the checklists
 
     [Fact]
-    public void TheShutdownGroups_FollowParking_Named()
+    public void TheShutdownGroup_FollowsParking_Last_Named()
     {
-        Assert.Equal(new[] { "SHUTDOWN", "SHUTDOWN_CL" }, Groups.Select(g => g.Id).SkipWhile(id => id != "SHUTDOWN").Take(2));
-        Assert.Equal("PARKING_CL", Groups.Select(g => g.Id).TakeWhile(id => id != "SHUTDOWN").Last());
-        Assert.Equal("SHUTDOWN_CL", Groups[^1].Id);
+        Assert.Equal(new[] { "PARKING", "SHUTDOWN" }, Groups.Select(g => g.Id).SkipWhile(id => id != "PARKING"));
+        Assert.Equal("SHUTDOWN", Groups[^1].Id);
         Assert.Equal("Shutdown", Group("SHUTDOWN").Name);
-        Assert.Equal("Securing", Group("SHUTDOWN_CL").Name);
     }
 
     /// <summary>[FO-22]: the arrival, never marked by an in-flight start.</summary>
     [Fact]
-    public void EveryShutdownGroup_IsArrival_AndNeverDeparture()
+    public void TheShutdownGroup_IsArrival_AndNeverDeparture()
     {
-        foreach (var id in Shutdown.RelatedChecklistGroupIds)
-        {
-            Assert.True(FoDepartureGroups.Arrival.Contains(id), $"{id} is not an arrival group");
-            Assert.False(FoDepartureGroups.Departure.Contains(id), $"{id} is a departure group too");
-        }
+        Assert.True(FoDepartureGroups.Arrival.Contains("SHUTDOWN"));
+        Assert.False(FoDepartureGroups.Departure.Contains("SHUTDOWN"));
     }
-
-    [Fact]
-    public void The_read_back_has_no_check_action()
-        => Assert.All(Group("SHUTDOWN_CL").Items, i => Assert.True(i.CheckAction == null, $"{i.Id} has a CheckAction"));
 
     private static readonly string[] ActionLineIds =
     {
@@ -853,53 +844,10 @@ public class L1011FoShutdownTests
         }
     }
 
-    // ---- the read-back, word for word ------------------------------------------------------------------------------
-
-    /// <summary>A read-back line: its label, and its field and done value.</summary>
-    private sealed record ReadBack(string Id, string Label, string Field, double Done = 1);
-
-    private static readonly ReadBack[] Securing =
-    {
-        new("SDC_EMER_LIGHTS", "Emergency exit lights: off", "FO_EMER_LIGHTS_OFF"),
-        new("SDC_STBY_POWER", "Standby power: off", "TOGGLE_STBY_POWER", 0),
-        new("SDC_RADIO_MASTERS", "Master radio switches: off", "FO_RADIO_MASTERS_OFF"),
-        new("SDC_GALLEY", "Galley power: off", "FO_GALLEY_OFF"),
-        new("SDC_APU_GEN_TRIP", "APU generator breaker: trip", "FO_APU_GEN_OFF_LINE"),
-        new("SDC_APU_BLEED", "APU bleed air shutoff valve: unlatch", "SWITCH_APU_BLEED", 0),
-        new("SDC_APU_STOP", "APU stop button: press", "FO_APU_OFF"),
-        new("SDC_APU_MASTER", "APU master power: off", "TOGGLE_APU_POWER", 0),
-        new("SDC_EXT_PWR", "External power switch: off", "FO_EXT_POWER_OFF"),
-        new("SDC_FUEL_PUMPS", "Fuel tank pumps: off", "FO_FUEL_PUMPS_OFF"),
-        new("SDC_BATTERY", "Battery switch: off", "TOGGLE_BATTERY", 0),
-    };
-
+    /// <summary>A finished run latches its own group, and nothing else.</summary>
     [Fact]
-    public void The_read_back_is_word_for_word()
-        => Assert.Equal(Securing.Select(l => (l.Id, l.Label)), Group("SHUTDOWN_CL").Items.Select(i => (i.Id, i.Label)));
-
-    [Fact]
-    public void EveryReadBackLine_ReadsItsFieldAtItsValue()
-    {
-        foreach (var rb in Securing)
-        {
-            var line = Line(rb.Id);
-            Assert.Null(line.CheckAction);
-            Assert.Empty(line.AdditionalStateFields);
-            Assert.Equal(ChecklistItemType.AutoDetectable, line.Type);
-            Assert.Equal(RevertBehavior.RevertToState, line.RevertBehavior);
-            Assert.Equal(rb.Field, line.StateFieldName);
-            Assert.True(line.StateCondition!(rb.Done), $"{rb.Id}: {rb.Field} at {rb.Done} must read done");
-            Assert.False(line.StateCondition!(double.NaN), $"{rb.Id}: unread must not read done");
-            var others = L1011FoStateEvaluator.SyntheticKeys.Contains(rb.Field) ? new[] { 0.0 } : new[] { 0.0, 1, 2, 3, 4, 5 };
-            foreach (double other in others.Where(v => v != rb.Done))
-                Assert.False(line.StateCondition!(other), $"{rb.Id}: {rb.Field} at {other} must not read done");
-        }
-    }
-
-    /// <summary>A finished run latches the action group and the read-back, and nothing else.</summary>
-    [Fact]
-    public void Shutdown_LatchesItsTwoGroups()
-        => Assert.Equal(Shutdown.RelatedChecklistGroupIds, Shutdown.CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
+    public void Shutdown_LatchesItsOwnGroup()
+        => Assert.Equal(new[] { "SHUTDOWN" }, Shutdown.CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
 
     /// <summary>The labels, and the APU wait's 1 %, read the same under a comma-decimal culture.</summary>
     [Theory]
@@ -914,7 +862,7 @@ public class L1011FoShutdownTests
                 .Concat(L1011FoChecklistDefinitions.Build().SelectMany(g => g.Items).Select(i => i.Label)).ToList();
             return (all, flow.Steps.Single(s => s.Id == "SD_APU_STOPPED").Condition!(0.5));
         });
-        Assert.Contains("APU bleed air shutoff valve: unlatch", labels);
+        Assert.Contains("APU bleed: off", labels);
         Assert.Contains(PumpsFlowText, labels);
         Assert.True(standstill);
     }

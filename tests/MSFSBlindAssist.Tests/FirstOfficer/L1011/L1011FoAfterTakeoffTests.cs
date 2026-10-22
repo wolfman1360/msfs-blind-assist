@@ -11,8 +11,8 @@ using Step = MSFSBlindAssist.FirstOfficer.Models.FlowStep<MSFSBlindAssist.FirstO
 namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 
 /// <summary>
-/// The TriStar First Officer's After Takeoff flow, its action group and its two read-backs (the aircraft's take-off and
-/// climb pages), pinned by structure and by behaviour: the step ids and their order; the gear lever up, skipped once it
+/// The TriStar First Officer's After Takeoff flow and its group (its writes, the Captain's flap schedule, and the
+/// take-off page's flaps and gear checks, the gear last), pinned by structure and by behaviour: the step ids and their order; the gear lever up, skipped once it
 /// reads up, left alone (step and tick) unless the aircraft reads airborne, and not done when the lever does not move;
 /// the flaps left to the Captain, with a read-only
 /// wait of up to five minutes for them; every write's label, keys and targets word for word, with its "Already set" on
@@ -75,7 +75,7 @@ public class L1011FoAfterTakeoffTests
     public void AfterTakeoff_NamesItselfAndItsChecklistGroups()
     {
         Assert.Equal("After Takeoff", AfterTakeoff.Name);
-        Assert.Equal(new[] { "AFTER_TAKEOFF", "AFTER_TAKEOFF_CL", "CLIMB_CL" }, AfterTakeoff.RelatedChecklistGroupIds);
+        Assert.Equal(new[] { "AFTER_TAKEOFF" }, AfterTakeoff.RelatedChecklistGroupIds);
         Assert.False(string.IsNullOrWhiteSpace(AfterTakeoff.Description));
     }
 
@@ -121,19 +121,18 @@ public class L1011FoAfterTakeoffTests
         => Assert.Equal(Writes.Select(w => w.Id).OrderBy(x => x, StringComparer.Ordinal),
             AfterTakeoff.Steps.Where(IsSwitch).Select(s => s.Id).OrderBy(x => x, StringComparer.Ordinal));
 
-    /// <summary>Every step's lines, from the table: a write its action line then the read-back line it sets (the gear
-    /// write only its action line: the read-back's gear line is the legs', delivered by the gear check), the Captain's
-    /// flaps its reminder line, each check the read-back line it reads.</summary>
+    /// <summary>Every step's lines, from the table: a write its own line (the gear write the lever's; the legs' line is
+    /// the gear check's), the Captain's flaps its reminder line, each check its own line, which reads its field.</summary>
     private static readonly Dictionary<string, string[]> Links = new(StringComparer.Ordinal)
     {
         ["AT_GEAR"] = new[] { "AT_GEAR" },
         ["AT_CPT_FLAPS"] = new[] { "AT_CPT_FLAPS" },
-        ["AT_AUTOBRAKE"] = new[] { "AT_AUTOBRAKE", "CLC_AUTOBRAKE" },
-        ["AT_GROUND_LIGHTS"] = new[] { "AT_GROUND_LIGHTS", "CLC_GROUND_LIGHTS" },
-        ["AT_CONT_IGN"] = new[] { "AT_CONT_IGN", "CLC_CONT_IGN" },
-        ["AT_PACKS_ON"] = new[] { "AT_PACKS_ON", "CLC_PACKS" },
-        ["AT_CHK_FLAPS_UP"] = new[] { "ATC_FLAPS" },
-        ["AT_GEAR_UP_CHECK"] = new[] { "ATC_GEAR" },
+        ["AT_AUTOBRAKE"] = new[] { "AT_AUTOBRAKE" },
+        ["AT_GROUND_LIGHTS"] = new[] { "AT_GROUND_LIGHTS" },
+        ["AT_CONT_IGN"] = new[] { "AT_CONT_IGN" },
+        ["AT_PACKS_ON"] = new[] { "AT_PACKS_ON" },
+        ["AT_CHK_FLAPS_UP"] = new[] { "AT_CHK_FLAPS_UP" },
+        ["AT_GEAR_UP_CHECK"] = new[] { "AT_GEAR_UP_CHECK" },
     };
 
     [Fact]
@@ -216,8 +215,8 @@ public class L1011FoAfterTakeoffTests
     }
 
     /// <summary>[FO-13]: the gear is confirmed up by the LAST step, a read-only wait on the lever and every leg, 20 s,
-    /// then skipped aloud; it never writes, and it completes only the read-back's gear line, which reads the same field
-    /// under the same rule.</summary>
+    /// then skipped aloud; it never writes, and it completes only its own gear line, the LAST line of the group, which
+    /// reads the same field under the same rule.</summary>
     [Fact]
     public void The_gear_check_is_last_read_only_twenty_seconds_and_skips()
     {
@@ -239,8 +238,14 @@ public class L1011FoAfterTakeoffTests
         Assert.False(check.SkipCondition!(State(Gear(0, 100))), "gear down");
         Assert.False(check.SkipCondition!(State(Gear(100, 0).Take(3).ToArray())), "a leg unread");
 
-        Assert.Equal(new[] { "ATC_GEAR" }, check.LinkedChecklistItemIds);
-        var line = Line("ATC_GEAR");
+        Assert.Equal(new[] { "AT_GEAR_UP_CHECK" }, check.LinkedChecklistItemIds);
+        var line = Line("AT_GEAR_UP_CHECK");
+        Assert.Equal("AT_GEAR_UP_CHECK", Group("AFTER_TAKEOFF").Items[^1].Id);
+        Assert.Equal("Positive rate of climb: landing gear up", line.Label);
+        Assert.Equal(ChecklistItemType.AutoDetectable, line.Type);
+        Assert.Equal(RevertBehavior.RevertToState, line.RevertBehavior);
+        Assert.Null(line.CheckAction);
+        Assert.Null(line.LeaveAloneWhen);
         Assert.Equal(check.ConditionFieldName, line.StateFieldName);
         foreach (double v in new[] { double.NaN, 0, 1 })
             Assert.Equal(check.Condition!(v), line.StateCondition!(v));
@@ -275,8 +280,11 @@ public class L1011FoAfterTakeoffTests
         Assert.False(check.SkipCondition!(State((L1011Levers.FlapHandleKey, 2))));
         Assert.False(check.SkipCondition!(State()));
 
-        Assert.Equal(new[] { "ATC_FLAPS" }, check.LinkedChecklistItemIds);
-        var line = Line("ATC_FLAPS");
+        Assert.Equal(new[] { "AT_CHK_FLAPS_UP" }, check.LinkedChecklistItemIds);
+        var line = Line("AT_CHK_FLAPS_UP");
+        Assert.Equal("At V2 plus 60: set flaps up", line.Label);
+        Assert.Equal(ChecklistItemType.AutoDetectable, line.Type);
+        Assert.Null(line.CheckAction);
         Assert.Equal(check.ConditionFieldName, line.StateFieldName);
         foreach (double v in new[] { double.NaN, 0, 1 })
             Assert.Equal(check.Condition!(v), line.StateCondition!(v));
@@ -338,7 +346,7 @@ public class L1011FoAfterTakeoffTests
         var polled = new L1011FoStateEvaluator().OnRequestPollFields.ToHashSet();
         var fields = AfterTakeoff.Steps.Select(s => s.ConditionFieldName).OfType<string>()
             .Concat(L1011GearConfirmation.Inputs)
-            .Concat(Groups.Where(g => g.Id is "AFTER_TAKEOFF" or "AFTER_TAKEOFF_CL" or "CLIMB_CL").SelectMany(g => g.Items)
+            .Concat(Groups.Where(g => g.Id is "AFTER_TAKEOFF").SelectMany(g => g.Items)
                 .Select(i => i.StateFieldName).OfType<string>())
             .Distinct().ToList();
         foreach (var field in fields)
@@ -355,51 +363,40 @@ public class L1011FoAfterTakeoffTests
     // ================================================================== the checklists
 
     [Fact]
-    public void TheAfterTakeoffGroups_FollowBeforeTakeoff_Named()
+    public void TheAfterTakeoffGroup_FollowsBeforeTakeoff_Named()
     {
-        Assert.Equal(new[] { "AFTER_TAKEOFF", "AFTER_TAKEOFF_CL", "CLIMB_CL" },
-            Groups.Select(g => g.Id).SkipWhile(id => id != "AFTER_TAKEOFF").Take(3));
-        Assert.Equal("BEFORE_TAKEOFF_CL", Groups.Select(g => g.Id).TakeWhile(id => id != "AFTER_TAKEOFF").Last());
+        Assert.Equal(new[] { "BEFORE_TAKEOFF", "AFTER_TAKEOFF", "DESCENT" },
+            Groups.Select(g => g.Id).SkipWhile(id => id != "BEFORE_TAKEOFF").Take(3));
         Assert.Equal("After Takeoff", Group("AFTER_TAKEOFF").Name);
-        Assert.Equal("Take Off", Group("AFTER_TAKEOFF_CL").Name);
-        Assert.Equal("Climb", Group("CLIMB_CL").Name);
     }
 
-    /// <summary>[FO-22]: an in-flight start marks the departure lists through After Takeoff, these three included.</summary>
+    /// <summary>[FO-22]: an in-flight start marks the departure lists through After Takeoff, this one included.</summary>
     [Fact]
-    public void EveryAfterTakeoffGroup_IsDeparture_AndNeverArrival()
+    public void TheAfterTakeoffGroup_IsDeparture_AndNeverArrival()
     {
-        foreach (var id in AfterTakeoff.RelatedChecklistGroupIds)
-        {
-            Assert.True(FoDepartureGroups.Departure.Contains(id), $"{id} is not a departure group");
-            Assert.False(FoDepartureGroups.Arrival.Contains(id), $"{id} is an arrival group too");
-        }
+        Assert.True(FoDepartureGroups.Departure.Contains("AFTER_TAKEOFF"));
+        Assert.False(FoDepartureGroups.Arrival.Contains("AFTER_TAKEOFF"));
     }
 
+    /// <summary>The flow's writes and Captain line, then the take-off page's flaps and gear checks, the gear last
+    /// ([FO-13]). The climb page's lines all read the same state as the climb writes' lines, and went.</summary>
     [Fact]
-    public void The_read_backs_have_no_check_action()
-        => Assert.All(Group("AFTER_TAKEOFF_CL").Items.Concat(Group("CLIMB_CL").Items),
-            i => Assert.True(i.CheckAction == null, $"{i.Id} has a CheckAction"));
+    public void AfterTakeoff_Lines_InTheFlowsOrder()
+        => Assert.Equal(StepIds, Group("AFTER_TAKEOFF").Items.Select(i => i.Id));
 
-    private static readonly string[] ActionLineIds =
-        { "AT_GEAR", "AT_CPT_FLAPS", "AT_AUTOBRAKE", "AT_GROUND_LIGHTS", "AT_CONT_IGN", "AT_PACKS_ON" };
-
-    [Fact]
-    public void AfterTakeoff_ActionLines_InTheFlowsOrder()
-        => Assert.Equal(ActionLineIds, Group("AFTER_TAKEOFF").Items.Select(i => i.Id));
-
-    /// <summary>Ticked or run, a line says the same thing; the Captain's line keeps his reminder.</summary>
+    /// <summary>Ticked or run, a write's line says what its step says; the Captain's line keeps his reminder; the two
+    /// check lines keep the take-off page's words.</summary>
     [Fact]
     public void AfterTakeoff_ActionLabels_AreTheFlowStepLabels()
     {
-        foreach (var i in Group("AFTER_TAKEOFF").Items)
+        foreach (var i in Group("AFTER_TAKEOFF").Items.Where(i => i.Id is not ("AT_CHK_FLAPS_UP" or "AT_GEAR_UP_CHECK")))
             Assert.Equal(Of(i.Id).Label, i.Label);
     }
 
     [Fact]
     public void AfterTakeoff_LineKinds()
     {
-        foreach (var i in Group("AFTER_TAKEOFF").Items)
+        foreach (var i in Group("AFTER_TAKEOFF").Items.Where(i => i.Id is not ("AT_CHK_FLAPS_UP" or "AT_GEAR_UP_CHECK")))
         {
             if (i.Id == "AT_CPT_FLAPS")
             {
@@ -473,58 +470,12 @@ public class L1011FoAfterTakeoffTests
         Assert.Equal(Sent(byStep), Sent(byTick));
     }
 
-    // ---- the read-backs, word for word -----------------------------------------------------------------------------
-
-    /// <summary>A read-back line: its label, its field and its done value.</summary>
-    private sealed record ReadBack(string Id, string Label, string Field, double Done = 1);
-
-    private static readonly ReadBack[] TakeOff =
-    {
-        new("ATC_GEAR", "Positive rate of climb: landing gear up", L1011GearConfirmation.UpField),
-        new("ATC_FLAPS", "At V2 plus 60: set flaps up", "FO_FLAPS_UP"),
-    };
-
-    private static readonly ReadBack[] Climb =
-    {
-        new("CLC_AUTOBRAKE", "Autobrake: off", "ROTARY_AUTO_BRAKE_MODE", 1),
-        new("CLC_GROUND_LIGHTS", "Nose wheel landing, taxi and runway turnoff lights: off", "FO_GROUND_LIGHTS_OFF"),
-        new("CLC_CONT_IGN", "Continuous ignition: off", "SWITCH_CONT_IGNITION", 0),
-        new("CLC_PACKS", "Packs: on", "FO_PACKS_ON"),
-    };
-
+    /// <summary>A finished run latches its own group, and nothing else.</summary>
     [Fact]
-    public void The_take_off_read_back_is_word_for_word()
-        => Assert.Equal(TakeOff.Select(l => (l.Id, l.Label)), Group("AFTER_TAKEOFF_CL").Items.Select(i => (i.Id, i.Label)));
+    public void AfterTakeoff_LatchesItsOwnGroup()
+        => Assert.Equal(new[] { "AFTER_TAKEOFF" }, AfterTakeoff.CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
 
-    [Fact]
-    public void The_climb_read_back_is_word_for_word()
-        => Assert.Equal(Climb.Select(l => (l.Id, l.Label)), Group("CLIMB_CL").Items.Select(i => (i.Id, i.Label)));
-
-    [Fact]
-    public void EveryReadBackLine_ReadsItsFieldAtItsValue()
-    {
-        foreach (var rb in TakeOff.Concat(Climb))
-        {
-            var line = Line(rb.Id);
-            Assert.Null(line.CheckAction);
-            Assert.Empty(line.AdditionalStateFields);
-            Assert.Equal(ChecklistItemType.AutoDetectable, line.Type);
-            Assert.Equal(RevertBehavior.RevertToState, line.RevertBehavior);
-            Assert.Equal(rb.Field, line.StateFieldName);
-            Assert.True(line.StateCondition!(rb.Done), $"{rb.Id}: {rb.Field} at {rb.Done} must read done");
-            Assert.False(line.StateCondition!(double.NaN), $"{rb.Id}: unread must not read done");
-            var others = L1011FoStateEvaluator.SyntheticKeys.Contains(rb.Field) ? new[] { 0.0 } : new[] { 0.0, 1, 2, 3, 4, 5 };
-            foreach (double other in others.Where(v => v != rb.Done))
-                Assert.False(line.StateCondition!(other), $"{rb.Id}: {rb.Field} at {other} must not read done");
-        }
-    }
-
-    /// <summary>A finished run latches the action group and both read-backs, and nothing else.</summary>
-    [Fact]
-    public void AfterTakeoff_LatchesItsThreeGroups()
-        => Assert.Equal(AfterTakeoff.RelatedChecklistGroupIds, AfterTakeoff.CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
-
-    /// <summary>The Captain's flap schedule and the read-back's speeds read the same under a comma-decimal culture.</summary>
+    /// <summary>The Captain's flap schedule and the flaps line's speed read the same under a comma-decimal culture.</summary>
     [Theory]
     [InlineData("de-DE")]
     [InlineData("sv-SE")]

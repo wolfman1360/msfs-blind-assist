@@ -57,7 +57,7 @@ public class L1011FoFlowStructureTests
     public void PowerUp_NamesItselfAndItsChecklistGroups()
     {
         Assert.Equal("Power Up", PowerUp.Name);
-        Assert.Equal(new[] { "POWER_UP", "POWER_UP_CL" }, PowerUp.RelatedChecklistGroupIds);
+        Assert.Equal(new[] { "POWER_UP" }, PowerUp.RelatedChecklistGroupIds);
         Assert.False(string.IsNullOrWhiteSpace(PowerUp.Description));
     }
 
@@ -126,13 +126,14 @@ public class L1011FoFlowStructureTests
 
     // ------------------------------------------------------------------ the read-only checks
 
+    // Each check completes its own line, under its own id.
     private static readonly (string Id, string Label, string Field, string Line)[] Checks =
     {
-        ("PU_CHK_FIRE_HANDLES", "Engine and APU fire handles: in", "FO_FIRE_HANDLES_IN", "PUC_FIRE_HANDLES"),
-        ("PU_CHK_GEAR", "Gear lever: down", "FO_GEAR_LEVER_DOWN", "PUC_GEAR"),
-        ("PU_CHK_SPEED_BRAKE", "Speed brake handle: forward", "FO_SPEED_BRAKE_FORWARD", "PUC_SPEED_BRAKE"),
-        ("PU_CHK_FLAPS", "Flaps and flap handle: agree", "FO_FLAPS_AGREE", "PUC_FLAPS"),
-        ("PU_CHK_FUEL_IGN", "Fuel and ignition switches: off", "FO_FUEL_IGNITION_OFF", "PUC_FUEL_IGN"),
+        ("PU_CHK_FIRE_HANDLES", "Engine and APU fire handles: in", "FO_FIRE_HANDLES_IN", "PU_CHK_FIRE_HANDLES"),
+        ("PU_CHK_GEAR", "Gear lever: down", "FO_GEAR_LEVER_DOWN", "PU_CHK_GEAR"),
+        ("PU_CHK_SPEED_BRAKE", "Speed brake handle: forward", "FO_SPEED_BRAKE_FORWARD", "PU_CHK_SPEED_BRAKE"),
+        ("PU_CHK_FLAPS", "Flaps and flap handle: agree", "FO_FLAPS_AGREE", "PU_CHK_FLAPS"),
+        ("PU_CHK_FUEL_IGN", "Fuel and ignition switches: off", "FO_FUEL_IGNITION_OFF", "PU_CHK_FUEL_IGN"),
     };
 
     [Fact]
@@ -154,18 +155,21 @@ public class L1011FoFlowStructureTests
     }
 
     [Fact]
-    public void TheChecks_CompleteOnlyTheirOwnReadBackLine()
+    public void TheChecks_CompleteOnlyTheirOwnLine()
     {
         foreach (var (id, _, _, line) in Checks)
+        {
             Assert.Equal(new[] { line }, Of(id).LinkedChecklistItemIds);
+            Assert.Equal(line, Of(id).CompletesChecklistItemId);
+        }
     }
 
     [Fact]
-    public void EveryCheckLinksOnlyReadBackLines()
+    public void EveryCheckLinksOnlyItsOwnLine()
     {
         var checks = PowerUp.Steps.Where(s => s.Id.StartsWith("PU_CHK_", StringComparison.Ordinal)).ToList();
         Assert.Equal(Checks.Length, checks.Count);
-        Assert.All(checks, s => Assert.All(s.LinkedChecklistItemIds, id => Assert.StartsWith("PUC_", id, StringComparison.Ordinal)));
+        Assert.All(checks, s => Assert.Equal(new[] { s.Id }, s.LinkedChecklistItemIds));
     }
 
     [Fact]
@@ -248,48 +252,40 @@ public class L1011FoFlowStructureTests
         }
     }
 
+    /// <summary>Every write but the fire test (which also leaves the loop selectors at Both) completes its own action
+    /// line and nothing else: Power Up has no read-back group.</summary>
     [Fact]
-    public void TheSwitchWrites_EachCompleteTheirActionLineAndTheirReadBackLine()
+    public void TheSwitchWrites_EachCompleteOnlyTheirActionLine()
     {
-        foreach (var id in new[]
+        foreach (var s in PowerUp.Steps.Where(IsSwitch).Where(s => s.Id != "PU_FIRE_TEST"))
         {
-            "PU_CONT_IGN", "PU_RADIO_MASTERS", "PU_XPDR", "PU_RADAR", "PU_ATMS", "PU_AC_PUMPS", "PU_FUEL_PUMPS",
-            "PU_JETTISON", "PU_PAX_OXY", "PU_BATTERY", "PU_STBY_ARMED",
-        })
-        {
-            string readBack = "PUC_" + id["PU_".Length..];
-            var s = Of(id);
-            Assert.Equal(id, s.CompletesChecklistItemId);
-            Assert.Equal(new[] { id, readBack }, s.LinkedChecklistItemIds);
+            Assert.Equal(s.Id, s.CompletesChecklistItemId);
+            Assert.Equal(new[] { s.Id }, s.LinkedChecklistItemIds);
         }
     }
 
-    /// <summary>
-    /// The aircraft's cockpit safety inspection has no galley line, so <c>POWER_UP_CL</c> has no
-    /// <c>PUC_GALLEY</c>: the galley step links only its action line.
-    /// </summary>
+    /// <summary>The galley step links only its action line.</summary>
     [Fact]
     public void TheGalleyStep_LinksOnlyItsActionLine()
     {
         var s = Of("PU_GALLEY");
         Assert.Equal("PU_GALLEY", s.CompletesChecklistItemId);
         Assert.Equal(new[] { "PU_GALLEY" }, s.LinkedChecklistItemIds);
-        Assert.DoesNotContain(PowerUp.Steps.SelectMany(x => x.LinkedChecklistItemIds), id => id == "PUC_GALLEY");
     }
 
-    /// <summary>The check links only its own two lines: the battery and the armed standby power have steps of their own,
-    /// which a pilot working the action group line by line can tick.</summary>
+    /// <summary>The check links only its own line: the battery and the armed standby power have steps of their own,
+    /// which a pilot working the group line by line can tick.</summary>
     [Fact]
-    public void TheStandbyPowerCheck_LinksOnlyItsOwnLines()
+    public void TheStandbyPowerCheck_LinksOnlyItsOwnLine()
     {
         var s = Of("PU_STBY_CHECK");
         Assert.Equal(X.StandbyPowerCheck, s.EventName);
-        Assert.Equal(new[] { "PU_STBY_CHECK", "PUC_STBY_CHECK" }, s.LinkedChecklistItemIds);
+        Assert.Equal(new[] { "PU_STBY_CHECK" }, s.LinkedChecklistItemIds);
         // The electrical meter selector lines are the pilot's (FO-7): no step of the flow links them. The fire test's
         // loop selectors are its own, set by the test.
         Assert.DoesNotContain(PowerUp.Steps.SelectMany(x => x.LinkedChecklistItemIds),
             id => id.Contains("METER", StringComparison.OrdinalIgnoreCase)
-                || (id.Contains("SELECTOR", StringComparison.OrdinalIgnoreCase) && id != "PUC_LOOP_SELECTORS"));
+                || (id.Contains("SELECTOR", StringComparison.OrdinalIgnoreCase) && id != "PU_LOOP_SELECTORS"));
     }
 
     /// <summary>The battery on and standby power armed follow the check, each its own step and line, so a pilot ticking
@@ -396,8 +392,8 @@ public class L1011FoFlowStructureTests
         => Assert.Equal(new[] { "PU_FUEL_PUMPS" }, PowerUp.Steps.Where(s => s.LeaveAloneWhen != null).Select(s => s.Id));
 
     [Fact]
-    public void TheAcEssentialBusSelector_LinksItsOwnLines()
-        => Assert.Equal(new[] { "PU_AC_ESS", "PUC_AC_ESS" }, Of("PU_AC_ESS").LinkedChecklistItemIds);
+    public void TheAcEssentialBusSelector_LinksItsOwnLine()
+        => Assert.Equal(new[] { "PU_AC_ESS" }, Of("PU_AC_ESS").LinkedChecklistItemIds);
 
     [Fact]
     public void ExternalPower_IsTurnedOnUnlessItIsAlreadyOn_AndTheCaptainIsAskedForGroundPower()
@@ -421,8 +417,8 @@ public class L1011FoFlowStructureTests
     /// <summary>
     /// The engine and APU fire test is the manual's cockpit preparation, after the standby power check and before the
     /// APU, as the aircraft's own checklist has it. It runs after external power and the ground power reminder: it has
-    /// been checked live only with power on. It delivers its action line and the inspection's loop selector and fire
-    /// test lines.
+    /// been checked live only with power on. It delivers its action line and the loop selectors line, which it leaves
+    /// at Both.
     /// </summary>
     [Fact]
     public void TheFireTest_RunsAfterExternalPowerAndBeforeTheInsAlign_LinkingItsLines()
@@ -433,13 +429,13 @@ public class L1011FoFlowStructureTests
         var s = Of("PU_FIRE_TEST");
         Assert.Equal(X.FireTest, s.EventName);
         Assert.Equal(FlowStepFailurePolicy.Skip, s.FailurePolicy);   // a failed test never stops the flow
-        Assert.Equal(new[] { "PU_FIRE_TEST", "PUC_FIRE_TEST", "PUC_LOOP_SELECTORS" }, s.LinkedChecklistItemIds);
+        Assert.Equal(new[] { "PU_FIRE_TEST", "PU_LOOP_SELECTORS" }, s.LinkedChecklistItemIds);
     }
 
     [Fact]
-    public void TheInsAlignStep_LinksItsOwnLines_AndTheCaptainEntersThePosition()
+    public void TheInsAlignStep_LinksItsOwnLine_AndTheCaptainEntersThePosition()
     {
-        Assert.Equal(new[] { "PU_INS_ALIGN", "PUC_INS_ALIGN" }, Of("PU_INS_ALIGN").LinkedChecklistItemIds);
+        Assert.Equal(new[] { "PU_INS_ALIGN" }, Of("PU_INS_ALIGN").LinkedChecklistItemIds);
 
         var position = Of("PU_INS_POSITION");
         Assert.Equal(FlowStepActionType.CaptainReminder, position.ActionType);

@@ -71,19 +71,21 @@ public class EngineStartChecklistShapeTests
                              "ES_E2_START", "ES_E2_FUEL", "ES_ANTI_ICE" }, ids);
     }
 
-    // The TriStar starts 2, 1, 3: each engine's feed, ground start and fuel and ignition, the previous engine's
-    // isolation valve off before engines 1 and 3, then the generators. No "running" line in the action group.
+    // The TriStar starts 2, 1, 3: each engine's feed, ground start, fuel and ignition and the aircraft's release of the
+    // ground start switch, the previous engine's isolation valve off before engines 1 and 3, then the generators. No
+    // "running" line: the ground start line latches on the engine running, the one line that reads it.
     [Fact]
-    public void L1011_EngineStart_IsFeedGroundStartAndFuelIgnitionOnly_TwoOneThree()
+    public void L1011_EngineStart_IsFeedGroundStartFuelIgnitionAndReleaseOnly_TwoOneThree()
     {
         var ids = MSFSBlindAssist.FirstOfficer.L1011.L1011FoChecklistDefinitions.Build()
             .First(g => g.Id == "ENGINE_START").Items.Select(i => i.Id).ToList();
         Assert.Equal(new[]
         {
-            "ES_E2_FUEL_FEED", "ES_E2_GND_START", "ES_E2_FUEL_IGN",
-            "ES_E1_PREV_ISLN_OFF", "ES_E1_FUEL_FEED", "ES_E1_GND_START", "ES_E1_FUEL_IGN",
-            "ES_E3_PREV_ISLN_OFF", "ES_E3_FUEL_FEED", "ES_E3_GND_START", "ES_E3_FUEL_IGN",
+            "ES_E2_FUEL_FEED", "ES_E2_GND_START", "ES_E2_FUEL_IGN", "ES_E2_RELEASED",
+            "ES_E1_PREV_ISLN_OFF", "ES_E1_FUEL_FEED", "ES_E1_GND_START", "ES_E1_FUEL_IGN", "ES_E1_RELEASED",
+            "ES_E3_PREV_ISLN_OFF", "ES_E3_FUEL_FEED", "ES_E3_GND_START", "ES_E3_FUEL_IGN", "ES_E3_RELEASED",
             "ES_GENERATORS",
         }, ids);
+        Assert.DoesNotContain(ids, id => id.EndsWith("_RUNNING", System.StringComparison.Ordinal));
     }
 }

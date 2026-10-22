@@ -11,8 +11,8 @@ using Step = MSFSBlindAssist.FirstOfficer.Models.FlowStep<MSFSBlindAssist.FirstO
 namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 
 /// <summary>
-/// The TriStar First Officer's After Landing flow, its action group and its read-back (the aircraft's after landing
-/// page), pinned by structure and by behaviour: the step ids and their order, the ground guard first, read only, Stop;
+/// The TriStar First Officer's After Landing flow and its group (the after landing page's lines all read the same state
+/// as the group's, so it adds none), pinned by structure and by behaviour: the step ids and their order, the ground guard first, read only, Stop;
 /// every write's label, keys and targets word for word, with its "Already set" on its own state; the stabilizer trim
 /// zeroed and verified on its readout; the flaps up on the ground only, the step and its tick left alone otherwise, and
 /// the anti-skid, air data heat, stabilizer trim and speed brake ticks too; the APU master on and the APU started to its
@@ -80,7 +80,7 @@ public class L1011FoAfterLandingTests
     public void AfterLanding_NamesItselfAndItsChecklistGroups()
     {
         Assert.Equal("After Landing", AfterLanding.Name);
-        Assert.Equal(new[] { "AFTER_LANDING", "AFTER_LANDING_CL" }, AfterLanding.RelatedChecklistGroupIds);
+        Assert.Equal(new[] { "AFTER_LANDING" }, AfterLanding.RelatedChecklistGroupIds);
         Assert.False(string.IsNullOrWhiteSpace(AfterLanding.Description));
     }
 
@@ -162,26 +162,25 @@ public class L1011FoAfterLandingTests
         => Assert.Equal(Writes.Select(w => w.Id).OrderBy(x => x, StringComparer.Ordinal),
             AfterLanding.Steps.Where(IsSwitch).Select(s => s.Id).OrderBy(x => x, StringComparer.Ordinal));
 
-    /// <summary>Every step's lines, from the table: each write its action line then the read-back line it sets, the guard
-    /// none.</summary>
+    /// <summary>Every step's lines, from the table: each write its own line, the guard none.</summary>
     private static readonly Dictionary<string, string[]> Links = new(StringComparer.Ordinal)
     {
         ["AL_ON_GROUND"] = Array.Empty<string>(),
-        ["AL_ANTISKID"] = new[] { "AL_ANTISKID", "ALC_ANTISKID" },
-        ["AL_AUTOBRAKE"] = new[] { "AL_AUTOBRAKE", "ALC_AUTOBRAKE" },
-        ["AL_LANDING_LIGHTS"] = new[] { "AL_LANDING_LIGHTS", "ALC_LANDING_LIGHTS" },
-        ["AL_STROBES"] = new[] { "AL_STROBES", "ALC_STROBES" },
-        ["AL_CONT_IGN"] = new[] { "AL_CONT_IGN", "ALC_CONT_IGN" },
-        ["AL_AIR_DATA"] = new[] { "AL_AIR_DATA", "ALC_AIR_DATA" },
-        ["AL_WINDSHIELD"] = new[] { "AL_WINDSHIELD", "ALC_WINDSHIELD" },
-        ["AL_SIDE_WINDOWS"] = new[] { "AL_SIDE_WINDOWS", "ALC_SIDE_WINDOWS" },
-        ["AL_STAB_TRIM"] = new[] { "AL_STAB_TRIM", "ALC_STAB_TRIM" },
-        ["AL_SPEED_BRAKE"] = new[] { "AL_SPEED_BRAKE", "ALC_SPEED_BRAKE" },
-        ["AL_FLAPS_UP"] = new[] { "AL_FLAPS_UP", "ALC_FLAPS" },
-        ["AL_RADAR"] = new[] { "AL_RADAR", "ALC_RADAR" },
-        ["AL_TRANSFERS_OFF"] = new[] { "AL_TRANSFERS_OFF", "ALC_TRANSFERS" },
-        ["AL_APU_MASTER"] = new[] { "AL_APU_MASTER", "ALC_APU_MASTER" },
-        ["AL_APU_START"] = new[] { "AL_APU_START", "ALC_APU" },
+        ["AL_ANTISKID"] = new[] { "AL_ANTISKID" },
+        ["AL_AUTOBRAKE"] = new[] { "AL_AUTOBRAKE" },
+        ["AL_LANDING_LIGHTS"] = new[] { "AL_LANDING_LIGHTS" },
+        ["AL_STROBES"] = new[] { "AL_STROBES" },
+        ["AL_CONT_IGN"] = new[] { "AL_CONT_IGN" },
+        ["AL_AIR_DATA"] = new[] { "AL_AIR_DATA" },
+        ["AL_WINDSHIELD"] = new[] { "AL_WINDSHIELD" },
+        ["AL_SIDE_WINDOWS"] = new[] { "AL_SIDE_WINDOWS" },
+        ["AL_STAB_TRIM"] = new[] { "AL_STAB_TRIM" },
+        ["AL_SPEED_BRAKE"] = new[] { "AL_SPEED_BRAKE" },
+        ["AL_FLAPS_UP"] = new[] { "AL_FLAPS_UP" },
+        ["AL_RADAR"] = new[] { "AL_RADAR" },
+        ["AL_TRANSFERS_OFF"] = new[] { "AL_TRANSFERS_OFF" },
+        ["AL_APU_MASTER"] = new[] { "AL_APU_MASTER" },
+        ["AL_APU_START"] = new[] { "AL_APU_START" },
     };
 
     [Fact]
@@ -354,15 +353,14 @@ public class L1011FoAfterLandingTests
     // ------------------------------------------------------------------ nothing cut ([FO-25])
 
     /// <summary>After Landing cuts no fuel, pump, INS, battery, engine or pack: the fleet's cut sweep sees none in any of
-    /// its labels, the flow's, the action group's or the read-back's. The manual's tank pumps and crossfeeds wait for
-    /// Parking, once the engines are cut.</summary>
+    /// its labels, the flow's or the group's. The manual's tank pumps and crossfeeds wait for Parking, once the engines
+    /// are cut.</summary>
     [Fact]
     public void No_step_in_After_Landing_cuts_fuel_or_pumps()
     {
         var labels = AfterLanding.Steps.Select(s => s.Label)
-            .Concat(Group("AFTER_LANDING").Items.Select(i => i.Label))
-            .Concat(Group("AFTER_LANDING_CL").Items.Select(i => i.Label)).ToList();
-        Assert.True(labels.Count >= 45, $"only {labels.Count} labels enumerated");
+            .Concat(Group("AFTER_LANDING").Items.Select(i => i.Label)).ToList();
+        Assert.True(labels.Count >= 30, $"only {labels.Count} labels enumerated");
         foreach (var label in labels)
             Assert.Null(FoCutGuardSweepTests.CutKind(label));
         Assert.DoesNotContain(AfterLanding.Steps.Where(IsSwitch).SelectMany(Actions),
@@ -383,7 +381,7 @@ public class L1011FoAfterLandingTests
         var synthetic = L1011FoStateEvaluator.SyntheticKeys.ToHashSet();
         var polled = new L1011FoStateEvaluator().OnRequestPollFields.ToHashSet();
         var fields = new[] { ElevatorTrim, ApuRpm, Ground, SpeedBrake, FlapHandle }
-            .Concat(Groups.Where(g => g.Id is "AFTER_LANDING" or "AFTER_LANDING_CL").SelectMany(g => g.Items)
+            .Concat(Groups.Where(g => g.Id is "AFTER_LANDING").SelectMany(g => g.Items)
                 .Select(i => i.StateFieldName).OfType<string>())
             .Distinct().ToList();
         foreach (var field in fields)
@@ -400,31 +398,22 @@ public class L1011FoAfterLandingTests
     // ================================================================== the checklists
 
     [Fact]
-    public void TheAfterLandingGroups_FollowBeforeLanding_Named()
+    public void TheAfterLandingGroup_FollowsBeforeLanding_Named()
     {
-        Assert.Equal(new[] { "AFTER_LANDING", "AFTER_LANDING_CL" },
-            Groups.Select(g => g.Id).SkipWhile(id => id != "AFTER_LANDING").Take(2));
-        Assert.Equal("BEFORE_LANDING_CL", Groups.Select(g => g.Id).TakeWhile(id => id != "AFTER_LANDING").Last());
+        Assert.Equal(new[] { "BEFORE_LANDING", "AFTER_LANDING", "PARKING" },
+            Groups.Select(g => g.Id).SkipWhile(id => id != "BEFORE_LANDING").Take(3));
         Assert.Equal("After Landing", Group("AFTER_LANDING").Name);
-        Assert.Equal("After Landing", Group("AFTER_LANDING_CL").Name);
     }
 
     /// <summary>[FO-22]: the arrival, never marked by an in-flight start.</summary>
     [Fact]
-    public void EveryAfterLandingGroup_IsArrival_AndNeverDeparture()
+    public void TheAfterLandingGroup_IsArrival_AndNeverDeparture()
     {
-        foreach (var id in AfterLanding.RelatedChecklistGroupIds)
-        {
-            Assert.True(FoDepartureGroups.Arrival.Contains(id), $"{id} is not an arrival group");
-            Assert.False(FoDepartureGroups.Departure.Contains(id), $"{id} is a departure group too");
-        }
+        Assert.True(FoDepartureGroups.Arrival.Contains("AFTER_LANDING"));
+        Assert.False(FoDepartureGroups.Departure.Contains("AFTER_LANDING"));
     }
 
-    [Fact]
-    public void The_read_back_has_no_check_action()
-        => Assert.All(Group("AFTER_LANDING_CL").Items, i => Assert.True(i.CheckAction == null, $"{i.Id} has a CheckAction"));
-
-    /// <summary>The ground guard is flow-only.</summary>
+    /// <summary>The group is the fifteen writes; the ground guard is flow-only.</summary>
     [Fact]
     public void AfterLanding_ActionLines_InTheFlowsOrder()
     {
@@ -549,57 +538,10 @@ public class L1011FoAfterLandingTests
         Assert.True(ac.Get(ApuRpm) >= L1011FoStateEvaluator.ApuStartingRpm);
     }
 
-    // ---- the read-back, word for word ------------------------------------------------------------------------------
-
-    /// <summary>A read-back line: its label, and its field and done value.</summary>
-    private sealed record ReadBack(string Id, string Label, string Field, double Done = 1);
-
-    private static readonly ReadBack[] AfterLandingReadBack =
-    {
-        new("ALC_ANTISKID", "Antiskid: off", "SWITCH_ANTISKID_ON", 0),
-        new("ALC_AUTOBRAKE", "Autobrake: off", "ROTARY_AUTO_BRAKE_MODE", 1),
-        new("ALC_LANDING_LIGHTS", "Landing lights: off", "FO_LANDING_LIGHTS_OFF"),
-        new("ALC_STROBES", "Strobe lights: off", "SWITCH_STROBE_LIGHT", 0),
-        new("ALC_CONT_IGN", "Continuous ignition: off", "SWITCH_CONT_IGNITION", 0),
-        new("ALC_AIR_DATA", "Air data sensor heaters: all off", "FO_AIR_DATA_HEAT_OFF"),
-        new("ALC_WINDSHIELD", "Capt and F/O windshield heat: idle", "FO_WINDSHIELD_IDLE"),
-        new("ALC_SIDE_WINDOWS", "Side windows: off", "FO_SIDE_WINDOWS_OFF"),
-        new("ALC_STAB_TRIM", "Stabilizer trim: zero", "FO_STAB_TRIM_ZERO"),
-        new("ALC_SPEED_BRAKE", "Speedbrake lever: forward", "FO_SPEED_BRAKE_FORWARD"),
-        new("ALC_FLAPS", "Flaps: up", "FO_FLAPS_UP"),
-        new("ALC_RADAR", "Radar: off", "SWITCH_WX_OFF", 1),
-        new("ALC_APU_MASTER", "APU master power: on", "TOGGLE_APU_POWER", 1),
-        new("ALC_APU", "APU: start", "FO_APU_STARTING_OR_RUNNING"),
-        new("ALC_TRANSFERS", "1A and 3A xfr switches: unlatch", "FO_TRANSFERS_OFF"),
-    };
-
+    /// <summary>A finished run latches its own group, and nothing else.</summary>
     [Fact]
-    public void The_read_back_is_word_for_word()
-        => Assert.Equal(AfterLandingReadBack.Select(l => (l.Id, l.Label)), Group("AFTER_LANDING_CL").Items.Select(i => (i.Id, i.Label)));
-
-    [Fact]
-    public void EveryReadBackLine_ReadsItsFieldAtItsValue()
-    {
-        foreach (var rb in AfterLandingReadBack)
-        {
-            var line = Line(rb.Id);
-            Assert.Null(line.CheckAction);
-            Assert.Empty(line.AdditionalStateFields);
-            Assert.Equal(ChecklistItemType.AutoDetectable, line.Type);
-            Assert.Equal(RevertBehavior.RevertToState, line.RevertBehavior);
-            Assert.Equal(rb.Field, line.StateFieldName);
-            Assert.True(line.StateCondition!(rb.Done), $"{rb.Id}: {rb.Field} at {rb.Done} must read done");
-            Assert.False(line.StateCondition!(double.NaN), $"{rb.Id}: unread must not read done");
-            var others = L1011FoStateEvaluator.SyntheticKeys.Contains(rb.Field) ? new[] { 0.0 } : new[] { 0.0, 1, 2, 3, 4, 5 };
-            foreach (double other in others.Where(v => v != rb.Done))
-                Assert.False(line.StateCondition!(other), $"{rb.Id}: {rb.Field} at {other} must not read done");
-        }
-    }
-
-    /// <summary>A finished run latches the action group and the read-back, and nothing else.</summary>
-    [Fact]
-    public void AfterLanding_LatchesItsTwoGroups()
-        => Assert.Equal(AfterLanding.RelatedChecklistGroupIds, AfterLanding.CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
+    public void AfterLanding_LatchesItsOwnGroup()
+        => Assert.Equal(new[] { "AFTER_LANDING" }, AfterLanding.CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
 
     /// <summary>The labels with a figure, and the stabilizer trim's zero test, read the same under a comma-decimal
     /// culture.</summary>
@@ -616,7 +558,6 @@ public class L1011FoAfterLandingTests
             return (all, flow.Steps.Single(s => s.Id == "AL_STAB_TRIM").SkipCondition!(State((ElevatorTrim, 0.15))));
         });
         Assert.Contains("1A and 3A transfers: off", labels);
-        Assert.Contains("1A and 3A xfr switches: unlatch", labels);
         Assert.True(zero);
     }
 

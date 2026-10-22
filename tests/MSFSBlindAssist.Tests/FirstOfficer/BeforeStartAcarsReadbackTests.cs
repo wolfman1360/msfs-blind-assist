@@ -20,6 +20,10 @@ namespace MSFSBlindAssist.Tests.FirstOfficer;
 /// Captain reminder (the First Officer cannot see ACARS; FO-3 keeps read-backs action-free).
 /// The Before Start flow and action list keep "Start ACARS" then the pushback clearance
 /// (FoChecklistRefinementTests).
+///
+/// The iniBuilds L-1011 has no read-back groups: its checklist is one group per flow (the owner's
+/// choice). Its Before Start group is its checklist, and it carries "Start ACARS" once, a
+/// Captain reminder, before the pushback clearance (<see cref="The_TriStar_has_no_read_back_and_its_Before_Start_group_starts_ACARS_once"/>).
 /// </summary>
 public class BeforeStartAcarsReadbackTests
 {
@@ -29,7 +33,6 @@ public class BeforeStartAcarsReadbackTests
         new object[] { "iFly 737 MAX8", "BSC_ACARS" }, new object[] { "Fenix A320", "BSC_ACARS" },
         new object[] { "FBW A32NX", "BSC_ACARS" }, new object[] { "Headwind A330", "BSC_ACARS" },
         new object[] { "FBW A380", "BSC_ACARS" }, new object[] { "TFDi MD-11", "BSC_ACARS" },
-        new object[] { "iniBuilds L-1011", "BSC_ACARS" },
     };
 
     private static (string Id, string Label, ChecklistItemType Type, bool HasAction)[] BeforeStartCl(string profile) =>
@@ -43,7 +46,6 @@ public class BeforeStartAcarsReadbackTests
             "Headwind A330" => Project(HwA330.HwA330ChecklistDefinitions.Build()),
             "FBW A380" => Project(A380.FbwA380ChecklistDefinitions.Build()),
             "TFDi MD-11" => Project(Md11.Md11FoChecklistDefinitions.Build()),
-            "iniBuilds L-1011" => Project(TriStar.L1011FoChecklistDefinitions.Build()),
             _ => throw new System.ArgumentException(profile),
         };
 
@@ -62,5 +64,21 @@ public class BeforeStartAcarsReadbackTests
         Assert.Equal(ChecklistItemType.CaptainReminder, last.Type);
         Assert.False(last.HasAction);
         Assert.Single(BeforeStartCl(profile), i => i.Label == "Start ACARS");
+    }
+
+    /// <summary>The TriStar: no read-back group at all; its Before Start group, the checklist the pilot reads, holds
+    /// "Start ACARS" exactly once, a Captain reminder with no action, right before the pushback clearance that ends it.</summary>
+    [Fact]
+    public void The_TriStar_has_no_read_back_and_its_Before_Start_group_starts_ACARS_once()
+    {
+        var groups = TriStar.L1011FoChecklistDefinitions.Build();
+        Assert.DoesNotContain(groups, g => g.Id.EndsWith("_CL", System.StringComparison.Ordinal));
+        var items = groups.Single(g => g.Id == "BEFORE_START").Items;
+        var acars = Assert.Single(items, i => i.Label == "Start ACARS");
+        Assert.Equal("BS_ACARS", acars.Id);
+        Assert.Equal(ChecklistItemType.CaptainReminder, acars.Type);
+        Assert.Null(acars.CheckAction);
+        Assert.Same(acars, items[^2]);
+        Assert.Equal("Obtain pushback and start clearance", items[^1].Label);
     }
 }

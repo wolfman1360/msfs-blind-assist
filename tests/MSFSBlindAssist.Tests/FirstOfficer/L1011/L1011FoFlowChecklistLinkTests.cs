@@ -21,9 +21,11 @@ public class L1011FoFlowChecklistLinkTests
             f => f.CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
 
     [Fact]
-    public void PowerUp_LatchesItsActionGroupAndTheCockpitSafetyInspection()
-        => Assert.Equal(new[] { "POWER_UP", "POWER_UP_CL" },
-            Flows.Single(f => f.Id == "POWER_UP").CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
+    public void EveryFlow_LatchesOnlyItsOwnGroup()
+    {
+        foreach (var f in Flows)
+            Assert.Equal(new[] { f.Id }, f.CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
+    }
 
     /// <summary>The three ground start lines are the only lines latched with no step behind them: they latch on the
     /// engine running and no step links them (the MD-11's start switch lines).</summary>
@@ -61,7 +63,8 @@ public class L1011FoFlowChecklistLinkTests
     }
 
     /// <summary>A check field that is the conjunction of other fields, by the fields it is made of: After Start's
-    /// generator check reads all six relays closed, which is the three fields closed and the three breakers closed.</summary>
+    /// generator check reads all six relays closed, which is the three fields closed (<c>AS_GEN_FIELDS</c>) and the
+    /// three breakers closed (<c>AS_GEN_BREAKERS</c>).</summary>
     private static readonly Dictionary<string, string[]> PartsOf = new(StringComparer.Ordinal)
     {
         ["FO_ENGINE_GENERATORS_ON"] = new[] { "FO_GEN_FIELDS_CLOSED", "FO_GEN_BREAKERS_CLOSED" },
@@ -136,10 +139,11 @@ public class L1011FoFlowChecklistLinkTests
     /// APU mode normal, the ATMs to auto): each is its own step's line, ticked when the step completes.</summary>
     private static readonly string[] UndoneLaterLines = { "PF_APU_MODE_MIN", "PF_PACKS_OFF", "PF_HOT_AIR_OFF", "AS_ATMS_ON" };
 
-    /// <summary>The writes that link no line: each engine's ground start (its line latches on the engine running) and
-    /// its light-off watch.</summary>
+    /// <summary>The writes that link no line: each engine's ground start (its line latches on the engine running), its
+    /// light-off watch and its stable idle watch (an engine running is what its ground start line latches on, so no
+    /// second line reads it).</summary>
     private static readonly string[] UnlinkedWrites =
-        new[] { 1, 2, 3 }.SelectMany(n => new[] { X.GroundStart(n), X.EngineLightOff(n) }).ToArray();
+        new[] { 1, 2, 3 }.SelectMany(n => new[] { X.GroundStart(n), X.EngineLightOff(n), X.EngineIdle(n) }).ToArray();
 
     private static readonly string[] FuelPumpKeys =
     {

@@ -10,14 +10,13 @@ using Step = MSFSBlindAssist.FirstOfficer.Models.FlowStep<MSFSBlindAssist.FirstO
 namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 
 /// <summary>
-/// The TriStar First Officer's Power Up checklists, the MD-11's two layers: the action group
-/// <c>POWER_UP</c>, whose lines are the flow's writes and its unconditional Captain step in the flow's order
-/// (a conditional Captain prompt, the ground power one, stays flow-only), and the read-back group
-/// <c>POWER_UP_CL</c>, the aircraft's cockpit safety inspection in its own words and order, action-free
-/// ([FO-3]) and with no galley line, since the aircraft's page has none. Every state line mirrors the aircraft live
-/// (<c>RevertToState</c>, [FOB-1]); a hand tick of a line that switches the fuel or hydraulic pumps off, or
-/// runs the standby power check (which turns the battery off), is left alone unless the aircraft reads on
-/// the ground with every engine stopped ([FO-25]).
+/// The TriStar First Officer's checklists: twelve groups, one per flow, with the flow's id and name, and no
+/// read-back group. Each group lists its flow's lines in the flow's order: the writes, the unconditional
+/// Captain steps and the read-only checks the flow completes (a conditional Captain prompt, the ground power
+/// one, stays flow-only), and no two lines in a group read the same state. Every state line mirrors the
+/// aircraft live (<c>RevertToState</c>, [FOB-1]); a hand tick of a line that switches the fuel or hydraulic
+/// pumps off, or runs the standby power check (which turns the battery off), is left alone unless the aircraft
+/// reads on the ground with every engine stopped ([FO-25]).
 /// </summary>
 public class L1011FoChecklistStructureTests
 {
@@ -37,29 +36,88 @@ public class L1011FoChecklistStructureTests
 
     // ------------------------------------------------------------------ the groups
 
+    /// <summary>One group per flow, in the flow's order, with its id: the MD-11's action groups, and no read-back.</summary>
     [Fact]
-    public void GroupIds_InFlightOrder()
-        => Assert.Equal(new[]
+    public void GroupIds_AreTheTwelveFlows_InFlightOrder()
+    {
+        Assert.Equal(new[]
         {
-            "POWER_UP", "POWER_UP_CL",
-            "PREFLIGHT", "PREFLIGHT_FE_CL", "PREFLIGHT_OVHD_CL", "PREFLIGHT_MAIN_CL", "PREFLIGHT_CONSOLE_CL",
-            "BEFORE_START", "BEFORE_START_CL",
-            "ENGINE_START", "ENGINE_START_CL",
-            "AFTER_START", "AFTER_START_CL", "TAXI_CL",
-            "BEFORE_TAKEOFF", "BEFORE_TAKEOFF_CL",
-            "AFTER_TAKEOFF", "AFTER_TAKEOFF_CL", "CLIMB_CL",
-            "DESCENT", "DESCENT_CL",
-            "BEFORE_LANDING", "BEFORE_LANDING_CL",
-            "AFTER_LANDING", "AFTER_LANDING_CL",
-            "PARKING", "PARKING_CL",
-            "SHUTDOWN", "SHUTDOWN_CL",
+            "POWER_UP", "PREFLIGHT", "BEFORE_START", "ENGINE_START", "AFTER_START", "BEFORE_TAKEOFF", "AFTER_TAKEOFF",
+            "DESCENT", "BEFORE_LANDING", "AFTER_LANDING", "PARKING", "SHUTDOWN",
         }, Groups.Select(g => g.Id));
+        Assert.Equal(Flows.Select(f => f.Id), Groups.Select(g => g.Id));
+    }
 
     [Fact]
-    public void Groups_AreNamed()
+    public void EveryGroup_IsNamedAsItsFlow()
     {
+        foreach (var f in Flows)
+            Assert.Equal(f.Name, Group(f.Id).Name);
         Assert.Equal("Power Up", Group("POWER_UP").Name);
-        Assert.Equal("Cockpit Safety Inspection", Group("POWER_UP_CL").Name);
+    }
+
+    /// <summary>No read-back group, and no line of one: each read-back line was dropped, as a line of its flow's group
+    /// read the same state, or moved into its flow's group under that flow's prefix.</summary>
+    [Fact]
+    public void There_is_no_read_back_group_or_line()
+    {
+        Assert.DoesNotContain(Groups, g => g.Id.EndsWith("_CL", StringComparison.Ordinal));
+        var readBackPrefixes = new[]
+        {
+            "PUC_", "PFC_", "PFO_", "PFM_", "PFX_", "BSC_", "ESC_", "ASC_", "TXC_", "BTC_", "ATC_", "CLC_", "DSC_", "BLC_",
+            "ALC_", "PKC_", "SDC_",
+        };
+        foreach (var i in Groups.SelectMany(g => g.Items))
+            Assert.False(readBackPrefixes.Any(p => i.Id.StartsWith(p, StringComparison.Ordinal)), $"{i.Id} is a read-back line");
+    }
+
+    /// <summary>Each line carries its flow's prefix: PU_, PF_, BS_, ES_, AS_, BT_, AT_, DS_, BL_, AL_, PK_, SD_.</summary>
+    [Fact]
+    public void EveryLine_CarriesItsFlowsPrefix()
+    {
+        var prefixes = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["POWER_UP"] = "PU_", ["PREFLIGHT"] = "PF_", ["BEFORE_START"] = "BS_", ["ENGINE_START"] = "ES_",
+            ["AFTER_START"] = "AS_", ["BEFORE_TAKEOFF"] = "BT_", ["AFTER_TAKEOFF"] = "AT_", ["DESCENT"] = "DS_",
+            ["BEFORE_LANDING"] = "BL_", ["AFTER_LANDING"] = "AL_", ["PARKING"] = "PK_", ["SHUTDOWN"] = "SD_",
+        };
+        foreach (var g in Groups)
+            Assert.All(g.Items, i => Assert.StartsWith(prefixes[g.Id], i.Id, StringComparison.Ordinal));
+    }
+
+    /// <summary>[FO-6]: a finished flow latches its own group and nothing else.</summary>
+    [Fact]
+    public void EveryFlow_NamesAndLatchesOnlyItsOwnGroup()
+    {
+        foreach (var f in Flows)
+        {
+            Assert.Equal(new[] { f.Id }, f.RelatedChecklistGroupIds);
+            Assert.Equal(new[] { f.Id }, f.CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
+        }
+    }
+
+    /// <summary>
+    /// Never two lines in one group that read the same state: a line reading the same field (and the same further
+    /// fields) as another line of its group, done at the same values, is one line too many. Compared over every
+    /// position a switch or synthetic reads, and unread.
+    /// </summary>
+    [Fact]
+    public void NoTwoLinesInAGroup_ReadTheSameState()
+    {
+        var probes = new[] { double.NaN, 0, 1, 2, 3, 4, 5, 10, 24.9, 50, 59.2, 100 };
+        foreach (var g in Groups)
+        {
+            var state = g.Items.Where(i => i.StateFieldName != null).ToList();
+            for (int a = 0; a < state.Count; a++)
+                for (int b = a + 1; b < state.Count; b++)
+                {
+                    var (x, y) = (state[a], state[b]);
+                    if (x.StateFieldName != y.StateFieldName || !x.AdditionalStateFields.SequenceEqual(y.AdditionalStateFields))
+                        continue;
+                    bool same = probes.All(v => x.StateCondition!(v) == y.StateCondition!(v));
+                    Assert.False(same, $"{g.Id}: {x.Id} and {y.Id} read the same state ({x.StateFieldName})");
+                }
+        }
     }
 
     /// <summary>[FO-22]: an in-flight start marks the departure lists, through the climb; Descent onwards is the
@@ -80,14 +138,6 @@ public class L1011FoChecklistStructureTests
             Assert.True(FoDepartureGroups.Arrival.Contains(id), $"{id} is not an arrival group");
             Assert.False(FoDepartureGroups.Departure.Contains(id), $"{id} is a departure group too");
         }
-    }
-
-    [Fact]
-    public void NoReadbackGroupHasACheckAction()
-    {
-        foreach (var g in Groups.Where(g => g.Id.EndsWith("_CL", StringComparison.Ordinal)))
-            foreach (var i in g.Items)
-                Assert.True(i.CheckAction == null, $"{g.Id}/{i.Id}: *_CL items are action-free");
     }
 
     [Fact]
@@ -189,9 +239,10 @@ public class L1011FoChecklistStructureTests
     }
 
     /// <summary>
-    /// A flow and its action group are one procedure in two forms, so they list the same lines in the same
-    /// order (the MD-11's shape). Only flow-only steps fall outside: the guards, the read-only checks and
-    /// the Captain prompt that speaks only when needed (no ground power).
+    /// A flow and its group are one procedure in two forms, so they list the same lines in the same order (the
+    /// MD-11's shape): every line a step links, its own first, then those it also delivers. Only flow-only steps
+    /// fall outside: the guards, the waits that link no line and the Captain prompts that speak only when needed (no
+    /// ground power).
     /// </summary>
     [Fact]
     public void EveryActionGroup_ListsTheSameLinesInTheSameOrderAsItsFlow()
@@ -200,30 +251,34 @@ public class L1011FoChecklistStructureTests
         {
             var group = Groups.Single(g => g.Id == f.Id);
             var itemIds = group.Items.Select(i => i.Id).ToHashSet();
-            var fromFlow = f.Steps.Select(s => s.CompletesChecklistItemId ?? s.Id).Where(itemIds.Contains).ToList();
+            var fromFlow = f.Steps.SelectMany(s => s.LinkedChecklistItemIds.DefaultIfEmpty(s.Id)).Where(itemIds.Contains).ToList();
             Assert.Equal(group.Items.Select(i => i.Id), fromFlow);
         }
     }
 
-    /// <summary>The action group's lines, in order. The conditional ground power prompt stays flow-only.</summary>
+    /// <summary>The group's lines, in the flow's order: the five read-only checks first, the loop selectors after the
+    /// fire test that leaves them at Both. The conditional ground power prompt stays flow-only.</summary>
     [Fact]
-    public void PowerUp_ActionLines_InTheFlowsOrder()
+    public void PowerUp_Lines_InTheFlowsOrder()
     {
         Assert.Equal(new[]
         {
+            "PU_CHK_FIRE_HANDLES", "PU_CHK_GEAR", "PU_CHK_SPEED_BRAKE", "PU_CHK_FLAPS", "PU_CHK_FUEL_IGN",
             "PU_CONT_IGN", "PU_RADIO_MASTERS", "PU_XPDR", "PU_RADAR", "PU_ATMS", "PU_AC_PUMPS", "PU_FUEL_PUMPS",
             "PU_JETTISON", "PU_PAX_OXY", "PU_GALLEY", "PU_STBY_CHECK", "PU_BATTERY", "PU_STBY_ARMED", "PU_AC_ESS",
-            "PU_EXT_PWR", "PU_FIRE_TEST", "PU_INS_ALIGN", "PU_INS_POSITION",
+            "PU_EXT_PWR", "PU_FIRE_TEST", "PU_LOOP_SELECTORS", "PU_INS_ALIGN", "PU_INS_POSITION",
         }, Group("POWER_UP").Items.Select(i => i.Id));
         Assert.DoesNotContain(Groups.SelectMany(g => g.Items), i => i.Id == "PU_EXT_PWR_CPT");
     }
 
-    /// <summary>Ticked or run, a line says the same thing: each action line's label is its flow step's.</summary>
+    /// <summary>Ticked or run, a line says the same thing: each action line's label is its flow step's. The loop
+    /// selectors line has no step of its own: the fire test delivers it.</summary>
     [Fact]
     public void PowerUp_ActionLabels_AreTheFlowStepLabels()
     {
-        foreach (var i in Group("POWER_UP").Items)
+        foreach (var i in Group("POWER_UP").Items.Where(i => i.Id != "PU_LOOP_SELECTORS"))
             Assert.Equal(FlowStep(i.Id).Label, i.Label);
+        Assert.Contains("PU_LOOP_SELECTORS", FlowStep("PU_FIRE_TEST").LinkedChecklistItemIds);
     }
 
     [Fact]
@@ -247,6 +302,12 @@ public class L1011FoChecklistStructureTests
                     Assert.Null(i.CheckAction);
                     Assert.Equal(FlowStep(i.Id).ReminderText, i.ReminderText);
                     Assert.Equal("Enter present position on INS 1, 2 and 3: input Shift+M, then Alt+P on each unit.", i.ReminderText);
+                    break;
+                case var _ when ReadOnlyLines.Any(r => r.Id == i.Id):
+                    // What the First Officer finds and never moves: read only, ticked by the aircraft.
+                    Assert.Equal(ChecklistItemType.AutoDetectable, i.Type);
+                    Assert.Null(i.CheckAction);
+                    Assert.Equal(RevertBehavior.RevertToState, i.RevertBehavior);
                     break;
                 default:
                     Assert.Equal(ChecklistItemType.AutoDetectable, i.Type);
@@ -277,89 +338,53 @@ public class L1011FoChecklistStructureTests
     public void PowerUp_ActionLine_ReadsItsStepsField(string id, string field)
         => Assert.Equal(field, Line(id).StateFieldName);
 
-    // ------------------------------------------------------------------ the cockpit safety inspection
-
-    /// <summary>The aircraft's cockpit safety inspection, word for word and in its order. No galley line: the aircraft's page has none.</summary>
-    [Fact]
-    public void CockpitSafetyInspection_LinesWordForWord()
-    {
-        var expected = new (string Id, string Label)[]
-        {
-            ("PUC_FIRE_HANDLES", "Engine and APU fire handles: in"),
-            ("PUC_CONT_IGN", "Continuous ignition: unlatched"),
-            ("PUC_RADIO_MASTERS", "Essential and no. 2 radio master switches: latched"),
-            ("PUC_GEAR", "Gear lever: down"),
-            ("PUC_SPEED_BRAKE", "Speed brake handle: forward"),
-            ("PUC_FLAPS", "Flaps and flap handle: agree"),
-            ("PUC_FUEL_IGN", "Fuel and ignition switches: off"),
-            ("PUC_XPDR", "Transponder: standby"),
-            ("PUC_RADAR", "Radar: off"),
-            ("PUC_ATMS", "ATM switches: off"),
-            ("PUC_AC_PUMPS", "AC hydraulic pump switches: unlatched"),
-            ("PUC_FUEL_PUMPS", "Fuel tank pump switches: unlatched"),
-            ("PUC_JETTISON", "Master jettison and dump switches: unlatched"),
-            ("PUC_PAX_OXY", "Passenger oxygen manual switch: guarded and unlatched"),
-            ("PUC_STBY_CHECK", "Standby power check: complete"),
-            ("PUC_BATTERY", "Battery: on"),
-            ("PUC_STBY_ARMED", "Standby power: armed"),
-            ("PUC_AC_ESS", "AC essential power selector: normal, bus 3 (generator 1)"),
-            // The page's fire tests come between the AC essential selector and external power.
-            ("PUC_LOOP_SELECTORS", "Detection loop selectors: both"),
-            ("PUC_FIRE_TEST", "Engine and APU fire test: complete"),
-            ("PUC_INS_ALIGN", "All INS: align"),
-        };
-        Assert.Equal(expected, Group("POWER_UP_CL").Items.Select(i => (i.Id, i.Label)).ToArray());
-        Assert.DoesNotContain(Groups.SelectMany(g => g.Items), i => i.Id == "PUC_GALLEY");
-    }
+    // ------------------------------------------------------------------ the inspection's lines Power Up keeps
 
     /// <summary>
-    /// Each read line reads the field and value its delivering flow step checks or skips on: a single
-    /// switch its own key at the target, a multi-switch line the matching synthetic.
+    /// The cockpit safety inspection's lines the action lines did not already read, moved into Power Up with their
+    /// labels: the five read-only checks under their steps' ids, and the loop selectors, which the fire test leaves at
+    /// Both. Every other inspection line read the same state as an action line, and went.
     /// </summary>
-    [Theory]
-    [InlineData("PUC_FIRE_HANDLES", "FO_FIRE_HANDLES_IN", 1)]
-    [InlineData("PUC_CONT_IGN", "SWITCH_CONT_IGNITION", 0)]
-    [InlineData("PUC_RADIO_MASTERS", "FO_RADIO_MASTERS_ON", 1)]
-    [InlineData("PUC_GEAR", "FO_GEAR_LEVER_DOWN", 1)]
-    [InlineData("PUC_SPEED_BRAKE", "FO_SPEED_BRAKE_FORWARD", 1)]
-    [InlineData("PUC_FLAPS", "FO_FLAPS_AGREE", 1)]
-    [InlineData("PUC_FUEL_IGN", "FO_FUEL_IGNITION_OFF", 1)]
-    [InlineData("PUC_XPDR", "ROTARY_TCAS_MODE", 1)]
-    [InlineData("PUC_RADAR", "SWITCH_WX_OFF", 1)]
-    [InlineData("PUC_ATMS", "FO_ATMS_OFF", 1)]
-    [InlineData("PUC_AC_PUMPS", "FO_AC_PUMPS_OFF", 1)]
-    [InlineData("PUC_FUEL_PUMPS", "FO_FUEL_PUMPS_OFF", 1)]
-    [InlineData("PUC_JETTISON", "FO_JETTISON_SAFE", 1)]
-    [InlineData("PUC_PAX_OXY", "FO_PAX_OXY_SAFE", 1)]
-    [InlineData("PUC_BATTERY", "TOGGLE_BATTERY", 1)]
-    [InlineData("PUC_STBY_ARMED", "FO_STBY_ARMED", 1)]
-    [InlineData("PUC_AC_ESS", "ROTARY_AC_ESS_BUS", 4)]
-    [InlineData("PUC_LOOP_SELECTORS", "FO_FIRE_LOOPS_BOTH", 1)]
-    [InlineData("PUC_INS_ALIGN", "FO_INS_ALIGN_OR_NAV", 1)]
-    public void ReadLine_ReadsItsFieldAtItsValue(string id, string field, double done)
+    private static readonly (string Id, string Label, string Field, double Done)[] ReadOnlyLines =
     {
-        var line = Line(id);
-        Assert.Equal(ChecklistItemType.AutoDetectable, line.Type);
-        Assert.Equal(field, line.StateFieldName);
-        Assert.Empty(line.AdditionalStateFields);
-        Assert.Null(line.CheckAction);
-        Assert.True(line.StateCondition!(done), $"{id}: {field} at {done} must read done");
-        Assert.False(line.StateCondition!(double.NaN), $"{id}: {field} unread must not read done");
-        // A synthetic reads 1, 0 or unread; a switch or selector reads any of its positions.
-        var others = L1011FoStateEvaluator.SyntheticKeys.Contains(field) ? new[] { 0.0 } : new[] { 0.0, 1, 2, 3, 4 };
-        foreach (double other in others.Where(v => v != done))
-            Assert.False(line.StateCondition!(other), $"{id}: {field} at {other} must not read done");
+        ("PU_CHK_FIRE_HANDLES", "Engine and APU fire handles: in", "FO_FIRE_HANDLES_IN", 1),
+        ("PU_CHK_GEAR", "Gear lever: down", "FO_GEAR_LEVER_DOWN", 1),
+        ("PU_CHK_SPEED_BRAKE", "Speed brake handle: forward", "FO_SPEED_BRAKE_FORWARD", 1),
+        ("PU_CHK_FLAPS", "Flaps and flap handle: agree", "FO_FLAPS_AGREE", 1),
+        ("PU_CHK_FUEL_IGN", "Fuel and ignition switches: off", "FO_FUEL_IGNITION_OFF", 1),
+        ("PU_LOOP_SELECTORS", "Detection loop selectors: both", "FO_FIRE_LOOPS_BOTH", 1),
+    };
+
+    /// <summary>Each moved line keeps its label and reads its field at its value, action-free, a live mirror.</summary>
+    [Fact]
+    public void TheMovedInspectionLines_KeepTheirLabels_AndReadTheirFieldAtTheirValue()
+    {
+        foreach (var (id, label, field, done) in ReadOnlyLines)
+        {
+            var line = Line(id);
+            Assert.Equal("POWER_UP", line.GroupId);
+            Assert.Equal(label, line.Label);
+            Assert.Equal(ChecklistItemType.AutoDetectable, line.Type);
+            Assert.Equal(RevertBehavior.RevertToState, line.RevertBehavior);
+            Assert.Equal(field, line.StateFieldName);
+            Assert.Empty(line.AdditionalStateFields);
+            Assert.Null(line.CheckAction);
+            Assert.Null(line.LeaveAloneWhen);
+            Assert.True(line.StateCondition!(done), $"{id}: {field} at {done} must read done");
+            Assert.False(line.StateCondition!(double.NaN), $"{id}: {field} unread must not read done");
+            Assert.False(line.StateCondition!(0), $"{id}: {field} at 0 must not read done");
+        }
     }
 
-    /// <summary>The check's own line: actionable, judged by no state, delivered by the composite step.</summary>
+    /// <summary>Each read-only check completes its own line, which reads the field it waits on.</summary>
     [Fact]
-    public void StandbyPowerCheckLine_IsActionableWithNoStateAndNoAction()
+    public void EachCheck_CompletesItsOwnLine()
     {
-        var line = Line("PUC_STBY_CHECK");
-        Assert.Equal(ChecklistItemType.Actionable, line.Type);
-        Assert.Null(line.StateFieldName);
-        Assert.Null(line.CheckAction);
-        Assert.True(line.ManualCompletionAllowed);
+        foreach (var (id, _, field, _) in ReadOnlyLines.Where(r => r.Id.StartsWith("PU_CHK_", StringComparison.Ordinal)))
+        {
+            Assert.Equal(new[] { id }, FlowStep(id).LinkedChecklistItemIds);
+            Assert.Equal(field, FlowStep(id).ConditionFieldName);
+        }
     }
 
     // ------------------------------------------------------------------ the guarded hand ticks ([FO-25])

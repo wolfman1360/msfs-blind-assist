@@ -10,9 +10,9 @@ using Step = MSFSBlindAssist.FirstOfficer.Models.FlowStep<MSFSBlindAssist.FirstO
 namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 
 /// <summary>
-/// The TriStar First Officer's Preflight flow, its action group and its four read-back checklists (the flight
-/// engineer station, the overhead, the main panel and the centre console), pinned by structure and by
-/// behaviour: the step ids and their order, the two guards first ([FO-25]: the flow switches the packs, the
+/// The TriStar First Officer's Preflight flow and its group (its writes, its unconditional Captain steps, and the
+/// read-only checks of the engineer station, overhead, main panel and console preparation it completes), pinned by
+/// structure and by behaviour: the step ids and their order, the two guards first ([FO-25]: the flow switches the packs, the
 /// AC hydraulic pumps and the power transfer units off), every label, key and target word for word, every
 /// write's "Already set" on its own state (the three tests excepted: the test is the point), the lines each
 /// step delivers ([FO-6], [FO-7]), the cabin altitude provider and its Captain fallback ([FO-20]), the packs
@@ -75,8 +75,7 @@ public class L1011FoPreflightTests
     public void Preflight_NamesItselfAndItsChecklistGroups()
     {
         Assert.Equal("Preflight", Preflight.Name);
-        Assert.Equal(new[] { "PREFLIGHT", "PREFLIGHT_FE_CL", "PREFLIGHT_OVHD_CL", "PREFLIGHT_MAIN_CL", "PREFLIGHT_CONSOLE_CL" },
-            Preflight.RelatedChecklistGroupIds);
+        Assert.Equal(new[] { "PREFLIGHT" }, Preflight.RelatedChecklistGroupIds);
         Assert.False(string.IsNullOrWhiteSpace(Preflight.Description));
     }
 
@@ -250,7 +249,7 @@ public class L1011FoPreflightTests
     public void The_engine_and_APU_fire_test_is_Power_Ups_not_Preflights()
     {
         Assert.DoesNotContain(Preflight.Steps, s => s.EventName == X.FireTest);
-        Assert.DoesNotContain(Groups.SelectMany(g => g.Items), i => i.Id is "PF_FIRE_TEST" or "PFC_FIRE_TEST" or "PFC_LOOP_SELECTORS");
+        Assert.DoesNotContain(Group("PREFLIGHT").Items, i => i.Id is "PF_FIRE_TEST" or "PF_LOOP_SELECTORS");
     }
 
     [Fact]
@@ -271,86 +270,86 @@ public class L1011FoPreflightTests
         Assert.Equal(120, running.TimeoutSeconds);
         Assert.Equal(FlowStepFailurePolicy.Stop, running.FailurePolicy);
         Assert.Null(running.SkipCondition);
-        Assert.Equal(new[] { "PFC_APU_START" }, running.LinkedChecklistItemIds);
+        Assert.Equal(new[] { "PF_APU_RUNNING" }, running.LinkedChecklistItemIds);
         Assert.False(running.Condition!(double.NaN));
         Assert.False(running.Condition!(0));
         Assert.True(running.Condition!(1));
     }
 
-    /// <summary>Every step's lines, from the table: a write its action line then the read-back lines it sets,
-    /// a check or a wait the read-back line it reads, an unconditional Captain step its reminder line.</summary>
+    /// <summary>Every step's lines, from the table: a write its own line, a check or the APU running wait the line
+    /// it reads (its own id), an unconditional Captain step its reminder line. Preflight has no read-back group.</summary>
     private static readonly Dictionary<string, string[]> Links = new(StringComparer.Ordinal)
     {
-        ["PF_APU_MASTER"] = new[] { "PF_APU_MASTER", "PFC_APU_MASTER" },
+        ["PF_APU_MASTER"] = new[] { "PF_APU_MASTER" },
         ["PF_APU_MODE_MIN"] = new[] { "PF_APU_MODE_MIN" },
-        ["PF_APU_FUEL"] = new[] { "PF_APU_FUEL", "PFC_APU_FUEL" },
+        ["PF_APU_FUEL"] = new[] { "PF_APU_FUEL" },
         ["PF_APU_START"] = new[] { "PF_APU_START" },
-        ["PF_APU_RUNNING"] = new[] { "PFC_APU_START" },
-        ["PF_APU_GEN"] = new[] { "PF_APU_GEN", "PFC_APU_GEN" },
-        ["PF_AC_TIES"] = new[] { "PF_AC_TIES", "PFC_AC_TIES" },
-        ["PF_APU_AIR"] = new[] { "PF_APU_AIR", "PFC_FUSELAGE_ISLN", "PFC_XBLEEDS" },
+        ["PF_APU_RUNNING"] = new[] { "PF_APU_RUNNING" },
+        ["PF_APU_GEN"] = new[] { "PF_APU_GEN" },
+        ["PF_AC_TIES"] = new[] { "PF_AC_TIES" },
+        ["PF_APU_AIR"] = new[] { "PF_APU_AIR" },
         ["PF_PACKS_OFF"] = new[] { "PF_PACKS_OFF" },
-        ["PF_PACKS_AUTO"] = new[] { "PF_PACKS_AUTO", "PFC_PACK_AUTO" },
+        ["PF_PACKS_AUTO"] = new[] { "PF_PACKS_AUTO" },
         ["PF_HOT_AIR_OFF"] = new[] { "PF_HOT_AIR_OFF" },
-        ["PF_ZONE_TRIMS"] = new[] { "PF_ZONE_TRIMS", "PFC_ZONE_TRIMS" },
-        ["PF_APU_BLEED"] = new[] { "PF_APU_BLEED", "PFC_APU_BLEED" },
-        ["PF_PACKS_ON"] = new[] { "PF_PACKS_ON", "PFC_PACKS" },
-        ["PF_APU_MODE_NORM"] = new[] { "PF_APU_MODE_NORM", "PFC_APU_MODE_NORM" },
-        ["PF_HOT_AIR_ON"] = new[] { "PF_HOT_AIR_ON", "PFC_HOT_AIR" },
-        ["PF_WHEEL_WELL_TEST"] = new[] { "PF_WHEEL_WELL_TEST", "PFC_WHEEL_WELL_TEST" },
-        ["PF_HYD_ENGINE_PUMPS"] = new[] { "PF_HYD_ENGINE_PUMPS", "PFC_HYD_ENGINE_PUMPS" },
-        ["PF_CHK_ATMS"] = new[] { "PFC_ATMS" },
-        ["PF_AC_PUMPS_PTUS_OFF"] = new[] { "PF_AC_PUMPS_PTUS_OFF", "PFC_PTUS" },
-        ["PF_HYD_CHECK"] = new[] { "PF_HYD_CHECK", "PFC_HYD_CHECK" },
-        ["PF_AC_METER"] = new[] { "PF_AC_METER", "PFC_AC_METER" },
-        ["PF_DC_METER"] = new[] { "PF_DC_METER", "PFC_DC_METER" },
-        ["PF_CHK_AC_ESS"] = new[] { "PFC_AC_ESS" },
-        ["PF_TRANSFERS_OFF"] = new[] { "PF_TRANSFERS_OFF", "PFC_TRANSFERS" },
-        ["PF_CROSSFEEDS"] = new[] { "PF_CROSSFEEDS", "PFC_CROSSFEEDS" },
-        ["PF_TANK_VALVES"] = new[] { "PF_TANK_VALVES", "PFC_TANK_VALVES" },
-        ["PF_CHK_APU_PUMP"] = new[] { "PFC_APU_PUMP_ONLY" },
-        ["PF_CHK_JETTISON"] = new[] { "PFC_JETTISON" },
-        ["PF_FUEL_CTRL"] = new[] { "PF_FUEL_CTRL", "PFC_FUEL_CTRL" },
-        ["PF_MOVIE"] = new[] { "PF_MOVIE", "PFC_MOVIE" },
-        ["PF_SLAT_MONITOR"] = new[] { "PF_SLAT_MONITOR", "PFC_SLAT_MONITOR" },
-        ["PF_HI_PRESS"] = new[] { "PF_HI_PRESS", "PFC_HI_PRESS" },
-        ["PF_ISLN_VALVES"] = new[] { "PF_ISLN_VALVES", "PFC_ISLN_VALVES" },
-        ["PF_ECS"] = new[] { "PF_ECS", "PFC_ECS" },
-        ["PF_PRESS_MODE"] = new[] { "PF_PRESS_MODE", "PFC_PRESS_MODE" },
-        ["PF_CABIN_ALT"] = new[] { "PF_CABIN_ALT", "PFC_CABIN_ALT" },
+        ["PF_ZONE_TRIMS"] = new[] { "PF_ZONE_TRIMS" },
+        ["PF_APU_BLEED"] = new[] { "PF_APU_BLEED" },
+        ["PF_PACKS_ON"] = new[] { "PF_PACKS_ON" },
+        ["PF_APU_MODE_NORM"] = new[] { "PF_APU_MODE_NORM" },
+        ["PF_HOT_AIR_ON"] = new[] { "PF_HOT_AIR_ON" },
+        ["PF_WHEEL_WELL_TEST"] = new[] { "PF_WHEEL_WELL_TEST" },
+        ["PF_HYD_ENGINE_PUMPS"] = new[] { "PF_HYD_ENGINE_PUMPS" },
+        ["PF_CHK_ATMS"] = new[] { "PF_CHK_ATMS" },
+        ["PF_AC_PUMPS_PTUS_OFF"] = new[] { "PF_AC_PUMPS_PTUS_OFF" },
+        ["PF_HYD_CHECK"] = new[] { "PF_HYD_CHECK" },
+        ["PF_AC_METER"] = new[] { "PF_AC_METER" },
+        ["PF_DC_METER"] = new[] { "PF_DC_METER" },
+        ["PF_CHK_AC_ESS"] = new[] { "PF_CHK_AC_ESS" },
+        ["PF_TRANSFERS_OFF"] = new[] { "PF_TRANSFERS_OFF" },
+        ["PF_CROSSFEEDS"] = new[] { "PF_CROSSFEEDS" },
+        ["PF_TANK_VALVES"] = new[] { "PF_TANK_VALVES" },
+        ["PF_CHK_APU_PUMP"] = new[] { "PF_CHK_APU_PUMP" },
+        ["PF_CHK_JETTISON"] = new[] { "PF_CHK_JETTISON" },
+        ["PF_FUEL_CTRL"] = new[] { "PF_FUEL_CTRL" },
+        ["PF_MOVIE"] = new[] { "PF_MOVIE" },
+        ["PF_SLAT_MONITOR"] = new[] { "PF_SLAT_MONITOR" },
+        ["PF_HI_PRESS"] = new[] { "PF_HI_PRESS" },
+        ["PF_ISLN_VALVES"] = new[] { "PF_ISLN_VALVES" },
+        ["PF_ECS"] = new[] { "PF_ECS" },
+        ["PF_PRESS_MODE"] = new[] { "PF_PRESS_MODE" },
+        ["PF_CABIN_ALT"] = new[] { "PF_CABIN_ALT" },
         ["PF_CABIN_ALT_CPT"] = Array.Empty<string>(),
-        ["PF_COMPASSES"] = new[] { "PF_COMPASSES", "PFO_COMPASSES" },
-        ["PF_WIPERS"] = new[] { "PF_WIPERS", "PFO_WIPERS" },
-        ["PF_ANTI_ICE"] = new[] { "PF_ANTI_ICE", "PFO_ANTI_ICE" },
-        ["PF_WINDSHIELD"] = new[] { "PF_WINDSHIELD", "PFO_WINDSHIELD" },
-        ["PF_SIDE_WINDOWS"] = new[] { "PF_SIDE_WINDOWS", "PFO_SIDE_WINDOWS" },
-        ["PF_AIR_DATA"] = new[] { "PF_AIR_DATA", "PFO_AIR_DATA" },
-        ["PF_MACH_FEEL"] = new[] { "PF_MACH_FEEL", "PFO_MACH_FEEL" },
-        ["PF_IGNITION"] = new[] { "PF_IGNITION", "PFO_IGNITION" },
-        ["PF_STBY_LIGHTS"] = new[] { "PF_STBY_LIGHTS", "PFO_STBY_LIGHTS" },
-        ["PF_PFCS"] = new[] { "PF_PFCS", "PFO_PFCS" },
-        ["PF_FCES"] = new[] { "PF_FCES", "PFO_FCES" },
-        ["PF_BRAKE_SEL"] = new[] { "PF_BRAKE_SEL", "PFO_BRAKE_SEL", "PFM_BRAKE_SYS" },
-        ["PF_ANTISKID_OFF"] = new[] { "PF_ANTISKID_OFF", "PFO_ANTISKID" },
-        ["PF_PARKING_BRAKE"] = new[] { "PF_PARKING_BRAKE", "PFO_PARKING_BRAKE", "PFX_PARKING_BRAKE" },
-        ["PF_AUTOBRAKE"] = new[] { "PF_AUTOBRAKE", "PFO_AUTOBRAKE" },
-        ["PF_EXT_LIGHTS"] = new[] { "PF_EXT_LIGHTS", "PFO_EXT_LIGHTS" },
-        ["PF_EMER_LIGHTS"] = new[] { "PF_EMER_LIGHTS", "PFO_EMER_LIGHTS" },
-        ["PF_CHK_STBY_ARMED"] = new[] { "PFO_STBY_POWER" },
-        ["PF_NO_SMOKING"] = new[] { "PF_NO_SMOKING", "PFO_NO_SMOKING" },
-        ["PF_INSTR_SOURCES"] = new[] { "PF_INSTR_SOURCES", "PFM_INSTR_SOURCE" },
-        ["PF_DME"] = new[] { "PF_DME", "PFM_DME" },
-        ["PF_FLIGHT_DIRECTORS"] = new[] { "PF_FLIGHT_DIRECTORS", "PFM_FLIGHT_DIRECTORS" },
-        ["PF_PADDLES_OFF"] = new[] { "PF_PADDLES_OFF", "PFM_AUTOPILOT_MASTERS" },
-        ["PF_CHK_DISCONNECT"] = new[] { "PFX_DISCONNECT" },
-        ["PF_SPEED_BRAKE"] = new[] { "PF_SPEED_BRAKE", "PFX_SPEED_BRAKE" },
-        ["PF_CHK_FUEL_IGN"] = new[] { "PFX_FUEL_IGN" },
-        ["PF_XPDR"] = new[] { "PF_XPDR", "PFX_XPDR" },
-        ["PF_CHK_INS"] = new[] { "PFO_INS" },
-        ["PF_CHK_FIRE_HANDLES"] = new[] { "PFO_FIRE_HANDLES" },
-        ["PF_CHK_RADIO_MASTERS"] = new[] { "PFO_RADIO_MASTERS" },
-        ["PF_CHK_START_LIGHTS"] = new[] { "PFO_START_LIGHTS" },
-        ["PF_CHK_GEAR"] = new[] { "PFM_GEAR" },
+        ["PF_COMPASSES"] = new[] { "PF_COMPASSES" },
+        ["PF_WIPERS"] = new[] { "PF_WIPERS" },
+        ["PF_ANTI_ICE"] = new[] { "PF_ANTI_ICE" },
+        ["PF_WINDSHIELD"] = new[] { "PF_WINDSHIELD" },
+        ["PF_SIDE_WINDOWS"] = new[] { "PF_SIDE_WINDOWS" },
+        ["PF_AIR_DATA"] = new[] { "PF_AIR_DATA" },
+        ["PF_MACH_FEEL"] = new[] { "PF_MACH_FEEL" },
+        ["PF_IGNITION"] = new[] { "PF_IGNITION" },
+        ["PF_STBY_LIGHTS"] = new[] { "PF_STBY_LIGHTS" },
+        ["PF_PFCS"] = new[] { "PF_PFCS" },
+        ["PF_FCES"] = new[] { "PF_FCES" },
+        ["PF_BRAKE_SEL"] = new[] { "PF_BRAKE_SEL" },
+        ["PF_ANTISKID_OFF"] = new[] { "PF_ANTISKID_OFF" },
+        ["PF_PARKING_BRAKE"] = new[] { "PF_PARKING_BRAKE" },
+        ["PF_AUTOBRAKE"] = new[] { "PF_AUTOBRAKE" },
+        ["PF_EXT_LIGHTS"] = new[] { "PF_EXT_LIGHTS" },
+        ["PF_EMER_LIGHTS"] = new[] { "PF_EMER_LIGHTS" },
+        ["PF_CHK_STBY_ARMED"] = new[] { "PF_CHK_STBY_ARMED" },
+        ["PF_NO_SMOKING"] = new[] { "PF_NO_SMOKING" },
+        ["PF_INSTR_SOURCES"] = new[] { "PF_INSTR_SOURCES" },
+        ["PF_DME"] = new[] { "PF_DME" },
+        ["PF_FLIGHT_DIRECTORS"] = new[] { "PF_FLIGHT_DIRECTORS" },
+        ["PF_PADDLES_OFF"] = new[] { "PF_PADDLES_OFF" },
+        ["PF_CHK_DISCONNECT"] = new[] { "PF_CHK_DISCONNECT" },
+        ["PF_SPEED_BRAKE"] = new[] { "PF_SPEED_BRAKE" },
+        ["PF_CHK_FUEL_IGN"] = new[] { "PF_CHK_FUEL_IGN" },
+        ["PF_XPDR"] = new[] { "PF_XPDR" },
+        ["PF_CHK_INS"] = new[] { "PF_CHK_INS" },
+        ["PF_CHK_FIRE_HANDLES"] = new[] { "PF_CHK_FIRE_HANDLES" },
+        ["PF_CHK_RADIO_MASTERS"] = new[] { "PF_CHK_RADIO_MASTERS" },
+        ["PF_CHK_START_LIGHTS"] = new[] { "PF_CHK_START_LIGHTS" },
+        ["PF_CHK_GEAR"] = new[] { "PF_CHK_GEAR" },
         ["PF_CPT_INS_ROUTE"] = new[] { "PF_CPT_INS_ROUTE" },
         ["PF_CPT_PMS"] = new[] { "PF_CPT_PMS" },
         ["PF_CPT_NAV"] = new[] { "PF_CPT_NAV" },
@@ -381,20 +380,21 @@ public class L1011FoPreflightTests
 
     // ------------------------------------------------------------------ the read-only checks
 
+    /// <summary>Each check's step label, the field it waits on, and the line it completes (its own id).</summary>
     private static readonly (string Id, string Label, string Field, string Line)[] Checks =
     {
-        ("PF_CHK_ATMS", "ATM switches: off", "FO_ATMS_OFF", "PFC_ATMS"),
-        ("PF_CHK_AC_ESS", "AC essential power selector: bus 3, generator 1", "ROTARY_AC_ESS_BUS", "PFC_AC_ESS"),
-        ("PF_CHK_APU_PUMP", "Fuel pumps: tank 2 left pump only", "FO_ONLY_APU_PUMP_ON", "PFC_APU_PUMP_ONLY"),
-        ("PF_CHK_JETTISON", "Jettison switches: off and guarded", "FO_JETTISON_SAFE", "PFC_JETTISON"),
-        ("PF_CHK_STBY_ARMED", "Standby power: armed", "FO_STBY_ARMED", "PFO_STBY_POWER"),
-        ("PF_CHK_DISCONNECT", "Pitch and roll disconnect handles: stowed", "FO_DISCONNECT_HANDLES_STOWED", "PFX_DISCONNECT"),
-        ("PF_CHK_FUEL_IGN", "Fuel and ignition switches: off", "FO_FUEL_IGNITION_OFF", "PFX_FUEL_IGN"),
-        ("PF_CHK_INS", "INS 1, 2 and 3: aligning or navigating", "FO_INS_ALIGN_OR_NAV", "PFO_INS"),
-        ("PF_CHK_FIRE_HANDLES", "Fire handles: in", "FO_FIRE_HANDLES_IN", "PFO_FIRE_HANDLES"),
-        ("PF_CHK_RADIO_MASTERS", "Radio master switches: on", "FO_RADIO_MASTERS_ON", "PFO_RADIO_MASTERS"),
-        ("PF_CHK_START_LIGHTS", "Engine start lights: out", "FO_START_LIGHTS_OUT", "PFO_START_LIGHTS"),
-        ("PF_CHK_GEAR", "Landing gear: down, three green", L1011GearConfirmation.DownField, "PFM_GEAR"),
+        ("PF_CHK_ATMS", "ATM switches: off", "FO_ATMS_OFF", "PF_CHK_ATMS"),
+        ("PF_CHK_AC_ESS", "AC essential power selector: bus 3, generator 1", "ROTARY_AC_ESS_BUS", "PF_CHK_AC_ESS"),
+        ("PF_CHK_APU_PUMP", "Fuel pumps: tank 2 left pump only", "FO_ONLY_APU_PUMP_ON", "PF_CHK_APU_PUMP"),
+        ("PF_CHK_JETTISON", "Jettison switches: off and guarded", "FO_JETTISON_SAFE", "PF_CHK_JETTISON"),
+        ("PF_CHK_STBY_ARMED", "Standby power: armed", "FO_STBY_ARMED", "PF_CHK_STBY_ARMED"),
+        ("PF_CHK_DISCONNECT", "Pitch and roll disconnect handles: stowed", "FO_DISCONNECT_HANDLES_STOWED", "PF_CHK_DISCONNECT"),
+        ("PF_CHK_FUEL_IGN", "Fuel and ignition switches: off", "FO_FUEL_IGNITION_OFF", "PF_CHK_FUEL_IGN"),
+        ("PF_CHK_INS", "INS 1, 2 and 3: aligning or navigating", "FO_INS_ALIGN_OR_NAV", "PF_CHK_INS"),
+        ("PF_CHK_FIRE_HANDLES", "Fire handles: in", "FO_FIRE_HANDLES_IN", "PF_CHK_FIRE_HANDLES"),
+        ("PF_CHK_RADIO_MASTERS", "Radio master switches: on", "FO_RADIO_MASTERS_ON", "PF_CHK_RADIO_MASTERS"),
+        ("PF_CHK_START_LIGHTS", "Engine start lights: out", "FO_START_LIGHTS_OUT", "PF_CHK_START_LIGHTS"),
+        ("PF_CHK_GEAR", "Landing gear: down, three green", L1011GearConfirmation.DownField, "PF_CHK_GEAR"),
     };
 
     [Fact]
@@ -417,18 +417,18 @@ public class L1011FoPreflightTests
         }
     }
 
-    /// <summary>A read-only check completes only the read-back line that reads its own field, under the same
-    /// rule: never an action line, never a line it cannot see.</summary>
+    /// <summary>A read-only check completes only its own line, which reads its own field under the same rule: never
+    /// a write's line, never a line it cannot see.</summary>
     [Fact]
     public void Every_check_completes_only_lines_reading_its_field()
     {
-        var readBacks = new[] { "PREFLIGHT_FE_CL", "PREFLIGHT_OVHD_CL", "PREFLIGHT_MAIN_CL", "PREFLIGHT_CONSOLE_CL" }
-            .SelectMany(g => Group(g).Items).ToDictionary(i => i.Id, StringComparer.Ordinal);
+        var lines = Group("PREFLIGHT").Items.ToDictionary(i => i.Id, StringComparer.Ordinal);
         foreach (var (id, _, field, line) in Checks)
         {
             var s = Of(id);
             Assert.Equal(new[] { line }, s.LinkedChecklistItemIds);
-            Assert.True(readBacks.TryGetValue(line, out var item), $"{id}: {line} is not a read-back line");
+            Assert.True(lines.TryGetValue(line, out var item), $"{id}: {line} is not a Preflight line");
+            Assert.Null(item!.CheckAction);
             Assert.Equal(field, item!.StateFieldName);
             foreach (double v in new[] { double.NaN, 0, 1, 2, 3, 4, 5 })
                 Assert.Equal(s.Condition!(v), item.StateCondition!(v));
@@ -786,69 +786,101 @@ public class L1011FoPreflightTests
     // ================================================================== the checklists
 
     [Fact]
-    public void ThePreflightGroups_FollowPowerUp_InFlightOrder_Named()
+    public void ThePreflightGroup_FollowsPowerUp_Named()
     {
-        Assert.Equal(new[] { "PREFLIGHT", "PREFLIGHT_FE_CL", "PREFLIGHT_OVHD_CL", "PREFLIGHT_MAIN_CL", "PREFLIGHT_CONSOLE_CL" },
-            Groups.Select(g => g.Id).SkipWhile(id => id.StartsWith("POWER_UP", StringComparison.Ordinal)).Take(5));
+        Assert.Equal(new[] { "POWER_UP", "PREFLIGHT", "BEFORE_START" }, Groups.Select(g => g.Id).Take(3));
         Assert.Equal("Preflight", Group("PREFLIGHT").Name);
-        Assert.Equal("Flight Engineer Station Preparation", Group("PREFLIGHT_FE_CL").Name);
-        Assert.Equal("Overhead Preparation", Group("PREFLIGHT_OVHD_CL").Name);
-        Assert.Equal("Main Panel Preparation", Group("PREFLIGHT_MAIN_CL").Name);
-        Assert.Equal("Center Console Preparation", Group("PREFLIGHT_CONSOLE_CL").Name);
     }
 
     [Fact]
-    public void EveryPreflightGroup_IsDeparture_AndNeverArrival()
+    public void ThePreflightGroup_IsDeparture_AndNeverArrival()
     {
-        foreach (var id in Preflight.RelatedChecklistGroupIds.Append("CLIMB_CL"))
-        {
-            Assert.True(FoDepartureGroups.Departure.Contains(id), $"{id} is not a departure group");
-            Assert.False(FoDepartureGroups.Arrival.Contains(id), $"{id} is an arrival group too");
-        }
+        Assert.True(FoDepartureGroups.Departure.Contains("PREFLIGHT"));
+        Assert.False(FoDepartureGroups.Arrival.Contains("PREFLIGHT"));
     }
 
-    [Fact]
-    public void No_read_back_has_a_check_action()
+    private static readonly string[] LineIds =
     {
-        foreach (var g in Preflight.RelatedChecklistGroupIds.Skip(1))
-            Assert.All(Group(g).Items, i => Assert.True(i.CheckAction == null, $"{g}/{i.Id} has a CheckAction"));
-    }
-
-    private static readonly string[] ActionLineIds =
-    {
-        "PF_APU_MASTER", "PF_APU_MODE_MIN", "PF_APU_FUEL", "PF_APU_START", "PF_APU_GEN", "PF_AC_TIES", "PF_APU_AIR",
-        "PF_PACKS_OFF", "PF_PACKS_AUTO", "PF_HOT_AIR_OFF", "PF_ZONE_TRIMS", "PF_APU_BLEED", "PF_PACKS_ON", "PF_APU_MODE_NORM",
-        "PF_HOT_AIR_ON", "PF_WHEEL_WELL_TEST", "PF_HYD_ENGINE_PUMPS", "PF_AC_PUMPS_PTUS_OFF", "PF_HYD_CHECK",
-        "PF_AC_METER", "PF_DC_METER", "PF_TRANSFERS_OFF", "PF_CROSSFEEDS", "PF_TANK_VALVES", "PF_FUEL_CTRL",
+        "PF_APU_MASTER", "PF_APU_MODE_MIN", "PF_APU_FUEL", "PF_APU_START", "PF_APU_RUNNING", "PF_APU_GEN", "PF_AC_TIES",
+        "PF_APU_AIR", "PF_PACKS_OFF", "PF_PACKS_AUTO", "PF_HOT_AIR_OFF", "PF_ZONE_TRIMS", "PF_APU_BLEED", "PF_PACKS_ON",
+        "PF_APU_MODE_NORM", "PF_HOT_AIR_ON", "PF_WHEEL_WELL_TEST", "PF_HYD_ENGINE_PUMPS", "PF_CHK_ATMS",
+        "PF_AC_PUMPS_PTUS_OFF", "PF_HYD_CHECK", "PF_AC_METER", "PF_DC_METER", "PF_CHK_AC_ESS", "PF_TRANSFERS_OFF",
+        "PF_CROSSFEEDS", "PF_TANK_VALVES", "PF_CHK_APU_PUMP", "PF_CHK_JETTISON", "PF_FUEL_CTRL",
         "PF_MOVIE", "PF_SLAT_MONITOR", "PF_HI_PRESS", "PF_ISLN_VALVES", "PF_ECS", "PF_PRESS_MODE", "PF_CABIN_ALT",
         "PF_COMPASSES", "PF_WIPERS", "PF_ANTI_ICE", "PF_WINDSHIELD", "PF_SIDE_WINDOWS", "PF_AIR_DATA", "PF_MACH_FEEL",
         "PF_IGNITION", "PF_STBY_LIGHTS", "PF_PFCS", "PF_FCES", "PF_BRAKE_SEL", "PF_ANTISKID_OFF", "PF_PARKING_BRAKE",
-        "PF_AUTOBRAKE", "PF_EXT_LIGHTS", "PF_EMER_LIGHTS", "PF_NO_SMOKING", "PF_INSTR_SOURCES", "PF_DME",
-        "PF_FLIGHT_DIRECTORS", "PF_PADDLES_OFF", "PF_SPEED_BRAKE", "PF_XPDR",
+        "PF_AUTOBRAKE", "PF_EXT_LIGHTS", "PF_EMER_LIGHTS", "PF_CHK_STBY_ARMED", "PF_NO_SMOKING", "PF_INSTR_SOURCES",
+        "PF_DME", "PF_FLIGHT_DIRECTORS", "PF_PADDLES_OFF", "PF_CHK_DISCONNECT", "PF_SPEED_BRAKE", "PF_CHK_FUEL_IGN",
+        "PF_XPDR", "PF_CHK_INS", "PF_CHK_FIRE_HANDLES", "PF_CHK_RADIO_MASTERS", "PF_CHK_START_LIGHTS", "PF_CHK_GEAR",
         "PF_CPT_INS_ROUTE", "PF_CPT_PMS", "PF_CPT_NAV", "PF_CPT_ALTIMETERS", "PF_CPT_AFCS", "PF_CPT_TAKEOFF_DATA",
         "PF_CPT_RADIOS",
     };
 
-    /// <summary>The flow's writes and its unconditional Captain steps, in the flow's order; the cabin altitude
-    /// prompt, spoken only when the aircraft does not show the cruise setting, stays flow-only.</summary>
+    /// <summary>The flow's writes, the read-only checks it completes (the APU running wait among them) and its
+    /// unconditional Captain steps, in the flow's order; the cabin altitude prompt, spoken only when the aircraft does
+    /// not show the cruise setting, stays flow-only.</summary>
     [Fact]
-    public void Preflight_ActionLines_InTheFlowsOrder()
+    public void Preflight_Lines_InTheFlowsOrder()
     {
-        Assert.Equal(ActionLineIds, Group("PREFLIGHT").Items.Select(i => i.Id));
+        Assert.Equal(LineIds, Group("PREFLIGHT").Items.Select(i => i.Id));
         Assert.DoesNotContain(Groups.SelectMany(g => g.Items), i => i.Id == "PF_CABIN_ALT_CPT");
     }
 
+    /// <summary>The engineer station, overhead, main panel and console preparation lines Preflight keeps: the ones no
+    /// write of the flow reads, each moved under the id of the step that completes it, with its label. Every other
+    /// line of those four pages read the same state as a Preflight line, and went.</summary>
+    private static readonly (string Id, string Label, string Field, double Done)[] ReadOnlyLines =
+    {
+        ("PF_APU_RUNNING", "APU start switch: press and release", "FO_APU_RUNNING", 1),
+        ("PF_CHK_ATMS", "ATM switches: off", "FO_ATMS_OFF", 1),
+        ("PF_CHK_AC_ESS", "AC ESS power selector: norm b3 (g1)", "ROTARY_AC_ESS_BUS", 4),
+        ("PF_CHK_APU_PUMP", "Tank pump switches: one on for the APU", "FO_ONLY_APU_PUMP_ON", 1),
+        ("PF_CHK_JETTISON", "Master and tank jettison switches: unlatched", "FO_JETTISON_SAFE", 1),
+        ("PF_CHK_STBY_ARMED", "Standby power: armed", "FO_STBY_ARMED", 1),
+        ("PF_CHK_DISCONNECT", "Pitch and roll disconnect handles: normal", "FO_DISCONNECT_HANDLES_STOWED", 1),
+        ("PF_CHK_FUEL_IGN", "Fuel and ignition switches: off", "FO_FUEL_IGNITION_OFF", 1),
+        ("PF_CHK_INS", "INS 1, 2 and 3: check alignment", "FO_INS_ALIGN_OR_NAV", 1),
+        ("PF_CHK_FIRE_HANDLES", "Fire pull handles: in", "FO_FIRE_HANDLES_IN", 1),
+        ("PF_CHK_RADIO_MASTERS", "Master radio switches: on", "FO_RADIO_MASTERS_ON", 1),
+        ("PF_CHK_START_LIGHTS", "Engine start lights: all out", "FO_START_LIGHTS_OUT", 1),
+        ("PF_CHK_GEAR", "Landing gear: down, 3 green", L1011GearConfirmation.DownField, 1),
+    };
+
+    /// <summary>Each moved line keeps its label, reads its field at its value and nothing else, action-free.</summary>
+    [Fact]
+    public void TheMovedLines_KeepTheirLabels_AndReadTheirFieldAtTheirValue()
+    {
+        foreach (var (id, label, field, done) in ReadOnlyLines)
+        {
+            var line = Line(id);
+            Assert.Equal("PREFLIGHT", line.GroupId);
+            Assert.Equal(label, line.Label);
+            Assert.Equal(ChecklistItemType.AutoDetectable, line.Type);
+            Assert.Equal(RevertBehavior.RevertToState, line.RevertBehavior);
+            Assert.Null(line.CheckAction);
+            Assert.Null(line.LeaveAloneWhen);
+            Assert.Empty(line.AdditionalStateFields);
+            Assert.Equal(field, line.StateFieldName);
+            Assert.True(line.StateCondition!(done), $"{id}: {field} at {done} must read done");
+            Assert.False(line.StateCondition!(double.NaN), $"{id}: unread must not read done");
+            var others = L1011FoStateEvaluator.SyntheticKeys.Contains(field) ? new[] { 0.0 } : new[] { 0.0, 1, 2, 3, 5 };
+            foreach (double other in others.Where(v => v != done))
+                Assert.False(line.StateCondition!(other), $"{id}: {field} at {other} must not read done");
+        }
+    }
+
+    /// <summary>Ticked or run, a write's line says what its step says. A read-only line keeps its own words.</summary>
     [Fact]
     public void Preflight_ActionLabels_AreTheFlowStepLabels()
     {
-        foreach (var i in Group("PREFLIGHT").Items)
+        foreach (var i in Group("PREFLIGHT").Items.Where(i => ReadOnlyLines.All(r => r.Id != i.Id)))
             Assert.Equal(Of(i.Id).Label, i.Label);
     }
 
     [Fact]
     public void Preflight_LineKinds()
     {
-        foreach (var i in Group("PREFLIGHT").Items)
+        foreach (var i in Group("PREFLIGHT").Items.Where(i => ReadOnlyLines.All(r => r.Id != i.Id)))
         {
             if (Tests.Contains(i.Id) || UndoneLater.Contains(i.Id))
             {
@@ -1142,156 +1174,8 @@ public class L1011FoPreflightTests
         Assert.Equal(Sent(byStep), Sent(byTick));
     }
 
-    // ---- the read-backs, word for word ---------------------------------------------------------------------------
-
-    /// <summary>A read-back line: its label, and its field and done value, or null for a line judged by no state
-    /// (<c>Manual</c>, delivered by the composite) or a Captain's <c>Reminder</c>.</summary>
-    private sealed record ReadBack(string Id, string Label, string? Field = null, double Done = 1, bool Reminder = false);
-
-    private static readonly ReadBack[] EngineerStation =
-    {
-        new("PFC_APU_MASTER", "APU master power switch: on", "TOGGLE_APU_POWER"),
-        new("PFC_APU_FUEL", "One tank boost pump and engine 2 tank valve switch: on", "FO_ENG2_FUEL_FEED"),
-        new("PFC_APU_START", "APU start switch: press and release", "FO_APU_RUNNING"),
-        new("PFC_APU_GEN", "APU generator field and breaker switches: latch", "FO_APU_GEN_CLOSED"),
-        new("PFC_AC_TIES", "Bus tie breakers: close", "FO_AC_TIES_CLOSED"),
-        new("PFC_FUSELAGE_ISLN", "Fuselage isolation valve switch: latch", "SWITCH_APU_ISLN_VALVE"),
-        new("PFC_XBLEEDS", "Crossbleed valve switches: latch", "FO_CROSSBLEEDS_ON"),
-        new("PFC_PACK_AUTO", "Pack auto/manual control switches: auto", "FO_PACKS_AUTO"),
-        new("PFC_ZONE_TRIMS", "Zone trim switches: latched", "FO_ZONE_TRIMS_ON"),
-        new("PFC_APU_BLEED", "APU bleed air shut off switch: latch in", "SWITCH_APU_BLEED"),
-        new("PFC_PACKS", "Pack flow control valve switches: latch in", "FO_PACKS_ON"),
-        new("PFC_APU_MODE_NORM", "APU mode selector: norm", "SWITCH_APU_MODE"),
-        new("PFC_HOT_AIR", "Hot air valve and hot air isolation valve switches: latch in", "FO_HOT_AIR_ON"),
-        new("PFC_WHEEL_WELL_TEST", "Wheel well fire panel check: complete"),
-        new("PFC_HYD_ENGINE_PUMPS", "Engine pump shut off switches: latched", "FO_HYD_ENGINE_PUMPS_ON"),
-        new("PFC_ATMS", "ATM switches: off", "FO_ATMS_OFF"),
-        new("PFC_PTUS", "PTU switches: unlatched", "FO_PTUS_OFF"),
-        new("PFC_HYD_CHECK", "Hydraulic panel check: complete"),
-        new("PFC_AC_METER", "AC meter selector: APU", "ROTARY_PWR_SOURCE", 4),
-        new("PFC_DC_METER", "DC meter: bat", "ROTARY_STBY_DC_BUS", 4),
-        new("PFC_AC_ESS", "AC ESS power selector: norm b3 (g1)", "ROTARY_AC_ESS_BUS", 4),
-        new("PFC_TRANSFERS", "1A and 3A transfer switches: unlatched", "FO_TRANSFERS_OFF"),
-        new("PFC_CROSSFEEDS", "Crossfeed switches: close", "FO_CROSSFEEDS_CLOSED"),
-        new("PFC_TANK_VALVES", "All engine tank valve switches: latched", "FO_TANK_VALVES_ON"),
-        new("PFC_APU_PUMP_ONLY", "Tank pump switches: one on for the APU", "FO_ONLY_APU_PUMP_ON"),
-        new("PFC_JETTISON", "Master and tank jettison switches: unlatched", "FO_JETTISON_SAFE"),
-        new("PFC_FUEL_CTRL", "Fuel control amplifier switches: unlatched", "FO_FUEL_CTRL_OVRD_OFF"),
-        new("PFC_MOVIE", "Movie interrupt switch: unlatched", "FO_MOVIE_OFF"),
-        new("PFC_SLAT_MONITOR", "Slat monitor switch: unlatch", "SWITCH_SLAT_MONITOR", 0),
-        new("PFC_HI_PRESS", "Hi pressure bleed switches: latched", "FO_HI_PRESS_ON"),
-        new("PFC_ISLN_VALVES", "Engine isolation valve switches: latched", "FO_ISLN_VALVES_ON"),
-        new("PFC_ECS", "Cool air overboard and cargo heat switches: latched", "FO_ECS_ON"),
-        new("PFC_PRESS_MODE", "Mode sel: norm", "ROTARY_CAB_PRESS_MODE"),
-        new("PFC_CABIN_ALT", "Alt sel control: set cruise altitude", "FO_CABIN_ALT_AT_CRUISE"),
-    };
-
-    private static readonly ReadBack[] Overhead =
-    {
-        new("PFO_INS", "INS 1, 2 and 3: check alignment", "FO_INS_ALIGN_OR_NAV"),
-        new("PFO_FIRE_HANDLES", "Fire pull handles: in", "FO_FIRE_HANDLES_IN"),
-        new("PFO_COMPASSES", "Compass 1 and 2: mag", "FO_COMPASSES_MAG"),
-        new("PFO_RADIO_MASTERS", "Master radio switches: on", "FO_RADIO_MASTERS_ON"),
-        new("PFO_WIPERS", "Captain and F/O wipers: off", "FO_WIPERS_OFF"),
-        new("PFO_ANTI_ICE", "Engine and wing anti-ice switches: unlatched", "FO_ANTI_ICE_OFF"),
-        new("PFO_WINDSHIELD", "Capt and F/O windshield heat switches: latched", "FO_WINDSHIELD_NORMAL"),
-        new("PFO_SIDE_WINDOWS", "Side window switches: latch in", "FO_SIDE_WINDOWS_ON"),
-        new("PFO_AIR_DATA", "Air data sensor heat switches: all off", "FO_AIR_DATA_HEAT_OFF"),
-        new("PFO_MACH_FEEL", "Mach feel switches and rudder travel limiter: latched", "FO_MACH_FEEL_RUDDER_ON"),
-        new("PFO_START_LIGHTS", "Engine start lights: all out", "FO_START_LIGHTS_OUT"),
-        new("PFO_IGNITION", "Ignition: A or B", "FO_IGNITION_SELECTED"),
-        new("PFO_STBY_LIGHTS", "Instrument standby lights: brt", "TOGGLE_INSTR_STBY_LIGHTS"),
-        new("PFO_PFCS", "All PFCS switches: latched", "FO_PFCS_ON"),
-        new("PFO_FCES", "All FCES switches: latched", "FO_FCES_ON"),
-        new("PFO_BRAKE_SEL", "Brake selector switch: norm sys B", "TOGGLE_BRAKE_SYS_SEL", 0),
-        new("PFO_ANTISKID", "Anti-skid switch: unlatch", "SWITCH_ANTISKID_ON", 0),
-        new("PFO_PARKING_BRAKE", "Parking brake: set", "L1011_PARKING_BRAKE"),
-        new("PFO_AUTOBRAKE", "Auto brake: off", "ROTARY_AUTO_BRAKE_MODE"),
-        new("PFO_EXT_LIGHTS", "Exterior lights: logo and position on, the rest off", "FO_EXT_LIGHTS_PREFLIGHT"),
-        new("PFO_EMER_LIGHTS", "Emergency lighting switch: arm", "FO_EMER_LIGHTS_ARMED"),
-        new("PFO_STBY_POWER", "Standby power: armed", "FO_STBY_ARMED"),
-        new("PFO_NO_SMOKING", "No smoking: on", "SWITCH_SMOKING_LIGHT"),
-    };
-
-    private static readonly ReadBack[] MainPanel =
-    {
-        new("PFM_NAV", "Nav 1 and Nav 2: set", Reminder: true),
-        new("PFM_DME", "Nav 1 and Nav 2 DME: norm", "FO_DME_NORMAL"),
-        new("PFM_AUTOPILOT", "Autopilot: IAS, heading, courses and altitude set", Reminder: true),
-        new("PFM_FLIGHT_DIRECTORS", "Flight directors: on", "FO_FLIGHT_DIRECTORS_ON"),
-        new("PFM_AUTOPILOT_MASTERS", "Autopilot masters: off", "FO_PADDLES_OFF"),
-        new("PFM_ALTIMETERS", "Altimeters: set QNH", Reminder: true),
-        new("PFM_INSTR_SOURCE", "Instrument source selector: normal", "FO_INSTR_SOURCES_NORMAL"),
-        new("PFM_GEAR", "Landing gear: down, 3 green", L1011GearConfirmation.DownField),
-        new("PFM_BRAKE_SYS", "Brake system: norm sys B", "TOGGLE_BRAKE_SYS_SEL", 0),
-    };
-
-    private static readonly ReadBack[] CentreConsole =
-    {
-        new("PFX_INS", "INS 1, 2 and 3: set", Reminder: true),
-        new("PFX_PMS", "PMS: set", Reminder: true),
-        new("PFX_DISCONNECT", "Pitch and roll disconnect handles: normal", "FO_DISCONNECT_HANDLES_STOWED"),
-        new("PFX_PARKING_BRAKE", "Parking brake: set", "L1011_PARKING_BRAKE"),
-        new("PFX_SPEED_BRAKE", "Speed brake lever: forward", "FO_SPEED_BRAKE_FORWARD"),
-        new("PFX_FUEL_IGN", "Fuel and ignition switches: off", "FO_FUEL_IGNITION_OFF"),
-        new("PFX_RADIOS", "Communication radios: set", Reminder: true),
-        new("PFX_XPDR", "Transponder: set and STBY", "ROTARY_TCAS_MODE"),
-    };
-
-    private static IEnumerable<(string Group, ReadBack Line)> AllReadBacks() =>
-        EngineerStation.Select(l => ("PREFLIGHT_FE_CL", l))
-            .Concat(Overhead.Select(l => ("PREFLIGHT_OVHD_CL", l)))
-            .Concat(MainPanel.Select(l => ("PREFLIGHT_MAIN_CL", l)))
-            .Concat(CentreConsole.Select(l => ("PREFLIGHT_CONSOLE_CL", l)));
-
+    /// <summary>A finished run latches its own group, and nothing else.</summary>
     [Fact]
-    public void The_four_read_backs_are_word_for_word()
-    {
-        foreach (var (group, lines) in new[]
-        {
-            ("PREFLIGHT_FE_CL", EngineerStation), ("PREFLIGHT_OVHD_CL", Overhead),
-            ("PREFLIGHT_MAIN_CL", MainPanel), ("PREFLIGHT_CONSOLE_CL", CentreConsole),
-        })
-            Assert.Equal(lines.Select(l => (l.Id, l.Label)), Group(group).Items.Select(i => (i.Id, i.Label)));
-    }
-
-    /// <summary>Each read line reads its field at its value, and nothing else; a test's line is judged by no
-    /// state; a Captain's line is his reminder.</summary>
-    [Fact]
-    public void EveryReadBackLine_ReadsItsFieldAtItsValue()
-    {
-        foreach (var (group, rb) in AllReadBacks())
-        {
-            var line = Group(group).Items.Single(i => i.Id == rb.Id);
-            Assert.Null(line.CheckAction);
-            Assert.Empty(line.AdditionalStateFields);
-            if (rb.Reminder)
-            {
-                Assert.Equal(ChecklistItemType.CaptainReminder, line.Type);
-                Assert.Equal(rb.Label, line.ReminderText);
-                continue;
-            }
-            if (rb.Field is null)
-            {
-                Assert.Equal(ChecklistItemType.Actionable, line.Type);
-                Assert.Null(line.StateFieldName);
-                Assert.True(line.ManualCompletionAllowed);
-                continue;
-            }
-            Assert.Equal(ChecklistItemType.AutoDetectable, line.Type);
-            Assert.Equal(RevertBehavior.RevertToState, line.RevertBehavior);
-            Assert.Equal(rb.Field, line.StateFieldName);
-            Assert.True(line.StateCondition!(rb.Done), $"{rb.Id}: {rb.Field} at {rb.Done} must read done");
-            Assert.False(line.StateCondition!(double.NaN), $"{rb.Id}: unread must not read done");
-            var others = L1011FoStateEvaluator.SyntheticKeys.Contains(rb.Field) ? new[] { 0.0 } : new[] { 0.0, 1, 2, 3, 4, 5 };
-            foreach (double other in others.Where(v => v != rb.Done))
-                Assert.False(line.StateCondition!(other), $"{rb.Id}: {rb.Field} at {other} must not read done");
-        }
-    }
-
-    /// <summary>A finished run latches the action group and the four read-backs, and nothing else.</summary>
-    [Fact]
-    public void Preflight_LatchesItsFiveGroups()
-        => Assert.Equal(Preflight.RelatedChecklistGroupIds,
-            Preflight.CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
+    public void Preflight_LatchesItsOwnGroup()
+        => Assert.Equal(new[] { "PREFLIGHT" }, Preflight.CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
 }
