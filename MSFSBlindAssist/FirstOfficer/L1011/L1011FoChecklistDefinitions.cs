@@ -71,6 +71,11 @@ using CheckFn = System.Func<L1011FoActionExecutor, L1011FoStateEvaluator, System
 /// QNH, and the cabin altitude for the destination; its conditional cabin altitude prompt stays flow-only) and one
 /// read-back, the aircraft's descent page. The cabin altitude line writes the plan's destination elevation, clamped to
 /// the selector's end stops, or nothing without a plan, as its step does.
+///
+/// Before Landing has one action group (<c>BEFORE_LANDING</c>: the flow's writes and the Captain's flap schedule; its
+/// conditional cabin baro prompt stays flow-only) and one read-back, the aircraft's approach page, which carries the
+/// descent page's baro set line too. The cabin baro line writes the captain's altimeter, or nothing when it reads
+/// standard or unread. The landing autobrake line is the Captain's reminder, with no setting ([FO-14]).
 /// </summary>
 public static class L1011FoChecklistDefinitions
 {
@@ -84,6 +89,7 @@ public static class L1011FoChecklistDefinitions
         BeforeTakeoff(), BeforeTakeoffCL(),
         AfterTakeoff(), AfterTakeoffCL(), ClimbCL(),
         Descent(), DescentCL(),
+        BeforeLanding(), BeforeLandingCL(),
     };
 
     private const string ContIgnition = "SWITCH_CONT_IGNITION";
@@ -989,6 +995,65 @@ public static class L1011FoChecklistDefinitions
                 Read("DSC_SEAT_BELTS", G, "30 mins before landing: seatbelt signs on", SeatBelts, v => Is(v, 1)),
                 Reminder("DSC_QNH", G, "At transition level, altimeters: set QNH"),
                 Read("DSC_CABIN_ALT", G, "At transition level, flt cab alt sel: set destination elevation", "FO_CABIN_ALT_AT_DEST", On),
+            }
+        };
+    }
+
+    // ================================================================== Before Landing
+
+    /// <summary>The gear lever's down position (50 off, 100 up).</summary>
+    private const int GearDown = 0;
+
+    /// <summary>
+    /// The Before Landing flow's writes and the Captain's flap schedule, in its order and with its labels: the cabin baro
+    /// line reads the setting at the captain's altimeter, a multi-switch line its synthetic, a single switch its key at
+    /// the target, the gear line the lever down (the read-back's gear line reads the legs too).
+    /// </summary>
+    private static Group BeforeLanding()
+    {
+        const string G = "BEFORE_LANDING";
+        return new Group
+        {
+            Id = G, Name = "Before Landing",
+            Items = new()
+            {
+                // A standard or unread captain's altimeter gives no value: the tick writes nothing (FO-20).
+                Auto("BL_CABIN_BARO", G, "Cabin barometric setting: captain's altimeter", "FO_CABIN_BARO_SET", On,
+                    Provided(X.CabinBaro, s => s.CabinBaroTargetHundredths())),
+                Auto("BL_TRANSFERS_OFF", G, "1A and 3A transfers: off", "FO_TRANSFERS_OFF", On,
+                    SetAll(All(0, "SWITCH_FUEL_XFR_1A", "SWITCH_FUEL_XFR_3A"))),
+                Auto("BL_FUEL_PUMPS", G, "Fuel pumps: all on", "FO_FUEL_PUMPS_ON", On, SetAll(All(1, FuelPumps))),
+                Auto("BL_CROSSFEEDS", G, "Crossfeed valves: closed", "FO_CROSSFEEDS_CLOSED", On,
+                    SetAll(All(0, "SWITCH_FUEL_LEFT_XFEED", "SWITCH_FUEL_CTR_XFEED", "SWITCH_FUEL_RIGHT_XFEED"))),
+                Auto("BL_GROUND_LIGHTS", G, "Nose, taxi and runway turnoff lights: on", "FO_GROUND_LIGHTS_ON", On,
+                    SetAll(All(1, GroundLights))),
+                Auto("BL_CONT_IGN", G, "Continuous ignition: on", ContIgnition, v => Is(v, 1), Set(ContIgnition, 1)),
+                Auto("BL_GEAR", G, "Landing gear: down", "FO_GEAR_LEVER_DOWN", On, Set(L1011Levers.GearLeverKey, GearDown)),
+                Reminder("BL_CPT_FLAPS", G,
+                    "Extend the flaps on schedule: 4 at Vref plus 60, 10 at Vref plus 40, 22 at Vref plus 30, 33 at Vref plus 20.",
+                    label: "Flaps on schedule"),
+            }
+        };
+    }
+
+    /// <summary>The aircraft's approach page in its own words, opening with the descent page's baro set line, which
+    /// Before Landing delivers. Its autobrake line is the Captain's (FO-14).</summary>
+    private static Group BeforeLandingCL()
+    {
+        const string G = "BEFORE_LANDING_CL";
+        return new Group
+        {
+            Id = G, Name = "Approach",
+            Items = new()
+            {
+                Read("BLC_CABIN_BARO", G, "Baro set: set QNH", "FO_CABIN_BARO_SET", On),
+                Read("BLC_TRANSFERS", G, "1A and 3A xfr switches: close", "FO_TRANSFERS_OFF", On),
+                Read("BLC_PUMPS", G, "All tank pumps: on", "FO_FUEL_PUMPS_ON", On),
+                Read("BLC_CROSSFEEDS", G, "All crossfeed valves: close", "FO_CROSSFEEDS_CLOSED", On),
+                Read("BLC_GEAR", G, "Landing gear: down", L1011GearConfirmation.DownField, On),
+                Reminder("BLC_AUTOBRAKE", G, "Autobrake: set"),
+                Read("BLC_GROUND_LIGHTS", G, "Nose wheel landing, taxi and runway turnoff lights: on", "FO_GROUND_LIGHTS_ON", On),
+                Read("BLC_CONT_IGN", G, "Continuous ignition: on", ContIgnition, v => Is(v, 1)),
             }
         };
     }

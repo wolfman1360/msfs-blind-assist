@@ -78,6 +78,13 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// no setting: [FO-14]) and the QNH, and turns the cabin altitude selector to the plan's destination elevation, clamped
 /// to the selector's end stops; with no plan nothing is sent or spoken and a Captain step asks instead ([FO-20]). The
 /// seat belt switch carries a toggle: its single-switch step reads its own position first.
+///
+/// Before Landing is the manual's approach: the cabin barometric setting copied from the captain's altimeter, by now the
+/// destination QNH (a standard or unread altimeter gives no value, and a Captain step asks: [FO-20]; the aircraft moves
+/// the cabin baro with the captain's altimeter, so the step usually reads already set, and still catches a cabin baro
+/// moved on its own), the fuel set for landing, the nose, taxi and turnoff lights and continuous ignition on, the gear
+/// lever down, the Captain's flap schedule, and the gear confirmed down last ([FO-13]). The landing autobrake stays the
+/// Captain's ([FO-14]).
 /// </summary>
 public static class L1011FoFlowDefinitions
 {
@@ -91,6 +98,7 @@ public static class L1011FoFlowDefinitions
         BuildBeforeTakeoff(),
         BuildAfterTakeoff(),
         BuildDescent(),
+        BuildBeforeLanding(),
     };
 
     // ------------------------------------------------------------------ Power Up (the manual's cockpit entry and power-up)
@@ -904,6 +912,57 @@ public static class L1011FoFlowDefinitions
             Skip(Captain("DS_CABIN_ALT_CPT", "Cabin altitude selector",
                     "Set the cabin altitude selector to the destination elevation on the engineer's pressurization panel."),
                 s => s.IsOn("FO_CABIN_ALT_AT_DEST")),
+        }
+    };
+
+    // ------------------------------------------------------------------ Before Landing (the manual's approach)
+
+    /// <summary>The gear lever's down position (50 off, 100 up).</summary>
+    private const int GearDown = 0;
+
+    private static Flow BuildBeforeLanding() => new()
+    {
+        Id = "BEFORE_LANDING", Name = "Before Landing",
+        Description = "Cabin barometric setting to the captain's altimeter; 1A and 3A transfers off, all fuel pumps on, "
+            + "crossfeeds closed; nose, taxi and turnoff lights and continuous ignition on; gear down; the Captain's flap "
+            + "schedule; then the gear confirmed down.",
+        RelatedChecklistGroupIds = new[] { "BEFORE_LANDING", "BEFORE_LANDING_CL" },
+        Steps = new()
+        {
+            // The captain's altimeter holds the destination QNH by now. Standard or unread: nothing is sent or spoken
+            // (FO-20), and the Captain step below asks for it. The aircraft moves the cabin baro with the captain's
+            // altimeter, so this usually reads already set; it still catches a cabin baro moved on its own.
+            Also(Done(Skip(Provider("BL_CABIN_BARO", "Cabin barometric setting: captain's altimeter", X.CabinBaro,
+                    s => s.CabinBaroTargetHundredths()),
+                s => s.IsOn("FO_CABIN_BARO_SET")), "BL_CABIN_BARO"), "BLC_CABIN_BARO"),
+            // Keyed on the setting, never on the altimeter: without a value, or with a write that did not take, the
+            // cabin baro does not read the captain's setting and the Captain is asked.
+            Skip(Captain("BL_CABIN_BARO_CPT", "Cabin barometric setting",
+                    "Set the cabin barometric setting to the QNH on the engineer's pressurization panel."),
+                s => s.IsOn("FO_CABIN_BARO_SET")),
+
+            // ---- fuel for landing ----
+            Also(Done(Skip(Multi("BL_TRANSFERS_OFF", "1A and 3A transfers: off", AllTo(0, "SWITCH_FUEL_XFR_1A", "SWITCH_FUEL_XFR_3A")),
+                s => s.IsOn("FO_TRANSFERS_OFF")), "BL_TRANSFERS_OFF"), "BLC_TRANSFERS"),
+            Also(Done(Skip(Multi("BL_FUEL_PUMPS", "Fuel pumps: all on", AllTo(1, FuelPumpKeys)),
+                s => s.IsOn("FO_FUEL_PUMPS_ON")), "BL_FUEL_PUMPS"), "BLC_PUMPS"),
+            Also(Done(Skip(Multi("BL_CROSSFEEDS", "Crossfeed valves: closed",
+                    AllTo(0, "SWITCH_FUEL_LEFT_XFEED", "SWITCH_FUEL_CTR_XFEED", "SWITCH_FUEL_RIGHT_XFEED")),
+                s => s.IsOn("FO_CROSSFEEDS_CLOSED")), "BL_CROSSFEEDS"), "BLC_CROSSFEEDS"),
+
+            Also(Done(Skip(Multi("BL_GROUND_LIGHTS", "Nose, taxi and runway turnoff lights: on", AllTo(1, GroundLightKeys)),
+                s => s.IsOn("FO_GROUND_LIGHTS_ON")), "BL_GROUND_LIGHTS"), "BLC_GROUND_LIGHTS"),
+            Also(Done(Skip(SW("BL_CONT_IGN", "Continuous ignition: on", "SWITCH_CONT_IGNITION", 1),
+                s => s.IsPosition("SWITCH_CONT_IGNITION", 1)), "BL_CONT_IGN"), "BLC_CONT_IGN"),
+            // Already set once the lever reads down. Its read-back line is the legs', which the gear check last delivers.
+            Done(Skip(SW("BL_GEAR", "Landing gear: down", L1011Levers.GearLeverKey, GearDown),
+                s => s.IsOn("FO_GEAR_LEVER_DOWN")), "BL_GEAR"),
+            // The flaps stay the Captain's.
+            Done(Captain("BL_CPT_FLAPS", "Flaps on schedule",
+                "Extend the flaps on schedule: 4 at Vref plus 60, 10 at Vref plus 40, 22 at Vref plus 30, 33 at Vref plus 20."),
+                "BL_CPT_FLAPS"),
+            // LAST (FO-13): the gear confirmed down, the lever and every leg, read only. 20 s, then skipped aloud.
+            Check("BL_GEAR_DOWN_CHECK", "Landing gear: down", L1011GearConfirmation.DownField, On, GearCheckSeconds, "BLC_GEAR"),
         }
     };
 
