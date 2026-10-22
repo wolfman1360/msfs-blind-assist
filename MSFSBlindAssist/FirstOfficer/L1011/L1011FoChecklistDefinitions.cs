@@ -1459,8 +1459,9 @@ public static class L1011FoChecklistDefinitions
 
     private const string ParkedOnlyText = "Left alone: the aircraft must be on the ground with the engines stopped.";
 
-    /// <summary>The fuel pump lines' and Shutdown's battery line's reason: each also stays while the APU runs.</summary>
-    private const string ParkedApuOffText = "Left alone: the aircraft must be on the ground with the engines stopped and the APU shut down.";
+    /// <summary>The fuel pump lines' and Shutdown's battery line's reason: each also stays while the APU runs. Shutdown's
+    /// battery step speaks it too.</summary>
+    internal const string ParkedApuOffText = "Left alone: the aircraft must be on the ground with the engines stopped and the APU shut down.";
 
     // On the ground (the stock SIM_ON_GROUND, the flow's PU_ON_GROUND) with every engine read stopped
     // (FO_ENGINES_STOPPED, the flow's PU_ENGINES_STOPPED); airborne, an engine turning, or either unread,

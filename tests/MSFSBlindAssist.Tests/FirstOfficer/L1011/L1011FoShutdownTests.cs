@@ -429,7 +429,8 @@ public class L1011FoShutdownTests
     }
 
     /// <summary>On a real flow manager: a stop that is not done leaves the master on, and with it the battery, each saying
-    /// so; neither is written.</summary>
+    /// so; neither is written. With the APU still reading turning, the battery speaks its own APU rule (checked before the
+    /// dependency).</summary>
     [Fact]
     public async Task A_stop_not_done_leaves_the_master_and_the_battery_on_aloud()
     {
@@ -438,6 +439,21 @@ public class L1011FoShutdownTests
 
         Assert.True(run.Finished);
         Assert.Contains("Skipping: APU: stop", run.Speech);
+        Assert.Contains(MasterLeftOnText, run.Speech);
+        Assert.Contains(ParkedApuOffText, run.Speech);
+        Assert.Equal(new[] { "SD_APU_STOP", "SD_APU_MASTER_OFF", "SD_BATTERY_OFF" }, run.Skipped);
+        Assert.Empty(run.Sent);
+    }
+
+    /// <summary>On a real flow manager: with the APU's speed unread, a stop that is not done still leaves the master on and
+    /// the battery on, the battery saying the APU did not stop (its dependency on the master); neither is written.</summary>
+    [Fact]
+    public async Task A_stop_not_done_over_an_unread_APU_leaves_the_battery_on_by_its_dependency()
+    {
+        var run = await L1011FoFlowRun.RunAsync("SHUTDOWN", new[] { "SD_APU_STOP", "SD_APU_MASTER_OFF", "SD_BATTERY_OFF" },
+            Connected((ApuMaster, 1), ("TOGGLE_BATTERY", 1)), fail: new[] { X.ApuStop });
+
+        Assert.True(run.Finished);
         Assert.Contains(MasterLeftOnText, run.Speech);
         Assert.Contains(BatteryLeftOnText, run.Speech);
         Assert.Equal(new[] { "SD_APU_STOP", "SD_APU_MASTER_OFF", "SD_BATTERY_OFF" }, run.Skipped);
@@ -606,13 +622,48 @@ public class L1011FoShutdownTests
         Assert.False(line.IsChecked);
     }
 
-    /// <summary>In the flow only the packs and the pump cut are left alone (both guards stand before every cut, and the
-    /// master and the battery hang on the steps before them); in the action group the APU master, the packs, the pumps,
-    /// standby power and the battery.</summary>
+    /// <summary>
+    /// The battery step carries its tick's APU rule and text: behind both guards, the step and the tick agree parked,
+    /// left alone while the APU reads 1 % or more, going ahead below it or unread. So a master found already off over a
+    /// turning APU ("Already set", not skipped) no longer lets the battery go.
+    /// </summary>
+    [Fact]
+    public void The_battery_step_and_its_tick_share_the_APU_rule()
+    {
+        var step = Of("SD_BATTERY_OFF");
+        var tick = Line("SD_BATTERY_OFF");
+        Assert.Equal(ParkedApuOffText, step.LeaveAloneText);
+        Assert.Equal(tick.LeaveAloneText, step.LeaveAloneText);
+        foreach (double? rpm in new double?[] { 100, 3, 1, 0.9, 0, null })
+            Assert.Equal(tick.LeaveAloneWhen!(Parked(rpm)), step.LeaveAloneWhen!(Parked(rpm)));
+        Assert.True(step.LeaveAloneWhen!(Parked(3)), "the APU coasting at 3 %");
+        Assert.False(step.LeaveAloneWhen!(Parked(0)), "the APU stopped");
+        Assert.Equal("SD_APU_MASTER_OFF", step.RequiresStepId);
+    }
+
+    /// <summary>On a real flow manager: the master already reads off but the APU still turns at 3 %; the master is
+    /// "Already set", and the battery is left alone, aloud, with nothing written.</summary>
+    [Fact]
+    public async Task A_master_found_off_over_a_turning_APU_leaves_the_battery_on_aloud()
+    {
+        var run = await L1011FoFlowRun.RunAsync("SHUTDOWN", new[] { "SD_APU_MASTER_OFF", "SD_BATTERY_OFF" },
+            Connected((ApuRpm, 3), (ApuMaster, 0), ("TOGGLE_BATTERY", 1)));
+
+        Assert.True(run.Finished);
+        Assert.Contains("Already set: APU master: off", run.Speech);
+        Assert.Contains(ParkedApuOffText, run.Speech);
+        Assert.Equal(new[] { "SD_BATTERY_OFF" }, run.Skipped);
+        Assert.Empty(run.Sent);
+    }
+
+    /// <summary>In the flow only the packs, the pump cut and the battery are left alone (both guards stand before every
+    /// cut, and the master and the battery also hang on the steps before them); in the action group the APU master, the
+    /// packs, the pumps, standby power and the battery.</summary>
     [Fact]
     public void Only_the_cuts_and_the_APU_master_are_left_alone()
     {
-        Assert.Equal(new[] { "SD_PACKS_OFF", "SD_FUEL_PUMPS" }, Shutdown.Steps.Where(s => s.LeaveAloneWhen != null).Select(s => s.Id));
+        Assert.Equal(new[] { "SD_PACKS_OFF", "SD_FUEL_PUMPS", "SD_BATTERY_OFF" },
+            Shutdown.Steps.Where(s => s.LeaveAloneWhen != null).Select(s => s.Id));
         Assert.Equal(new[] { "SD_APU_MASTER_OFF", "SD_PACKS_OFF", "SD_FUEL_PUMPS", "SD_STBY_POWER_OFF", "SD_BATTERY_OFF" },
             Group("SHUTDOWN").Items.Where(i => i.LeaveAloneWhen != null).Select(i => i.Id));
     }

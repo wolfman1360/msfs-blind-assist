@@ -118,7 +118,8 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// so an APU found coasting is waited out too, and the master off only once the stop is done or found done. The packs go
 /// off on the ground only, external power off when it was used (a breaker read open is "Already set"), then the fuel
 /// pumps, left alone while the APU turns (the tank 2 left pump feeds it); standby power and the radio masters come last,
-/// then the battery, only once the APU master went off or was found off (the PMDG 777's battery waits on its APU too).
+/// then the battery, only once the APU master went off or was found off (the PMDG 777's battery waits on its APU too),
+/// and left alone, as its tick is, while the APU still reads turning.
 /// The APU bleed carries a toggle: its single-switch step reads its own position first.
 /// </summary>
 public static class L1011FoFlowDefinitions
@@ -1238,8 +1239,11 @@ public static class L1011FoFlowDefinitions
                     AllTo(0, "SWITCH_MASTER_RADIO_ESS", "SWITCH_MASTER_RADIO_NO2")),
                 s => s.IsOn("FO_RADIO_MASTERS_OFF")), "SD_RADIO_MASTERS_OFF"), "SDC_RADIO_MASTERS"),
             // Only once the APU master went off or was found off: a master left on (the APU did not stop) leaves the
-            // battery on, as the PMDG 777's battery waits on its APU.
-            Also(Done(Skip(Requires(SW("SD_BATTERY_OFF", "Battery: off", "TOGGLE_BATTERY", 0),
+            // battery on, as the PMDG 777's battery waits on its APU. And never while the APU reads turning, as its tick:
+            // a master found off over an APU still turning is "Already set", not skipped, so the dependency alone would
+            // let the battery go. An unread APU speed does not hold it back.
+            Also(Done(Skip(Requires(LeaveAlone(SW("SD_BATTERY_OFF", "Battery: off", "TOGGLE_BATTERY", 0),
+                        s => s.IsOn("FO_APU_STARTING_OR_RUNNING"), L1011FoChecklistDefinitions.ParkedApuOffText),
                     "SD_APU_MASTER_OFF", BatteryStaysText),
                 s => s.IsPosition("TOGGLE_BATTERY", 0)), "SD_BATTERY_OFF"), "SDC_BATTERY"),
         }
