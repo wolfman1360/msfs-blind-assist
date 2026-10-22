@@ -93,6 +93,18 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// APU started: one press, done once it turns; Parking waits for it to run. It cuts no fuel, pump or engine: the manual's
 /// tank pumps and crossfeeds wait for Parking, once the engines are cut. The anti-skid carries a toggle: its
 /// single-switch step reads its own position first.
+///
+/// Parking opens with the aircraft read stopped (the stock ground speed below a knot, read only, Stop: the MD-11's
+/// <c>PK_STOPPED</c>), sets the parking brake and turns the ground lights off, waits up to two minutes for the APU After
+/// Landing started (left alone at once when it does not turn), puts its generator on line, or external power on when the
+/// APU generator is not on line and ground power is there, and confirms one of the two on line, read only, Stop, before
+/// the fuel and ignition go off (the MD-11's <c>PK_POWER_SOURCE</c>: never drop to the battery). The anti-collision
+/// lights and seat belt signs go off; then the engines are read stopped, read only, up to two minutes, Stop, before the
+/// INS, the ATMs, the AC pumps and the tank pumps come off ([FO-25]): an engine that does not stop ends the flow before
+/// any of them is cut, and no tank pump is ever switched off under a running engine. The fuel panel leaves the tank 2
+/// left pump and the engine 2 tank valve on for the APU, the crossfeeds closed. The APU bleed goes on and the Captain is
+/// reminded of ground power. The seat belts, the APU bleed and the three fuel and ignition switches carry a toggle: each
+/// step's "Already set" reads its own keys, and the executor reads each key before it writes it.
 /// </summary>
 public static class L1011FoFlowDefinitions
 {
@@ -108,6 +120,7 @@ public static class L1011FoFlowDefinitions
         BuildDescent(),
         BuildBeforeLanding(),
         BuildAfterLanding(),
+        BuildParking(),
     };
 
     // ------------------------------------------------------------------ Power Up (the manual's cockpit entry and power-up)
@@ -1032,6 +1045,98 @@ public static class L1011FoFlowDefinitions
             // waits for it to run.
             Also(Done(Skip(SW("AL_APU_START", "APU: start", X.ApuStart, 1),
                 s => s.IsOn("FO_APU_STARTING_OR_RUNNING")), "AL_APU_START"), "ALC_APU"),
+        }
+    };
+
+    // ------------------------------------------------------------------ Parking (the manual's parking)
+
+    /// <summary>How long Parking waits for the aircraft to stop, the APU to run, a power source to come on line and the
+    /// engines to spin down.</summary>
+    private const int ParkingWaitSeconds = 120;
+
+    /// <summary>The aircraft reads stopped below this ground speed, in knots.</summary>
+    private const double StoppedBelowKnots = 1;
+
+    /// <summary>What the APU wait says when the APU does not turn: the flow goes on to external power.</summary>
+    private const string ApuNotStartedText = "APU not started: external power will be used.";
+
+    private static readonly string[] InsModeKeys = { "ROTARY_INS_MODE_1", "ROTARY_INS_MODE_2", "ROTARY_INS_MODE_3" };
+
+    private static readonly string[] FuelIgnitionKeys = { "TOGGLE_CUTOFF_ENG_1", "TOGGLE_CUTOFF_ENG_2", "TOGGLE_CUTOFF_ENG_3" };
+
+    private static readonly string[] CrossfeedKeys = { "SWITCH_FUEL_LEFT_XFEED", "SWITCH_FUEL_CTR_XFEED", "SWITCH_FUEL_RIGHT_XFEED" };
+
+    /// <summary>The fuel panel for the APU: the tank 2 left pump on first, so the APU never loses its feed, then the other
+    /// seven pumps off, the engine 2 tank valve on under its closed guard, and the crossfeeds closed.</summary>
+    private static readonly (string EventName, int? TargetValue)[] ApuFuelPanel =
+        new[] { ("SWITCH_FUEL_PUMP_2L_1", (int?)1) }
+            .Concat(AllTo(0, FuelPumpKeys.Where(k => k != "SWITCH_FUEL_PUMP_2L_1").ToArray()))
+            .Concat(new[] { ("SWITCH_ENG_2_TANK_VALVE", (int?)1), ("GUARD_ENG_2_TANK_VALVE", (int?)0) })
+            .Concat(AllTo(0, CrossfeedKeys))
+            .ToArray();
+
+    private static Flow BuildParking() => new()
+    {
+        Id = "PARKING", Name = "Parking",
+        Description = "Aircraft stopped; ground lights off, parking brake set; the APU generator or external power on line "
+            + "before the fuel and ignition go off; anti-collision lights and seat belts off; once the engines stop, INS off, "
+            + "transponder standby, ATMs and AC pumps off, the fuel panel set for the APU; APU bleed on.",
+        RelatedChecklistGroupIds = new[] { "PARKING", "PARKING_CL" },
+        Steps = new()
+        {
+            // The ground guard: read only, the stock ground speed, unread failing it. Links no line.
+            WaitForField("PK_STOPPED", "Aircraft stopped", "GROUND_VELOCITY", v => v < StoppedBelowKnots, ParkingWaitSeconds,
+                onTimeout: FlowStepFailurePolicy.Stop),
+            Also(Done(Skip(Multi("PK_GROUND_LIGHTS", "Nose, taxi and runway turnoff lights: off", AllTo(0, GroundLightKeys)),
+                s => s.IsOn("FO_GROUND_LIGHTS_OFF")), "PK_GROUND_LIGHTS"), "PKC_GROUND_LIGHTS"),
+            Also(Done(Skip(SW("PK_PARKING_BRAKE", "Parking brake: set", L1011Levers.ParkingBrakeKey, 1),
+                s => s.IsPosition(L1011Levers.ParkingBrakeKey, 1)), "PK_PARKING_BRAKE"), "PKC_PARKING_BRAKE"),
+
+            // ---- a power source before the fuel cut: the APU After Landing started, else external power ----
+            // Up to two minutes for the APU to run; an APU not turning is not waited for.
+            LeaveAlone(Skip(WaitForField("PK_APU_RUNNING", "APU running", "FO_APU_RUNNING", On, ParkingWaitSeconds),
+                    s => s.IsOn("FO_APU_RUNNING")),
+                s => !s.IsOn("FO_APU_STARTING_OR_RUNNING"), ApuNotStartedText),
+            Also(Done(Skip(LeaveAlone(SW("PK_APU_GEN", "APU generator: on line", X.ApuGenerator, 1),
+                    L1011FoChecklistDefinitions.ApuNotRunning, L1011FoChecklistDefinitions.ApuGenStaysOffText),
+                s => s.IsOn("FO_APU_GEN_ON_LINE")), "PK_APU_GEN"), "PKC_POWER"),
+            Done(Skip(LeaveAlone(SW("PK_EXT_PWR", "External power: on", X.ExternalPower, 1),
+                    L1011FoChecklistDefinitions.ExtPowerNotWanted, L1011FoChecklistDefinitions.ExtPowerStaysOffText),
+                s => s.IsOn("FO_EXT_POWER_ON")), "PK_EXT_PWR"),
+            // The fuel cut takes the engine generators off the buses: the APU generator or external power must be on line
+            // first, or the aircraft drops to its battery. Read only; nothing on line stops the flow with the engines running.
+            Skip(WaitForField("PK_POWER_SOURCE", "APU generator or external power on", "FO_POWER_SOURCE_ON", On,
+                    ParkingWaitSeconds, onTimeout: FlowStepFailurePolicy.Stop),
+                s => s.IsOn("FO_POWER_SOURCE_ON")),
+            // Toggle-carrying switches: each key read before it is written, and refused from an unknown position (L1011-4).
+            Also(Done(Skip(Multi("PK_FUEL_IGN_OFF", "Fuel and ignition switches: off", AllTo(0, FuelIgnitionKeys)),
+                s => s.IsOn("FO_FUEL_IGNITION_OFF")), "PK_FUEL_IGN_OFF"), "PKC_FUEL_IGN"),
+            Also(Done(Skip(SW("PK_ANTICOL", "Anti-collision lights: off", "SWITCH_ANTICOL_LIGHT", 0),
+                s => s.IsPosition("SWITCH_ANTICOL_LIGHT", 0)), "PK_ANTICOL"), "PKC_ANTICOL"),
+            // A toggle-carrying switch: written only over its own position read (L1011-4).
+            Also(Done(Skip(SW("PK_SEAT_BELTS", "Seat belt signs: off", "SWITCH_SEATBELT_LIGHT", 0),
+                s => s.IsPosition("SWITCH_SEATBELT_LIGHT", 0)), "PK_SEAT_BELTS"), "PKC_SEAT_BELTS"),
+
+            // ---- the engines stopped before the INS and any pump is cut (FO-25): an engine that does not stop ends the
+            // flow here, before a tank pump goes off under it. Read only; links no line.
+            WaitForField("PK_SPOOL_DOWN", "Engines stopped", "FO_ENGINES_STOPPED", On, ParkingWaitSeconds,
+                onTimeout: FlowStepFailurePolicy.Stop),
+            Also(Done(Skip(Multi("PK_INS_OFF", "INS: all off", AllTo(0, InsModeKeys)),
+                s => s.IsOn("FO_INS_OFF")), "PK_INS_OFF"), "PKC_INS"),
+            Also(Done(Skip(SW("PK_XPDR", "Transponder: standby", "ROTARY_TCAS_MODE", 1),
+                s => s.IsPosition("ROTARY_TCAS_MODE", 1)), "PK_XPDR"), "PKC_XPDR"),
+            Also(Done(Skip(Multi("PK_ATMS_AC_PUMPS", "ATMs and AC hydraulic pumps: off",
+                    AllTo(0, "ROTARY_HYD_B2_MODE", "ROTARY_HYD_C2_MODE", "SWITCH_HYD_AC_PUMP_B3", "SWITCH_HYD_AC_PUMP_C3")),
+                s => s.IsOn("FO_ATMS_AC_PUMPS_OFF")), "PK_ATMS_AC_PUMPS"), "PKC_ATMS_PUMPS"),
+            // The manual's after landing fuel panel, done here once the engines are cut. The APU keeps its feed.
+            Also(Done(Skip(Multi("PK_FUEL_PANEL", "Fuel pumps: off except tank 2 left for the APU", ApuFuelPanel),
+                s => s.IsOn("FO_ONLY_APU_PUMP_ON") && s.IsOn("FO_ENG2_FUEL_FEED") && s.IsOn("FO_CROSSFEEDS_CLOSED")),
+                "PK_FUEL_PANEL"), "PKC_TANK_PUMPS"),
+            // A toggle-carrying switch: written only over its own position read (L1011-4).
+            Also(Done(Skip(SW("PK_APU_BLEED", "APU bleed: on", "SWITCH_APU_BLEED", 1),
+                s => s.IsPosition("SWITCH_APU_BLEED", 1)), "PK_APU_BLEED"), "PKC_APU_BLEED"),
+            Done(Captain("PK_CPT_GROUND_POWER", "Connect ground power on the tablet's Ground page if required"),
+                "PK_CPT_GROUND_POWER"),
         }
     };
 

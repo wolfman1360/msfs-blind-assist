@@ -89,7 +89,7 @@ public class L1011FoProfileTests
         Assert.Equal(new[]
             {
                 "POWER_UP", "PREFLIGHT", "BEFORE_START", "ENGINE_START", "AFTER_START", "BEFORE_TAKEOFF", "AFTER_TAKEOFF",
-                "DESCENT", "BEFORE_LANDING", "AFTER_LANDING",
+                "DESCENT", "BEFORE_LANDING", "AFTER_LANDING", "PARKING",
             }, p.BuildFlows().Select(f => f.Id));
     }
 

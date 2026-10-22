@@ -80,6 +80,12 @@ using CheckFn = System.Func<L1011FoActionExecutor, L1011FoStateEvaluator, System
 /// After Landing has one action group (<c>AFTER_LANDING</c>: the flow's fifteen writes) and one read-back, the aircraft's
 /// after landing page. The stabilizer trim line reads the trim readout at zero, the typed entry being write-only; the
 /// flaps line is left alone off the ground, as After Start's is; the APU start line holds until the APU turns ([FO-11]).
+///
+/// Parking has one action group (<c>PARKING</c>: the flow's writes and the Captain's ground power line; its waits stay
+/// flow-only) and one read-back, the aircraft's parking page. The APU generator line is left alone unless the APU runs,
+/// and the external power line while the APU generator is on line or no ground power is available, as their steps are.
+/// The fuel and ignition line is an engine cut, left alone off the ground; the INS, the ATMs and AC pumps and the fuel
+/// panel lines are left alone unless the aircraft reads on the ground with every engine stopped ([FO-25]).
 /// </summary>
 public static class L1011FoChecklistDefinitions
 {
@@ -95,6 +101,7 @@ public static class L1011FoChecklistDefinitions
         Descent(), DescentCL(),
         BeforeLanding(), BeforeLandingCL(),
         AfterLanding(), AfterLandingCL(),
+        Parking(), ParkingCL(),
     };
 
     private const string ContIgnition = "SWITCH_CONT_IGNITION";
@@ -1136,6 +1143,109 @@ public static class L1011FoChecklistDefinitions
                 Read("ALC_APU_MASTER", G, "APU master power: on", ApuMaster, v => Is(v, 1)),
                 Read("ALC_APU", G, "APU: start", "FO_APU_STARTING_OR_RUNNING", On),
                 Read("ALC_TRANSFERS", G, "1A and 3A xfr switches: unlatch", "FO_TRANSFERS_OFF", On),
+            }
+        };
+    }
+
+    // ================================================================== Parking
+
+    /// <summary>The APU generator line's reason, and its flow step's.</summary>
+    internal const string ApuGenStaysOffText = "APU generator left off: the APU is not running.";
+
+    /// <summary>The APU not read running (stopped, still spooling up, or unread): its generator stays off line. The
+    /// Parking step and its tick share it.</summary>
+    internal static bool ApuNotRunning(L1011FoStateEvaluator s) => !s.IsOn("FO_APU_RUNNING");
+
+    /// <summary>The external power line's reason, and its flow step's.</summary>
+    internal const string ExtPowerStaysOffText =
+        "External power left off: the APU generator is on line, or no ground power is available.";
+
+    /// <summary>The APU generator reads on line, or the external power available light does not read lit (out or
+    /// unread): external power stays off. The Parking step and its tick share it.</summary>
+    internal static bool ExtPowerNotWanted(L1011FoStateEvaluator s) =>
+        s.IsOn("FO_APU_GEN_ON_LINE") || !s.IsOn("FO_EXT_POWER_AVAILABLE");
+
+    /// <summary>The fuel and ignition line's reason: an engine cut, so on the ground only.</summary>
+    private const string FuelIgnitionStaysText = "Fuel and ignition left on: not read on the ground.";
+
+    private static readonly string[] FuelIgnition = { "TOGGLE_CUTOFF_ENG_1", "TOGGLE_CUTOFF_ENG_2", "TOGGLE_CUTOFF_ENG_3" };
+
+    private static readonly string[] Crossfeeds = { "SWITCH_FUEL_LEFT_XFEED", "SWITCH_FUEL_CTR_XFEED", "SWITCH_FUEL_RIGHT_XFEED" };
+
+    /// <summary>The fuel panel for the APU, the flow's order: the tank 2 left pump on, the other seven off, the engine 2
+    /// tank valve on under its closed guard, the crossfeeds closed.</summary>
+    private static readonly (string Key, int Target)[] ApuFuelPanel =
+        new[] { ("SWITCH_FUEL_PUMP_2L_1", 1) }
+            .Concat(All(0, FuelPumps.Where(p => p != "SWITCH_FUEL_PUMP_2L_1").ToArray()))
+            .Concat(new[] { ("SWITCH_ENG_2_TANK_VALVE", 1), ("GUARD_ENG_2_TANK_VALVE", 0) })
+            .Concat(All(0, Crossfeeds))
+            .ToArray();
+
+    /// <summary>
+    /// The Parking flow's writes and the Captain's ground power line, in its order and with its labels: a single switch
+    /// reads its key at the target, a multi-switch line its synthetic, the APU generator and external power their breakers
+    /// closed, the parking brake the lever set, the fuel panel the only pump on with the engine 2 feed and the crossfeeds
+    /// closed. The waits are flow-only.
+    /// </summary>
+    private static Group Parking()
+    {
+        const string G = "PARKING";
+        return new Group
+        {
+            Id = G, Name = "Parking",
+            Items = new()
+            {
+                Auto("PK_GROUND_LIGHTS", G, "Nose, taxi and runway turnoff lights: off", "FO_GROUND_LIGHTS_OFF", On,
+                    SetAll(All(0, GroundLights))),
+                Auto("PK_PARKING_BRAKE", G, "Parking brake: set", L1011Levers.ParkingBrakeKey, v => Is(v, 1),
+                    Set(L1011Levers.ParkingBrakeKey, 1)),
+                LeaveAlone(Auto("PK_APU_GEN", G, "APU generator: on line", "FO_APU_GEN_ON_LINE", On, Set(X.ApuGenerator, 1)),
+                    ApuNotRunning, ApuGenStaysOffText),
+                LeaveAlone(Auto("PK_EXT_PWR", G, "External power: on", "FO_EXT_POWER_ON", On, Set(X.ExternalPower, 1)),
+                    ExtPowerNotWanted, ExtPowerStaysOffText),
+                // An engine cut: never airborne, never unread; on the ground it goes ahead with the engines running.
+                LeaveAlone(Auto("PK_FUEL_IGN_OFF", G, "Fuel and ignition switches: off", "FO_FUEL_IGNITION_OFF", On,
+                        SetAll(All(0, FuelIgnition))),
+                    NotOnGround, FuelIgnitionStaysText),
+                Auto("PK_ANTICOL", G, "Anti-collision lights: off", AntiCollision, v => Is(v, 0), Set(AntiCollision, 0)),
+                Auto("PK_SEAT_BELTS", G, "Seat belt signs: off", SeatBelts, v => Is(v, 0), Set(SeatBelts, 0)),
+                // The INS and the pumps: parked only, with every engine stopped (FO-25).
+                LeaveAlone(Auto("PK_INS_OFF", G, "INS: all off", "FO_INS_OFF", On,
+                        SetAll(All(0, "ROTARY_INS_MODE_1", "ROTARY_INS_MODE_2", "ROTARY_INS_MODE_3"))),
+                    NotParked, ParkedOnlyText),
+                Auto("PK_XPDR", G, "Transponder: standby", Transponder, v => Is(v, 1), Set(Transponder, 1)),
+                LeaveAlone(Auto("PK_ATMS_AC_PUMPS", G, "ATMs and AC hydraulic pumps: off", "FO_ATMS_AC_PUMPS_OFF", On,
+                        SetAll(All(0, AtmB, AtmC, "SWITCH_HYD_AC_PUMP_B3", "SWITCH_HYD_AC_PUMP_C3"))),
+                    NotParked, ParkedOnlyText),
+                LeaveAlone(Auto("PK_FUEL_PANEL", G, "Fuel pumps: off except tank 2 left for the APU", "FO_ONLY_APU_PUMP_ON", On,
+                        SetAll(ApuFuelPanel), additionalFields: new[] { "FO_ENG2_FUEL_FEED", "FO_CROSSFEEDS_CLOSED" }),
+                    NotParked, ParkedOnlyText),
+                Auto("PK_APU_BLEED", G, "APU bleed: on", ApuBleed, v => Is(v, 1), Set(ApuBleed, 1)),
+                Reminder("PK_CPT_GROUND_POWER", G, "Connect ground power on the tablet's Ground page if required"),
+            }
+        };
+    }
+
+    /// <summary>The aircraft's parking page in its own words.</summary>
+    private static Group ParkingCL()
+    {
+        const string G = "PARKING_CL";
+        return new Group
+        {
+            Id = G, Name = "Parking",
+            Items = new()
+            {
+                Read("PKC_GROUND_LIGHTS", G, "Nose wheel landing, taxi and runway turnoff lights: off", "FO_GROUND_LIGHTS_OFF", On),
+                Read("PKC_PARKING_BRAKE", G, "Parking brake: set", L1011Levers.ParkingBrakeKey, v => Is(v, 1)),
+                Read("PKC_POWER", G, "APU generator or external power: on", "FO_POWER_SOURCE_ON", On),
+                Read("PKC_FUEL_IGN", G, "Fuel and ignition switches: off", "FO_FUEL_IGNITION_OFF", On),
+                Read("PKC_ANTICOL", G, "Anti coll light: off", AntiCollision, v => Is(v, 0)),
+                Read("PKC_SEAT_BELTS", G, "Seatbelts sign: off", SeatBelts, v => Is(v, 0)),
+                Read("PKC_INS", G, "INS: all off", "FO_INS_OFF", On),
+                Read("PKC_XPDR", G, "Transponder: STBY", Transponder, v => Is(v, 1)),
+                Read("PKC_ATMS_PUMPS", G, "ATMs and AC hyd pumps: off", "FO_ATMS_AC_PUMPS_OFF", On),
+                Read("PKC_TANK_PUMPS", G, "Tank pumps: one on", "FO_ONLY_APU_PUMP_ON", On),
+                Read("PKC_APU_BLEED", G, "APU bleed air shut off valve: on", ApuBleed, v => Is(v, 1)),
             }
         };
     }

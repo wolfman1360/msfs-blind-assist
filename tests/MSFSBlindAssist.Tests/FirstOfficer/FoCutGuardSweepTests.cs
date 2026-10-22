@@ -45,7 +45,7 @@ public class FoCutGuardSweepTests
 
     private static readonly Regex PumpIrsBattery = new(
         @"(fuel pumps?( switches)?: (all )?off|hydraulic.*pumps?( \w+)?: off|hydraulic pumps and ptus: off|demand pump selectors: off|\b(electric|engine|demand) pumps: off|"
-        + @"primary pump switches: off|\birs\b.*: off|\badirs\b.*: off|\badiru\b.*: off|\bbatter(y|ies)\b.*: off)",
+        + @"primary pump switches: off|\birs\b.*: off|\bins\b.*: (all )?off|\badirs\b.*: off|\badiru\b.*: off|\bbatter(y|ies)\b.*: off)",
         RegexOptions.IgnoreCase);
 
     // "Packs: off", or some packs off by number ("packs 1 and 3 off", the TriStar's pack 2 only line).
@@ -394,6 +394,8 @@ public class FoCutGuardSweepTests
     [InlineData("Demand pump selectors: OFF", "Pumps")]
     [InlineData("Batteries: OFF", "Pumps")]
     [InlineData("Battery switch: OFF", "Pumps")]
+    [InlineData("INS: all off", "Pumps")]
+    [InlineData("Fuel pumps: off except tank 2 left for the APU", "Pumps")]
     public void The_sweep_classifies_labels(string label, string expected) =>
         Assert.Equal(expected, Classify(label)?.ToString() ?? "");
 }
