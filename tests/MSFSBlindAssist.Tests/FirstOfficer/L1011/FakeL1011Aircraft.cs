@@ -58,6 +58,15 @@ internal readonly record struct FakeL1011Io(FakeL1011IoKind Kind, string Key, do
 /// <c>_CD</c>) are on and systems B and C read at least <see cref="PressurizedPsi"/>; anything else reads
 /// <see cref="DepressurizedPsi"/>. A test wanting a slow rise or a stuck pressure uses <see cref="NeverDeliver"/>
 /// then <see cref="Set"/>.</item>
+/// <item>The engines as on APU air, by the clock: while an engine's ground start (<c>SWITCH_GND_START_ENG_n</c>)
+/// reads on, its N3 (<c>L1011_RO_N3_n</c>, only once seeded) rises <see cref="GroundStartN3PerSecond"/> per clock
+/// second, up to <see cref="DryMotoringN3"/> with its fuel and ignition (<c>TOGGLE_CUTOFF_ENG_n</c>) off and on to
+/// <see cref="IdleN3Reading"/> with them on. Past <see cref="StarterCutoutN3"/> the aircraft releases the switch
+/// itself (not a write) and the engine runs on to idle. A write of the switch to 0, or the ground start release
+/// press (<c>SWITCH_GND_START</c>, which turns all three off), stops it turning: N3 stays where it is. A generator
+/// field press (<c>SWITCH_BRG_GEN_n</c>) closes its relay (<c>L1011_RO_GEN_n_FIELD</c>) only with its N3 at or above
+/// <see cref="L1011FoStateEvaluator.EngineRunningN3"/>; its breaker press (<c>SWITCH_GEN_FLOW_n</c>) closes the breaker
+/// relay (<c>L1011_RO_GEN_n_BREAKER</c>) only over a closed field. The buttons hold no position.</item>
 /// <item>The altimeters set together set the three altimeter readouts, the setting read as the definition
 /// reads it (inches taken too; out of range refused). The cabin baro sets its own readout
 /// (<c>L1011_RO_CABIN_BARO</c>), read the same way.</item>
@@ -144,6 +153,14 @@ internal sealed class FakeL1011Aircraft : IL1011FoTransport
     /// <summary>System B or C drives its power transfer unit at or above this.</summary>
     public const double PressurizedPsi = 2000;
 
+    private const string GroundStartPrefix = "SWITCH_GND_START_ENG_";
+    private const string GroundStartRelease = "SWITCH_GND_START";
+    private const string GenFieldPressPrefix = "SWITCH_BRG_GEN_";
+    private const string GenBreakerPressPrefix = "SWITCH_GEN_FLOW_";
+    private static string GroundStartSwitch(int n) => $"{GroundStartPrefix}{n}";
+    private static string FuelSwitch(int n) => $"TOGGLE_CUTOFF_ENG_{n}";
+    private static string N3(int n) => $"L1011_RO_N3_{n}";
+
     /// <summary>A generator is on line when its breaker relay reads closed.</summary>
     private static readonly string[] GeneratorBreakers =
     {
@@ -171,6 +188,10 @@ internal sealed class FakeL1011Aircraft : IL1011FoTransport
     private readonly object _sync = new();
     private readonly HashSet<string> _refused = new(StringComparer.Ordinal);
     private readonly HashSet<string> _neverDelivered = new(StringComparer.Ordinal);
+
+    /// <summary>By engine (index 0 unused): turning, by its starter or lit and running on, until its ground start
+    /// is written off or released by the press.</summary>
+    private readonly bool[] _turning = new bool[4];
     private long _clock;
 
     public FakeL1011Aircraft() => Recompute();
@@ -184,6 +205,19 @@ internal sealed class FakeL1011Aircraft : IL1011FoTransport
     /// <summary>The APU's RPM right after a start press with the master on: running (100) by default; a test
     /// scripting the spool-up sets 0 and drives the RPM through <see cref="OnClock"/>.</summary>
     public double ApuRpmAfterStart { get; set; } = 100;
+
+    /// <summary>An engine's N3 rise per clock second while its ground start turns it (live, on APU air: about
+    /// 1 %/s from cold); 0 for an engine that never turns.</summary>
+    public double GroundStartN3PerSecond { get; set; } = 1.0;
+
+    /// <summary>Where the starter alone takes N3 with the fuel and ignition off.</summary>
+    public const double DryMotoringN3 = 25;
+
+    /// <summary>Where an engine lit settles (live: the gauge read 59 to 61 at a stable idle).</summary>
+    public const double IdleN3Reading = 59.2;
+
+    /// <summary>The aircraft releases a ground start switch itself as N3 passes this (live: about 55 %).</summary>
+    public const double StarterCutoutN3 = 55;
 
     /// <summary>The readings, by key; a key absent is unread. Seed through <see cref="Set"/>.</summary>
     public Dictionary<string, double> Vars { get; } = new(StringComparer.Ordinal);
@@ -356,6 +390,7 @@ internal sealed class FakeL1011Aircraft : IL1011FoTransport
         lock (_sync)
         {
             _clock += Math.Max(0, ms);
+            TurnEngines(Math.Max(0, ms));
             OnClock?.Invoke(this);
         }
         return Task.CompletedTask;
@@ -428,6 +463,26 @@ internal sealed class FakeL1011Aircraft : IL1011FoTransport
         }
         else if (key == ApuGenBreakerTrip)
             Put(ApuGenBreaker, 0);
+        else if (EngineOf(key, GroundStartPrefix) is int started)
+            _turning[started] = value >= 0.5;   // written off: the starter stops turning it
+        else if (key == GroundStartRelease)
+        {
+            for (int n = 1; n <= 3; n++)
+            {
+                Put(GroundStartSwitch(n), 0);
+                _turning[n] = false;
+            }
+        }
+        else if (EngineOf(key, GenFieldPressPrefix) is int field)
+        {
+            if (Value(N3(field)) is double n3 && n3 >= L1011FoStateEvaluator.EngineRunningN3)
+                Put($"L1011_RO_GEN_{field}_FIELD", 1);
+        }
+        else if (EngineOf(key, GenBreakerPressPrefix) is int breaker)
+        {
+            if (IsOn($"L1011_RO_GEN_{breaker}_FIELD"))
+                Put($"L1011_RO_GEN_{breaker}_BREAKER", 1);
+        }
         else if (TieNumber(key) is int tie && SourceOnLine())
             Put($"L1011_RO_AC_TIE_{tie}", 1);
     }
@@ -469,6 +524,35 @@ internal sealed class FakeL1011Aircraft : IL1011FoTransport
         Put(HydA, ptusDriven ? PtuPsi : DepressurizedPsi);
         Put(HydD, ptusDriven ? PtuPsi : DepressurizedPsi);
     }
+
+    /// <summary>
+    /// <paramref name="ms"/> of clock for each engine whose N3 reads: one with its ground start on, or still
+    /// turning, rises <see cref="GroundStartN3PerSecond"/> per second up to <see cref="DryMotoringN3"/> with its
+    /// fuel and ignition off or <see cref="IdleN3Reading"/> with them on, and never falls; past
+    /// <see cref="StarterCutoutN3"/> the aircraft releases its ground start itself.
+    /// </summary>
+    private void TurnEngines(int ms)
+    {
+        for (int n = 1; n <= 3; n++)
+        {
+            if (Value(N3(n)) is not double n3)
+                continue;
+            bool starter = IsOn(GroundStartSwitch(n));
+            _turning[n] |= starter;
+            if (!_turning[n])
+                continue;
+            double limit = IsOn(FuelSwitch(n)) ? IdleN3Reading : DryMotoringN3;
+            if (n3 < limit)
+                Put(N3(n), Math.Min(limit, n3 + GroundStartN3PerSecond * ms / 1000.0));
+            if (starter && Value(N3(n)) >= StarterCutoutN3)
+                Put(GroundStartSwitch(n), 0);   // the aircraft's own release: not a write
+        }
+    }
+
+    /// <summary>Engine 1 to 3 from a key that is <paramref name="prefix"/> and the engine's number, else null.</summary>
+    private static int? EngineOf(string key, string prefix) =>
+        key.StartsWith(prefix, StringComparison.Ordinal)
+        && int.TryParse(key.AsSpan(prefix.Length), out int n) && n is >= 1 and <= 3 ? n : null;
 
     private bool SourceOnLine() => IsOn(ExternalPowerBreaker) || GeneratorBreakers.Any(IsOn);
 

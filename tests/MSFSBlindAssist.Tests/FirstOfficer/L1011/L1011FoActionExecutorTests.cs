@@ -2384,6 +2384,28 @@ public class L1011FoActionExecutorTests
         Assert.Equal(FireTestWrites, _ac.Writes);
     }
 
+    [Fact]
+    public async Task Fire_test_with_one_light_stuck_out_and_another_stuck_lit_speaks_only_the_first()
+    {
+        // The engine 1 fire light stays lit and the APU fire light stays out. Tests on: the APU light is the one
+        // wrong light. Tests off: engine 1 is. Only the first in the test's own order is spoken; both are logged.
+        SeedFireTest();
+        _ac.NeverDeliver("LAMP_ENG_FIRE_1");
+        _ac.Set("LAMP_ENG_FIRE_1", 1);
+        _ac.NeverDeliver("LAMP_FIRE_APU");
+        _ac.Set("LAMP_FIRE_APU", 0);
+        _exec.AttachFlowProgressSpeech(() => true);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.FireTest, 1));
+
+        Assert.Equal(new[] { "Engine and APU fire test: APU fire light did not come on" }, _spoken);
+        Assert.Contains(_logged, line => line.Contains("LAMP_FIRE_APU") && line.Contains("expected lit"));
+        Assert.Contains(_logged, line => line.Contains("LAMP_ENG_FIRE_1") && line.Contains("expected out"));
+        Assert.Equal(FireTestWrites, _ac.Writes);   // the test still ran to the end, both switches off
+        Assert.Equal(0, _ac.Get(FireTestA));
+        Assert.Equal(0, _ac.Get(FireTestB));
+    }
+
     [Theory]
     [InlineData(FireTestA)]
     [InlineData(FireTestB)]

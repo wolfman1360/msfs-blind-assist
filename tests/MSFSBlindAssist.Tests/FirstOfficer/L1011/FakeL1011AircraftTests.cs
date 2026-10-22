@@ -505,12 +505,13 @@ public class FakeL1011AircraftTests
         Assert.All(FireLamps, lamp => Assert.Equal(0, ac.Get(lamp)));
     }
 
-    /// <summary>Live, on APU and external power with the engines off, test A alone lit nothing. B alone lit all five
-    /// there, but the fake lights them only with both on, so an executor that turns on one switch fails.</summary>
+    /// <summary>The fake's own rule, not the aircraft's: it lights the five only with A AND B on. Live, on APU and
+    /// external power with the engines off, A alone lit nothing but B alone lit all five; the fake holds back on B
+    /// alone so that an executor turning on one switch fails its test.</summary>
     [Theory]
     [InlineData(FireTestA)]
     [InlineData(FireTestB)]
-    public async Task One_fire_test_alone_lights_nothing(string test)
+    public async Task The_fakes_and_rule_lights_nothing_for_one_fire_test_alone(string test)
     {
         var ac = FireLoopsAt(2);
 
@@ -670,6 +671,148 @@ public class FakeL1011AircraftTests
         Assert.Equal(2650, ac.Get(Hyd('C')));
         Assert.Equal(14.5, ac.Get(Hyd('A')));
         Assert.Equal(14.5, ac.Get(Hyd('D')));
+    }
+
+    // ---- The engines (as the live aircraft behaves on APU air) ----------------------------------------------
+
+    private static string GroundStart(int n) => $"SWITCH_GND_START_ENG_{n}";
+    private static string Fuel(int n) => $"TOGGLE_CUTOFF_ENG_{n}";
+    private static string N3(int n) => $"L1011_RO_N3_{n}";
+    private static string GenField(int n) => $"L1011_RO_GEN_{n}_FIELD";
+    private static string GenBreaker(int n) => $"L1011_RO_GEN_{n}_BREAKER";
+
+    /// <summary>Every engine cold (a gauge reads 1.6, never 0), its fuel and ignition and its ground start off.</summary>
+    private static FakeL1011Aircraft ColdEngines()
+    {
+        var ac = new FakeL1011Aircraft();
+        foreach (int n in new[] { 1, 2, 3 })
+        {
+            ac.Set(N3(n), 1.6);
+            ac.Set(Fuel(n), 0);
+            ac.Set(GroundStart(n), 0);
+        }
+        return ac;
+    }
+
+    [Fact]
+    public async Task A_ground_start_turns_n3_one_percent_a_second_up_to_dry_motoring_with_the_fuel_off()
+    {
+        var ac = ColdEngines();
+        Assert.Equal(1.0, ac.GroundStartN3PerSecond);   // live: about 1 %/s on APU air
+
+        Assert.Equal(L1011FoResult.Sent, await ac.SetAsync(GroundStart(2), 1));
+        Assert.Equal(1.6, ac.Get(N3(2)));                // nothing until the clock moves
+
+        await ac.DelayAsync(2000);
+        Assert.Equal(3.6, ac.Get(N3(2))!.Value, 9);
+        Assert.Equal(1.6, ac.Get(N3(1)));                // the other engines stay cold
+        Assert.Equal(1.6, ac.Get(N3(3)));
+
+        await ac.DelayAsync(60_000);
+        Assert.Equal(FakeL1011Aircraft.DryMotoringN3, ac.Get(N3(2)));
+        Assert.Equal(1, ac.Get(GroundStart(2)));         // dry: the switch stays on
+        Assert.Equal(new[] { (GroundStart(2), 1.0) }, ac.Writes);
+    }
+
+    [Fact]
+    public async Task With_the_fuel_on_it_runs_on_to_idle_and_the_aircraft_releases_the_switch_past_fifty_five()
+    {
+        var ac = ColdEngines();
+        await ac.SetAsync(GroundStart(2), 1);
+        await ac.DelayAsync(20_000);                      // 21.6 %
+        Assert.Equal(L1011FoResult.Sent, await ac.SetAsync(Fuel(2), 1));
+
+        await ac.DelayAsync(33_000);                      // 54.6 %: the switch still on
+        Assert.Equal(1, ac.Get(GroundStart(2)));
+        await ac.DelayAsync(1_000);                       // past 55 %: released by the aircraft
+        Assert.Equal(0, ac.Get(GroundStart(2)));
+
+        await ac.DelayAsync(30_000);
+        Assert.Equal(FakeL1011Aircraft.IdleN3Reading, ac.Get(N3(2)));   // runs on to idle, unstarted
+        Assert.Equal(59.2, FakeL1011Aircraft.IdleN3Reading);
+        Assert.Equal(new[] { (GroundStart(2), 1.0), (Fuel(2), 1.0) }, ac.Writes);   // the release was not a write
+    }
+
+    [Fact]
+    public async Task Writing_the_ground_start_off_freezes_n3_where_it_is()
+    {
+        var ac = ColdEngines();
+        await ac.SetAsync(GroundStart(2), 1);
+        await ac.DelayAsync(5_000);
+
+        Assert.Equal(L1011FoResult.Sent, await ac.SetAsync(GroundStart(2), 0));
+        double frozen = ac.Get(N3(2))!.Value;
+        await ac.DelayAsync(30_000);
+
+        Assert.Equal(frozen, ac.Get(N3(2)));
+        Assert.Equal(0, ac.Get(GroundStart(2)));
+    }
+
+    [Fact]
+    public async Task A_ground_start_already_on_turns_the_engine_too()
+    {
+        var ac = ColdEngines();
+        ac.Set(GroundStart(3), 1);   // seeded, not written
+
+        await ac.DelayAsync(2000);
+
+        Assert.Equal(3.6, ac.Get(N3(3))!.Value, 9);
+        Assert.Empty(ac.Writes);
+    }
+
+    [Fact]
+    public async Task No_rise_per_second_never_turns_the_engine()
+    {
+        var ac = ColdEngines();
+        ac.GroundStartN3PerSecond = 0;
+
+        await ac.SetAsync(GroundStart(2), 1);
+        await ac.DelayAsync(60_000);
+
+        Assert.Equal(1.6, ac.Get(N3(2)));
+    }
+
+    [Fact]
+    public async Task The_ground_start_release_turns_every_ground_start_off_and_freezes_them()
+    {
+        var ac = ColdEngines();
+        foreach (int n in new[] { 1, 2, 3 })
+            await ac.SetAsync(GroundStart(n), 1);
+        await ac.DelayAsync(3_000);
+
+        Assert.Equal(L1011FoResult.Sent, await ac.SetAsync("SWITCH_GND_START", 1));
+        var frozen = new[] { 1, 2, 3 }.Select(n => ac.Get(N3(n))).ToList();
+        await ac.DelayAsync(10_000);
+
+        foreach (int n in new[] { 1, 2, 3 })
+            Assert.Equal(0, ac.Get(GroundStart(n)));
+        Assert.Equal(frozen, new[] { 1, 2, 3 }.Select(n => ac.Get(N3(n))).ToList());
+        Assert.Null(ac.Get("SWITCH_GND_START"));   // a press holds no position
+    }
+
+    [Fact]
+    public async Task A_generator_field_closes_only_on_a_running_engine_and_its_breaker_only_over_a_closed_field()
+    {
+        var ac = new FakeL1011Aircraft();
+        ac.Set(N3(1), 49);   // below running
+        ac.Set(GenField(1), 0);
+        ac.Set(GenBreaker(1), 0);
+
+        await ac.SetAsync("SWITCH_BRG_GEN_1", 1);
+        Assert.Equal(0, ac.Get(GenField(1)));
+        await ac.SetAsync("SWITCH_GEN_FLOW_1", 1);
+        Assert.Equal(0, ac.Get(GenBreaker(1)));       // the breaker closes only over a closed field
+
+        ac.Set(N3(1), 59.2);
+        await ac.SetAsync("SWITCH_BRG_GEN_1", 1);
+        Assert.Equal(1, ac.Get(GenField(1)));
+        Assert.Equal(0, ac.Get(GenBreaker(1)));       // the field press closes the field alone
+        await ac.SetAsync("SWITCH_GEN_FLOW_1", 1);
+        Assert.Equal(1, ac.Get(GenBreaker(1)));
+
+        Assert.Null(ac.Get(GenField(2)));             // another engine's relays are not touched
+        Assert.Null(ac.Get("SWITCH_BRG_GEN_1"));      // the buttons hold no position
+        Assert.Null(ac.Get("SWITCH_GEN_FLOW_1"));
     }
 
     // ---- Altimeters and the lamp mute ------------------------------------------------------------------
