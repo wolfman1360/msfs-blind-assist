@@ -42,6 +42,12 @@ using CheckFn = System.Func<L1011FoActionExecutor, L1011FoStateEvaluator, System
 /// write their provider's value, or nothing without one, as their steps do. The pack 2 line switches packs 1 and 3
 /// off, so its tick is left alone off the ground, as Preflight's packs line is; the external power line is left
 /// alone until the APU generator reads on line, as its flow step waits for it.
+///
+/// Engine Start has one action group (<c>ENGINE_START</c>: per engine, 2, 1 then 3, the previous engine's isolation
+/// valve off, its feed, its ground start and its fuel and ignition; then the generators) and one read-back, the
+/// aircraft's engine start page in its own words. The three ground start lines are the profile's only
+/// <c>StayComplete</c> lines ([FOB-1]): the aircraft releases the switch itself at about 55 % N3, so each latches on
+/// its engine running and no flow step links it. Every other line mirrors the aircraft.
 /// </summary>
 public static class L1011FoChecklistDefinitions
 {
@@ -50,6 +56,7 @@ public static class L1011FoChecklistDefinitions
         PowerUp(), PowerUpCL(),
         Preflight(), PreflightEngineerCL(), PreflightOverheadCL(), PreflightMainPanelCL(), PreflightConsoleCL(),
         BeforeStart(), BeforeStartCL(),
+        EngineStart(), EngineStartCL(),
     };
 
     private const string ContIgnition = "SWITCH_CONT_IGNITION";
@@ -571,6 +578,73 @@ public static class L1011FoChecklistDefinitions
         };
     }
 
+    // ================================================================== Engine Start
+
+    /// <summary>The start order, and the engine started before each (none before engine 2).</summary>
+    private static readonly (int Engine, int? Previous)[] StartOrder = { (2, null), (1, 2), (3, 1) };
+
+    private static string Num(int n) => n.ToString(CultureInfo.InvariantCulture);
+
+    private static string IsolationValve(int n) => $"SWITCH_ISLN_VALVE_ENG_{Num(n)}";
+
+    /// <summary>Engine <paramref name="n"/>'s own tank pump: the first pump of tank 1, 2 left or 3.</summary>
+    private static string TankPump(int n) => n switch
+    {
+        1 => "SWITCH_FUEL_PUMP_1_1",
+        2 => "SWITCH_FUEL_PUMP_2L_1",
+        _ => "SWITCH_FUEL_PUMP_3_1",
+    };
+
+    /// <summary>
+    /// The Engine Start flow's writes, in its order and with its labels: a single switch reads its key at the target, the
+    /// feed its synthetic, the generators all six relays. A ground start line latches on its engine running (N3 at 50 %),
+    /// never on the switch, which the aircraft releases at about 55 %; its tick turns the switch on and watches N3 rise,
+    /// as the flow step does.
+    /// </summary>
+    private static Group EngineStart()
+    {
+        const string G = "ENGINE_START";
+        var items = new List<Item>();
+        foreach (var (n, previous) in StartOrder)
+        {
+            string e = $"ES_E{Num(n)}_";
+            if (previous is int p)
+                items.Add(Auto(e + "PREV_ISLN_OFF", G, $"Engine {Num(p)} isolation valve: off", IsolationValve(p), v => Is(v, 0),
+                    Set(IsolationValve(p), 0)));
+            items.Add(Auto(e + "FUEL_FEED", G, $"Engine {Num(n)} fuel: tank pump and tank valve on", $"FO_ENG{Num(n)}_FUEL_FEED", On,
+                SetAll((TankPump(n), 1), ($"SWITCH_ENG_{Num(n)}_TANK_VALVE", 1), ($"GUARD_ENG_{Num(n)}_TANK_VALVE", 0))));
+            items.Add(AutoLatch(e + "GND_START", G, $"Engine {Num(n)} ground start switch: on", X.N3Key(n),
+                v => v >= L1011FoStateEvaluator.EngineRunningN3, Set(X.GroundStart(n), 1)));
+            string fuel = X.FuelIgnitionKey(n);
+            items.Add(Auto(e + "FUEL_IGN", G, $"Engine {Num(n)} fuel and ignition: on", fuel, v => Is(v, 1), Set(fuel, 1)));
+        }
+        items.Add(Auto("ES_GENERATORS", G, "Engine generator fields and breakers: closed", "FO_ENGINE_GENERATORS_ON", On,
+            Set(X.EngineGenerators, 1)));
+        return new Group { Id = G, Name = "Engine Start", Items = items };
+    }
+
+    /// <summary>The aircraft's engine start page on APU air, in its own words, engines 2, 1 then 3. The page's engine
+    /// parameters check and its ground-air and crossbleed alternatives are left out, and its APU shutdown lines belong to
+    /// After Start.</summary>
+    private static Group EngineStartCL()
+    {
+        const string G = "ENGINE_START_CL";
+        var items = new List<Item> { Read("ESC_FUEL_PUMP", G, "Fuel pump: minimum one on", "FO_ANY_FUEL_PUMP_ON", On) };
+        foreach (var (n, previous) in StartOrder)
+        {
+            if (previous is int p)
+                items.Add(Read($"ESC_E{Num(p)}_ISLN_OFF", G, $"Engine {Num(p)} isln valve: unlatch", IsolationValve(p), v => Is(v, 0)));
+            items.Add(Read($"ESC_E{Num(n)}_FUEL_IGN", G, $"Engine {Num(n)} at 20 percent N3: fuel and ignition on",
+                X.FuelIgnitionKey(n), v => Is(v, 1)));
+            items.Add(Read($"ESC_E{Num(n)}_RELEASED", G, $"Engine {Num(n)} at 55 percent N3: ground start switch released",
+                X.GroundStartKey(n), v => Is(v, 0)));
+            items.Add(Read($"ESC_E{Num(n)}_RUNNING", G, $"Engine {Num(n)}: running", $"FO_ENG{Num(n)}_RUNNING", On));
+        }
+        items.Add(Read("ESC_GEN_FIELDS", G, "Engine generator field: close", "FO_GEN_FIELDS_CLOSED", On));
+        items.Add(Read("ESC_GEN_BREAKERS", G, "Engine generator breaker: close", "FO_GEN_BREAKERS_CLOSED", On));
+        return new Group { Id = G, Name = "Engine Start", Items = items };
+    }
+
     // ================================================================== builders (the MD-11's)
 
     /// <summary>A state line; <paramref name="additionalFields"/> must each read done under the same condition too.</summary>
@@ -600,6 +674,22 @@ public static class L1011FoChecklistDefinitions
     /// <summary>A read-back (*_CL) item: auto-detected, action-free.</summary>
     private static Item Read(string id, string groupId, string label, string field, Func<double, bool> condition)
         => Auto(id, groupId, label, field, condition, action: null);
+
+    /// <summary>The ONE sanctioned StayComplete ([FOB-1]): the ground start lines, latched on the engine running.</summary>
+    private static Item AutoLatch(string id, string groupId, string label, string field, Func<double, bool> condition,
+        CheckFn action) => new()
+    {
+        Id = id, GroupId = groupId, Label = label,
+        Type = ChecklistItemType.AutoDetectable,
+        AutoCompleteAllowed = true,
+        ManualCompletionAllowed = true,
+        StateFieldName = field,
+        StateCondition = condition,
+        RevertBehavior = RevertBehavior.StayComplete,
+        AdditionalStateFields = Array.Empty<string>(),
+        AdditionalStateCondition = condition,
+        CheckAction = action,
+    };
 
     private static Item ActionManual(string id, string groupId, string label, CheckFn action) => new()
     {

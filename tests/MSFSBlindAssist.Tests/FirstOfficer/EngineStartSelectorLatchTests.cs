@@ -6,6 +6,7 @@ using B737 = MSFSBlindAssist.FirstOfficer.PMDG737;
 using IFly737 = MSFSBlindAssist.FirstOfficer.IFly737;
 using B777 = MSFSBlindAssist.FirstOfficer;
 using Md11 = MSFSBlindAssist.FirstOfficer.MD11;
+using TriStar = MSFSBlindAssist.FirstOfficer.L1011;
 
 namespace MSFSBlindAssist.Tests.FirstOfficer;
 
@@ -106,6 +107,21 @@ public class EngineStartSelectorLatchTests
     }
 
     /// <summary>
+    /// The TriStar's ground start switch is released by the aircraft itself as N3 passes about 55 % (the Boeing
+    /// selector's physics), so its line latches on the engine RUNNING, read on N3 at 50 % ([FOL-3]), never on the
+    /// switch. Three engines, started 2, 1, 3.
+    /// </summary>
+    [Fact]
+    public void L1011GroundStartSwitchesLatchOnN3Running()
+    {
+        var groups = TriStar.L1011FoChecklistDefinitions.Build();
+        Assert.Equal(50, TriStar.L1011FoStateEvaluator.EngineRunningN3);
+        AssertLatchesOnEngineRunning(Item(groups, "ES_E2_GND_START"), "L1011_RO_N3_2", 50);
+        AssertLatchesOnEngineRunning(Item(groups, "ES_E1_GND_START"), "L1011_RO_N3_1", 50);
+        AssertLatchesOnEngineRunning(Item(groups, "ES_E3_GND_START"), "L1011_RO_N3_3", 50);
+    }
+
+    /// <summary>
     /// The 777 evaluator discarded the N2 the shared FirstOfficerForm feeds every profile
     /// ("not used by the 777 evaluator"), so the field had to be wired before its selector
     /// items could detect anything. N2 arrives from SimConnect, NOT the PMDG CDA, so it must
@@ -151,5 +167,10 @@ public class EngineStartSelectorLatchTests
         Assert.Equal(RevertBehavior.RevertToState, Item(md11, "ES_E1_FUEL").RevertBehavior);
         Assert.Equal(RevertBehavior.RevertToState, Item(md11, "ES_E2_FUEL").RevertBehavior);
         Assert.Equal(RevertBehavior.RevertToState, Item(md11, "ES_E3_FUEL").RevertBehavior);
+
+        var tristar = TriStar.L1011FoChecklistDefinitions.Build();
+        Assert.Equal(RevertBehavior.RevertToState, Item(tristar, "ES_E1_FUEL_IGN").RevertBehavior);
+        Assert.Equal(RevertBehavior.RevertToState, Item(tristar, "ES_E2_FUEL_IGN").RevertBehavior);
+        Assert.Equal(RevertBehavior.RevertToState, Item(tristar, "ES_E3_FUEL_IGN").RevertBehavior);
     }
 }

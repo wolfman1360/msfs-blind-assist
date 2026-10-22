@@ -44,6 +44,7 @@ public class L1011FoChecklistStructureTests
             "POWER_UP", "POWER_UP_CL",
             "PREFLIGHT", "PREFLIGHT_FE_CL", "PREFLIGHT_OVHD_CL", "PREFLIGHT_MAIN_CL", "PREFLIGHT_CONSOLE_CL",
             "BEFORE_START", "BEFORE_START_CL",
+            "ENGINE_START", "ENGINE_START_CL",
         }, Groups.Select(g => g.Id));
 
     [Fact]
@@ -96,13 +97,16 @@ public class L1011FoChecklistStructureTests
             Assert.All(g.Items, i => Assert.Equal(g.Id, i.GroupId));
     }
 
-    /// <summary>[FOB-1]: every state line is a live mirror; the TriStar has no StayComplete line at all.</summary>
+    /// <summary>[FOB-1]: every state line is a live mirror but the three ground start lines, which latch on the
+    /// engine running (the one sanctioned StayComplete).</summary>
     [Fact]
     public void EveryAutoAndReadLine_UsesRevertToState()
     {
+        var latched = new[] { "ES_E1_GND_START", "ES_E2_GND_START", "ES_E3_GND_START" };
         var auto = Groups.SelectMany(g => g.Items).Where(i => i.Type == ChecklistItemType.AutoDetectable).ToList();
         Assert.NotEmpty(auto);
-        Assert.All(auto, i => Assert.Equal(RevertBehavior.RevertToState, i.RevertBehavior));
+        Assert.All(auto.Where(i => !latched.Contains(i.Id)), i => Assert.Equal(RevertBehavior.RevertToState, i.RevertBehavior));
+        Assert.Equal(latched.Length, auto.Count(i => latched.Contains(i.Id)));
         Assert.All(auto, i => Assert.True(i.IsAutoDetectable, $"{i.Id} is AutoDetectable but cannot auto-detect"));
     }
 
@@ -149,7 +153,9 @@ public class L1011FoChecklistStructureTests
         }
     }
 
-    /// <summary>[FO-7]: an action line with a CheckAction and no delivering step would be latched with its switch untouched.</summary>
+    /// <summary>[FO-7]: an action line with a CheckAction and no delivering step would be latched with its switch
+    /// untouched. The one exception is the ground start lines: StayComplete on the engine running, they are never
+    /// linked to the ground start, and tick only from the engine running (L1011FoFlowChecklistLinkTests).</summary>
     [Fact]
     public void EveryActionableItemInAnActionGroup_HasADeliveringFlowStep()
     {
@@ -158,7 +164,7 @@ public class L1011FoChecklistStructureTests
             var delivered = f.Steps.Select(s => s.CompletesChecklistItemId).Where(id => id != null).ToHashSet();
             var group = Groups.SingleOrDefault(g => g.Id == f.Id);
             Assert.NotNull(group);
-            foreach (var i in group!.Items.Where(i => i.CheckAction != null))
+            foreach (var i in group!.Items.Where(i => i.CheckAction != null && i.RevertBehavior != RevertBehavior.StayComplete))
                 Assert.True(delivered.Contains(i.Id), $"{group.Id}/{i.Id} has a CheckAction but no flow step delivers it");
         }
     }

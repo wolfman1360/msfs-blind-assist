@@ -25,9 +25,13 @@ public class L1011FoFlowChecklistLinkTests
         => Assert.Equal(new[] { "POWER_UP", "POWER_UP_CL" },
             Flows.Single(f => f.Id == "POWER_UP").CompletionGroupIds(id => Groups.Any(g => g.Id == id)));
 
+    /// <summary>The three ground start lines are the only lines latched with no step behind them: they latch on the
+    /// engine running and no step links them (the MD-11's start switch lines).</summary>
+    private static readonly string[] GroundStartLines = { "ES_E1_GND_START", "ES_E2_GND_START", "ES_E3_GND_START" };
+
     [Fact]
     public void No_line_is_latched_with_no_step_behind_it()
-        => Assert.Empty(FlowChecklistLinkAudit.UndeliveredLines(Latched()));
+        => Assert.Equal(GroundStartLines.Select(id => $"ENGINE_START/{id}"), FlowChecklistLinkAudit.UndeliveredLines(Latched()));
 
     [Fact]
     public void Every_link_names_a_line_of_a_group_its_flow_latches()
@@ -41,13 +45,19 @@ public class L1011FoFlowChecklistLinkTests
         }
     }
 
+    /// <summary>The three ground start lines latch on the engine running and no step links them: a ground start
+    /// marked them, a failed light-off stopped the flow, and the line stayed ticked over an engine that never ran.</summary>
     [Fact]
     public void No_step_links_a_StayComplete_line()
     {
         var stay = Groups.SelectMany(g => g.Items)
             .Where(i => i.RevertBehavior == RevertBehavior.StayComplete && i.IsAutoDetectable)
-            .Select(i => i.Id).ToList();
-        Assert.Empty(stay);
+            .Select(i => i.Id).OrderBy(x => x, StringComparer.Ordinal).ToList();
+        Assert.Equal(GroundStartLines, stay);
+        foreach (var flow in Flows)
+            foreach (var step in flow.Steps)
+                Assert.False(step.LinkedChecklistItemIds.Any(stay.Contains),
+                    $"{flow.Id}/{step.Id} links a StayComplete line: a ground start is not a started engine");
     }
 
     // A read-only check never writes: every link of a check step is to a line it reads.
@@ -95,16 +105,40 @@ public class L1011FoFlowChecklistLinkTests
     /// APU mode normal): each is its own step's line, ticked when the step completes.</summary>
     private static readonly string[] UndoneLaterLines = { "PF_APU_MODE_MIN", "PF_PACKS_OFF", "PF_HOT_AIR_OFF" };
 
+    /// <summary>The writes that link no line: each engine's ground start (its line latches on the engine running) and
+    /// its light-off watch.</summary>
+    private static readonly string[] UnlinkedWrites =
+        new[] { 1, 2, 3 }.SelectMany(n => new[] { X.GroundStart(n), X.EngineLightOff(n) }).ToArray();
+
+    private static readonly string[] FuelPumpKeys =
+    {
+        "SWITCH_FUEL_PUMP_1_1", "SWITCH_FUEL_PUMP_1_2", "SWITCH_FUEL_PUMP_2L_1", "SWITCH_FUEL_PUMP_2L_2",
+        "SWITCH_FUEL_PUMP_2R_1", "SWITCH_FUEL_PUMP_2R_2", "SWITCH_FUEL_PUMP_3_1", "SWITCH_FUEL_PUMP_3_2",
+    };
+
     /// <summary>What the aircraft reads once the step's work is done: its keys at their targets; the external
     /// power breaker closed for the external power composite on, open for it off; the battery on and standby
     /// power armed under its closed guard after the standby power check; the three INS mode selectors at ALIGN
     /// after the INS align composite; the APU turning after its start; the APU generator's field and breaker
     /// relays and the three AC ties closed after theirs; the four fire loop selectors at Both after the fire
     /// test, the wheel well selector at Both after its test, and the AC pumps and PTUs off after the hydraulic
-    /// check; and for a provider step, the readout at the provider's value (the cabin altitude selector's, in
-    /// metres; the cabin baro's, at the captain's altimeter), or an INS mode selector at NAV.</summary>
+    /// check; an engine's N3 at idle after its idle wait, and the six engine generator relays closed after theirs; a
+    /// tank pump written with every other tank pump read off; and for a provider step, the readout at the provider's
+    /// value (the cabin altitude selector's, in metres; the cabin baro's, at the captain's altimeter), or an INS mode
+    /// selector at NAV.</summary>
     private static (string Key, double Value)[] Done(Step s)
     {
+        foreach (int n in new[] { 1, 2, 3 })
+            if (s.EventName == X.EngineIdle(n))
+                return new[] { ($"L1011_RO_N3_{n}", 59.2) };
+        if (s.EventName == X.EngineGenerators)
+            return new[] { 1, 2, 3 }.SelectMany(n => new[] { ($"L1011_RO_GEN_{n}_FIELD", 1.0), ($"L1011_RO_GEN_{n}_BREAKER", 1.0) })
+                .ToArray();
+        if (s.ActionType == FlowStepActionType.SetSwitchMultiple && s.MultiActions.Any(a => FuelPumpKeys.Contains(a.EventName)))
+        {
+            var written = s.MultiActions.Select(a => (a.EventName, (double)a.TargetValue!.Value)).ToArray();
+            return written.Concat(FuelPumpKeys.Where(k => written.All(w => w.EventName != k)).Select(k => (k, 0.0))).ToArray();
+        }
         if (s.EventName == X.ExternalPower)
             return new[] { ("L1011_RO_EXT_PWR_BREAKER", s.TargetValue == 0 ? 0.0 : 1.0) };
         if (s.EventName == X.InsAlign)
@@ -140,7 +174,8 @@ public class L1011FoFlowChecklistLinkTests
     /// <summary>
     /// Every line a write step links reads done once the step's work reads done, and does not with nothing
     /// read: a write never ticks a line it does not set. A line no state judges (the standby power check's
-    /// own two, a test's own two) is the composite's alone.
+    /// own two, a test's own two) is the composite's alone. Only the engine start's ground start and light-off
+    /// watch link no line.
     /// </summary>
     [Fact]
     public void Every_line_a_write_links_reads_done_when_the_write_is_done()
@@ -151,6 +186,11 @@ public class L1011FoFlowChecklistLinkTests
         Assert.True(writes.Count >= 14, $"only {writes.Count} writes enumerated");
         foreach (var step in writes)
         {
+            if (UnlinkedWrites.Contains(step.EventName))
+            {
+                Assert.Empty(step.LinkedChecklistItemIds);
+                continue;
+            }
             var done = State(Done(step));
             var unread = State();
             Assert.NotEmpty(step.LinkedChecklistItemIds);

@@ -70,4 +70,20 @@ public class EngineStartChecklistShapeTests
         Assert.Equal(new[] { "ES_E3_START", "ES_E3_FUEL", "ES_E1_START", "ES_E1_FUEL",
                              "ES_E2_START", "ES_E2_FUEL", "ES_ANTI_ICE" }, ids);
     }
+
+    // The TriStar starts 2, 1, 3: each engine's feed, ground start and fuel and ignition, the previous engine's
+    // isolation valve off before engines 1 and 3, then the generators. No "running" line in the action group.
+    [Fact]
+    public void L1011_EngineStart_IsFeedGroundStartAndFuelIgnitionOnly_TwoOneThree()
+    {
+        var ids = MSFSBlindAssist.FirstOfficer.L1011.L1011FoChecklistDefinitions.Build()
+            .First(g => g.Id == "ENGINE_START").Items.Select(i => i.Id).ToList();
+        Assert.Equal(new[]
+        {
+            "ES_E2_FUEL_FEED", "ES_E2_GND_START", "ES_E2_FUEL_IGN",
+            "ES_E1_PREV_ISLN_OFF", "ES_E1_FUEL_FEED", "ES_E1_GND_START", "ES_E1_FUEL_IGN",
+            "ES_E3_PREV_ISLN_OFF", "ES_E3_FUEL_FEED", "ES_E3_GND_START", "ES_E3_FUEL_IGN",
+            "ES_GENERATORS",
+        }, ids);
+    }
 }

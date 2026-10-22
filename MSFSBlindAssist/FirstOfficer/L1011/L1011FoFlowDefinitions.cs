@@ -44,6 +44,15 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// show the state, so they are flow-only; the doors step reads the four stock door positions, because the main
 /// panel's door light does not follow the doors.
 /// Its toggle-carrying writes (seat belts, APU bleed) are single switches that read their own position first.
+///
+/// Engine Start starts engines 2, 1 and 3 on APU air, the MD-11's shape: the ground guard and four read-only Stop
+/// waits (engine data, the APU running, its bleed and the crossbleeds on), then per engine its own tank pump and tank
+/// valve, its isolation valve read on (the engine before it has its own turned off first), the ground start, the
+/// light-off watch to 20 % N3, the fuel and ignition, the ground start released by the aircraft and a stable idle,
+/// each a Stop step; then the engine generators on line. The ground start step links no line: its line latches on the
+/// engine running. A flow stopped with a ground start on has it released by the executor over fuel and ignition read
+/// off, never by a fuel write. The fuel and ignition switch carries a toggle: its single-switch step reads its own
+/// position first.
 /// </summary>
 public static class L1011FoFlowDefinitions
 {
@@ -52,6 +61,7 @@ public static class L1011FoFlowDefinitions
         BuildPowerUp(),
         BuildPreflight(),
         BuildBeforeStart(),
+        BuildEngineStart(),
     };
 
     // ------------------------------------------------------------------ Power Up (the manual's cockpit entry and power-up)
@@ -523,6 +533,102 @@ public static class L1011FoFlowDefinitions
         return Skip(Captain($"BS_INS_{n}_CPT", $"INS {n} not in NAV",
                 $"INS {n} is not in NAV: set it to NAV once READY NAV lights."),
             s => s.IsPosition(key, L1011FoStateEvaluator.InsNav));
+    }
+
+    // ------------------------------------------------------------------ Engine Start (2, 1, 3, on APU air)
+
+    /// <summary>How long Engine Start's opening waits and each isolation valve check wait: Before Start left them so.</summary>
+    private const int StartReadySeconds = 10;
+
+    /// <summary>How long the flow waits for the aircraft to release a ground start switch, which it does as N3 passes
+    /// about 55 %, about 35 s after the fuel and ignition go on at 20 %.</summary>
+    private const int GroundStartReleaseSeconds = 60;
+
+    /// <summary>The start order, and the engine started before each (none before engine 2).</summary>
+    private static readonly (int Engine, int? Previous)[] StartOrder = { (2, null), (1, 2), (3, 1) };
+
+    /// <summary>Engine <paramref name="n"/>'s own tank pump: the first pump of tank 1, 2 left or 3.</summary>
+    private static string TankPump(int n) => n switch
+    {
+        1 => "SWITCH_FUEL_PUMP_1_1",
+        2 => "SWITCH_FUEL_PUMP_2L_1",
+        _ => "SWITCH_FUEL_PUMP_3_1",
+    };
+
+    private static Flow BuildEngineStart()
+    {
+        var steps = new List<Step>
+        {
+            // Never airborne. Links no line.
+            OnGroundGuard("ES_ON_GROUND"),
+            // Engine 2's N3 read, so every wait and "Already set" below reads the engines (the MD-11's engine data wait).
+            WaitForField("ES_DATA", "Engine data", X.N3Key(2), v => !double.IsNaN(v), StartReadySeconds,
+                onTimeout: FlowStepFailurePolicy.Stop),
+            // The start air Before Start left: the APU running with its bleed on, both crossbleeds on. Read only.
+            WaitForField("ES_APU_RUNNING", "APU running", "FO_APU_RUNNING", On, StartReadySeconds,
+                onTimeout: FlowStepFailurePolicy.Stop),
+            WaitForField("ES_APU_BLEED", "APU bleed: on", "SWITCH_APU_BLEED", On, StartReadySeconds,
+                onTimeout: FlowStepFailurePolicy.Stop),
+            WaitForField("ES_CROSSBLEEDS", "Crossbleed valves: on", "FO_CROSSBLEEDS_ON", On, StartReadySeconds,
+                onTimeout: FlowStepFailurePolicy.Stop),
+        };
+        foreach (var (engine, previous) in StartOrder)
+            steps.AddRange(StartEngine(engine, previous));
+        // Every field relay closed, then every breaker: a relay already closed is not pressed (an engine's field closed
+        // by itself once it ran). One that does not close does not stop the flow.
+        steps.Add(Also(Done(Skip(SW("ES_GENERATORS", "Engine generator fields and breakers: closed", X.EngineGenerators, 1),
+            s => s.IsOn("FO_ENGINE_GENERATORS_ON")), "ES_GENERATORS"), "ESC_GEN_FIELDS", "ESC_GEN_BREAKERS"));
+        return new Flow
+        {
+            Id = "ENGINE_START", Name = "Engine Start",
+            Description = "Engines 2, 1 and 3 on APU air: tank pump and valve, ground start, fuel and ignition at "
+                + "20 percent N3, the switch released at 55 percent, stable idle; then the engine generators on line.",
+            RelatedChecklistGroupIds = new[] { "ENGINE_START", "ENGINE_START_CL" },
+            Steps = steps,
+        };
+    }
+
+    /// <summary>
+    /// Engine <paramref name="n"/>'s start. Engines 1 and 3 first turn the isolation valve of the engine started before
+    /// (<paramref name="previous"/>) off. Then the engine's own feed, its isolation valve read on, the ground start (the
+    /// executor turns the switch on and watches N3 rise), the light-off watch to 20 % N3, the fuel and ignition, the
+    /// ground start released by the aircraft itself past about 55 % N3, and a stable idle. From the isolation valve on,
+    /// every step stops the flow when it is not done: going on would start the next engine over a failed one.
+    /// </summary>
+    private static IEnumerable<Step> StartEngine(int n, int? previous)
+    {
+        string num = n.ToString(CultureInfo.InvariantCulture);
+        string e = $"ES_E{num}_";
+        if (previous is int p)
+        {
+            string prev = p.ToString(CultureInfo.InvariantCulture);
+            string isolation = $"SWITCH_ISLN_VALVE_ENG_{prev}";
+            yield return Also(Done(Skip(SW(e + "PREV_ISLN_OFF", $"Engine {prev} isolation valve: off", isolation, 0),
+                s => s.IsPosition(isolation, 0)), e + "PREV_ISLN_OFF"), $"ESC_E{prev}_ISLN_OFF");
+        }
+        // Engine 2's feed is the APU's, set in Preflight: already set there. It also delivers the read-back's pump line.
+        var feed = Done(Skip(Multi(e + "FUEL_FEED", $"Engine {num} fuel: tank pump and tank valve on",
+                (TankPump(n), 1), ($"SWITCH_ENG_{num}_TANK_VALVE", 1), ($"GUARD_ENG_{num}_TANK_VALVE", 0)),
+            s => s.IsOn($"FO_ENG{num}_FUEL_FEED")), e + "FUEL_FEED");
+        yield return n == 2 ? Also(feed, "ESC_FUEL_PUMP") : feed;
+        yield return WaitForField(e + "ISLN", $"Engine {num} isolation valve: on", $"SWITCH_ISLN_VALVE_ENG_{num}", On,
+            StartReadySeconds, onTimeout: FlowStepFailurePolicy.Stop);
+        // Never linked to its StayComplete line (latched on the engine running): a start marked it, a failed light-off
+        // then stopped the flow, and the line stayed ticked over an engine that never ran. Skipped only for an engine
+        // already running; one turning below that is left to the composite, which watches its rotation.
+        yield return Stop(Skip(SW(e + "GND_START", $"Engine {num} ground start switch: on", X.GroundStart(n), 1),
+            s => s.IsOn($"FO_ENG{num}_RUNNING")));
+        // No light-off in time releases the ground start over fuel off, and Stop ends the flow before any fuel goes on.
+        yield return Stop(SW(e + "N3_20", $"Engine {num} N3 twenty percent", X.EngineLightOff(n), 1));
+        // A toggle-carrying switch, written only over its own position read ([L1011-4]). Refused, the flow stops with
+        // the ground start on, and the Stop clean-up releases it over fuel read off.
+        string fuel = X.FuelIgnitionKey(n);
+        yield return Also(Done(Stop(Skip(SW(e + "FUEL_IGN", $"Engine {num} fuel and ignition: on", fuel, 1),
+            s => s.IsPosition(fuel, 1))), e + "FUEL_IGN"), $"ESC_E{num}_FUEL_IGN");
+        // The aircraft's own release: a switch that never releases is a hung start, the Captain's.
+        yield return Done(WaitForField(e + "RELEASED", $"Engine {num} ground start switch released", X.GroundStartKey(n),
+            v => v < 0.5, GroundStartReleaseSeconds, onTimeout: FlowStepFailurePolicy.Stop), $"ESC_E{num}_RELEASED");
+        yield return Done(Stop(SW(e + "IDLE", $"Engine {num}: stable idle", X.EngineIdle(n), 1)), $"ESC_E{num}_RUNNING");
     }
 
     // ------------------------------------------------------------------ step builders (the MD-11's, retyped)
