@@ -162,7 +162,7 @@ public class L1011FoFlowChecklistLinkTests
     {
         if (s.EventName == X.ApuGenerator && s.TargetValue == 0)
             return new[] { ("L1011_RO_APU_GEN_BREAKER", 0.0) };
-        if (s.EventName == "APU_STOP")
+        if (s.EventName == X.ApuStop)
             return new[] { ("L1011_RO_APU_RPM", 0.0) };
         if (s.TargetValueProvider is { } flaps && s.EventName == MSFSBlindAssist.Aircraft.L1011.L1011Levers.FlapHandleKey)
         {

@@ -412,17 +412,43 @@ public class FakeL1011AircraftTests
         Assert.Equal(0, ac.Get(ApuRpm));
     }
 
+    /// <summary>Live, the APU ran down from 100 to 0 in about 60 s after the stop press: the fake spins it down
+    /// <see cref="FakeL1011Aircraft.ApuSpinDownPerSecond"/> (2 %) a second of its clock, never below 0.</summary>
     [Fact]
-    public async Task The_stop_press_stops_the_apu()
+    public async Task The_stop_press_spins_the_apu_down_by_the_clock()
     {
         var ac = new FakeL1011Aircraft();
         ac.Set(ApuMaster, 1);
         ac.Set(ApuRpm, 100);
+        Assert.Equal(2, ac.ApuSpinDownPerSecond);
 
         Assert.Equal(L1011FoResult.Sent, await ac.SetAsync(ApuStopPress, 1));
 
-        Assert.Equal(0, ac.Get(ApuRpm));
+        Assert.Equal(100, ac.Get(ApuRpm));   // nothing at once
         Assert.Equal(new[] { (ApuStopPress, 1.0) }, ac.Writes);
+        await ac.DelayAsync(25_000);
+        Assert.Equal(50, ac.Get(ApuRpm));
+        await ac.DelayAsync(30_000);
+        Assert.Equal(0, ac.Get(ApuRpm));
+        await ac.DelayAsync(10_000);
+        Assert.Equal(0, ac.Get(ApuRpm));
+    }
+
+    [Fact]
+    public async Task A_start_press_ends_a_spin_down_and_no_press_leaves_the_apu_alone()
+    {
+        var ac = new FakeL1011Aircraft();
+        ac.Set(ApuMaster, 1);
+        ac.Set(ApuRpm, 100);
+        await ac.DelayAsync(10_000);
+        Assert.Equal(100, ac.Get(ApuRpm));   // no stop press: it runs on
+
+        await ac.SetAsync(ApuStopPress, 1);
+        await ac.DelayAsync(10_000);
+        Assert.Equal(80, ac.Get(ApuRpm));
+        await ac.SetAsync(ApuStartPress, 1);   // started again: running
+        await ac.DelayAsync(10_000);
+        Assert.Equal(100, ac.Get(ApuRpm));
     }
 
     [Fact]

@@ -36,7 +36,8 @@ internal readonly record struct FakeL1011Io(FakeL1011IoKind Kind, string Key, do
 /// (<c>L1011_RO_EXT_PWR_BREAKER</c> 1); external power off opens it.</item>
 /// <item>The APU: a start press (<c>SWITCH_APU_START</c>) with the master (<c>TOGGLE_APU_POWER</c>) reading 1
 /// sets its RPM (<c>L1011_RO_APU_RPM</c>) to <see cref="ApuRpmAfterStart"/>, with the master off or unread
-/// nothing; the stop press (<c>APU_STOP</c>) sets the RPM to 0. The generator field press
+/// nothing, and ends a spin-down; the stop press (<c>APU_STOP</c>) spins it down by the clock,
+/// <see cref="ApuSpinDownPerSecond"/> a second down to 0 (live: from 100 to 0 in about 60 s). The generator field press
 /// (<c>SWITCH_APU_BRG</c>) closes its relay (<c>L1011_RO_APU_GEN_FIELD</c>) only with the APU running (95 %);
 /// the breaker press (<c>SWITCH_GND_FLOW</c>) closes the breaker relay (<c>L1011_RO_APU_GEN_BREAKER</c>) only
 /// over a closed field, whatever external power does (no interlock); the trip (<c>SWITCH_GND_FLOW_OPEN</c>)
@@ -192,6 +193,9 @@ internal sealed class FakeL1011Aircraft : IL1011FoTransport
     /// <summary>By engine (index 0 unused): turning, by its starter or lit and running on, until its ground start
     /// is written off or released by the press.</summary>
     private readonly bool[] _turning = new bool[4];
+
+    /// <summary>The APU spinning down after a stop press, until it reads 0 or a start press runs it again.</summary>
+    private bool _apuSpinningDown;
     private long _clock;
 
     public FakeL1011Aircraft() => Recompute();
@@ -205,6 +209,10 @@ internal sealed class FakeL1011Aircraft : IL1011FoTransport
     /// <summary>The APU's RPM right after a start press with the master on: running (100) by default; a test
     /// scripting the spool-up sets 0 and drives the RPM through <see cref="OnClock"/>.</summary>
     public double ApuRpmAfterStart { get; set; } = 100;
+
+    /// <summary>The APU's RPM fall per clock second after a stop press (live: from 100 to 0 in about 60 s); 0 for an
+    /// APU that never spins down.</summary>
+    public double ApuSpinDownPerSecond { get; set; } = 2.0;
 
     /// <summary>An engine's N3 rise per clock second while its ground start turns it (live, on APU air: about
     /// 1 %/s from cold); 0 for an engine that never turns.</summary>
@@ -391,6 +399,7 @@ internal sealed class FakeL1011Aircraft : IL1011FoTransport
         {
             _clock += Math.Max(0, ms);
             TurnEngines(Math.Max(0, ms));
+            SpinDownApu(Math.Max(0, ms));
             OnClock?.Invoke(this);
         }
         return Task.CompletedTask;
@@ -447,10 +456,13 @@ internal sealed class FakeL1011Aircraft : IL1011FoTransport
         else if (key == ApuStartPress)
         {
             if (Value(ApuMaster) is double master && Near(master, 1))
+            {
+                _apuSpinningDown = false;
                 Put(ApuRpm, ApuRpmAfterStart);
+            }
         }
         else if (key == ApuStopPress)
-            Put(ApuRpm, 0);
+            _apuSpinningDown = true;
         else if (key == ApuGenFieldPress)
         {
             if (Value(ApuRpm) is double rpm && rpm >= L1011FoStateEvaluator.ApuRunningRpm)
@@ -547,6 +559,18 @@ internal sealed class FakeL1011Aircraft : IL1011FoTransport
             if (starter && Value(N3(n)) >= StarterCutoutN3)
                 Put(GroundStartSwitch(n), 0);   // the aircraft's own release: not a write
         }
+    }
+
+    /// <summary><paramref name="ms"/> of clock for an APU spinning down after its stop press: its RPM, once read, falls
+    /// <see cref="ApuSpinDownPerSecond"/> a second, never below 0, and the spin-down ends at 0.</summary>
+    private void SpinDownApu(int ms)
+    {
+        if (!_apuSpinningDown || Value(ApuRpm) is not double rpm)
+            return;
+        double next = Math.Max(0, rpm - ApuSpinDownPerSecond * ms / 1000.0);
+        Put(ApuRpm, next);
+        if (next <= 0)
+            _apuSpinningDown = false;
     }
 
     /// <summary>Engine 1 to 3 from a key that is <paramref name="prefix"/> and the engine's number, else null.</summary>

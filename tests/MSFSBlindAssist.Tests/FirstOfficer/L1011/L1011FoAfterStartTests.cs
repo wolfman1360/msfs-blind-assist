@@ -18,7 +18,8 @@ namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 /// own state; the ATMs to on, then to auto; the read-only checks, each completing only lines that read its field; the
 /// take-off flaps from the tablet, else SimBrief, else the Captain ([FO-20]), left alone off the ground; the 1A and 3A
 /// transfers only with fuel in both tanks; the stabilizer trim reminder naming the tablet's value; the APU shutdown
-/// only once every engine generator is on line, its cool-down only after this run's stop; the lines each step delivers
+/// only once every engine generator is on line, its stop held until the APU reads stopped ([FO-11]), its cool-down only
+/// after this run's stop, and its hand ticks left alone while the engine generators are not all on line; the lines each step delivers
 /// ([FO-6], [FO-7]); and that every key is one the definition takes, a toggle-carrying key only ever written over its
 /// own position read ([L1011-4]).
 /// </summary>
@@ -133,7 +134,7 @@ public class L1011FoAfterStartTests
         ("AS_TAXI_LIGHT", "Nose taxi light: on", All(1, "TOGGLE_TAXI_LIGHT")),
         ("AS_APU_GEN_TRIP", "APU generator breaker: trip", All(0, X.ApuGenerator)),
         ("AS_APU_BLEED_OFF", "APU bleed: off", All(0, "SWITCH_APU_BLEED")),
-        ("AS_APU_STOP", "APU: stop", All(1, "APU_STOP")),
+        ("AS_APU_STOP", "APU: stop", All(1, X.ApuStop)),
         ("AS_APU_MASTER_OFF", "APU master: off", All(0, "TOGGLE_APU_POWER")),
     };
 
@@ -229,7 +230,7 @@ public class L1011FoAfterStartTests
     private static (string Key, double Done, double Wrong)[] Done(Step s)
     {
         if (s.EventName == X.ApuGenerator) return new[] { (ApuGenBreaker, 0.0, 1.0) };
-        if (s.EventName == "APU_STOP") return new[] { (ApuRpm, 0.0, 100.0) };
+        if (s.EventName == X.ApuStop) return new[] { (ApuRpm, 0.0, 100.0) };
         if (s.EventName == L1011Levers.FlapHandleKey) return new[] { (s.EventName, 2.0, 0.0), (TabletFlaps, 10.0, 0.0) };
         return Actions(s).Select(a => (a.Key, (double)a.Target!.Value, a.Target.Value == 0 ? 1.0 : 0.0)).ToArray();
     }
@@ -484,13 +485,114 @@ public class L1011FoAfterStartTests
         Assert.False(line.IsChecked);
     }
 
-    /// <summary>Only the flaps and the transfers are left alone, in the flow and in the action group.</summary>
+    /// <summary>In the flow only the flaps and the transfers are left alone (the APU steps hang on the generator wait
+    /// instead); in the action group the four APU shutdown ticks are too.</summary>
     [Fact]
-    public void Only_the_flaps_and_the_transfers_are_left_alone()
+    public void Only_the_flaps_the_transfers_and_the_APU_shutdown_ticks_are_left_alone()
     {
         Assert.Equal(new[] { "AS_TRANSFERS", "AS_FLAPS" }, AfterStart.Steps.Where(s => s.LeaveAloneWhen != null).Select(s => s.Id));
-        Assert.Equal(new[] { "AS_TRANSFERS", "AS_FLAPS" },
+        Assert.Equal(new[] { "AS_TRANSFERS", "AS_FLAPS" }.Concat(ApuTail),
             Group("AFTER_START").Items.Where(i => i.LeaveAloneWhen != null).Select(i => i.Id));
+    }
+
+    // ------------------------------------------------------------------ the APU shutdown ticks
+
+    private const string ApuTickText = "APU left running: the engine generators are not all on line.";
+
+    public static IEnumerable<object[]> ApuShutdownTicks() => ApuTail.Select(id => new object[] { id });
+
+    /// <summary>
+    /// A hand tick that trips the APU generator, or stops the APU, with an engine generator off line would leave the
+    /// buses on the battery: each of the four APU shutdown ticks goes ahead only once all six engine generator relays
+    /// read closed, as the flow waits for them. One relay open, or any unread, refuses it aloud.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ApuShutdownTicks))]
+    public async Task The_APU_shutdown_ticks_wait_for_the_engine_generators(string id)
+    {
+        var line = Line(id);
+        Assert.Equal(ApuTickText, line.LeaveAloneText);
+
+        // Every relay closed: the tick goes ahead and runs its write.
+        var (ticked, spoken, _, ac) = await TickAsync(id, GeneratorRelays.Select(r => (r, 1.0)).ToArray());
+        Assert.True(ticked, $"{id}: all six relays closed");
+        Assert.Null(spoken);
+        Assert.NotEmpty(ac.Writes);
+
+        foreach (var relay in GeneratorRelays)
+        {
+            var open = GeneratorRelays.Select(r => (r, r == relay ? 0.0 : 1.0)).ToArray();
+            var unread = GeneratorRelays.Where(r => r != relay).Select(r => (r, 1.0)).ToArray();
+            foreach (var (seeds, why) in new[] { (open, $"{relay} open"), (unread, $"{relay} unread") })
+            {
+                var (refused, text, item, aircraft) = await TickAsync(id, seeds);
+                Assert.False(refused, $"{id}: {why}");
+                Assert.Equal(ApuTickText, text);
+                Assert.False(item.IsChecked);
+                Assert.Empty(aircraft.Io);
+            }
+        }
+    }
+
+    /// <summary>A hand tick of <paramref name="id"/> through the real checklist manager, the engine generator relays
+    /// read as <paramref name="relays"/>, on an aircraft with work for the step; waits, bounded, for its action.</summary>
+    private static async Task<(bool Ticked, string? Spoken, Item Line, FakeL1011Aircraft Aircraft)> TickAsync(
+        string id, (string, double)[] relays)
+    {
+        var groups = L1011FoChecklistDefinitions.Build();
+        var ac = AircraftFor(Of(id));
+        var exec = new X();
+        exec.SetTransport(ac);
+        var mgr = new ChecklistManager<X, L1011FoStateEvaluator>(Connected(relays), exec, groups);
+        var line = groups.SelectMany(g => g.Items).Single(i => i.Id == id);
+        bool ticked = mgr.ToggleItem(line.GroupId, id, out var spoken) == true;
+        var deadline = DateTime.UtcNow + Hang;
+        while (line.ActionSettling && DateTime.UtcNow < deadline)
+            await Task.Delay(20);
+        Assert.False(line.ActionSettling, $"{id}: the tick's action never finished");
+        return (ticked, spoken, line, ac);
+    }
+
+    /// <summary>
+    /// [FO-11]: the stop line is judged on the APU stopped, a slow condition (live, about 60 s from the press). Its tick's
+    /// action holds until the APU reads stopped, so the line has its state before the tick's grace runs out and never
+    /// reverts with "Unable to complete". The evaluator here follows the aircraft, as the cache follows the sim.
+    /// </summary>
+    [Fact]
+    public async Task The_APU_stop_tick_holds_until_the_APU_reads_stopped()
+    {
+        var ac = AircraftFor(Of("AS_APU_STOP"));
+        var sim = SeededSimConnectCache.ConnectedWith(GeneratorRelays.Select(r => (r, 1.0)).Append((ApuRpm, 100.0)).ToArray());
+        var cache = SeededSimConnectCache.Cache(sim);
+        ac.OnClock = a => cache[ApuRpm] = a.Get(ApuRpm) ?? double.NaN;
+        var state = new L1011FoStateEvaluator();
+        state.SetSimConnect(sim);
+        var exec = new X();
+        exec.SetTransport(ac);
+        var groups = L1011FoChecklistDefinitions.Build();
+        var mgr = new ChecklistManager<X, L1011FoStateEvaluator>(state, exec, groups);
+        var failed = new List<string>();
+        mgr.ItemActionFailed += (_, item) => failed.Add(item.Id);
+        var line = groups.SelectMany(g => g.Items).Single(i => i.Id == "AS_APU_STOP");
+
+        Assert.True(mgr.ToggleItem(line.GroupId, line.Id, out var spoken));
+        Assert.Null(spoken);
+        var deadline = DateTime.UtcNow + Hang;
+        while (line.ActionSettling && DateTime.UtcNow < deadline)
+            await Task.Delay(20);
+        Assert.False(line.ActionSettling);
+
+        // The action returned only once the APU read stopped, a spin-down after its one press.
+        var press = Assert.Single(ac.Io, e => e.Kind == FakeL1011IoKind.Write);
+        Assert.Equal("APU_STOP", press.Key);
+        Assert.True(ac.Get(ApuRpm) < L1011FoStateEvaluator.ApuStoppedRpm);
+        Assert.True(ac.NowMs - press.AtMs >= 47_500, $"held {ac.NowMs - press.AtMs} ms");
+        Assert.True(state.IsOn("FO_APU_OFF"));
+
+        mgr.EvaluateAutoDetection();
+        Assert.True(line.IsChecked);
+        Assert.False(line.AwaitingActionConfirmation);
+        Assert.Empty(failed);
     }
 
     // ------------------------------------------------------------------ the stabilizer trim reminder
@@ -930,14 +1032,14 @@ public class L1011FoAfterStartTests
     private static FakeL1011Aircraft AircraftFor(Step step)
     {
         var ac = new FakeL1011Aircraft();
-        foreach (var (key, target) in Actions(step).Where(a => !X.IsPseudoKey(a.Key) && a.Key != "APU_STOP"))
+        foreach (var (key, target) in Actions(step).Where(a => !X.IsPseudoKey(a.Key)))
             ac.Set(key, target is int t && t == 0 ? 1 : 0);
         if (step.EventName == X.ApuGenerator)
         {
             ac.Set(ApuGenField, 1);
             ac.Set(ApuGenBreaker, 1);
         }
-        if (step.EventName == "APU_STOP")
+        if (step.EventName == X.ApuStop)
         {
             ac.Set("TOGGLE_APU_POWER", 1);
             ac.Set(ApuRpm, 100);
@@ -1117,17 +1219,15 @@ public class L1011FoAfterStartTests
         Assert.Equal(44, EveryWrittenKey().Count());
     }
 
-    /// <summary>The one composite is the APU generator's breaker trip; the one lever the flap handle (the flaps step);
-    /// the one press the APU stop button.</summary>
+    /// <summary>The composites are the APU generator's breaker trip and the APU stop (its press and its spin-down
+    /// wait); the one lever is the flap handle (the flaps step); no step presses a button row itself.</summary>
     [Fact]
-    public void The_composite_the_lever_and_the_press()
+    public void The_composites_and_the_lever()
     {
-        Assert.Equal(new[] { X.ApuGenerator }, EveryWrittenKey().Select(w => w.Key).Where(X.IsPseudoKey).Distinct());
+        Assert.Equal(new[] { X.ApuGenerator, X.ApuStop }, EveryWrittenKey().Select(w => w.Key).Where(X.IsPseudoKey).Distinct());
         Assert.Equal(new[] { ("AS_FLAPS", L1011Levers.FlapHandleKey) },
             EveryWrittenKey().Where(w => L1011Levers.IsLever(w.Key)).Select(w => (w.Step, w.Key)));
-        Assert.Equal(new[] { ("AS_APU_STOP", "APU_STOP") },
-            EveryWrittenKey().Where(w => !X.IsPseudoKey(w.Key) && Rows.Value[w.Key].Action == L1011RowAction.Press)
-                .Select(w => (w.Step, w.Key)));
+        Assert.DoesNotContain(EveryWrittenKey(), w => !X.IsPseudoKey(w.Key) && Rows.Value[w.Key].Action == L1011RowAction.Press);
     }
 
     /// <summary>Every other key is a plain switch row, and its target one of the control's positions.</summary>
@@ -1145,7 +1245,7 @@ public class L1011FoAfterStartTests
     }
 
     private static IEnumerable<(string Step, string Key, int Target)> PlainSwitchWrites()
-        => EveryWrittenKey().Where(w => !X.IsPseudoKey(w.Key) && !L1011Levers.IsLever(w.Key) && w.Key != "APU_STOP")
+        => EveryWrittenKey().Where(w => !X.IsPseudoKey(w.Key) && !L1011Levers.IsLever(w.Key))
             .Select(w => (w.Step, w.Key, w.Target!.Value));
 
     /// <summary>The keys whose click replay carries a TOGGLE K: event, refused from an unknown position ([L1011-4]).</summary>

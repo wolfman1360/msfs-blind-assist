@@ -2061,6 +2061,197 @@ public class L1011FoActionExecutorTests
         }
     }
 
+    // ---- The APU stop --------------------------------------------------------------------------------------------------
+    // One press of the stop button, then a read-only wait for the APU to spin down: live, from 100 to 0 in about 60 s.
+    // A tick holds until the APU reads stopped, so its line, judged on the APU stopped, never reverts mid-spin-down.
+
+    private const string ApuStopPress = "APU_STOP";
+
+    private static Step ApuStopStep => new() { EventName = L1011FoActionExecutor.ApuStop, TargetValue = 1 };
+
+    /// <summary>The fake spins the APU down 2 % a second: from 100 it first reads below 5 once 47.5 s have passed.</summary>
+    private const int FakeSpinDownMs = 47_500;
+
+    [Fact]
+    public void The_apu_stop_is_a_stop_aware_pseudo_key_on_the_stop_button()
+    {
+        Assert.Equal("FO_APU_STOP", L1011FoActionExecutor.ApuStop);
+        Assert.True(L1011FoActionExecutor.IsPseudoKey(L1011FoActionExecutor.ApuStop));
+        Assert.Contains(L1011FoActionExecutor.ApuStop, L1011FoActionExecutor.StopAwareKeys);
+        Assert.DoesNotContain(L1011FoActionExecutor.ApuStop, L1011FoActionExecutor.PseudoKeys);
+        Assert.Equal(ApuStopPress, L1011FoActionExecutor.ApuStopPress);
+        Assert.Equal(90_000, L1011FoActionExecutor.ApuSpinDownWaitMs);
+        Assert.Equal(5, L1011FoStateEvaluator.ApuStoppedRpm);
+        Assert.False(_ac.CanReadBack(ApuStopPress));   // a press, no position
+    }
+
+    [Fact]
+    public async Task Apu_stop_presses_once_and_is_done_when_rpm_falls_below_five()
+    {
+        SeedApu(rpm: 100);
+        long pressedAt = -1;
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        io.AfterWrite(ApuStopPress, 1, () => pressedAt = _ac.NowMs);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ApuStop, 1).WaitAsync(Hang));
+
+        Assert.Equal(new[] { (ApuStopPress, 1.0) }, _ac.Writes);
+        Assert.Equal((FakeL1011IoKind.FreshRead, ApuRpm), IoKinds()[0]);   // the RPM first
+        Assert.Equal((FakeL1011IoKind.Write, ApuStopPress), IoKinds()[1]);  // one press
+        Assert.All(IoKinds().Skip(2), e => Assert.Equal((FakeL1011IoKind.FreshRead, ApuRpm), e));   // then the RPM only
+        Assert.True(_ac.Get(ApuRpm) < L1011FoStateEvaluator.ApuStoppedRpm);
+        Assert.InRange(_ac.NowMs - pressedAt, FakeSpinDownMs, FakeSpinDownMs + L1011FoActionExecutor.PollMs);   // it waited
+        Assert.Empty(_spoken);
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(4.9)]
+    public async Task Apu_stop_is_already_done_below_five_percent(double rpm)
+    {
+        SeedApu(rpm);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ApuStop, 1).WaitAsync(Hang));
+
+        Assert.Empty(_ac.Writes);
+        Assert.Equal(new[] { ApuRpm }, _ac.FreshReads);
+    }
+
+    [Fact]
+    public async Task Apu_stop_with_its_rpm_unread_is_not_done_and_presses_nothing()
+    {
+        _ac.Set(ApuMaster, 1);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.ApuStop, 1).WaitAsync(Hang));
+
+        Assert.Empty(_ac.Writes);
+        Assert.Contains(_logged, line => line.StartsWith(L1011FoActionExecutor.ApuStop, StringComparison.Ordinal) && line.Contains(ApuRpm));
+        Assert.Empty(_spoken);
+    }
+
+    [Fact]
+    public async Task Apu_stop_to_anything_but_one_presses_nothing()
+    {
+        SeedApu(rpm: 100);
+
+        Assert.False(await _exec.Set(L1011FoActionExecutor.ApuStop, 0).WaitAsync(Hang));
+
+        Assert.Empty(_ac.Io);
+        Assert.Contains(_logged, line => line.StartsWith(L1011FoActionExecutor.ApuStop, StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("never falls")]
+    [InlineData("stopped while waiting")]
+    public async Task Apu_stop_gives_up_after_ninety_seconds_or_on_stop(string how)
+    {
+        SeedApu(rpm: 100);
+        _ac.ApuSpinDownPerSecond = 0;   // the RPM stays at 100
+        long pressedAt = -1, stoppedAt = -1;
+        using var stop = new CancellationTokenSource();
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        io.AfterWrite(ApuStopPress, 1, () => pressedAt = _ac.NowMs);
+        if (how == "stopped while waiting")
+        {
+            _ac.OnClock = ac =>
+            {
+                if (pressedAt >= 0 && stoppedAt < 0 && ac.NowMs >= pressedAt + 3_000)
+                {
+                    stop.Cancel();
+                    stoppedAt = ac.NowMs;
+                }
+            };
+        }
+
+        Assert.False(await _exec.ExecuteStepAsync(ApuStopStep, stop.Token).WaitAsync(Hang));
+
+        Assert.Equal(new[] { (ApuStopPress, 1.0) }, _ac.Writes);   // one press, never a second
+        if (how == "never falls")
+        {
+            Assert.InRange(_ac.NowMs - pressedAt, L1011FoActionExecutor.ApuSpinDownWaitMs,
+                L1011FoActionExecutor.ApuSpinDownWaitMs + L1011FoActionExecutor.PollMs);
+            Assert.Contains(_logged, line => line.Contains("90000 ms"));
+        }
+        else
+        {
+            Assert.InRange(_ac.NowMs - stoppedAt, 0, L1011FoActionExecutor.PollMs);   // within one poll
+            Assert.Contains(_logged, line => line.StartsWith(L1011FoActionExecutor.ApuStop, StringComparison.Ordinal)
+                && line.EndsWith(": stopped", StringComparison.Ordinal));
+        }
+        Assert.Empty(_spoken);
+    }
+
+    [Fact]
+    public async Task A_stop_before_the_apu_stop_press_presses_nothing()
+    {
+        SeedApu(rpm: 100);
+        using var stop = new CancellationTokenSource();
+        var io = new ScriptedTransport(_ac);
+        _exec.SetTransport(io);
+        io.AfterRead(ApuRpm, 1, stop.Cancel);   // the Stop pressed while the stop decides
+
+        Assert.False(await _exec.ExecuteStepAsync(ApuStopStep, stop.Token).WaitAsync(Hang));
+
+        Assert.Empty(_ac.Writes);
+        Assert.Contains(_logged, line => line.StartsWith(L1011FoActionExecutor.ApuStop, StringComparison.Ordinal)
+            && line.EndsWith(": stopped", StringComparison.Ordinal));
+    }
+
+    /// <summary>The flow's stop waits, paused, while the APU spins down; a hand tick meanwhile finds the RPM still above
+    /// 5 and must not press again: it waits for the same spin-down.</summary>
+    [Fact]
+    public async Task An_overlapping_apu_stop_does_not_press_twice()
+    {
+        SeedApu(rpm: 100);
+        var resume = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _exec.AttachFlowPause(ct => resume.Task.WaitAsync(ct));
+        using var stop = new CancellationTokenSource();
+
+        var flowStop = _exec.ExecuteStepAsync(ApuStopStep, stop.Token);   // pressed, its wait paused
+        Assert.False(flowStop.IsCompleted);
+        long pressedAt = _ac.NowMs;
+        Assert.Single(_ac.Writes);
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ApuStop, 1).WaitAsync(Hang));
+        Assert.Contains(_logged, line => line.StartsWith(L1011FoActionExecutor.ApuStop, StringComparison.Ordinal)
+            && line.Contains("not pressed again"));
+        Assert.InRange(_ac.NowMs - pressedAt, FakeSpinDownMs, FakeSpinDownMs + L1011FoActionExecutor.PollMs);
+
+        resume.SetResult();
+        Assert.True(await flowStop.WaitAsync(Hang));
+        Assert.Equal(new[] { (ApuStopPress, 1.0) }, _ac.Writes);   // exactly one press
+    }
+
+    /// <summary>Past the spin-down window a press that did not stop the APU may be retried; and an APU started again
+    /// since the last stop press is stopped with a new press, not taken for the old one still spinning down.</summary>
+    [Theory]
+    [InlineData("after the spin-down window")]
+    [InlineData("after a restart")]
+    public async Task An_apu_stop_may_press_again_after_the_window_or_a_restart(string when)
+    {
+        SeedApu(rpm: 100);
+        if (when == "after the spin-down window")
+        {
+            _ac.ApuSpinDownPerSecond = 0;
+            Assert.False(await _exec.Set(L1011FoActionExecutor.ApuStop, 1).WaitAsync(Hang));   // 90 s, never fell
+            _ac.ApuSpinDownPerSecond = 2;
+        }
+        else
+        {
+            Assert.True(await _exec.Set(L1011FoActionExecutor.ApuStop, 1).WaitAsync(Hang));    // spinning down
+            _ac.Set(ApuRpm, 0);                                                                 // stopped
+            Assert.True(await _exec.Set(L1011FoActionExecutor.ApuStart, 1).WaitAsync(Hang));   // started again at once
+            Assert.Equal(100, _ac.Get(ApuRpm));
+        }
+
+        Assert.True(await _exec.Set(L1011FoActionExecutor.ApuStop, 1).WaitAsync(Hang));
+
+        Assert.Equal(2, _ac.Writes.Count(w => w == (ApuStopPress, 1.0)));
+        Assert.DoesNotContain(_logged, line => line.Contains("not pressed again"));
+    }
+
     // ---- The APU generator --------------------------------------------------------------------------------------------
 
     private void SeedApuGenerator(double rpm, double field, double breaker)

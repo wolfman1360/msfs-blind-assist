@@ -53,8 +53,10 @@ using CheckFn = System.Func<L1011FoActionExecutor, L1011FoStateEvaluator, System
 /// its conditional flaps prompt stays flow-only) and two read-backs: the aircraft's after start page, ending with the
 /// engine start page's APU shutdown lines, which After Start delivers, and its taxi page. The flaps line writes the
 /// take-off index (the tablet's, else SimBrief's) or nothing without one, and is left alone off the ground; the
-/// transfers line is left alone unless tanks 1A and 3A both hold fuel. The ATMs-on line reads no state: the flow puts
-/// them to auto right after. The stabilizer trim line shows the tablet's exported trim as its live value.
+/// transfers line is left alone unless tanks 1A and 3A both hold fuel. The four APU shutdown lines are left alone until
+/// all three engine generators read on line, as the flow's APU steps wait for them, and the stop line's tick holds until
+/// the APU reads stopped. The ATMs-on line reads no state: the flow puts them to auto right after. The stabilizer trim
+/// line shows the tablet's exported trim as its live value.
 /// </summary>
 public static class L1011FoChecklistDefinitions
 {
@@ -661,9 +663,6 @@ public static class L1011FoChecklistDefinitions
     private const string IgnitionSelector = "ROTARY_ENG_START_SEL";
     private const string TaxiLight = "TOGGLE_TAXI_LIGHT";
 
-    /// <summary>The APU stop button's row: a press, no position.</summary>
-    internal const string ApuStopPress = "APU_STOP";
-
     /// <summary>The ATM switches' positions: 1 AUTO, 2 ON (0 is OFF).</summary>
     private const int AtmAuto = 1, AtmOn = 2;
 
@@ -675,6 +674,13 @@ public static class L1011FoChecklistDefinitions
 
     /// <summary>The transfers line's reason, and its flow step's.</summary>
     internal const string TransfersStayText = "1A and 3A transfers left off: tanks 1A and 3A are empty or unread.";
+
+    /// <summary>The APU shutdown lines' reason: the APU keeps the buses until the engine generators carry them.</summary>
+    internal const string ApuStaysTickText = "APU left running: the engine generators are not all on line.";
+
+    /// <summary>Not all six engine generator relays read closed (one open, or any unread): the APU shutdown ticks are
+    /// left alone, as the flow's APU steps wait for the same field.</summary>
+    internal static bool EngineGeneratorsNotOnLine(L1011FoStateEvaluator s) => !s.IsOn("FO_ENGINE_GENERATORS_ON");
 
     /// <summary>Tanks 1A and 3A do not both read fuel (either empty or unread): the transfers stay off. The transfers
     /// step and its tick share it.</summary>
@@ -730,10 +736,18 @@ public static class L1011FoChecklistDefinitions
                 Reminder("AS_CPT_STAB_TRIM", G, "Set the stabilizer trim for take-off", StabTrimUnits),
                 Reminder("AS_CPT_ANTI_ICE", G, "Engine anti-ice as required"),
                 Reminder("AS_CPT_CONTROLS", G, "Check the speed brake and the flight controls"),
-                Auto("AS_APU_GEN_TRIP", G, "APU generator breaker: trip", "FO_APU_GEN_OFF_LINE", On, Set(X.ApuGenerator, 0)),
-                Auto("AS_APU_BLEED_OFF", G, "APU bleed: off", ApuBleed, v => Is(v, 0), Set(ApuBleed, 0)),
-                Auto("AS_APU_STOP", G, "APU: stop", "FO_APU_OFF", On, Set(ApuStopPress, 1)),
-                Auto("AS_APU_MASTER_OFF", G, "APU master: off", ApuMaster, v => Is(v, 0), Set(ApuMaster, 0)),
+                // The APU off only once the engine generators carry the buses, as the flow waits for them: tripped
+                // or stopped with one off line, the aircraft would be left on the battery. Unread refuses too.
+                LeaveAlone(Auto("AS_APU_GEN_TRIP", G, "APU generator breaker: trip", "FO_APU_GEN_OFF_LINE", On,
+                        Set(X.ApuGenerator, 0)),
+                    EngineGeneratorsNotOnLine, ApuStaysTickText),
+                LeaveAlone(Auto("AS_APU_BLEED_OFF", G, "APU bleed: off", ApuBleed, v => Is(v, 0), Set(ApuBleed, 0)),
+                    EngineGeneratorsNotOnLine, ApuStaysTickText),
+                // The composite holds until the APU reads stopped, a slow condition (FO-11): about a minute.
+                LeaveAlone(Auto("AS_APU_STOP", G, "APU: stop", "FO_APU_OFF", On, Set(X.ApuStop, 1)),
+                    EngineGeneratorsNotOnLine, ApuStaysTickText),
+                LeaveAlone(Auto("AS_APU_MASTER_OFF", G, "APU master: off", ApuMaster, v => Is(v, 0), Set(ApuMaster, 0)),
+                    EngineGeneratorsNotOnLine, ApuStaysTickText),
             }
         };
     }

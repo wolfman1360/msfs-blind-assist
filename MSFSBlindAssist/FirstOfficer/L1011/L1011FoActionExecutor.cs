@@ -121,6 +121,10 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     /// <summary>The APU generator on line (1: field, then breaker) or off line (0: the breaker tripped).</summary>
     public const string ApuGenerator = "FO_APU_GENERATOR";
 
+    /// <summary>The APU stopped (target 1): one press of the stop button, then done once the APU reads stopped; reads
+    /// the flow's Stop. The After Start and Shutdown flows' stop, and their ticks.</summary>
+    public const string ApuStop = "FO_APU_STOP";
+
     /// <summary>The engine and APU fire test (target ignored): one spoken verdict.</summary>
     public const string FireTest = "FO_FIRE_TEST";
 
@@ -185,6 +189,7 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
         new(StringComparer.Ordinal)
         {
             [ApuStart] = (exec, _, stop) => exec.ApuStartAsync(stop),
+            [ApuStop] = (exec, target, stop) => exec.ApuStopAsync(target, stop),
             [GroundStart(1)] = (exec, target, stop) => exec.GroundStartAsync(1, target, stop),
             [GroundStart(2)] = (exec, target, stop) => exec.GroundStartAsync(2, target, stop),
             [GroundStart(3)] = (exec, target, stop) => exec.GroundStartAsync(3, target, stop),
@@ -289,6 +294,13 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     /// the inlet doors opened, then rose about 3 %/s.</summary>
     internal const int ApuSpinUpWaitMs = 20_000;
 
+    /// <summary>The APU stop button's row: a press, holding no position (<c>L:APU_STOP</c> with <c>K:APU_OFF_SWITCH</c>).</summary>
+    internal const string ApuStopPress = "APU_STOP";
+
+    /// <summary>How long the APU may take to read stopped after its stop press: live, it ran down from 100 to 0 in
+    /// about 60 s.</summary>
+    internal const int ApuSpinDownWaitMs = 90_000;
+
     // ---- the audible tests ----
 
     internal const int FireTestMuteMs = 45_000;
@@ -356,6 +368,11 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     /// <summary>The last APU start press still spinning up: the transport it went out on and that transport's
     /// clock when it was sent. Read and written only under the gate (<see cref="ApuStartAsync"/>'s phase).</summary>
     private (IL1011FoTransport Io, long AtMs)? _apuStartPressed;
+
+    /// <summary>The last APU stop press still spinning down: the transport it went out on and that transport's clock
+    /// when it was sent. Read and written only under the gate (<see cref="ApuStopAsync"/>'s phase, and a start press,
+    /// which ends it).</summary>
+    private (IL1011FoTransport Io, long AtMs)? _apuStopPressed;
 
     /// <summary>
     /// The ground starts a flow had this executor turn on, by engine, with that run's Stop (the MD-11's
@@ -1190,6 +1207,7 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
             if (!await WriteAsync(io, ApuStartPress, 1).ConfigureAwait(false))
                 return false;
             _apuStartPressed = (io, io.NowMs);
+            _apuStopPressed = null;   // started again: an earlier stop press is over
             pressedOn = io;
             return true;
         }).ConfigureAwait(false);
@@ -1201,6 +1219,75 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
         return await WaitUntilAsync(waitOn,
             async () => await ReadAsync(waitOn, ApuRpm).ConfigureAwait(false) is double v && v >= L1011FoStateEvaluator.ApuStartingRpm,
             waitMs, stop, $"{what}, {ApuRpm} rising").ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The APU stopped, target 1 (any other reads and writes nothing, logged); a <see cref="StopAware"/> composite,
+    /// outside the gate, the APU start's shape. One write phase under the gate (<see cref="UnderGateAsync"/>, never
+    /// begun after the flow's Stop): the RPM read fresh, unread, not done and nothing pressed; below
+    /// <see cref="L1011FoStateEvaluator.ApuStoppedRpm"/>, done with no press. At or above it within
+    /// <see cref="ApuSpinDownWaitMs"/> of a stop press this executor sent on the same transport
+    /// (<see cref="_apuStopPressed"/>), not pressed again (logged): a call overlapping that spin-down (a hand tick
+    /// while the flow's step waits) waits for that press instead, ending when its 90 s end. Past them, on another
+    /// transport, or after a start press since, a new press is a retry. The Stop checked once more, then one press of
+    /// the stop button, the panel row's press (<see cref="ApuStopPress"/>), recorded on the transport's clock. Then,
+    /// the gate released, done once the RPM reads below <see cref="L1011FoStateEvaluator.ApuStoppedRpm"/> within
+    /// <see cref="ApuSpinDownWaitMs"/> of the press (<see cref="WaitUntilAsync"/>, read-only: a flow's Pause holds it,
+    /// its Stop ends it). Holding until the APU reads stopped is what keeps a hand tick's line, judged on the APU
+    /// stopped, from reverting in the minute it takes ([FO-11]). Never presses twice within a spin-down; speaks
+    /// nothing.
+    /// </summary>
+    private async Task<bool> ApuStopAsync(int target, CancellationToken stop)
+    {
+        const string what = ApuStop;
+        if (target != 1)
+        {
+            Note($"{what}: not done, the APU stop is 1, not {target.ToString(CultureInfo.InvariantCulture)}");
+            return false;
+        }
+        IL1011FoTransport? pressedOn = null;
+        int waitMs = ApuSpinDownWaitMs;
+        bool alreadyStopped = false;
+        bool pressed = await UnderGateAsync(what, stop, async io =>
+        {
+            var rpm = await ReadAsync(io, ApuRpm).ConfigureAwait(false);
+            if (rpm is not double r)
+            {
+                Note($"{what}: not done, {ApuRpm} unread, {ApuStopPress} not pressed");
+                return false;
+            }
+            if (r < L1011FoStateEvaluator.ApuStoppedRpm)
+            {
+                _apuStopPressed = null;   // stopped: that press did its work
+                alreadyStopped = true;
+                return true;
+            }
+            if (_apuStopPressed is { } earlier && ReferenceEquals(earlier.Io, io)
+                && io.NowMs - earlier.AtMs < ApuSpinDownWaitMs)
+            {
+                long agoMs = io.NowMs - earlier.AtMs;
+                Note($"{what}: {ApuStopPress} pressed {agoMs.ToString(CultureInfo.InvariantCulture)} ms ago and the APU is still spinning down: not pressed again");
+                pressedOn = io;
+                waitMs = (int)(ApuSpinDownWaitMs - agoMs);   // ends with that press's wait
+                return true;
+            }
+            if (stop.IsCancellationRequested)   // a Stop while the read above decided: no press
+                return Stopped(what);
+            if (!await WriteAsync(io, ApuStopPress, 1).ConfigureAwait(false))
+                return false;
+            _apuStopPressed = (io, io.NowMs);
+            _apuStartPressed = null;   // stopping: an earlier start press is over
+            pressedOn = io;
+            return true;
+        }).ConfigureAwait(false);
+        if (!pressed) return false;
+        if (alreadyStopped) return true;
+
+        // The gate is released: the spin-down wait is read-only and holds nothing.
+        var waitOn = pressedOn!;
+        return await WaitUntilAsync(waitOn,
+            async () => await ReadAsync(waitOn, ApuRpm).ConfigureAwait(false) is double v && v < L1011FoStateEvaluator.ApuStoppedRpm,
+            waitMs, stop, $"{what}, {ApuRpm} falling").ConfigureAwait(false);
     }
 
     /// <summary>

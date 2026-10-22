@@ -60,9 +60,9 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// tablet's export, else SimBrief's; with neither nothing is sent or spoken and a Captain step asks ([FO-20]); the flaps
 /// move on the ground only. The stabilizer trim is the Captain's, never automated: its reminder names the tablet's
 /// exported trim. The APU is shut down last, and only once all three engine generators read on line: a Skip wait that,
-/// timed out, skips every APU step with one sentence saying the APU stays running. The two-minute cool-down follows
-/// the stop only when this run sent it. The APU bleed carries a toggle: its single-switch step reads its own position
-/// first.
+/// timed out, skips every APU step with one sentence saying the APU stays running. The stop holds until the APU reads
+/// stopped, and the two-minute cool-down follows it only when this run sent it. The APU bleed carries a toggle: its
+/// single-switch step reads its own position first.
 /// </summary>
 public static class L1011FoFlowDefinitions
 {
@@ -764,8 +764,9 @@ public static class L1011FoFlowDefinitions
             Also(Done(Skip(Requires(SW("AS_APU_BLEED_OFF", "APU bleed: off", "SWITCH_APU_BLEED", 0),
                     "AS_GENS_ON_LINE", ApuStaysText),
                 s => s.IsPosition("SWITCH_APU_BLEED", 0)), "AS_APU_BLEED_OFF"), "ASC_APU_BLEED"),
-            // One press; the APU spools down in about a minute. Already set once its speed reads below 5 %.
-            Also(Done(Skip(Requires(SW("AS_APU_STOP", "APU: stop", L1011FoChecklistDefinitions.ApuStopPress, 1),
+            // One press, then the composite holds until the APU reads stopped (about a minute). Already set once its
+            // speed reads below 5 %.
+            Also(Done(Skip(Requires(SW("AS_APU_STOP", "APU: stop", X.ApuStop, 1),
                     "AS_GENS_ON_LINE", ApuStaysText),
                 s => s.IsOn("FO_APU_OFF")), "AS_APU_STOP"), "ASC_APU_STOP"),
             // Only after a stop this run sent: an APU found stopped costs no wait.
