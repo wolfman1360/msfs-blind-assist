@@ -66,6 +66,11 @@ using CheckFn = System.Func<L1011FoActionExecutor, L1011FoStateEvaluator, System
 /// climb's writes) and two read-backs, the aircraft's take-off page (the gear confirmed up by the lever and every leg,
 /// the flaps up) and its climb page. The page's fuel balance, 10,000 ft and transition lines are the Captain's and the
 /// phase monitor's and are left out.
+///
+/// Descent has one action group (<c>DESCENT</c>: the seat belt signs, the Captain's landing data, landing autobrake and
+/// QNH, and the cabin altitude for the destination; its conditional cabin altitude prompt stays flow-only) and one
+/// read-back, the aircraft's descent page. The cabin altitude line writes the plan's destination elevation, clamped to
+/// the selector's end stops, or nothing without a plan, as its step does.
 /// </summary>
 public static class L1011FoChecklistDefinitions
 {
@@ -78,6 +83,7 @@ public static class L1011FoChecklistDefinitions
         AfterStart(), AfterStartCL(), TaxiCL(),
         BeforeTakeoff(), BeforeTakeoffCL(),
         AfterTakeoff(), AfterTakeoffCL(), ClimbCL(),
+        Descent(), DescentCL(),
     };
 
     private const string ContIgnition = "SWITCH_CONT_IGNITION";
@@ -941,6 +947,48 @@ public static class L1011FoChecklistDefinitions
                 Read("CLC_GROUND_LIGHTS", G, "Nose wheel landing, taxi and runway turnoff lights: off", "FO_GROUND_LIGHTS_OFF", On),
                 Read("CLC_CONT_IGN", G, "Continuous ignition: off", ContIgnition, v => Is(v, 0)),
                 Read("CLC_PACKS", G, "Packs: on", "FO_PACKS_ON", On),
+            }
+        };
+    }
+
+    // ================================================================== Descent
+
+    /// <summary>The Descent flow's writes and its three Captain reminders, in its order and with its labels: the seat
+    /// belt line reads its key on, the cabin altitude line the selector at the destination.</summary>
+    private static Group Descent()
+    {
+        const string G = "DESCENT";
+        return new Group
+        {
+            Id = G, Name = "Descent",
+            Items = new()
+            {
+                Auto("DS_SEAT_BELTS", G, "Seat belt signs: on", SeatBelts, v => Is(v, 1), Set(SeatBelts, 1)),
+                Reminder("DS_CPT_LANDING_DATA", G, "Prepare the landing data on the tablet"),
+                // The landing autobrake is the Captain's (FO-14): the panel named, no setting.
+                Reminder("DS_CPT_AUTOBRAKE", G, "Set the landing autobrake on the overhead Antiskid and Autobrake panel"),
+                Reminder("DS_CPT_QNH", G, "Set the altimeters to QNH at the transition level: Ctrl+B"),
+                // No plan, no value: the tick writes nothing and the line stays as the selector reads (FO-20).
+                Auto("DS_CABIN_ALT", G, "Cabin altitude selector: destination elevation", "FO_CABIN_ALT_AT_DEST", On,
+                    Provided(X.CabinAltitudeSelect, s => s.DestinationCabinAltitudeFt())),
+            }
+        };
+    }
+
+    /// <summary>The aircraft's descent page in its own words. The page's baro set line is Before Landing's, and its
+    /// 10,000 ft landing lights the phase monitor's.</summary>
+    private static Group DescentCL()
+    {
+        const string G = "DESCENT_CL";
+        return new Group
+        {
+            Id = G, Name = "Descent",
+            Items = new()
+            {
+                Reminder("DSC_LANDING_DATA", G, "Landing data: prepared"),
+                Read("DSC_SEAT_BELTS", G, "30 mins before landing: seatbelt signs on", SeatBelts, v => Is(v, 1)),
+                Reminder("DSC_QNH", G, "At transition level, altimeters: set QNH"),
+                Read("DSC_CABIN_ALT", G, "At transition level, flt cab alt sel: set destination elevation", "FO_CABIN_ALT_AT_DEST", On),
             }
         };
     }

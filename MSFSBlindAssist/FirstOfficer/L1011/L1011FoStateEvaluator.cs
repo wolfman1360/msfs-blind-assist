@@ -192,6 +192,18 @@ public sealed class L1011FoStateEvaluator : LVarStateEvaluator, IFoEngine3N2Sink
         => cruiseFt is int cruise ? L1011Pressurization.CabinAltitudeAtMaxDifferentialFt(cruise) : null;
 
     /// <summary>
+    /// The cabin altitude for the destination: SimBrief's destination elevation, clamped to what the selector can
+    /// command (-250 to 8,000 ft, its end stops); null without a plan. The Descent step writes it and
+    /// <c>FO_CABIN_ALT_AT_DEST</c> compares against it, so a destination beyond an end stop reads set at that stop.
+    /// </summary>
+    public int? DestinationCabinAltitudeFt() => DestinationCabinAltitudeFor(PlannedDestElevFt);
+
+    private static int? DestinationCabinAltitudeFor(int? destElevFt)
+        => destElevFt is int elevation
+            ? Math.Clamp(elevation, L1011Pressurization.MinCabinAltitudeFt, L1011Pressurization.MaxCabinAltitudeFt)
+            : null;
+
+    /// <summary>
     /// The cabin baro's target in hundredths of a hectopascal: the captain's altimeter, read and off
     /// standard. Null while it is unread or within <see cref="StandardMillibarsTolerance"/> of 1013.25,
     /// where the captain has set no local pressure to copy (D2).
@@ -561,7 +573,8 @@ public sealed class L1011FoStateEvaluator : LVarStateEvaluator, IFoEngine3N2Sink
 
         // ---- pressurization ----
         ["FO_CABIN_ALT_AT_CRUISE"] = CabinAltitudeAt(plan => CruiseCabinAltitudeFor(plan.CruiseFt)),
-        ["FO_CABIN_ALT_AT_DEST"] = CabinAltitudeAt(plan => plan.DestElevFt),
+        // Against the destination clamped to the selector's end stops, the value the Descent step writes.
+        ["FO_CABIN_ALT_AT_DEST"] = CabinAltitudeAt(plan => DestinationCabinAltitudeFor(plan.DestElevFt)),
         // The cabin baro at the captain's altimeter; a standard altimeter is no target, so NaN (D2).
         ["FO_CABIN_BARO_SET"] = new(new[] { CabinBaroKey, CaptainAltimeterKey }, (r, _) =>
         {

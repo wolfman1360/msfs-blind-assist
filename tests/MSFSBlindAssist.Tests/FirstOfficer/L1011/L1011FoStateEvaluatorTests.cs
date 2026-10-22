@@ -977,6 +977,11 @@ public class L1011FoStateEvaluatorTests
         Assert.Equal(0, Dest(1500 - 151));
         Assert.Equal(1, Dest(-11, destElev: -11));
         Assert.True(double.IsNaN(Dest(1500, destElev: null)), "no plan must read unknown");
+        // The selector stops at -250 and 8,000 ft: a destination beyond either is compared at that stop.
+        Assert.Equal(1, Dest(8000, destElev: 9000));
+        Assert.Equal(0, Dest(9000, destElev: 9000));
+        Assert.Equal(1, Dest(-250, destElev: -500));
+        Assert.Equal(0, Dest(-500, destElev: -500));
 
         var unread = Evaluator();
         unread.SetPlannedPressurizationAltitudes(null, 1500);
@@ -1001,6 +1006,30 @@ public class L1011FoStateEvaluatorTests
 
         Assert.Equal(new[] { CabinAltSelected }, InputsOf("FO_CABIN_ALT_AT_CRUISE"));
         Assert.Equal(new[] { CabinAltSelected }, InputsOf("FO_CABIN_ALT_AT_DEST"));
+    }
+
+    /// <summary>The destination cabin altitude is the plan's destination elevation, clamped to the selector's end stops
+    /// (-250 to 8,000 ft), and null without a plan.</summary>
+    [Fact]
+    public void Destination_cabin_altitude_is_the_plan_clamped_to_the_selector_or_null()
+    {
+        var e = new L1011FoStateEvaluator();
+        Assert.Null(e.DestinationCabinAltitudeFt());
+
+        e.SetPlannedPressurizationAltitudes(null, 1234);
+        Assert.Equal(1234, e.DestinationCabinAltitudeFt());
+        e.SetPlannedPressurizationAltitudes(35000, -11);
+        Assert.Equal(-11, e.DestinationCabinAltitudeFt());
+        e.SetPlannedPressurizationAltitudes(35000, 8000);
+        Assert.Equal(8000, e.DestinationCabinAltitudeFt());
+        e.SetPlannedPressurizationAltitudes(35000, 9000);
+        Assert.Equal(8000, e.DestinationCabinAltitudeFt());
+        e.SetPlannedPressurizationAltitudes(35000, -400);
+        Assert.Equal(-250, e.DestinationCabinAltitudeFt());
+        Assert.Equal(-400, e.PlannedDestElevFt);   // the plan itself is kept as given
+
+        e.SetPlannedPressurizationAltitudes(35000, null);
+        Assert.Null(e.DestinationCabinAltitudeFt());
     }
 
     [Fact]

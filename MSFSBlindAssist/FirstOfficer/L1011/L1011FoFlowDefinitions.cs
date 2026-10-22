@@ -73,6 +73,11 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// the step not done), reminds the Captain of the flap schedule, sets the climb (autobrake, nose, taxi and turnoff
 /// lights, continuous ignition off, packs on), waits up to five minutes, read only, for the Captain's flaps up, and
 /// confirms the gear up last ([FO-13]): a read-only 20 s wait on the lever and the legs that never writes.
+///
+/// Descent puts the seat belt signs on, reminds the Captain of the landing data, the landing autobrake (the panel named,
+/// no setting: [FO-14]) and the QNH, and turns the cabin altitude selector to the plan's destination elevation, clamped
+/// to the selector's end stops; with no plan nothing is sent or spoken and a Captain step asks instead ([FO-20]). The
+/// seat belt switch carries a toggle: its single-switch step reads its own position first.
 /// </summary>
 public static class L1011FoFlowDefinitions
 {
@@ -85,6 +90,7 @@ public static class L1011FoFlowDefinitions
         BuildAfterStart(),
         BuildBeforeTakeoff(),
         BuildAfterTakeoff(),
+        BuildDescent(),
     };
 
     // ------------------------------------------------------------------ Power Up (the manual's cockpit entry and power-up)
@@ -867,6 +873,37 @@ public static class L1011FoFlowDefinitions
             Check("AT_CHK_FLAPS_UP", "Flaps: up", "FO_FLAPS_UP", On, FlapsUpCheckSeconds, "ATC_FLAPS"),
             // LAST (FO-13): the gear confirmed up, the lever and every leg, read only. 20 s, then skipped aloud.
             Check("AT_GEAR_UP_CHECK", "Landing gear: up", L1011GearConfirmation.UpField, On, GearCheckSeconds, "ATC_GEAR"),
+        }
+    };
+
+    // ------------------------------------------------------------------ Descent
+
+    private static Flow BuildDescent() => new()
+    {
+        Id = "DESCENT", Name = "Descent",
+        Description = "Seat belt signs on; the Captain's landing data, landing autobrake and QNH; the cabin altitude "
+            + "selector to the destination elevation.",
+        RelatedChecklistGroupIds = new[] { "DESCENT", "DESCENT_CL" },
+        Steps = new()
+        {
+            // A toggle-carrying switch: written only over its own position read (L1011-4).
+            Also(Done(Skip(SW("DS_SEAT_BELTS", "Seat belt signs: on", "SWITCH_SEATBELT_LIGHT", 1),
+                s => s.IsPosition("SWITCH_SEATBELT_LIGHT", 1)), "DS_SEAT_BELTS"), "DSC_SEAT_BELTS"),
+            Done(Captain("DS_CPT_LANDING_DATA", "Prepare the landing data on the tablet"), "DS_CPT_LANDING_DATA"),
+            // The landing autobrake is the Captain's (FO-14): the panel named, no setting.
+            Done(Captain("DS_CPT_AUTOBRAKE", "Set the landing autobrake on the overhead Antiskid and Autobrake panel"),
+                "DS_CPT_AUTOBRAKE"),
+            Done(Captain("DS_CPT_QNH", "Set the altimeters to QNH at the transition level: Ctrl+B"), "DS_CPT_QNH"),
+            // The plan's destination elevation, clamped to the selector's end stops. No plan: nothing is sent or spoken
+            // (FO-20), and the Captain step below asks for it.
+            Also(Done(Skip(Provider("DS_CABIN_ALT", "Cabin altitude selector: destination elevation", X.CabinAltitudeSelect,
+                    s => s.DestinationCabinAltitudeFt()),
+                s => s.IsOn("FO_CABIN_ALT_AT_DEST")), "DS_CABIN_ALT"), "DSC_CABIN_ALT"),
+            // Keyed on the selector, never on the plan: without a plan, or with a write that did not take, the selector
+            // does not read the destination and the Captain is asked.
+            Skip(Captain("DS_CABIN_ALT_CPT", "Cabin altitude selector",
+                    "Set the cabin altitude selector to the destination elevation on the engineer's pressurization panel."),
+                s => s.IsOn("FO_CABIN_ALT_AT_DEST")),
         }
     };
 

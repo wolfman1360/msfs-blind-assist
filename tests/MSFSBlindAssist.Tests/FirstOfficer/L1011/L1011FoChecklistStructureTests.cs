@@ -48,6 +48,7 @@ public class L1011FoChecklistStructureTests
             "AFTER_START", "AFTER_START_CL", "TAXI_CL",
             "BEFORE_TAKEOFF", "BEFORE_TAKEOFF_CL",
             "AFTER_TAKEOFF", "AFTER_TAKEOFF_CL", "CLIMB_CL",
+            "DESCENT", "DESCENT_CL",
         }, Groups.Select(g => g.Id));
 
     [Fact]
@@ -57,14 +58,23 @@ public class L1011FoChecklistStructureTests
         Assert.Equal("Cockpit Safety Inspection", Group("POWER_UP_CL").Name);
     }
 
-    /// <summary>[FO-22]: an in-flight start marks the departure lists; every group sits in exactly one set.</summary>
+    /// <summary>[FO-22]: an in-flight start marks the departure lists, through the climb; Descent onwards is the
+    /// arrival. Every group sits in exactly one set.</summary>
     [Fact]
-    public void EveryGroup_IsDeparture_AndNeverArrival()
+    public void EveryGroup_IsDepartureThroughClimb_AndArrivalFromDescent()
     {
-        foreach (var g in Groups)
+        var ids = Groups.Select(g => g.Id).ToList();
+        int descent = ids.IndexOf("DESCENT");
+        Assert.True(descent > 0, "no Descent group");
+        foreach (var id in ids.Take(descent))
         {
-            Assert.True(FoDepartureGroups.Departure.Contains(g.Id), $"{g.Id} is not a departure group");
-            Assert.False(FoDepartureGroups.Arrival.Contains(g.Id), $"{g.Id} is an arrival group too");
+            Assert.True(FoDepartureGroups.Departure.Contains(id), $"{id} is not a departure group");
+            Assert.False(FoDepartureGroups.Arrival.Contains(id), $"{id} is an arrival group too");
+        }
+        foreach (var id in ids.Skip(descent))
+        {
+            Assert.True(FoDepartureGroups.Arrival.Contains(id), $"{id} is not an arrival group");
+            Assert.False(FoDepartureGroups.Departure.Contains(id), $"{id} is a departure group too");
         }
     }
 
