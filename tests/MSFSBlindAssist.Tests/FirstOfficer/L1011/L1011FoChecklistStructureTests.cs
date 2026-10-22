@@ -50,6 +50,7 @@ public class L1011FoChecklistStructureTests
             "AFTER_TAKEOFF", "AFTER_TAKEOFF_CL", "CLIMB_CL",
             "DESCENT", "DESCENT_CL",
             "BEFORE_LANDING", "BEFORE_LANDING_CL",
+            "AFTER_LANDING", "AFTER_LANDING_CL",
         }, Groups.Select(g => g.Id));
 
     [Fact]

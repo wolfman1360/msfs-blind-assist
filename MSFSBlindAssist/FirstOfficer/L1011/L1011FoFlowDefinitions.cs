@@ -85,6 +85,14 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// moved on its own), the fuel set for landing, the nose, taxi and turnoff lights and continuous ignition on, the gear
 /// lever down, the Captain's flap schedule, and the gear confirmed down last ([FO-13]). The landing autobrake stays the
 /// Captain's ([FO-14]).
+///
+/// After Landing is the manual's after landing, cleared off the runway: anti-skid and autobrake off, the landing and
+/// strobe lights, continuous ignition and the air data, windshield and side window heat off, the stabilizer trim zeroed
+/// (verified on its readout), the speed brake lever forward, the flaps up (on the ground only, left alone otherwise, as
+/// After Start's take-off flaps are), the weather radar and the 1A and 3A transfers off, then the APU master on and the
+/// APU started: one press, done once it turns; Parking waits for it to run. It cuts no fuel, pump or engine: the manual's
+/// tank pumps and crossfeeds wait for Parking, once the engines are cut. The anti-skid carries a toggle: its
+/// single-switch step reads its own position first.
 /// </summary>
 public static class L1011FoFlowDefinitions
 {
@@ -99,6 +107,7 @@ public static class L1011FoFlowDefinitions
         BuildAfterTakeoff(),
         BuildDescent(),
         BuildBeforeLanding(),
+        BuildAfterLanding(),
     };
 
     // ------------------------------------------------------------------ Power Up (the manual's cockpit entry and power-up)
@@ -963,6 +972,66 @@ public static class L1011FoFlowDefinitions
                 "BL_CPT_FLAPS"),
             // LAST (FO-13): the gear confirmed down, the lever and every leg, read only. 20 s, then skipped aloud.
             Check("BL_GEAR_DOWN_CHECK", "Landing gear: down", L1011GearConfirmation.DownField, On, GearCheckSeconds, "BLC_GEAR"),
+        }
+    };
+
+    // ------------------------------------------------------------------ After Landing (the manual's after landing)
+
+    private static readonly string[] LandingLightKeys = { "TOGGLE_LANDING_LEFT", "TOGGLE_LANDING_RIGHT" };
+
+    private static readonly string[] AirDataHeatKeys =
+        { "SWITCH_CPT_PITOT_HEAT", "SWITCH_FO_PITOT_HEAT", "SWITCH_PROBE_HEAT", "SWITCH_ALPHA_HEAT" };
+
+    private static readonly string[] WindshieldKeys = { "SWITCH_ANTI_ICE_CPT", "SWITCH_ANTI_ICE_FO" };
+
+    private static readonly string[] SideWindowKeys =
+        { "SWITCH_ANTI_ICE_L_FWD", "SWITCH_ANTI_ICE_L_REAR", "SWITCH_ANTI_ICE_R_FWD", "SWITCH_ANTI_ICE_R_REAR" };
+
+    private static Flow BuildAfterLanding() => new()
+    {
+        Id = "AFTER_LANDING", Name = "After Landing",
+        Description = "Anti-skid and autobrake off; landing and strobe lights, continuous ignition and probe and window heat "
+            + "off; stabilizer trim zero, speed brake forward, flaps up; weather radar and transfers off; then the APU master "
+            + "on and the APU started.",
+        RelatedChecklistGroupIds = new[] { "AFTER_LANDING", "AFTER_LANDING_CL" },
+        Steps = new()
+        {
+            // A toggle-carrying switch: written only over its own position read (L1011-4).
+            Also(Done(Skip(SW("AL_ANTISKID", "Anti-skid: off", "SWITCH_ANTISKID_ON", 0),
+                s => s.IsPosition("SWITCH_ANTISKID_ON", 0)), "AL_ANTISKID"), "ALC_ANTISKID"),
+            Also(Done(Skip(SW("AL_AUTOBRAKE", "Autobrake: off", "ROTARY_AUTO_BRAKE_MODE", AutobrakeOff),
+                s => s.IsPosition("ROTARY_AUTO_BRAKE_MODE", AutobrakeOff)), "AL_AUTOBRAKE"), "ALC_AUTOBRAKE"),
+            Also(Done(Skip(Multi("AL_LANDING_LIGHTS", "Landing lights: off", AllTo(0, LandingLightKeys)),
+                s => s.IsOn("FO_LANDING_LIGHTS_OFF")), "AL_LANDING_LIGHTS"), "ALC_LANDING_LIGHTS"),
+            Also(Done(Skip(SW("AL_STROBES", "Strobe lights: off", "SWITCH_STROBE_LIGHT", 0),
+                s => s.IsPosition("SWITCH_STROBE_LIGHT", 0)), "AL_STROBES"), "ALC_STROBES"),
+            Also(Done(Skip(SW("AL_CONT_IGN", "Continuous ignition: off", "SWITCH_CONT_IGNITION", 0),
+                s => s.IsPosition("SWITCH_CONT_IGNITION", 0)), "AL_CONT_IGN"), "ALC_CONT_IGN"),
+            Also(Done(Skip(Multi("AL_AIR_DATA", "Air data heat: off", AllTo(0, AirDataHeatKeys)),
+                s => s.IsOn("FO_AIR_DATA_HEAT_OFF")), "AL_AIR_DATA"), "ALC_AIR_DATA"),
+            Also(Done(Skip(Multi("AL_WINDSHIELD", "Windshield heat: idle", AllTo(0, WindshieldKeys)),
+                s => s.IsOn("FO_WINDSHIELD_IDLE")), "AL_WINDSHIELD"), "ALC_WINDSHIELD"),
+            Also(Done(Skip(Multi("AL_SIDE_WINDOWS", "Side window heat: off", AllTo(0, SideWindowKeys)),
+                s => s.IsOn("FO_SIDE_WINDOWS_OFF")), "AL_SIDE_WINDOWS"), "ALC_SIDE_WINDOWS"),
+            // The typed entry is write-only: the executor verifies it on the trim readout, and "Already set" reads it.
+            Also(Done(Skip(SW("AL_STAB_TRIM", "Stabilizer trim: zero", L1011Levers.StabTrimKey, 0),
+                s => s.IsOn("FO_STAB_TRIM_ZERO")), "AL_STAB_TRIM"), "ALC_STAB_TRIM"),
+            Also(Done(Skip(SW("AL_SPEED_BRAKE", "Speed brake lever: forward", L1011Levers.SpeedBrakeKey, 0),
+                s => s.IsOn("FO_SPEED_BRAKE_FORWARD")), "AL_SPEED_BRAKE"), "ALC_SPEED_BRAKE"),
+            // The flaps move on the ground only: left alone, aloud, airborne or with the ground unread.
+            Also(Done(Skip(LeaveAlone(SW("AL_FLAPS_UP", "Flaps: up", L1011Levers.FlapHandleKey, 0),
+                    L1011FoChecklistDefinitions.NotOnGround, L1011FoChecklistDefinitions.FlapsStayText),
+                s => s.IsOn("FO_FLAPS_UP")), "AL_FLAPS_UP"), "ALC_FLAPS"),
+            Also(Done(Skip(SW("AL_RADAR", "Weather radar: off", "SWITCH_WX_OFF", 1),
+                s => s.IsPosition("SWITCH_WX_OFF", 1)), "AL_RADAR"), "ALC_RADAR"),
+            Also(Done(Skip(Multi("AL_TRANSFERS_OFF", "1A and 3A transfers: off", AllTo(0, "SWITCH_FUEL_XFR_1A", "SWITCH_FUEL_XFR_3A")),
+                s => s.IsOn("FO_TRANSFERS_OFF")), "AL_TRANSFERS_OFF"), "ALC_TRANSFERS"),
+            Also(Done(Skip(SW("AL_APU_MASTER", "APU master: on", "TOGGLE_APU_POWER", 1),
+                s => s.IsPosition("TOGGLE_APU_POWER", 1)), "AL_APU_MASTER"), "ALC_APU_MASTER"),
+            // One press, done once the APU turns: a press while it already turns would be a second start. Parking
+            // waits for it to run.
+            Also(Done(Skip(SW("AL_APU_START", "APU: start", X.ApuStart, 1),
+                s => s.IsOn("FO_APU_STARTING_OR_RUNNING")), "AL_APU_START"), "ALC_APU"),
         }
     };
 

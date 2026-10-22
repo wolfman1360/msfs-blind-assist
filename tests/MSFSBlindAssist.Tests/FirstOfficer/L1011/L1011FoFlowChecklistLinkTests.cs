@@ -162,6 +162,9 @@ public class L1011FoFlowChecklistLinkTests
     {
         if (s.EventName == X.ApuGenerator && s.TargetValue == 0)
             return new[] { ("L1011_RO_APU_GEN_BREAKER", 0.0) };
+        // The stabilizer trim's typed entry is write-only: done is its readout at the target.
+        if (s.EventName == MSFSBlindAssist.Aircraft.L1011.L1011Levers.StabTrimKey)
+            return new[] { ("L1011_RO_ELEVATOR_TRIM", (double)s.TargetValue!.Value) };
         if (s.EventName == X.ApuStop)
             return new[] { ("L1011_RO_APU_RPM", 0.0) };
         if (s.TargetValueProvider is { } flaps && s.EventName == MSFSBlindAssist.Aircraft.L1011.L1011Levers.FlapHandleKey)

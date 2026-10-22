@@ -76,6 +76,10 @@ using CheckFn = System.Func<L1011FoActionExecutor, L1011FoStateEvaluator, System
 /// conditional cabin baro prompt stays flow-only) and one read-back, the aircraft's approach page, which carries the
 /// descent page's baro set line too. The cabin baro line writes the captain's altimeter, or nothing when it reads
 /// standard or unread. The landing autobrake line is the Captain's reminder, with no setting ([FO-14]).
+///
+/// After Landing has one action group (<c>AFTER_LANDING</c>: the flow's fifteen writes) and one read-back, the aircraft's
+/// after landing page. The stabilizer trim line reads the trim readout at zero, the typed entry being write-only; the
+/// flaps line is left alone off the ground, as After Start's is; the APU start line holds until the APU turns ([FO-11]).
 /// </summary>
 public static class L1011FoChecklistDefinitions
 {
@@ -90,6 +94,7 @@ public static class L1011FoChecklistDefinitions
         AfterTakeoff(), AfterTakeoffCL(), ClimbCL(),
         Descent(), DescentCL(),
         BeforeLanding(), BeforeLandingCL(),
+        AfterLanding(), AfterLandingCL(),
     };
 
     private const string ContIgnition = "SWITCH_CONT_IGNITION";
@@ -1054,6 +1059,83 @@ public static class L1011FoChecklistDefinitions
                 Reminder("BLC_AUTOBRAKE", G, "Autobrake: set"),
                 Read("BLC_GROUND_LIGHTS", G, "Nose wheel landing, taxi and runway turnoff lights: on", "FO_GROUND_LIGHTS_ON", On),
                 Read("BLC_CONT_IGN", G, "Continuous ignition: on", ContIgnition, v => Is(v, 1)),
+            }
+        };
+    }
+
+    // ================================================================== After Landing
+
+    private static readonly string[] LandingLights = { "TOGGLE_LANDING_LEFT", "TOGGLE_LANDING_RIGHT" };
+
+    private static readonly string[] AirDataHeat =
+        { "SWITCH_CPT_PITOT_HEAT", "SWITCH_FO_PITOT_HEAT", "SWITCH_PROBE_HEAT", "SWITCH_ALPHA_HEAT" };
+
+    private static readonly string[] SideWindows =
+        { "SWITCH_ANTI_ICE_L_FWD", "SWITCH_ANTI_ICE_L_REAR", "SWITCH_ANTI_ICE_R_FWD", "SWITCH_ANTI_ICE_R_REAR" };
+
+    /// <summary>
+    /// The After Landing flow's fifteen writes, in its order and with its labels: a single switch reads its key at the
+    /// target, a multi-switch line its synthetic, the stabilizer trim its readout at zero, the speed brake forward, the
+    /// flaps up, the APU start the APU turning. The flaps tick is left alone off the ground, as its step is; the APU start
+    /// tick holds until the APU turns, a slow condition ([FO-11]).
+    /// </summary>
+    private static Group AfterLanding()
+    {
+        const string G = "AFTER_LANDING";
+        return new Group
+        {
+            Id = G, Name = "After Landing",
+            Items = new()
+            {
+                Auto("AL_ANTISKID", G, "Anti-skid: off", AntiSkid, v => Is(v, 0), Set(AntiSkid, 0)),
+                Auto("AL_AUTOBRAKE", G, "Autobrake: off", Autobrake, v => Is(v, AutobrakeOff), Set(Autobrake, AutobrakeOff)),
+                Auto("AL_LANDING_LIGHTS", G, "Landing lights: off", "FO_LANDING_LIGHTS_OFF", On, SetAll(All(0, LandingLights))),
+                Auto("AL_STROBES", G, "Strobe lights: off", StrobeLights, v => Is(v, 0), Set(StrobeLights, 0)),
+                Auto("AL_CONT_IGN", G, "Continuous ignition: off", ContIgnition, v => Is(v, 0), Set(ContIgnition, 0)),
+                Auto("AL_AIR_DATA", G, "Air data heat: off", "FO_AIR_DATA_HEAT_OFF", On, SetAll(All(0, AirDataHeat))),
+                Auto("AL_WINDSHIELD", G, "Windshield heat: idle", "FO_WINDSHIELD_IDLE", On,
+                    SetAll(All(0, "SWITCH_ANTI_ICE_CPT", "SWITCH_ANTI_ICE_FO"))),
+                Auto("AL_SIDE_WINDOWS", G, "Side window heat: off", "FO_SIDE_WINDOWS_OFF", On, SetAll(All(0, SideWindows))),
+                // The typed entry is write-only: the line reads the trim readout, which the executor verifies the write on.
+                Auto("AL_STAB_TRIM", G, "Stabilizer trim: zero", "FO_STAB_TRIM_ZERO", On, Set(L1011Levers.StabTrimKey, 0)),
+                Auto("AL_SPEED_BRAKE", G, "Speed brake lever: forward", "FO_SPEED_BRAKE_FORWARD", On, Set(L1011Levers.SpeedBrakeKey, 0)),
+                // The flaps move on the ground only, as the flow's step.
+                LeaveAlone(Auto("AL_FLAPS_UP", G, "Flaps: up", "FO_FLAPS_UP", On, Set(L1011Levers.FlapHandleKey, 0)),
+                    NotOnGround, FlapsStayText),
+                Auto("AL_RADAR", G, "Weather radar: off", RadarOff, v => Is(v, 1), Set(RadarOff, 1)),
+                Auto("AL_TRANSFERS_OFF", G, "1A and 3A transfers: off", "FO_TRANSFERS_OFF", On,
+                    SetAll(All(0, "SWITCH_FUEL_XFR_1A", "SWITCH_FUEL_XFR_3A"))),
+                Auto("AL_APU_MASTER", G, "APU master: on", ApuMaster, v => Is(v, 1), Set(ApuMaster, 1)),
+                // The composite holds until the APU turns, a slow condition (FO-11): the 10 s grace would not cover it.
+                Auto("AL_APU_START", G, "APU: start", "FO_APU_STARTING_OR_RUNNING", On, Set(X.ApuStart, 1)),
+            }
+        };
+    }
+
+    /// <summary>The aircraft's after landing page in its own words, ending with the transfers.</summary>
+    private static Group AfterLandingCL()
+    {
+        const string G = "AFTER_LANDING_CL";
+        return new Group
+        {
+            Id = G, Name = "After Landing",
+            Items = new()
+            {
+                Read("ALC_ANTISKID", G, "Antiskid: off", AntiSkid, v => Is(v, 0)),
+                Read("ALC_AUTOBRAKE", G, "Autobrake: off", Autobrake, v => Is(v, AutobrakeOff)),
+                Read("ALC_LANDING_LIGHTS", G, "Landing lights: off", "FO_LANDING_LIGHTS_OFF", On),
+                Read("ALC_STROBES", G, "Strobe lights: off", StrobeLights, v => Is(v, 0)),
+                Read("ALC_CONT_IGN", G, "Continuous ignition: off", ContIgnition, v => Is(v, 0)),
+                Read("ALC_AIR_DATA", G, "Air data sensor heaters: all off", "FO_AIR_DATA_HEAT_OFF", On),
+                Read("ALC_WINDSHIELD", G, "Capt and F/O windshield heat: idle", "FO_WINDSHIELD_IDLE", On),
+                Read("ALC_SIDE_WINDOWS", G, "Side windows: off", "FO_SIDE_WINDOWS_OFF", On),
+                Read("ALC_STAB_TRIM", G, "Stabilizer trim: zero", "FO_STAB_TRIM_ZERO", On),
+                Read("ALC_SPEED_BRAKE", G, "Speedbrake lever: forward", "FO_SPEED_BRAKE_FORWARD", On),
+                Read("ALC_FLAPS", G, "Flaps: up", "FO_FLAPS_UP", On),
+                Read("ALC_RADAR", G, "Radar: off", RadarOff, v => Is(v, 1)),
+                Read("ALC_APU_MASTER", G, "APU master power: on", ApuMaster, v => Is(v, 1)),
+                Read("ALC_APU", G, "APU: start", "FO_APU_STARTING_OR_RUNNING", On),
+                Read("ALC_TRANSFERS", G, "1A and 3A xfr switches: unlatch", "FO_TRANSFERS_OFF", On),
             }
         };
     }
