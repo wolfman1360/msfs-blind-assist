@@ -562,13 +562,18 @@ setting and ignores it. Its window is "First Officer — iniBuilds L-1011", and 
 "iniBuilds L-1011 First Officer" (`FirstOfficerWindows`, `INI_L1011`). It has the fleet's twelve
 flows: **Power Up**, **Preflight**, **Before Start**, **Engine Start**, **After Start**, **Before
 Takeoff**, **After Takeoff**, **Descent**, **Before Landing**, **After Landing**, **Parking** and
-**Shutdown**. Each has an action group in the flow's order and words, and read-backs that are the
-aircraft's own checklist pages in its own words, condensed to the lines BA can read: Cockpit Safety
-Inspection for Power Up; Flight Engineer Station, Overhead, Main Panel and Center Console Preparation
-for Preflight; then Before Engine Start, Engine Start, After Start and Taxi, Line Up, Take Off and
-Climb, Descent, Approach, After Landing, Parking and Securing. Every group is classified in
-`FoDepartureGroups` (FO-22). Rules: `.claude/rules/first-officer-l1011.md` (FOL-1 to FOL-9); the
-aircraft's write rules are in [docs/l1011.md](l1011.md).
+**Shutdown**. Its Checklists tab has exactly twelve groups, one per flow, with the flow's id and name, and
+no read-back group: a read-back beside each group repeated most of its lines and, ticking itself from the
+aircraft, showed complete before anything was done. Each group lists its flow's lines in the flow's order: the writes and the
+unconditional Captain steps in the flow's words, and the lines of the aircraft's own checklist pages
+(cockpit safety inspection, preparation pages, before engine start, engine start, after start, taxi,
+line-up, take-off, approach, parking) that no write of the flow reads, in the page's words: each a
+read-only line under the id of the flow step that completes it (a check or a wait), or a Captain line
+with a step of its own. A page line that read the same state as a line already in the group was dropped,
+so no two lines in a group read the same thing; the climb, descent, after landing and securing pages add
+nothing. Every group is classified in `FoDepartureGroups` (FO-22). Rules:
+`.claude/rules/first-officer-l1011.md` (FOL-1 to FOL-9); the aircraft's write rules are in
+[docs/l1011.md](l1011.md).
 
 Every write goes through the definition's First Officer entry (`IniL1011Definition.FirstOfficer.cs`:
 `FoSetAsync`, `FoSetAltimetersAsync`, `FoSetCabinBaroAsync`, `FoSetCabinAltitudeSelectorAsync`), which
@@ -653,7 +658,7 @@ Before Start opens with the ground guard and two read-only Stop waits, the APU r
 generator on line, so external power comes off only once the APU carries the buses. It sets the seat
 belts and anti-collision lights; asks the Captain to close the doors on the tablet while any of the
 four exits' stock positions (`EXIT OPEN:0` to `:3`) reads open, then checks them closed ("Doors:
-closed", its read-back line too), worded on the doors because the main panel's door light does not
+closed", its line too), worded on the doors because the main panel's door light does not
 follow them; turns the galley off; sets up APU air for the start (minimum compressor load, pack
 2 only, the engine isolation and crossbleed valves, the APU bleed); and copies the captain's altimeter
 into the cabin barometric setting. It turns each INS unit from ALIGN to NAV once that unit reads aligned
@@ -692,7 +697,8 @@ only after a stop this run sent, and the master off only once the stop is done o
 master left on: the APU did not stop." The stop presses once and then holds, outside the dispatch gate,
 until the APU reads below 5 %, up to 90 s: the APU takes about half a minute to a minute to stop, longer
 than a checklist tick's grace (FOL-8, FO-11). The master line's tick, in After Start and in Shutdown, is
-left alone with the same sentence until the APU reads stopped.
+left alone with the same sentence until the APU reads stopped. The taxi page's two Captain lines close the
+flow: "Parking brake: release" and "Brakes: check".
 
 Before Takeoff is the manual's line-up: pack 2 only (left alone off the ground), anti-skid, the take-off
 autobrake, strobe and landing lights, continuous ignition, probe heat, the transponder read at TA/RA and
@@ -705,8 +711,10 @@ puts the seat belt
 signs on, reminds the Captain of the landing data, the landing autobrake (the panel named, no setting:
 FO-14) and the QNH, and turns the cabin altitude selector to the plan's destination elevation. Before
 Landing copies the captain's altimeter, by now the destination QNH, into the cabin barometric setting,
-sets the fuel for landing, the ground lights and continuous ignition, puts the gear lever down, reminds
-the Captain of the flap schedule and confirms the gear down last. After Landing opens with the ground
+sets the fuel for landing, the ground lights and continuous ignition, puts the gear lever down ("Gear
+lever: down", so the confirmed "Landing gear: down" line stays apart), reminds the Captain to check the
+landing autobrake on the overhead Antiskid and Autobrake panel (the approach page's "Autobrake: set", no
+setting: FO-14) and of the flap schedule, and confirms the gear down last. After Landing opens with the ground
 guard (read only, Stop, fails unread): started in the air by mistake it would turn the air data heat and
 anti-skid off, zero the trim and stow the speed brake lever, so it stops whole (FOL-9). Then it turns the
 anti-skid, autobrake, landing and strobe lights, continuous ignition, air data heat and side window heat
