@@ -15,10 +15,11 @@ namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 /// ground guard and the two Stop waits that open it, so external power goes off only once the APU generator is on
 /// line; every write's label, keys and targets word for word, with its "Already set" on its own state; the doors
 /// prompt while a door position reads open or unread; each INS unit turned to NAV only from ALIGN once it reads
-/// aligned, or left at NAV, its "not in NAV" Captain line otherwise ([FO-20]); the navigating check; the cabin barometric setting copied from the
-/// captain's altimeter, with its Captain fallback; the fleet's Before Start tail; the lines each step delivers
-/// ([FO-6], [FO-7]); the pack 2 tick left alone off the ground ([FO-25]); and that every key is one the definition
-/// takes, a toggle-carrying key only ever written over its own position read ([L1011-4]).
+/// aligned, or left at NAV, its "not in NAV" Captain line otherwise ([FO-20]); the navigating check; the cabin
+/// barometric setting copied from the captain's altimeter, with its Captain fallback; the fleet's Before Start tail;
+/// the lines each step delivers ([FO-6], [FO-7]); the pack 2 tick left alone off the ground ([FO-25]); and that
+/// every key is one the definition takes, a toggle-carrying key only ever written over its own position read
+/// ([L1011-4]).
 /// </summary>
 public class L1011FoBeforeStartTests
 {

@@ -9,13 +9,12 @@ namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 
 /// <summary>
 /// The TriStar First Officer's Power Up flow, and the profile's twelve flows in order, pinned by structure and by
-/// behaviour: the step
-/// ids and their order, the two guards that must come first ([FO-25]: the standby power check turns the
-/// battery off and the fuel pumps and hydraulic pumps are switched off here), every label word for word,
-/// every write's SkipCondition on its own state ("Already set"; the standby power check is the one write
-/// with none, the check is the point), the checklist lines each step delivers
-/// ([FO-6], [FO-7]), and that Power Up writes nothing the First Officer must not: no lever, no typed value
-/// and no toggle-carrying control, whose write is refused from an unknown position ([L1011-4]).
+/// behaviour: the step ids and their order, the two guards that must come first ([FO-25]: the standby power check
+/// turns the battery off and the fuel pumps and hydraulic pumps are switched off here), every label word for word,
+/// every write's SkipCondition on its own state ("Already set"; the standby power check is the one write with none,
+/// the check is the point), the checklist lines each step delivers ([FO-6], [FO-7]), and that Power Up writes
+/// nothing the First Officer must not: no lever, no typed value and no toggle-carrying control, whose write is
+/// refused from an unknown position ([L1011-4]).
 /// </summary>
 public class L1011FoFlowStructureTests
 {

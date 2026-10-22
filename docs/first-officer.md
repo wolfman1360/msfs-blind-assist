@@ -582,18 +582,19 @@ runs (FOL-2).
 
 Power Up opens with two read-only guards, engines stopped and on the ground, each a Stop that fails
 when unread (FO-25). The engines are read on N3, never the window's N2 feed (FOL-3): running at 50 %
-or above, stopped when every N3 is below 5 % and every fuel and ignition switch reads off. Then it
+or above, stopped when every N3 is below 5 % and every fuel and ignition switch reads off, so the
+engines guard, here and in Preflight and Shutdown, is "Engines stopped, fuel and ignition off". Then it
 checks, without moving anything, that the fire handles are in, the gear lever is down, the speed
 brake is forward, the flaps agree with their handle and the fuel and ignition switches are off. It
-sets continuous ignition off, the essential and no. 2 radio masters on, the transponder to standby, the weather radar
-off, both ATM switches and both AC hydraulic pumps off, all eight fuel pumps off (left alone, aloud,
-while an APU started by hand turns: "Fuel pumps left on: the APU is running.", FOL-6), the jettison master
-and dump switches off with their guards closed, passenger oxygen off and guarded, and galley power
-off. It runs the standby power check, sets the AC essential bus selector to bus 3 (generator 1),
-connects external power and closes any AC tie that reads open when the external power available
-light is lit (otherwise the Captain hears "Connect ground power on the tablet's Ground page, or the Preflight flow
-starts the APU."), turns the three INS mode selectors to Align, and reminds the Captain to enter
-present position on each unit (input Shift+M, then Alt+P).
+sets continuous ignition off, the essential and no. 2 radio masters on, the transponder to standby, the
+weather radar off, both ATM switches and both AC hydraulic pumps off, all eight fuel pumps off (left
+alone, aloud, while an APU started by hand turns: "Fuel pumps left on: the APU is running.", FOL-6), the
+jettison master and dump switches off with their guards closed, passenger oxygen off and guarded, and
+galley power off. It runs the standby power check, sets the AC essential bus selector to bus 3
+(generator 1), connects external power and closes any AC tie that reads open when the external power
+available light is lit (otherwise the Captain hears "Connect ground power on the tablet's Ground page,
+or the Preflight flow starts the APU."), turns the three INS mode selectors to Align, and reminds the
+Captain to enter present position on each unit (input Shift+M, then Alt+P).
 
 The standby power check is the aircraft's own check as one step: battery off, the guard open,
 standby power On; the lights read (the flowbar lit, both standby bus fail lights out, and both
@@ -608,15 +609,18 @@ progress on.
 Power Up writes no lever, no typed value and no control whose click carries a toggle K: event. A hand
 tick on an action line runs the same write as its flow step; the ATM, AC hydraulic pump and fuel pump
 lines and the standby power check are left alone unless the aircraft reads on the ground with every
-engine stopped (FO-25), and the fuel pump line also while the APU turns (FOL-6). The universal autopilot engage presses engage paddle A to Command through the
-same entry, CWS notch included, and works closed loop on the two paddles (`IsAutopilotEngaged`,
-FO-18); it never sends the stock `AUTOPILOT_ON`, which the paddle-driven autopilot ignores.
+engine stopped (FO-25), and the fuel pump line also while the APU turns (FOL-6). The universal
+autopilot engage presses engage paddle A to Command through the same entry, CWS notch included, and
+works closed loop on the two paddles (`IsAutopilotEngaged`, FO-18); it never sends the stock
+`AUTOPILOT_ON`, which the paddle-driven autopilot ignores.
 
 Preflight opens with the same two guards, since it switches the packs, the AC hydraulic pumps and the
 power transfer units off on the way. It starts the APU: the master on, minimum compressor load, the
 tank 2 left pump and the engine 2 tank valve for its fuel, then one press of the start button
 (`FO_APU_START`, Stop-aware: done once the APU turns, never a second press while it spins up) and a
-read-only Stop wait of up to two minutes for it to run. It puts the APU generator on line (the field,
+read-only Stop wait of up to two minutes for it to run. Both require the master step: a master that did
+not come on skips the two at once, each saying "APU not started: the APU master is not on.", instead
+of a two-minute wait for an APU that cannot start. It puts the APU generator on line (the field,
 then the breaker, each verified on its relay, never on the button) and closes the AC ties, puts the
 bleed air and packs on the APU, runs the engine and APU fire test and the wheel well fire test, sets
 the engine hydraulic pumps and runs the hydraulic check, then sets the meters, the fuel panel (transfers
@@ -640,8 +644,9 @@ off within about 4 s.
 Before Start opens with the ground guard and two read-only Stop waits, the APU running and its
 generator on line, so external power comes off only once the APU carries the buses. It sets the seat
 belts and anti-collision lights; asks the Captain to close the doors on the tablet while any of the
-four exits' stock positions (`EXIT OPEN:0` to `:3`) reads open, since the main panel's door light does
-not follow the doors; turns the galley off; sets up APU air for the start (minimum compressor load, pack
+four exits' stock positions (`EXIT OPEN:0` to `:3`) reads open, then checks them closed ("Doors:
+closed", its read-back line too), worded on the doors because the main panel's door light does not
+follow them; turns the galley off; sets up APU air for the start (minimum compressor load, pack
 2 only, the engine isolation and crossbleed valves, the APU bleed); and copies the captain's altimeter
 into the cabin barometric setting. It turns each INS unit from ALIGN to NAV once that unit reads aligned
 (never a unit the pilot left at OFF or STBY: a unit not ready gets the Captain's "INS n is not in NAV"
@@ -658,8 +663,11 @@ the Captain's), and a stable idle (`FO_ENGINE_IDLE_n`). From the feed on, every 
 it is not done. Then the engine generator fields and breakers are closed; a field that closed by itself
 at idle is not pressed. A flow stopped with a ground start on and that engine's fuel off has the start
 released once, by the Stop clean-up or the window's close, by the row's own click to 0 and never by a
-fuel write (FOL-4). The three "Engine n ground start switch: on" lines are the profile's only
-`StayComplete` lines: each latches on its engine running, and no flow step links it.
+fuel write (FOL-4). A start the Stop clean-up cannot release (the fuel and ignition or the switch
+unread, or the click not done or not reading off) is said once per engine, with flow progress off too:
+"Engine 2 ground start switch still on: release it." The three "Engine n ground start switch: on" lines
+are the profile's only `StayComplete` lines: each latches on its engine running, and no flow step links
+it.
 
 After Start sets the aircraft up for taxi on engine air and power: the bleeds and packs, the ATMs on
 then to auto, the galley, read-only electrical checks, the meters, all fuel pumps, the 1A and 3A
@@ -680,9 +688,10 @@ Before Takeoff is the manual's line-up: pack 2 only (left alone off the ground),
 autobrake, strobe and landing lights, continuous ignition, probe heat, the transponder read at TA/RA and
 the weather radar. After Takeoff puts the gear lever up only with the aircraft read airborne: on the
 ground, or with the on-ground flag unread, the step and its tick are left alone, aloud ("Gear left down: on
-the ground."), and nothing relies on the aircraft refusing gear up on the ground, which has not been seen
-(FOL-9). It reminds the Captain of the flap schedule, sets the climb, waits up to five minutes, read only,
-for the flaps up, and confirms the gear up last (FO-13). Descent puts the seat belt
+the ground."), and nothing relies on the aircraft refusing gear up on the ground: the gear lever's gauge
+script refuses it; no live check has seen it (FOL-9). It reminds the Captain of the flap schedule, sets the
+climb, waits up to five minutes, read only, for the flaps up, and confirms the gear up last (FO-13). Descent
+puts the seat belt
 signs on, reminds the Captain of the landing data, the landing autobrake (the panel named, no setting:
 FO-14) and the QNH, and turns the cabin altitude selector to the plan's destination elevation. Before
 Landing copies the captain's altimeter, by now the destination QNH, into the cabin barometric setting,
@@ -705,14 +714,14 @@ the ground with the APU generator or external power on line. Then the engines ar
 only, up to two minutes, Stop) before anything else: the anti-collision lights (the ground crew's sign
 that engines turn, off only once they stop, as the MD-11's beacon), the seat belts, the INS, the
 transponder, the ATMs and AC pumps and the fuel panel, which keeps the tank 2 left pump and the engine 2
-tank valve on for the APU (FOL-6). An engine that does not stop ends the flow with the beacon on and
-nothing cut. The APU bleed goes on and the Captain is reminded of ground power. Shutdown is the manual's
-securing, behind both guards: emergency lights and galley off; the APU shut down in the manual's order
-(the generator breaker, the bleed, the stop held until it reads below 5 %, then a wait of up to 150 s for
-a standstill below 1 %, already set when it reads so, so an APU found coasting is waited out whoever
-stopped it, and the master off only once the stop is done or found done); packs off on the ground only,
-external power off, the fuel pumps off (left alone while the APU turns, FOL-6); and standby power, the
-radio masters and the battery last. The battery goes off only once the APU master went off or was found
+tank valve on for the APU (FOL-6). The fuel and ignition are already off by then, so an engine that does
+not stop ends the flow with the beacon on and no tank pump or later switch cut. The APU bleed goes on and
+the Captain is reminded of ground power. Shutdown is the manual's securing, behind both guards: emergency
+lights and galley off; the APU shut down in the manual's order (the generator breaker, the bleed, the stop
+held until it reads below 5 %, then "APU at a standstill", a wait of up to 150 s for it below 1 %, already
+set when it reads so, so an APU found coasting is waited out whoever stopped it, and the master off only
+once the stop is done or found done); packs off on the ground only, external power off, the fuel pumps
+off (left alone while the APU turns, FOL-6); and standby power, the radio masters and the battery last. The battery goes off only once the APU master went off or was found
 off ("Battery left on: the APU did not stop." otherwise), and its step and tick are left alone while the
 APU still reads turning, so the battery never goes with the APU running (FOL-8).
 

@@ -6,7 +6,7 @@ public enum L1011EffectKind { LVar, AVar, HEvent, KEvent }
 
 /// <summary>
 /// One entry of a control-map effect list, parsed from the generator's text form and rendered
-/// back as an RPN fragment for the MobiFlight calculator path. Text forms (Task 3 contract):
+/// back as an RPN fragment for the MobiFlight calculator path. Text forms (the generator's contract):
 /// <c>L:NAME=VALUE</c>, <c>L:NAME, UNIT=VALUE</c>, <c>A:NAME, UNIT=VALUE</c>, <c>H:NAME</c>,
 /// <c>K:NAME</c>, <c>K:NAME=P</c>, <c>K:2:NAME=P1,P2</c>. A VALUE may be <c>{v}</c>, the target.
 /// </summary>

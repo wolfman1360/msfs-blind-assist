@@ -90,7 +90,7 @@ public class IniL1011InsBehaviourTests
     [Fact]
     public void A_present_position_that_cannot_be_keyed_is_refused_aloud_and_nothing_is_chained()
     {
-        // Task 2's PresentPositionControls does no range check: infinity gives a null key, and a latitude
+        // PresentPositionControls does no range check: infinity gives a null key, and a latitude
         // past 90 keys digits the unit would take as another figure. The caller refuses before any key.
         _def.CanLand = _ => true;   // so the position, not the calculator path, is the only reason
         Assert.False(_def.EnterPresentPosition(2, double.NaN, -115.1336, _sim, _speech));

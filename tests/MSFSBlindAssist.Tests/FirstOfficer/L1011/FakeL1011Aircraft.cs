@@ -38,11 +38,10 @@ internal readonly record struct FakeL1011Io(FakeL1011IoKind Kind, string Key, do
 /// sets its RPM (<c>L1011_RO_APU_RPM</c>) to <see cref="ApuRpmAfterStart"/>, with the master off or unread
 /// nothing, and ends a spin-down; the stop press (<c>APU_STOP</c>) spins it down by the clock,
 /// <see cref="ApuSpinDownPerSecond"/> a second down to 0, 50 s from 100 (live, it took about half a minute to a
-/// minute). The generator field press
-/// (<c>SWITCH_APU_BRG</c>) closes its relay (<c>L1011_RO_APU_GEN_FIELD</c>) only with the APU running (95 %);
-/// the breaker press (<c>SWITCH_GND_FLOW</c>) closes the breaker relay (<c>L1011_RO_APU_GEN_BREAKER</c>) only
-/// over a closed field, whatever external power does (no interlock); the trip (<c>SWITCH_GND_FLOW_OPEN</c>)
-/// opens it. The buttons hold no position.</item>
+/// minute). The generator field press (<c>SWITCH_APU_BRG</c>) closes its relay (<c>L1011_RO_APU_GEN_FIELD</c>)
+/// only with the APU running (95 %); the breaker press (<c>SWITCH_GND_FLOW</c>) closes the breaker relay
+/// (<c>L1011_RO_APU_GEN_BREAKER</c>) only over a closed field, whatever external power does (no interlock); the
+/// trip (<c>SWITCH_GND_FLOW_OPEN</c>) opens it. The buttons hold no position.</item>
 /// <item>The standby lights as the aircraft showed them: the unarmed light lit only with the switch Off, the
 /// flowbar lit only with it On (neither read while the switch is unread), both standby bus fail lights always
 /// out, both essential bus fail lights lit unless the external power breaker reads closed. The battery
@@ -51,9 +50,10 @@ internal readonly record struct FakeL1011Io(FakeL1011IoKind Kind, string Key, do
 /// (<c>ROTARY_FIRE_DETECT_TEST_ENG_1..3</c>, <c>_APU</c>) at Both (2), both loop test switches
 /// (<c>SWITCH_FIRE_DETECT_TEST_A</c> and <c>_B</c>) on together light the three engine fire lights, the engine fire
 /// warning and the APU fire light; otherwise they read out. Live, on APU and external power with the engines off,
-/// A alone lit nothing and B alone lit all five; the fake asks for both, so a test that turns on one switch fails. The wheel well fire light (<c>LAMP_FIRE_WHEEL_WELL</c>) lights
-/// only with its selector (<c>ROTARY_WHEEL_WELL_TEST</c>) at Both (1) and both its test switches on (A alone lit
-/// nothing). Each light stays unread until one of its own selectors or test switches reads.</item>
+/// A alone lit nothing and B alone lit all five; the fake asks for both, so a test that turns on one switch fails.
+/// The wheel well fire light (<c>LAMP_FIRE_WHEEL_WELL</c>) lights only with its selector
+/// (<c>ROTARY_WHEEL_WELL_TEST</c>) at Both (1) and both its test switches on (A alone lit nothing). Each light stays
+/// unread until one of its own selectors or test switches reads.</item>
 /// <item>Hydraulics as on external power, but at once: system B (<c>L1011_RO_HYD_B</c>) reads
 /// <see cref="PumpPsi"/> while its AC pump (<c>SWITCH_HYD_AC_PUMP_B3</c>) is on, system C likewise from
 /// <c>_C3</c>; systems A and D read <see cref="PtuPsi"/> while both power transfer units (<c>SWITCH_PTU_AB</c>,
