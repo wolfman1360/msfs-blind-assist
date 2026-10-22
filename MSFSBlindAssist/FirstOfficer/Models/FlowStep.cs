@@ -138,6 +138,16 @@ public class FlowStep<TState> : IFlowStepDispatch
 
     public string? ReminderText { get; set; }
 
+    /// <summary>
+    /// Optional: the Captain reminder's text read from the aircraft at dispatch, re-read on every run. When it is
+    /// set and returns a non-blank text, that text is spoken (and raised to the window) in place of
+    /// <see cref="ReminderText"/>; when it returns null or blank, or throws, the step speaks
+    /// <see cref="ReminderText"/>, else <see cref="Label"/>, exactly as a step without one does. For a reminder that
+    /// names a value the First Officer reads but never sets (the TriStar's stabilizer trim from the tablet's
+    /// take-off export).
+    /// </summary>
+    public Func<TState, string?>? ReminderTextProvider { get; set; }
+
     // -----------------------------------------------------------------------
     // Failure behavior
     // -----------------------------------------------------------------------

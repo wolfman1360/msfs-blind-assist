@@ -53,6 +53,16 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// engine running. A flow stopped with a ground start on has it released by the executor over fuel and ignition read
 /// off, never by a fuel write. The fuel and ignition switch carries a toggle: its single-switch step reads its own
 /// position first.
+///
+/// After Start sets the aircraft up for taxi on engine air and power: bleeds, packs, the ATMs on then to auto, galley,
+/// read-only electrical checks, the meters, all fuel pumps, the 1A and 3A transfers only with fuel in both tanks (left
+/// alone aloud otherwise), probe heat, ignition on both, the take-off flaps and the taxi light. The flap index is the
+/// tablet's export, else SimBrief's; with neither nothing is sent or spoken and a Captain step asks ([FO-20]); the flaps
+/// move on the ground only. The stabilizer trim is the Captain's, never automated: its reminder names the tablet's
+/// exported trim. The APU is shut down last, and only once all three engine generators read on line: a Skip wait that,
+/// timed out, skips every APU step with one sentence saying the APU stays running. The two-minute cool-down follows
+/// the stop only when this run sent it. The APU bleed carries a toggle: its single-switch step reads its own position
+/// first.
 /// </summary>
 public static class L1011FoFlowDefinitions
 {
@@ -62,6 +72,7 @@ public static class L1011FoFlowDefinitions
         BuildPreflight(),
         BuildBeforeStart(),
         BuildEngineStart(),
+        BuildAfterStart(),
     };
 
     // ------------------------------------------------------------------ Power Up (the manual's cockpit entry and power-up)
@@ -633,6 +644,138 @@ public static class L1011FoFlowDefinitions
         yield return Done(Stop(SW(e + "IDLE", $"Engine {num}: stable idle", X.EngineIdle(n), 1)), $"ESC_E{num}_RUNNING");
     }
 
+    // ------------------------------------------------------------------ After Start (set up for taxi, then the APU off)
+
+    /// <summary>How long After Start waits for all three engine generators to read on line before the APU is shut down.</summary>
+    private const int EngineGeneratorsOnLineSeconds = 30;
+
+    /// <summary>The APU's cool-down after its stop press: the manual's two minutes.</summary>
+    private const int ApuCooldownSeconds = 120;
+
+    /// <summary>The AC meter's generator 3 position, the DC meter's battery, the ignition selector's both systems.</summary>
+    private const int AcMeterGen3 = 3, DcMeterBattery = 4, IgnitionBoth = 1;
+
+    /// <summary>The ATM switches' positions: 1 AUTO, 2 ON (0 is OFF).</summary>
+    private const int AtmAuto = 1, AtmOn = 2;
+
+    /// <summary>What every APU step says when the engine generators were not all read on line: the APU stays.</summary>
+    private const string ApuStaysText = "The engine generators are not all on line, so the APU stays running.";
+
+    private static readonly string[] AtmKeys = { "ROTARY_HYD_B2_MODE", "ROTARY_HYD_C2_MODE" };
+
+    private static readonly string[] FuelPumpKeys =
+    {
+        "SWITCH_FUEL_PUMP_1_1", "SWITCH_FUEL_PUMP_1_2", "SWITCH_FUEL_PUMP_2L_1", "SWITCH_FUEL_PUMP_2L_2",
+        "SWITCH_FUEL_PUMP_2R_1", "SWITCH_FUEL_PUMP_2R_2", "SWITCH_FUEL_PUMP_3_1", "SWITCH_FUEL_PUMP_3_2",
+    };
+
+    private static Flow BuildAfterStart() => new()
+    {
+        Id = "AFTER_START", Name = "After Start",
+        Description = "Bleeds, packs, ATMs and galley for taxi; electrical checks; all fuel pumps on, the 1A and 3A "
+            + "transfers with fuel in both tanks; probe heat; ignition both; take-off flaps; taxi light; then the APU shut "
+            + "down once the engine generators are on line.",
+        RelatedChecklistGroupIds = new[] { "AFTER_START", "AFTER_START_CL", "TAXI_CL" },
+        Steps = new()
+        {
+            // ---- air: bleeds, isolation valves and crossbleeds, packs ----
+            Also(Done(Skip(Multi("AS_HI_PRESS", "High pressure bleed valves: on",
+                    AllTo(1, "SWITCH_HI_PRESS_ENG_1", "SWITCH_HI_PRESS_ENG_2", "SWITCH_HI_PRESS_ENG_3")),
+                s => s.IsOn("FO_HI_PRESS_ON")), "AS_HI_PRESS"), "ASC_HI_PRESS"),
+            Also(Done(Skip(Multi("AS_ISLN_VALVES", "Engine isolation valves: on",
+                    AllTo(1, "SWITCH_ISLN_VALVE_ENG_1", "SWITCH_ISLN_VALVE_ENG_2", "SWITCH_ISLN_VALVE_ENG_3")),
+                s => s.IsOn("FO_ISLN_VALVES_ON")), "AS_ISLN_VALVES"), "ASC_ISLN_VALVES"),
+            Also(Done(Skip(Multi("AS_APU_AIR", "Fuselage isolation and crossbleed valves: on",
+                    AllTo(1, "SWITCH_APU_ISLN_VALVE", "SWITCH_XBLEED_1", "SWITCH_XBLEED_3")),
+                s => s.IsOn("FO_APU_AIR_ON")), "AS_APU_AIR"), "ASC_FUSELAGE_ISLN", "ASC_XBLEEDS"),
+            Also(Done(Skip(Multi("AS_PACKS_ON", "Packs: on", AllTo(1, PackKeys)),
+                s => s.IsOn("FO_PACKS_ON")), "AS_PACKS_ON"), "ASC_PACKS"),
+
+            // ---- the ATMs on, then to auto. The on position is the step, so it always runs, and its line reads no
+            // state: the next step undoes it.
+            Done(Multi("AS_ATMS_ON", "ATM switches: on", AllTo(AtmOn, AtmKeys)), "AS_ATMS_ON"),
+            Also(Done(Skip(Multi("AS_ATMS_AUTO", "ATM switches: auto", AllTo(AtmAuto, AtmKeys)),
+                s => s.IsOn("FO_ATMS_AUTO")), "AS_ATMS_AUTO"), "ASC_ATMS"),
+            Also(Done(Skip(Multi("AS_GALLEY_ON", "Galley power: on", AllTo(1, GalleyKeys)),
+                s => s.IsOn("FO_GALLEY_ON")), "AS_GALLEY_ON"), "ASC_GALLEY"),
+
+            // ---- electrical: what Engine Start left, read only; the generator check reads all six relays, which is
+            // both of its read-back lines.
+            Check("AS_CHK_GENERATORS", "Engine generators: on line", "FO_ENGINE_GENERATORS_ON", On, CheckSeconds,
+                "ASC_GEN_FIELDS", "ASC_GEN_BREAKERS"),
+            Check("AS_CHK_IDG", "IDG low pressure lights: out", "FO_IDG_LIGHTS_OUT", On, CheckSeconds, "ASC_IDG"),
+            Check("AS_CHK_BUS_FAIL", "Bus fail lights: out", "FO_BUS_FAIL_LIGHTS_OUT", On, CheckSeconds, "ASC_BUS_FAIL"),
+            Also(Done(Skip(SW("AS_AC_METER", "AC meter: generator 3", "ROTARY_PWR_SOURCE", AcMeterGen3),
+                s => s.IsPosition("ROTARY_PWR_SOURCE", AcMeterGen3)), "AS_AC_METER"), "ASC_AC_METER"),
+            Also(Done(Skip(SW("AS_DC_METER", "DC meter: battery", "ROTARY_STBY_DC_BUS", DcMeterBattery),
+                s => s.IsPosition("ROTARY_STBY_DC_BUS", DcMeterBattery)), "AS_DC_METER"), "ASC_DC_METER"),
+            Check("AS_CHK_AC_ESS", "AC essential power selector: bus 3, generator 1", "ROTARY_AC_ESS_BUS",
+                v => Math.Abs(v - AcEssNormal) < 0.5, CheckSeconds, "ASC_AC_ESS"),
+
+            // ---- fuel ----
+            Also(Done(Skip(Multi("AS_FUEL_PUMPS", "Fuel pumps: all on", AllTo(1, FuelPumpKeys)),
+                s => s.IsOn("FO_FUEL_PUMPS_ON")), "AS_FUEL_PUMPS"), "ASC_FUEL_PUMPS"),
+            Also(Done(Skip(Multi("AS_CROSSFEEDS", "Crossfeed valves: closed",
+                    AllTo(0, "SWITCH_FUEL_LEFT_XFEED", "SWITCH_FUEL_CTR_XFEED", "SWITCH_FUEL_RIGHT_XFEED")),
+                s => s.IsOn("FO_CROSSFEEDS_CLOSED")), "AS_CROSSFEEDS"), "ASC_CROSSFEEDS"),
+            // On only with fuel in both tanks 1A and 3A; otherwise left alone, aloud, and its lines stay out of the latch.
+            Also(Done(Skip(LeaveAlone(Multi("AS_TRANSFERS", "1A and 3A transfers: on", AllTo(1, "SWITCH_FUEL_XFR_1A", "SWITCH_FUEL_XFR_3A")),
+                    L1011FoChecklistDefinitions.TransferTanksNotFueled, L1011FoChecklistDefinitions.TransfersStayText),
+                s => s.IsOn("FO_TRANSFERS_ON")), "AS_TRANSFERS"), "ASC_TRANSFERS"),
+
+            // ---- probe heat and ignition ----
+            Also(Done(Skip(Multi("AS_PITOT_HEAT", "Pitot and alpha probe heat: on",
+                    AllTo(1, "SWITCH_CPT_PITOT_HEAT", "SWITCH_FO_PITOT_HEAT", "SWITCH_ALPHA_HEAT")),
+                s => s.IsOn("FO_PITOT_ALPHA_HEAT_ON")), "AS_PITOT_HEAT"), "ASC_PITOT_HEAT", "ASC_ALPHA_HEAT"),
+            Also(Done(Skip(SW("AS_IGNITION_BOTH", "Ignition selector: both", "ROTARY_ENG_START_SEL", IgnitionBoth),
+                s => s.IsPosition("ROTARY_ENG_START_SEL", IgnitionBoth)), "AS_IGNITION_BOTH"), "ASC_IGNITION"),
+
+            // ---- the take-off flaps: the tablet's export, else SimBrief's. With neither, nothing is sent or spoken
+            // (FO-20) and the Captain step below asks. The flaps move on the ground only.
+            Also(Done(Skip(LeaveAlone(Provider("AS_FLAPS", "Flaps: take-off setting", L1011Levers.FlapHandleKey,
+                        s => s.TakeoffFlapIndex()),
+                    L1011FoChecklistDefinitions.NotOnGround, L1011FoChecklistDefinitions.FlapsStayText),
+                s => s.IsOn("FO_FLAPS_TAKEOFF")), "AS_FLAPS"), "ASC_FLAPS"),
+            // Keyed on the handle, never on the data: with no data, or with a write that did not take, the handle does
+            // not read the take-off index and the Captain is asked.
+            Skip(Captain("AS_FLAPS_CPT", "Take-off flaps",
+                    "Set the take-off flaps: enter the take-off data on the tablet, or move the flap handle yourself."),
+                s => s.IsOn("FO_FLAPS_TAKEOFF")),
+            Also(Done(Skip(SW("AS_TAXI_LIGHT", "Nose taxi light: on", "TOGGLE_TAXI_LIGHT", 1),
+                s => s.IsPosition("TOGGLE_TAXI_LIGHT", 1)), "AS_TAXI_LIGHT"), "TXC_TAXI_LIGHT"),
+
+            // ---- the Captain's: each ticks its own reminder line. The stabilizer trim is never automated; its
+            // reminder names the tablet's exported trim once there is one.
+            Done(Saying(Captain("AS_CPT_STAB_TRIM", "Set the stabilizer trim for take-off"),
+                s => L1011FoChecklistDefinitions.StabTrimUnits(s) is string units
+                    ? $"Set stabilizer trim for take-off: {units}"
+                    : null), "AS_CPT_STAB_TRIM"),
+            Done(Captain("AS_CPT_ANTI_ICE", "Engine anti-ice as required"), "AS_CPT_ANTI_ICE"),
+            Done(Captain("AS_CPT_CONTROLS", "Check the speed brake and the flight controls"), "AS_CPT_CONTROLS"),
+
+            // ---- the APU off, only once all three engine generators carry the buses: timed out, the wait skips every
+            // APU step with one sentence, and the APU keeps running.
+            WaitForField("AS_GENS_ON_LINE", "Engine generators on line", "FO_ENGINE_GENERATORS_ON", On,
+                EngineGeneratorsOnLineSeconds),
+            Also(Done(Skip(Requires(SW("AS_APU_GEN_TRIP", "APU generator breaker: trip", X.ApuGenerator, 0),
+                    "AS_GENS_ON_LINE", ApuStaysText),
+                s => s.IsOn("FO_APU_GEN_OFF_LINE")), "AS_APU_GEN_TRIP"), "ASC_APU_GEN_TRIP"),
+            // A toggle-carrying switch: written only over its own position read (L1011-4).
+            Also(Done(Skip(Requires(SW("AS_APU_BLEED_OFF", "APU bleed: off", "SWITCH_APU_BLEED", 0),
+                    "AS_GENS_ON_LINE", ApuStaysText),
+                s => s.IsPosition("SWITCH_APU_BLEED", 0)), "AS_APU_BLEED_OFF"), "ASC_APU_BLEED"),
+            // One press; the APU spools down in about a minute. Already set once its speed reads below 5 %.
+            Also(Done(Skip(Requires(SW("AS_APU_STOP", "APU: stop", L1011FoChecklistDefinitions.ApuStopPress, 1),
+                    "AS_GENS_ON_LINE", ApuStaysText),
+                s => s.IsOn("FO_APU_OFF")), "AS_APU_STOP"), "ASC_APU_STOP"),
+            // Only after a stop this run sent: an APU found stopped costs no wait.
+            Sent(WaitSecondsStep("AS_APU_COOLDOWN", "APU cool-down: two minutes", ApuCooldownSeconds), "AS_APU_STOP"),
+            Also(Done(Skip(Requires(SW("AS_APU_MASTER_OFF", "APU master: off", "TOGGLE_APU_POWER", 0),
+                    "AS_GENS_ON_LINE", ApuStaysText),
+                s => s.IsPosition("TOGGLE_APU_POWER", 0)), "AS_APU_MASTER_OFF"), "ASC_APU_MASTER"),
+        }
+    };
+
     // ------------------------------------------------------------------ step builders (the MD-11's, retyped)
 
     /// <summary>A read-only check of a switch the flow finds: 5 s, then skipped aloud.</summary>
@@ -730,6 +873,14 @@ public static class L1011FoFlowDefinitions
         ActionType = FlowStepActionType.CaptainReminder,
         ReminderText = reminderText ?? label,
     };
+
+    /// <summary>A Captain step whose reminder names what <paramref name="text"/> reads at dispatch; with no text it
+    /// speaks its static reminder (<see cref="FlowStep{TState}.ReminderTextProvider"/>).</summary>
+    private static Step Saying(Step step, Func<L1011FoStateEvaluator, string?> text)
+    {
+        step.ReminderTextProvider = text;
+        return step;
+    }
 
     private static Step Skip(Step step, Func<L1011FoStateEvaluator, bool> cond)
     {

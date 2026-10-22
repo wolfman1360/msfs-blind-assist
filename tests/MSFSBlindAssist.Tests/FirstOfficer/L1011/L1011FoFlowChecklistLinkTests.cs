@@ -60,7 +60,14 @@ public class L1011FoFlowChecklistLinkTests
                     $"{flow.Id}/{step.Id} links a StayComplete line: a ground start is not a started engine");
     }
 
-    // A read-only check never writes: every link of a check step is to a line it reads.
+    /// <summary>A check field that is the conjunction of other fields, by the fields it is made of: After Start's
+    /// generator check reads all six relays closed, which is the three fields closed and the three breakers closed.</summary>
+    private static readonly Dictionary<string, string[]> PartsOf = new(StringComparer.Ordinal)
+    {
+        ["FO_ENGINE_GENERATORS_ON"] = new[] { "FO_GEN_FIELDS_CLOSED", "FO_GEN_BREAKERS_CLOSED" },
+    };
+
+    // A read-only check never writes: every link of a check step is to a line it reads, its own field or a part of it.
     [Fact]
     public void A_read_only_check_completes_only_lines_that_read_its_own_field()
     {
@@ -72,10 +79,34 @@ public class L1011FoFlowChecklistLinkTests
                 foreach (var id in step.LinkedChecklistItemIds)
                 {
                     n++;
-                    Assert.True(items[id].StateFieldName == step.ConditionFieldName,
-                        $"{flow.Id}/{step.Id} reads {step.ConditionFieldName} but completes {id}, which reads {items[id].StateFieldName}");
+                    string? field = items[id].StateFieldName;
+                    bool part = field is not null && PartsOf.TryGetValue(step.ConditionFieldName!, out var parts)
+                        && parts.Contains(field);
+                    Assert.True(field == step.ConditionFieldName || part,
+                        $"{flow.Id}/{step.Id} reads {step.ConditionFieldName} but completes {id}, which reads {field}");
                 }
         Assert.True(n >= 5, $"only {n} check links enumerated");
+    }
+
+    /// <summary>A check field read done reads every one of its parts done, and any part read not done (or unread)
+    /// reads the whole not done: the check never ticks a part line the aircraft does not show.</summary>
+    [Fact]
+    public void A_check_field_read_done_reads_each_of_its_parts_done()
+    {
+        var relays = new[] { 1, 2, 3 }.SelectMany(n => new[] { $"L1011_RO_GEN_{n}_FIELD", $"L1011_RO_GEN_{n}_BREAKER" }).ToArray();
+        var closed = State(relays.Select(r => (r, 1.0)).ToArray());
+        foreach (var (whole, parts) in PartsOf)
+        {
+            Assert.Equal(1, closed.GetValue(whole));
+            Assert.All(parts, p => Assert.Equal(1, closed.GetValue(p)));
+        }
+        foreach (var relay in relays)
+        {
+            var open = State(relays.Select(r => (r, r == relay ? 0.0 : 1.0)).ToArray());
+            var unread = State(relays.Where(r => r != relay).Select(r => (r, 1.0)).ToArray());
+            Assert.Equal(0, open.GetValue("FO_ENGINE_GENERATORS_ON"));
+            Assert.True(double.IsNaN(unread.GetValue("FO_ENGINE_GENERATORS_ON")), $"{relay} unread");
+        }
     }
 
     // ------------------------------------------------------------------ a write completes only lines it sets
@@ -102,8 +133,8 @@ public class L1011FoFlowChecklistLinkTests
         { X.StandbyPowerCheck, X.FireTest, X.WheelWellFireTest, X.HydraulicCheck };
 
     /// <summary>The action lines no state judges because the flow later undoes their position (packs on, hot air on,
-    /// APU mode normal): each is its own step's line, ticked when the step completes.</summary>
-    private static readonly string[] UndoneLaterLines = { "PF_APU_MODE_MIN", "PF_PACKS_OFF", "PF_HOT_AIR_OFF" };
+    /// APU mode normal, the ATMs to auto): each is its own step's line, ticked when the step completes.</summary>
+    private static readonly string[] UndoneLaterLines = { "PF_APU_MODE_MIN", "PF_PACKS_OFF", "PF_HOT_AIR_OFF", "AS_ATMS_ON" };
 
     /// <summary>The writes that link no line: each engine's ground start (its line latches on the engine running) and
     /// its light-off watch.</summary>
@@ -123,11 +154,21 @@ public class L1011FoFlowChecklistLinkTests
     /// relays and the three AC ties closed after theirs; the four fire loop selectors at Both after the fire
     /// test, the wheel well selector at Both after its test, and the AC pumps and PTUs off after the hydraulic
     /// check; an engine's N3 at idle after its idle wait, and the six engine generator relays closed after theirs; a
-    /// tank pump written with every other tank pump read off; and for a provider step, the readout at the provider's
-    /// value (the cabin altitude selector's, in metres; the cabin baro's, at the captain's altimeter), or an INS mode
-    /// selector at NAV.</summary>
+    /// tank pump written with every other tank pump read off; the APU generator's breaker open after its trip, and the
+    /// APU stopped after its stop press; and for a provider step, the readout at the provider's value (the cabin
+    /// altitude selector's, in metres; the cabin baro's, at the captain's altimeter), an INS mode selector at NAV, or
+    /// the flap handle at the take-off index with the tablet's export it came from.</summary>
     private static (string Key, double Value)[] Done(Step s)
     {
+        if (s.EventName == X.ApuGenerator && s.TargetValue == 0)
+            return new[] { ("L1011_RO_APU_GEN_BREAKER", 0.0) };
+        if (s.EventName == "APU_STOP")
+            return new[] { ("L1011_RO_APU_RPM", 0.0) };
+        if (s.TargetValueProvider is { } flaps && s.EventName == MSFSBlindAssist.Aircraft.L1011.L1011Levers.FlapHandleKey)
+        {
+            int index = flaps(PlanState) ?? throw new InvalidOperationException($"{s.Id}: no value with the tablet's export");
+            return new[] { (s.EventName, (double)index), (MSFSBlindAssist.Aircraft.IniL1011Definition.PerfSelectedFlapsKey, 10.0) };
+        }
         foreach (int n in new[] { 1, 2, 3 })
             if (s.EventName == X.EngineIdle(n))
                 return new[] { ($"L1011_RO_N3_{n}", 59.2) };

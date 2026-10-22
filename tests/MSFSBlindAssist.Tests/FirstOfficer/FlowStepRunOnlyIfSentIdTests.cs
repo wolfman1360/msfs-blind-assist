@@ -10,6 +10,7 @@ using HwA330 = MSFSBlindAssist.FirstOfficer.HWA330;
 using B737 = MSFSBlindAssist.FirstOfficer.PMDG737;
 using IFly737 = MSFSBlindAssist.FirstOfficer.IFly737;
 using Md11 = MSFSBlindAssist.FirstOfficer.MD11;
+using TriStar = MSFSBlindAssist.FirstOfficer.L1011;
 
 namespace MSFSBlindAssist.Tests.FirstOfficer;
 
@@ -25,7 +26,7 @@ public class FlowStepRunOnlyIfSentIdTests
     {
         new object[] { "PMDG 737" }, new object[] { "PMDG 777" }, new object[] { "Fenix A320" },
         new object[] { "FBW A32NX" }, new object[] { "FBW A380" }, new object[] { "Headwind A330" },
-        new object[] { "iFly 737 MAX8" }, new object[] { "TFDi MD-11" },
+        new object[] { "iFly 737 MAX8" }, new object[] { "TFDi MD-11" }, new object[] { "iniBuilds L-1011" },
     };
 
     internal static IEnumerable<(string Flow, (string Id, FlowStepActionType Type, string? After)[] Steps)> Flows(string profile) =>
@@ -39,6 +40,7 @@ public class FlowStepRunOnlyIfSentIdTests
             "Headwind A330" => Project(HwA330.HwA330FlowDefinitions.Build()),
             "iFly 737 MAX8" => Project(IFly737.IFly737FlowDefinitions.Build()),
             "TFDi MD-11" => Project(Md11.Md11FoFlowDefinitions.Build()),
+            "iniBuilds L-1011" => Project(TriStar.L1011FoFlowDefinitions.Build()),
             _ => throw new System.ArgumentException(profile),
         };
 
@@ -75,4 +77,8 @@ public class FlowStepRunOnlyIfSentIdTests
     [Fact]
     public void The_audit_sees_the_fenix_cooldown_wait()
         => Assert.Equal("SC_APUMASTER", Flows("Fenix A320").Single(f => f.Flow == "SECURE").Steps.Single(s => s.Id == "SC_APU_WAIT").After);
+
+    [Fact]
+    public void The_audit_sees_the_tristar_cooldown_wait()
+        => Assert.Equal("AS_APU_STOP", Flows("iniBuilds L-1011").Single(f => f.Flow == "AFTER_START").Steps.Single(s => s.Id == "AS_APU_COOLDOWN").After);
 }

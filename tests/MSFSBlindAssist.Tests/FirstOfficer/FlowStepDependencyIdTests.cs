@@ -9,6 +9,7 @@ using A380 = MSFSBlindAssist.FirstOfficer.FBWA380;
 using HwA330 = MSFSBlindAssist.FirstOfficer.HWA330;
 using B737 = MSFSBlindAssist.FirstOfficer.PMDG737;
 using IFly737 = MSFSBlindAssist.FirstOfficer.IFly737;
+using TriStar = MSFSBlindAssist.FirstOfficer.L1011;
 
 namespace MSFSBlindAssist.Tests.FirstOfficer;
 
@@ -26,7 +27,7 @@ public class FlowStepDependencyIdTests
     {
         new object[] { "PMDG 737" }, new object[] { "PMDG 777" }, new object[] { "Fenix A320" },
         new object[] { "FBW A32NX" }, new object[] { "FBW A380" }, new object[] { "Headwind A330" },
-        new object[] { "iFly 737 MAX8" },
+        new object[] { "iFly 737 MAX8" }, new object[] { "iniBuilds L-1011" },
     };
 
     // (flow id, ordered steps as (id, requiresStepId, requiresStepSkipText)) for one profile.
@@ -40,6 +41,7 @@ public class FlowStepDependencyIdTests
             "FBW A380" => Project(A380.FbwA380FlowDefinitions.Build()),
             "Headwind A330" => Project(HwA330.HwA330FlowDefinitions.Build()),
             "iFly 737 MAX8" => Project(IFly737.IFly737FlowDefinitions.Build()),
+            "iniBuilds L-1011" => Project(TriStar.L1011FoFlowDefinitions.Build()),
             _ => throw new System.ArgumentException(profile),
         };
 
@@ -75,5 +77,13 @@ public class FlowStepDependencyIdTests
         // would pass vacuously.
         var beforeStart = Flows("PMDG 737").Single(f => f.Flow == "BEFORE_START").Steps;
         Assert.Equal(2, beforeStart.Count(s => s.Requires == "BS_APU_GEN_AVAIL"));
+    }
+
+    [Fact]
+    public void The_audit_sees_the_tristar_apu_shutdown_dependencies()
+    {
+        var afterStart = Flows("iniBuilds L-1011").Single(f => f.Flow == "AFTER_START").Steps;
+        Assert.Equal(new[] { "AS_APU_GEN_TRIP", "AS_APU_BLEED_OFF", "AS_APU_STOP", "AS_APU_MASTER_OFF" },
+            afterStart.Where(s => s.Requires == "AS_GENS_ON_LINE").Select(s => s.Id));
     }
 }

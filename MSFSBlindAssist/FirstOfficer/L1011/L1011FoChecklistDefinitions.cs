@@ -48,6 +48,13 @@ using CheckFn = System.Func<L1011FoActionExecutor, L1011FoStateEvaluator, System
 /// aircraft's engine start page in its own words. The three ground start lines are the profile's only
 /// <c>StayComplete</c> lines ([FOB-1]): the aircraft releases the switch itself at about 55 % N3, so each latches on
 /// its engine running and no flow step links it. Every other line mirrors the aircraft.
+///
+/// After Start has one action group (<c>AFTER_START</c>: the flow's writes and its three unconditional Captain lines;
+/// its conditional flaps prompt stays flow-only) and two read-backs: the aircraft's after start page, ending with the
+/// engine start page's APU shutdown lines, which After Start delivers, and its taxi page. The flaps line writes the
+/// take-off index (the tablet's, else SimBrief's) or nothing without one, and is left alone off the ground; the
+/// transfers line is left alone unless tanks 1A and 3A both hold fuel. The ATMs-on line reads no state: the flow puts
+/// them to auto right after. The stabilizer trim line shows the tablet's exported trim as its live value.
 /// </summary>
 public static class L1011FoChecklistDefinitions
 {
@@ -57,6 +64,7 @@ public static class L1011FoChecklistDefinitions
         Preflight(), PreflightEngineerCL(), PreflightOverheadCL(), PreflightMainPanelCL(), PreflightConsoleCL(),
         BeforeStart(), BeforeStartCL(),
         EngineStart(), EngineStartCL(),
+        AfterStart(), AfterStartCL(), TaxiCL(),
     };
 
     private const string ContIgnition = "SWITCH_CONT_IGNITION";
@@ -646,6 +654,149 @@ public static class L1011FoChecklistDefinitions
         return new Group { Id = G, Name = "Engine Start", Items = items };
     }
 
+    // ================================================================== After Start
+
+    private const string AtmB = "ROTARY_HYD_B2_MODE";
+    private const string AtmC = "ROTARY_HYD_C2_MODE";
+    private const string IgnitionSelector = "ROTARY_ENG_START_SEL";
+    private const string TaxiLight = "TOGGLE_TAXI_LIGHT";
+
+    /// <summary>The APU stop button's row: a press, no position.</summary>
+    internal const string ApuStopPress = "APU_STOP";
+
+    /// <summary>The ATM switches' positions: 1 AUTO, 2 ON (0 is OFF).</summary>
+    private const int AtmAuto = 1, AtmOn = 2;
+
+    /// <summary>The AC meter's generator 3 position, the ignition selector's both systems.</summary>
+    private const int AcMeterGen3 = 3, IgnitionBoth = 1;
+
+    /// <summary>The flaps line's reason, and its flow step's: the flaps move on the ground only.</summary>
+    internal const string FlapsStayText = "Flaps left as they are: not read on the ground.";
+
+    /// <summary>The transfers line's reason, and its flow step's.</summary>
+    internal const string TransfersStayText = "1A and 3A transfers left off: tanks 1A and 3A are empty or unread.";
+
+    /// <summary>Tanks 1A and 3A do not both read fuel (either empty or unread): the transfers stay off. The transfers
+    /// step and its tick share it.</summary>
+    internal static bool TransferTanksNotFueled(L1011FoStateEvaluator s) => !s.IsOn("FO_TANKS_1A_3A_FUELED");
+
+    /// <summary>The tablet's take-off stabilizer trim as it is spoken ("2.38 units", invariant), null before an
+    /// export. The Captain's reminder and the action line's live value share it.</summary>
+    internal static string? StabTrimUnits(L1011FoStateEvaluator s)
+        => s.TakeoffStabTrimUnits() is double units ? $"{units.ToString("0.00", CultureInfo.InvariantCulture)} units" : null;
+
+    /// <summary>
+    /// The After Start flow's writes and its three unconditional Captain lines, in the flow's order and with its labels:
+    /// a single switch reads its key at the target, a multi-switch line its synthetic, the APU generator line its breaker
+    /// read open, the stop line the APU stopped, the flaps line the handle at the take-off index. The ATMs-on line reads
+    /// no state, the flow putting them to auto right after; a tick does its step's write.
+    /// </summary>
+    private static Group AfterStart()
+    {
+        const string G = "AFTER_START";
+        return new Group
+        {
+            Id = G, Name = "After Start",
+            Items = new()
+            {
+                Auto("AS_HI_PRESS", G, "High pressure bleed valves: on", "FO_HI_PRESS_ON", On,
+                    SetAll(All(1, "SWITCH_HI_PRESS_ENG_1", "SWITCH_HI_PRESS_ENG_2", "SWITCH_HI_PRESS_ENG_3"))),
+                Auto("AS_ISLN_VALVES", G, "Engine isolation valves: on", "FO_ISLN_VALVES_ON", On,
+                    SetAll(All(1, "SWITCH_ISLN_VALVE_ENG_1", "SWITCH_ISLN_VALVE_ENG_2", "SWITCH_ISLN_VALVE_ENG_3"))),
+                Auto("AS_APU_AIR", G, "Fuselage isolation and crossbleed valves: on", "FO_APU_AIR_ON", On,
+                    SetAll(All(1, FuselageIsolation, "SWITCH_XBLEED_1", "SWITCH_XBLEED_3"))),
+                Auto("AS_PACKS_ON", G, "Packs: on", "FO_PACKS_ON", On, SetAll(All(1, PackKeys))),
+                ActionManual("AS_ATMS_ON", G, "ATM switches: on", SetAll(All(AtmOn, AtmB, AtmC))),
+                Auto("AS_ATMS_AUTO", G, "ATM switches: auto", "FO_ATMS_AUTO", On, SetAll(All(AtmAuto, AtmB, AtmC))),
+                Auto("AS_GALLEY_ON", G, "Galley power: on", "FO_GALLEY_ON", On, SetAll(All(1, GalleyBuses))),
+                Auto("AS_AC_METER", G, "AC meter: generator 3", AcMeter, v => Is(v, AcMeterGen3), Set(AcMeter, AcMeterGen3)),
+                Auto("AS_DC_METER", G, "DC meter: battery", DcMeter, v => Is(v, DcMeterBattery), Set(DcMeter, DcMeterBattery)),
+                Auto("AS_FUEL_PUMPS", G, "Fuel pumps: all on", "FO_FUEL_PUMPS_ON", On, SetAll(All(1, FuelPumps))),
+                Auto("AS_CROSSFEEDS", G, "Crossfeed valves: closed", "FO_CROSSFEEDS_CLOSED", On,
+                    SetAll(All(0, "SWITCH_FUEL_LEFT_XFEED", "SWITCH_FUEL_CTR_XFEED", "SWITCH_FUEL_RIGHT_XFEED"))),
+                // On only with fuel in both tanks 1A and 3A, as its step.
+                LeaveAlone(Auto("AS_TRANSFERS", G, "1A and 3A transfers: on", "FO_TRANSFERS_ON", On,
+                        SetAll(All(1, "SWITCH_FUEL_XFR_1A", "SWITCH_FUEL_XFR_3A"))),
+                    TransferTanksNotFueled, TransfersStayText),
+                Auto("AS_PITOT_HEAT", G, "Pitot and alpha probe heat: on", "FO_PITOT_ALPHA_HEAT_ON", On,
+                    SetAll(All(1, "SWITCH_CPT_PITOT_HEAT", "SWITCH_FO_PITOT_HEAT", "SWITCH_ALPHA_HEAT"))),
+                Auto("AS_IGNITION_BOTH", G, "Ignition selector: both", IgnitionSelector, v => Is(v, IgnitionBoth),
+                    Set(IgnitionSelector, IgnitionBoth)),
+                // No take-off flaps from the tablet or SimBrief: the tick writes nothing (FO-20). On the ground only.
+                LeaveAlone(Auto("AS_FLAPS", G, "Flaps: take-off setting", "FO_FLAPS_TAKEOFF", On,
+                        Provided(L1011Levers.FlapHandleKey, s => s.TakeoffFlapIndex())),
+                    NotOnGround, FlapsStayText),
+                Auto("AS_TAXI_LIGHT", G, "Nose taxi light: on", TaxiLight, v => Is(v, 1), Set(TaxiLight, 1)),
+                Reminder("AS_CPT_STAB_TRIM", G, "Set the stabilizer trim for take-off", StabTrimUnits),
+                Reminder("AS_CPT_ANTI_ICE", G, "Engine anti-ice as required"),
+                Reminder("AS_CPT_CONTROLS", G, "Check the speed brake and the flight controls"),
+                Auto("AS_APU_GEN_TRIP", G, "APU generator breaker: trip", "FO_APU_GEN_OFF_LINE", On, Set(X.ApuGenerator, 0)),
+                Auto("AS_APU_BLEED_OFF", G, "APU bleed: off", ApuBleed, v => Is(v, 0), Set(ApuBleed, 0)),
+                Auto("AS_APU_STOP", G, "APU: stop", "FO_APU_OFF", On, Set(ApuStopPress, 1)),
+                Auto("AS_APU_MASTER_OFF", G, "APU master: off", ApuMaster, v => Is(v, 0), Set(ApuMaster, 0)),
+            }
+        };
+    }
+
+    /// <summary>The aircraft's after start page in its own words, then the engine start page's APU shutdown lines, which
+    /// After Start delivers once the engine generators are on line.</summary>
+    private static Group AfterStartCL()
+    {
+        const string G = "AFTER_START_CL";
+        return new Group
+        {
+            Id = G, Name = "After Start",
+            Items = new()
+            {
+                Read("ASC_HI_PRESS", G, "All engines hi press switches: latched", "FO_HI_PRESS_ON", On),
+                Read("ASC_ISLN_VALVES", G, "All eng isol valve: latch", "FO_ISLN_VALVES_ON", On),
+                Read("ASC_FUSELAGE_ISLN", G, "Fuselage isolation valve switch: latched", FuselageIsolation, v => Is(v, 1)),
+                Read("ASC_XBLEEDS", G, "All cross bleed switches: latched", "FO_CROSSBLEEDS_ON", On),
+                Read("ASC_PACKS", G, "Pack flow control switches: latch", "FO_PACKS_ON", On),
+                Read("ASC_ATMS", G, "ATMs: auto", "FO_ATMS_AUTO", On),
+                Read("ASC_GALLEY", G, "Galley power: on", "FO_GALLEY_ON", On),
+                Read("ASC_GEN_FIELDS", G, "Engine generator field: close", "FO_GEN_FIELDS_CLOSED", On),
+                Read("ASC_GEN_BREAKERS", G, "Engine generator breaker: close", "FO_GEN_BREAKERS_CLOSED", On),
+                Read("ASC_IDG", G, "IDG low pressure lights: out", "FO_IDG_LIGHTS_OUT", On),
+                Read("ASC_BUS_FAIL", G, "All bus fail lights: out", "FO_BUS_FAIL_LIGHTS_OUT", On),
+                Read("ASC_AC_METER", G, "AC meter selector: gen 3", AcMeter, v => Is(v, AcMeterGen3)),
+                Read("ASC_DC_METER", G, "DC meter selector: bat", DcMeter, v => Is(v, DcMeterBattery)),
+                Read("ASC_AC_ESS", G, "Essential power selector: normal b3 (g1)", AcEssBus, v => Is(v, AcEssNormal)),
+                Read("ASC_FUEL_PUMPS", G, "Fuel tank pumps: all on", "FO_FUEL_PUMPS_ON", On),
+                Read("ASC_CROSSFEEDS", G, "Crossfeed valves: closed", "FO_CROSSFEEDS_CLOSED", On),
+                Read("ASC_TRANSFERS", G, "If there is fuel in tanks 1A and 3A: latch xfr", "FO_TRANSFERS_ON", On),
+                Read("ASC_PITOT_HEAT", G, "Capt and F/O pitot heat: on", "FO_PITOT_ALPHA_HEAT_ON", On),
+                Read("ASC_ALPHA_HEAT", G, "Alpha probe heat: on", "FO_PITOT_ALPHA_HEAT_ON", On),
+                Read("ASC_IGNITION", G, "Engine ignition: both", IgnitionSelector, v => Is(v, IgnitionBoth)),
+                Reminder("ASC_STAB_TRIM", G, "Stabilizer trim: set for take off"),
+                Reminder("ASC_SPEED_BRAKES", G, "Speed brakes: check"),
+                Read("ASC_FLAPS", G, "Flaps: set for take off", "FO_FLAPS_TAKEOFF", On),
+                Reminder("ASC_CONTROLS", G, "Flight controls: check"),
+                Read("ASC_APU_GEN_TRIP", G, "APU generator breaker: trip", "FO_APU_GEN_OFF_LINE", On),
+                Read("ASC_APU_BLEED", G, "APU bleed air shut off switch: unlatch", ApuBleed, v => Is(v, 0)),
+                Read("ASC_APU_STOP", G, "APU stop button: press", "FO_APU_OFF", On),
+                Read("ASC_APU_MASTER", G, "APU master power: off", ApuMaster, v => Is(v, 0)),
+            }
+        };
+    }
+
+    /// <summary>The aircraft's taxi page in its own words: the nose taxi light, which After Start turns on, and the
+    /// Captain's brakes.</summary>
+    private static Group TaxiCL()
+    {
+        const string G = "TAXI_CL";
+        return new Group
+        {
+            Id = G, Name = "Taxi",
+            Items = new()
+            {
+                Read("TXC_TAXI_LIGHT", G, "Nose wheel taxi light: on", TaxiLight, v => Is(v, 1)),
+                Reminder("TXC_PARKING_BRAKE", G, "Parking brake: release"),
+                Reminder("TXC_BRAKES", G, "Brakes: check"),
+            }
+        };
+    }
+
     // ================================================================== builders (the MD-11's)
 
     /// <summary>A state line; <paramref name="additionalFields"/> must each read done under the same condition too.</summary>
@@ -708,12 +859,15 @@ public static class L1011FoChecklistDefinitions
         ManualCompletionAllowed = true,
     };
 
-    private static Item Reminder(string id, string groupId, string text) => new()
+    /// <summary>A Captain's line; <paramref name="live"/>, when given, is the value the First Officer reads for it,
+    /// spoken on a tick and shown on the status line, never in the tree (the A380's shape).</summary>
+    private static Item Reminder(string id, string groupId, string text, Func<L1011FoStateEvaluator, string?>? live = null) => new()
     {
         Id = id, GroupId = groupId, Label = text,
         Type = ChecklistItemType.CaptainReminder,
         ManualCompletionAllowed = true,
         ReminderText = text,
+        LiveValue = live,
     };
 
     // A line whose hand-tick the First Officer refuses in the aircraft's current state

@@ -454,7 +454,11 @@ public class FlowManager<TExec, TState>
             {
                 case FlowStepActionType.CaptainReminder:
                 {
-                    string text = step.ReminderText ?? step.Label;
+                    // A step with a FlowStep.ReminderTextProvider speaks what it reads now, when it has a text;
+                    // without one, or with no text, exactly what it always spoke.
+                    string text = ReadReminderText(flow, step) is { } dynamic && !string.IsNullOrWhiteSpace(dynamic)
+                        ? dynamic
+                        : step.ReminderText ?? step.Label;
                     CaptainReminderRequired?.Invoke(text);
                     _announcer.Announce($"Captain action required: {text}");
                     return StepOutcome.Done;
@@ -553,6 +557,23 @@ public class FlowManager<TExec, TState>
         {
             StepFailed?.Invoke(flow, step, index, ex.Message);
             return StepOutcome.Failed;
+        }
+    }
+
+    // A Captain step's FlowStep.ReminderTextProvider, read defensively: null when the step has none, and null (logged)
+    // when reading it throws, so the reminder falls back to its static text. The reminder is the pilot's only word of
+    // the action: a value it names is a courtesy, never a reason to lose the reminder.
+    private string? ReadReminderText(FlowDefinition<TState> flow, FlowStep<TState> step)
+    {
+        if (step.ReminderTextProvider is not { } provider) return null;
+        try
+        {
+            return provider(_state);
+        }
+        catch (Exception ex)
+        {
+            Log.Debug("FO", $"{flow.Id}.{step.Id}: reminder text provider threw, static text spoken: {ex.Message}");
+            return null;
         }
     }
 
