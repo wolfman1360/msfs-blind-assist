@@ -41,6 +41,9 @@ public interface IFoActionExecutor
     /// </summary>
     Task OnFlowStoppedAsync() => Task.CompletedTask;
 
+    /// <summary>What a stopped run left that the pilot must hear, taken once (then cleared) and queued after the run's own end sentence; null for nothing. Default: null.</summary>
+    string? TakeStoppedRunNotice() => null;
+
     /// <summary>
     /// The First Officer window is closing (an aircraft switch, app exit), its flow just cancelled:
     /// put back now, while the sim still listens, every press the executor still holds instead of

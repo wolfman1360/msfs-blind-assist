@@ -31,10 +31,10 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// Preflight starts the APU, puts the bleed air and packs on it, runs the fire, wheel well and hydraulic
 /// tests and sets the engineer's, overhead, main panel and console switches for departure. It switches the
 /// packs, the AC hydraulic pumps and the power transfer units off on the way, so it opens with the same two
-/// guards ([FO-25]); its packs step is also left alone off the ground, as its tick is. The APU start and its running
-/// wait require the master step: a master that did not come on skips both at once, aloud, instead of a two-minute
-/// wait. Its toggle-carrying writes (APU bleed, anti-skid, no smoking) are single switches whose "Already set" reads
-/// their own position: the executor reads first, and from an unknown position the definition refuses the write.
+/// guards ([FO-25]); its packs step is also left alone off the ground, as its tick is. A master that does not read on
+/// stops the flow at once, aloud, instead of a two-minute wait for an APU that cannot start. Its toggle-carrying writes
+/// (APU bleed, anti-skid, no smoking) are single switches whose "Already set" reads their own position: the executor
+/// reads first, and from an unknown position the definition refuses the write.
 ///
 /// Before Start opens with the ground guard (it switches packs 1 and 3 off) and two read-only Stop waits, the APU
 /// running and its generator on line, so external power comes off only once the APU carries the buses, as the
@@ -73,8 +73,8 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// anti-skid carries a toggle: its single-switch step reads its own position first.
 ///
 /// After Takeoff puts the gear lever up, only with the aircraft read airborne: on the ground, or with the on-ground flag
-/// unread, the step and its tick are left alone, aloud (whether the aircraft itself refuses gear up on the ground has not
-/// been seen live). It reminds the Captain of the flap schedule, sets the climb (autobrake, nose, taxi and turnoff
+/// unread, the step and its tick are left alone, aloud (the gauge's script refuses gear up on the ground, but no live
+/// check has seen it). It reminds the Captain of the flap schedule, sets the climb (autobrake, nose, taxi and turnoff
 /// lights, continuous ignition off, packs on), waits up to five minutes, read only, for the Captain's flaps up, and
 /// confirms the gear up last ([FO-13]): a read-only 20 s wait on the lever and the legs that never writes.
 ///
@@ -262,9 +262,6 @@ public static class L1011FoFlowDefinitions
     /// <summary>The AC essential power selector's normal position: bus 3 (generator 1).</summary>
     private const int AcEssNormal = 4;
 
-    /// <summary>What Preflight's APU start and running wait say when the master step was skipped: nothing is pressed.</summary>
-    private const string ApuMasterNotOnText = "APU not started: the APU master is not on.";
-
     private static (string EventName, int? TargetValue)[] AllTo(int target, params string[] keys)
         => keys.Select(k => (k, (int?)target)).ToArray();
 
@@ -282,22 +279,21 @@ public static class L1011FoFlowDefinitions
             OnGroundGuard("PF_ON_GROUND"),
 
             // ---- the APU: master, minimum compressor load, fuel, start, generator, ties ----
-            Also(Done(Skip(SW("PF_APU_MASTER", "APU master: on", "TOGGLE_APU_POWER", 1),
-                s => s.IsPosition("TOGGLE_APU_POWER", 1)), "PF_APU_MASTER"), "PFC_APU_MASTER"),
+            // A master that does not read on stops the flow at once, saying so: everything after it runs on the APU, and
+            // the start presses nothing without it.
+            Also(Done(Stop(Skip(SW("PF_APU_MASTER", "APU master: on", "TOGGLE_APU_POWER", 1),
+                s => s.IsPosition("TOGGLE_APU_POWER", 1))), "PF_APU_MASTER"), "PFC_APU_MASTER"),
             Done(Skip(SW("PF_APU_MODE_MIN", "APU compressor mode: minimum", "SWITCH_APU_MODE", 0),
                 s => s.IsPosition("SWITCH_APU_MODE", 0)), "PF_APU_MODE_MIN"),
             Also(Done(Skip(Multi("PF_APU_FUEL", "APU fuel: tank 2 left pump and engine 2 tank valve on",
                     ("SWITCH_FUEL_PUMP_2L_1", 1), ("SWITCH_ENG_2_TANK_VALVE", 1), ("GUARD_ENG_2_TANK_VALVE", 0)),
                 s => s.IsOn("FO_ENG2_FUEL_FEED")), "PF_APU_FUEL"), "PFC_APU_FUEL"),
-            // One press, done once the APU turns: a press while it already turns would be a second start. Only once
-            // the master went on or was found on ("Already set" is not a skip): the start presses nothing without it.
-            Done(Skip(Requires(SW("PF_APU_START", "APU: start", X.ApuStart, 1), "PF_APU_MASTER", ApuMasterNotOnText),
-                s => s.IsOn("FO_APU_STARTING_OR_RUNNING")), "PF_APU_START"),
+            // One press, done once the APU turns: a press while it already turns would be a second start.
+            Done(Skip(SW("PF_APU_START", "APU: start", X.ApuStart, 1), s => s.IsOn("FO_APU_STARTING_OR_RUNNING")), "PF_APU_START"),
             // About 50 s from the press to 100 %. An APU that never runs stops the flow: everything after it
-            // runs on its air and its generator. A master that did not come on skips it at once, aloud, instead of
-            // the two-minute wait for an APU that cannot start.
-            Done(Requires(WaitForField("PF_APU_RUNNING", "APU running", "FO_APU_RUNNING", On, ApuRunningSeconds,
-                onTimeout: FlowStepFailurePolicy.Stop), "PF_APU_MASTER", ApuMasterNotOnText), "PFC_APU_START"),
+            // runs on its air and its generator.
+            Done(WaitForField("PF_APU_RUNNING", "APU running", "FO_APU_RUNNING", On, ApuRunningSeconds,
+                onTimeout: FlowStepFailurePolicy.Stop), "PFC_APU_START"),
             Also(Done(Skip(SW("PF_APU_GEN", "APU generator: on line", X.ApuGenerator, 1), s => s.IsOn("FO_APU_GEN_CLOSED")),
                 "PF_APU_GEN"), "PFC_APU_GEN"),
             Also(Done(Skip(SW("PF_AC_TIES", "AC bus ties: closed", X.AcTies, 1), s => s.IsOn("FO_AC_TIES_CLOSED")),
@@ -916,8 +912,8 @@ public static class L1011FoFlowDefinitions
         Steps = new()
         {
             // Already set once the lever reads up. Written only with the aircraft read airborne: on the ground, or with
-            // the on-ground flag unread, it is left alone, aloud, as its tick is. Whether the aircraft itself refuses gear
-            // up on the ground has not been seen live, so nothing relies on it. Its read-back line is the legs', which
+            // the on-ground flag unread, it is left alone, aloud, as its tick is. The gauge's script refuses gear up on the
+            // ground, but no live check has seen it, so nothing relies on it. Its read-back line is the legs', which
             // the gear check last delivers.
             Done(Skip(LeaveAlone(SW("AT_GEAR", "Landing gear: up", L1011Levers.GearLeverKey, GearUp),
                     L1011FoChecklistDefinitions.NotAirborne, L1011FoChecklistDefinitions.GearStaysDownText),

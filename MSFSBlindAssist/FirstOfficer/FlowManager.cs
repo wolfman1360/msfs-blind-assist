@@ -251,6 +251,22 @@ public class FlowManager<TExec, TState>
         catch (Exception ex) { Log.Warn("FO", $"{flow.Id}: stop clean-up threw: {ex.Message}"); }
     }
 
+    // Right after the run's own end sentence: what the executor could not put back (the TriStar's
+    // ground start still on), QUEUED, so it follows that sentence and never cuts it off; spoken
+    // before it, an interrupting "flow stopped" cancelled it. A throw is logged; the run still ends.
+    private void AnnounceStoppedRunNotice(FlowDefinition<TState> flow)
+    {
+        string? notice;
+        try { notice = _executor.TakeStoppedRunNotice(); }
+        catch (Exception ex)
+        {
+            Log.Warn("FO", $"{flow.Id}: stopped-run notice threw: {ex.Message}");
+            return;
+        }
+        if (!string.IsNullOrWhiteSpace(notice))
+            _announcer.Announce(notice);
+    }
+
     private async Task RunFlowAsync(FlowDefinition<TState> flow, CancellationTokenSource run)
     {
         var ct = run.Token;
@@ -366,6 +382,7 @@ public class FlowManager<TExec, TState>
                         await CleanUpStoppedRunAsync(flow);
                         FlowFailed?.Invoke(flow, $"Step '{step.Label}' failed");
                         _announcer.AnnounceImmediate($"{flow.Name} flow stopped. Unable to complete: {step.AnnounceText}");
+                        AnnounceStoppedRunNotice(flow);
                         return;
                     }
 
@@ -415,6 +432,7 @@ public class FlowManager<TExec, TState>
             // Queued, not interrupting: on an aircraft switch it follows the switch's own
             // speech instead of cutting it off, and after Stop Flow nothing else is speaking.
             _announcer.Announce($"{flow.Name} flow cancelled");
+            AnnounceStoppedRunNotice(flow);
             return;
         }
         catch (Exception ex)
@@ -431,6 +449,7 @@ public class FlowManager<TExec, TState>
             _announcer.AnnounceImmediate(failed != null
                 ? $"{flow.Name} flow stopped. Unable to complete: {failed.AnnounceText}"
                 : $"{flow.Name} flow stopped.");
+            AnnounceStoppedRunNotice(flow);
             return;
         }
 

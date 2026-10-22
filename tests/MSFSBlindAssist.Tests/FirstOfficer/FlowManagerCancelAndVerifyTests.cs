@@ -99,6 +99,20 @@ public class FlowManagerCancelAndVerifyTests
             return Task.CompletedTask;
         }
 
+        // TakeStoppedRunNotice hands Notice over once (then null), or throws NoticeThrows; it counts its calls.
+        public string? Notice;
+        public Exception? NoticeThrows;
+        public int NoticeCalls;
+
+        public string? TakeStoppedRunNotice()
+        {
+            Interlocked.Increment(ref NoticeCalls);
+            if (NoticeThrows != null) throw NoticeThrows;
+            var notice = Notice;
+            Notice = null;
+            return notice;
+        }
+
         public Task WaitForDispatchDrainAsync() => Task.CompletedTask;
     }
 
@@ -477,5 +491,103 @@ public class FlowManagerCancelAndVerifyTests
     {
         h.Start(flow);
         await h.WaitUntilStoppedAsync();
+    }
+
+    // ---- a stopped run's notice: queued right after the run's own end sentence ------------------------------------
+
+    private const string Notice = "Engine 2 ground start switch still on: release it.";
+
+    /// <summary>Ends the run one of the three ways a run ends part-way: a Stop-policy failure, a throw outside a step's
+    /// own catch (a StepStarted handler), or a Stop. Returns the end sentence each speaks.</summary>
+    private static async Task<string> EndPartWayAsync(Harness h, string how)
+    {
+        switch (how)
+        {
+            case "stop-policy failure":
+                var failing = Write("A");
+                failing.FailurePolicy = FlowStepFailurePolicy.Stop;
+                h.Executor.Fails.Add("A");
+                await RunAsync(h, Flow(failing, Write("B")));
+                return "Test flow stopped. Unable to complete: A: ON";
+            case "throw":
+                h.Flows.StepStarted += (_, _, _) => throw new InvalidOperationException("handler threw");
+                await RunAsync(h, Flow(Write("A"), Write("B")));
+                return "Test flow stopped. Unable to complete: A: ON";
+            default:
+                h.Executor.Hold = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                h.Start(Flow(Write("A"), Write("B")));
+                await h.Executor.WriteStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                h.Flows.Cancel();
+                h.Executor.Hold.SetResult(true);
+                await h.WaitUntilStoppedAsync();
+                return "Test flow cancelled";
+        }
+    }
+
+    // The executor's notice (the TriStar's ground start it could not release) is queued after the end sentence, so the
+    // interrupting "flow stopped" can no longer cut it off; it is asked for once.
+    [Theory]
+    [InlineData("stop-policy failure")]
+    [InlineData("throw")]
+    [InlineData("stop")]
+    public async Task A_stopped_runs_notice_follows_its_end_sentence(string how)
+    {
+        var h = new Harness();
+        h.Executor.Notice = Notice;
+
+        string end = await EndPartWayAsync(h, how);
+
+        Assert.Equal(new[] { end, Notice }, h.Speech.All.TakeLast(2));
+        Assert.Single(h.Speech.All, m => m == Notice);
+        Assert.Equal(1, h.Executor.NoticeCalls);
+    }
+
+    [Theory]
+    [InlineData("stop-policy failure", null)]
+    [InlineData("throw", null)]
+    [InlineData("stop", null)]
+    [InlineData("stop", "")]
+    [InlineData("stop", "  ")]
+    public async Task No_notice_adds_nothing_after_the_end_sentence(string how, string? notice)
+    {
+        var h = new Harness();
+        h.Executor.Notice = notice;
+
+        string end = await EndPartWayAsync(h, how);
+
+        Assert.Equal(end, h.Speech.All[^1]);
+        Assert.Equal(1, h.Executor.NoticeCalls);
+    }
+
+    [Theory]
+    [InlineData("stop-policy failure")]
+    [InlineData("throw")]
+    [InlineData("stop")]
+    public async Task A_notice_that_throws_still_ends_the_run(string how)
+    {
+        var h = new Harness();
+        h.Executor.NoticeThrows = new InvalidOperationException("notice threw");
+
+        string end = await EndPartWayAsync(h, how);
+
+        Assert.False(h.Flows.IsRunning);
+        Assert.Equal(end, h.Speech.All[^1]);
+        Assert.Equal(how == "stop" ? 1 : 0, h.Cancelled);
+        Assert.Equal(how == "stop" ? 0 : 1, h.Failed);
+        Assert.Equal(1, h.Executor.NoticeCalls);
+    }
+
+    // A run that completes leaves nothing to say, and never asks.
+    [Fact]
+    public async Task A_completed_flow_never_asks_for_a_notice()
+    {
+        var h = new Harness();
+        h.Executor.Notice = Notice;
+
+        await RunAsync(h, Flow(Write("A")));
+
+        Assert.Equal(1, h.Completed);
+        Assert.Equal(0, h.Executor.NoticeCalls);
+        Assert.DoesNotContain(Notice, h.Speech.All);
     }
 }

@@ -12,9 +12,9 @@ namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 /// watched for rotation, the light-off watch, the idle wait and the generators. A start that times out or is
 /// stopped is released only while that engine's fuel and ignition read off, never by a fuel write, and once: by
 /// whoever takes the run's recorded start out (the watch, the flow's Stop clean-up or the window's close).
-/// Nothing is spoken, but for one sentence: a Stop clean-up that took a start and could not release it tells the
-/// Captain the switch is still on. Every engine starts cold (N3 1.6, a cold gauge never reads 0), its fuel and
-/// ignition and its ground start off.
+/// Nothing is spoken: a start a flow's run took and could not release becomes that run's notice, which FlowManager
+/// speaks after the run's own end sentence. Every engine starts cold (N3 1.6, a cold gauge never reads 0), its fuel
+/// and ignition and its ground start off.
 /// </summary>
 public class L1011FoEngineStartExecutorTests
 {
@@ -576,23 +576,25 @@ public class L1011FoEngineStartExecutorTests
         Assert.Equal(new[] { (Switch(2), 1.0) }, _ac.Writes);
         Assert.Equal(1, _ac.Get(Switch(2)));
         Assert.Contains(_logged, line => line.Contains(Fuel(2)) && line.Contains("unread"));
-        Assert.Equal(new[] { StillOn2 }, _spoken);
+        Assert.Empty(_spoken);   // never spoken here: the flow's end speaks it, after its own sentence
+        Assert.Equal(StillOn2, _exec.TakeStoppedRunNotice());
     }
 
-    /// <summary>What the Stop clean-up says for engine 2's start it took and could not release.</summary>
+    /// <summary>The stopped run's notice for engine 2's start the executor took and could not release.</summary>
     private const string StillOn2 = "Engine 2 ground start switch still on: release it.";
 
     /// <summary>
     /// The Stop clean-up took the run's start but could not release it: its fuel and ignition unread, its switch
     /// unread, or its click to off refused or never reading off. The starter may still turn a dry engine, which the
-    /// Captain cannot see, so one sentence says so: once, and with flow progress speech off too (a failure).
+    /// Captain cannot see, so the run's notice says so, once; the executor speaks nothing itself (FlowManager queues
+    /// the notice after the run's end sentence).
     /// </summary>
     [Theory]
     [InlineData("fuel unread")]
     [InlineData("switch unread")]
     [InlineData("click refused")]
     [InlineData("click never reads off")]
-    public async Task A_stop_clean_up_that_cannot_release_the_ground_start_says_so_once(string why)
+    public async Task A_stop_clean_up_that_cannot_release_the_ground_start_leaves_one_notice(string why)
     {
         _exec.AttachFlowProgressSpeech(() => false);
         using var stop = new CancellationTokenSource();
@@ -607,22 +609,24 @@ public class L1011FoEngineStartExecutorTests
         stop.Cancel();
 
         await _exec.OnFlowStoppedAsync().WaitAsync(Hang);
-        await _exec.OnFlowStoppedAsync().WaitAsync(Hang);   // taken once: nothing left to take or say
+        await _exec.OnFlowStoppedAsync().WaitAsync(Hang);   // taken once: nothing left to take
         _exec.ReleaseHeldPresses();
 
-        Assert.Equal(new[] { StillOn2 }, _spoken);
+        Assert.Empty(_spoken);
+        Assert.Equal(StillOn2, _exec.TakeStoppedRunNotice());
+        Assert.Null(_exec.TakeStoppedRunNotice());          // taken once, then cleared
         Assert.DoesNotContain(_ac.Writes, w => w.Key == Fuel(2));   // never a fuel write
         if (why != "switch unread")
             Assert.Equal(1, _ac.Get(Switch(2)));
     }
 
     /// <summary>A start the clean-up released, one already off and one whose fuel and ignition are on (the start runs
-    /// on) leave nothing to tell the Captain, with flow progress speech on too.</summary>
+    /// on) leave no notice.</summary>
     [Theory]
     [InlineData("released")]
     [InlineData("already off")]
     [InlineData("fuel on")]
-    public async Task A_stop_clean_up_says_nothing_when_the_ground_start_is_released_or_needs_no_release(string how)
+    public async Task A_stop_clean_up_leaves_no_notice_when_the_ground_start_is_released_or_needs_no_release(string how)
     {
         _exec.AttachFlowProgressSpeech(() => true);
         using var stop = new CancellationTokenSource();
@@ -637,6 +641,58 @@ public class L1011FoEngineStartExecutorTests
 
         Assert.Equal(how == "fuel on" ? 1 : 0, _ac.Get(Switch(2)));
         Assert.Equal(how == "released", _ac.Writes.Contains((Switch(2), 0.0)));
+        Assert.Null(_exec.TakeStoppedRunNotice());
+        Assert.Empty(_spoken);
+    }
+
+    /// <summary>The window's close takes a stopped run's start and releases it over the cache: a cache that leaves it
+    /// unread, or a click refused, leaves the notice; fuel on, a switch already off and a click sent leave none.</summary>
+    [Theory]
+    [InlineData("fuel unread", true)]
+    [InlineData("switch unread", true)]
+    [InlineData("click refused", true)]
+    [InlineData("fuel on", false)]
+    [InlineData("already off", false)]
+    [InlineData("released", false)]
+    public async Task The_windows_close_leaves_a_notice_only_for_a_start_it_could_not_release(string how, bool notice)
+    {
+        using var stop = new CancellationTokenSource();
+        Assert.True(await _exec.ExecuteStepAsync(Flow(GroundStart(2)), stop.Token));
+        switch (how)
+        {
+            case "fuel unread": _ac.Unset(Fuel(2)); break;
+            case "switch unread": _ac.Unset(Switch(2)); break;
+            case "click refused": _ac.Refuse(Switch(2)); break;
+            case "fuel on": _ac.Set(Fuel(2), 1); break;
+            case "already off": _ac.Set(Switch(2), 0); break;
+        }
+        stop.Cancel();
+
+        _exec.ReleaseHeldPresses();
+
+        Assert.Equal(notice ? StillOn2 : null, _exec.TakeStoppedRunNotice());
+        Assert.Equal(how == "released", _ac.Writes.Contains((Switch(2), 0.0)));
+        Assert.Empty(_spoken);
+    }
+
+    /// <summary>A flow step's watch that times out releases its own start; one it cannot release (fuel unread) leaves the
+    /// notice for that run's end. A hand tick's has no run to end, so it leaves none.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_timed_out_watch_that_cannot_release_leaves_a_notice_only_for_a_flow_step(bool flowStep)
+    {
+        _ac.GroundStartN3PerSecond = 0;   // the switch on, nothing turning: the watch gives up at 30 s
+        _ac.OnClock = ac => { if (ac.NowMs >= 10_000) ac.Unset(Fuel(2)); };
+        using var stop = new CancellationTokenSource();
+
+        bool done = flowStep
+            ? await _exec.ExecuteStepAsync(Flow(GroundStart(2)), stop.Token).WaitAsync(Hang)
+            : await _exec.Set(GroundStart(2), 1).WaitAsync(Hang);
+
+        Assert.False(done);
+        Assert.Equal(new[] { (Switch(2), 1.0) }, _ac.Writes);   // fuel unread: no click to off
+        Assert.Equal(flowStep ? StillOn2 : null, _exec.TakeStoppedRunNotice());
         Assert.Empty(_spoken);
     }
 
@@ -662,7 +718,8 @@ public class L1011FoEngineStartExecutorTests
             CultureInfo.CurrentCulture = previous;
         }
 
-        Assert.Equal(new[] { StillOn2, "Engine 3 ground start switch still on: release it." }, _spoken);
+        Assert.Empty(_spoken);
+        Assert.Equal(StillOn2 + " Engine 3 ground start switch still on: release it.", _exec.TakeStoppedRunNotice());
     }
 
     // ---- The idle wait ---------------------------------------------------------------------------------------------------
@@ -789,6 +846,7 @@ public class L1011FoEngineStartExecutorTests
         Assert.Contains(_logged, line => line.Contains("engine 2") && line.Contains(logged));
         Assert.Contains(_logged, line => line.Contains("engine 3") && line.Contains(logged));
         Assert.Empty(_spoken);
+        Assert.Null(_exec.TakeStoppedRunNotice());
     }
 
     [Theory]

@@ -231,7 +231,8 @@ public class L1011FoPreflightTests
             Assert.Equal(label, s.Label);
             Assert.Equal(actions, Actions(s));
             Assert.Equal(actions.Length == 1 ? FlowStepActionType.SetSwitch : FlowStepActionType.SetSwitchMultiple, s.ActionType);
-            Assert.Equal(FlowStepFailurePolicy.Skip, s.FailurePolicy);
+            // The APU master alone stops the flow: everything after it runs on the APU.
+            Assert.Equal(id == "PF_APU_MASTER" ? FlowStepFailurePolicy.Stop : FlowStepFailurePolicy.Skip, s.FailurePolicy);
             Assert.Equal(id == "PF_CABIN_ALT", s.TargetValueProvider != null);
         }
     }
@@ -626,45 +627,39 @@ public class L1011FoPreflightTests
         Assert.True(s(State(("L1011_RO_APU_RPM", 100))));
     }
 
-    // ------------------------------------------------------------------ the APU start requires the master
-
-    private const string ApuMasterNotOnText = "APU not started: the APU master is not on.";
+    // ------------------------------------------------------------------ the APU master stops the flow
 
     private static readonly string[] ApuStartSteps = { "PF_APU_MASTER", "PF_APU_START", "PF_APU_RUNNING" };
 
-    /// <summary>The start and the running wait each require the master step: a master that did not come on skips both
-    /// at once, each saying why, instead of a press the start refuses for its master and a two-minute wait.</summary>
+    /// <summary>The master step stops the flow when it is not done: everything after it runs on the APU, and without
+    /// the master the start presses nothing. The start and the running wait depend on no step of their own.</summary>
     [Fact]
-    public void The_APU_start_and_its_running_wait_require_the_master()
+    public void The_APU_master_step_stops_the_flow_when_it_is_not_done()
     {
-        foreach (var id in new[] { "PF_APU_START", "PF_APU_RUNNING" })
-        {
-            Assert.Equal("PF_APU_MASTER", Of(id).RequiresStepId);
-            Assert.Equal(ApuMasterNotOnText, Of(id).RequiresStepSkipText);
-        }
-        Assert.Equal(new[] { "PF_APU_START", "PF_APU_RUNNING" },
-            Preflight.Steps.Where(s => s.RequiresStepId != null).Select(s => s.Id));
+        Assert.Equal(FlowStepFailurePolicy.Stop, Of("PF_APU_MASTER").FailurePolicy);
+        Assert.Null(Of("PF_APU_START").RequiresStepId);
+        Assert.Null(Of("PF_APU_RUNNING").RequiresStepId);
+        Assert.DoesNotContain(Preflight.Steps, s => s.RequiresStepId != null);
     }
 
-    /// <summary>On a real flow manager: the master write not done skips the start and the running wait at once, each
-    /// saying the master is not on, with nothing pressed and no wait run.</summary>
+    /// <summary>On a real flow manager: a master that does not read on stops Preflight at once, saying why, with
+    /// nothing pressed and no two-minute wait for an APU that cannot start.</summary>
     [Fact]
-    public async Task A_master_not_done_skips_the_APU_start_and_its_wait_at_once_aloud()
+    public async Task A_master_not_done_stops_Preflight_at_once()
     {
         var run = await L1011FoFlowRun.RunAsync("PREFLIGHT", ApuStartSteps,
             Connected(("TOGGLE_APU_POWER", 0), ("L1011_RO_APU_RPM", 0)), fail: new[] { "TOGGLE_APU_POWER" });
 
-        Assert.True(run.Finished, "skipped at once, not a two-minute wait");
-        Assert.Contains("Skipping: APU master: on", run.Speech);
-        Assert.Equal(2, run.Speech.Count(m => m == ApuMasterNotOnText));
-        Assert.Equal(ApuStartSteps, run.Skipped);
+        Assert.True(run.Finished, "stopped at once, not a two-minute wait");
+        Assert.Equal("Preflight flow stopped. Unable to complete: APU master: on", run.Speech[^1]);
         Assert.DoesNotContain("PF_APU_START", run.Started);
         Assert.DoesNotContain("PF_APU_RUNNING", run.Started);
+        Assert.Empty(run.Skipped);
         Assert.Empty(run.Sent);
     }
 
-    /// <summary>On a real flow manager: a master found on is "Already set", not a skip, so the start is pressed and the
-    /// wait runs until the APU reads running.</summary>
+    /// <summary>On a real flow manager: a master found on is "Already set", so the start is pressed and the wait runs
+    /// until the APU reads running.</summary>
     [Fact]
     public async Task A_master_found_on_lets_the_APU_start_and_its_wait_run()
     {
@@ -680,7 +675,6 @@ public class L1011FoPreflightTests
 
         Assert.True(run.Finished);
         Assert.Contains("Already set: APU master: on", run.Speech);
-        Assert.DoesNotContain(ApuMasterNotOnText, run.Speech);
         Assert.Empty(run.Skipped);
         Assert.Equal(new[] { "PF_APU_START", "PF_APU_RUNNING" }, run.Completed.Where(id => id != "PF_APU_MASTER"));
         Assert.Equal(new[] { X.ApuStart }, run.Sent);

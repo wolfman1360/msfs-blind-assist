@@ -546,6 +546,48 @@ public class L1011FoEngineStartTests
         Assert.DoesNotContain(ac.Writes, w => w.Key == FuelIgnition(2));
     }
 
+    /// <summary>
+    /// On a real flow manager and the real executor: engine 2's start stops the flow with its fuel and ignition row
+    /// unread, by the fuel and ignition refused from an unread position or by the light-off watch timing out, and the
+    /// ground start cannot be released over a fuel row that cannot be read. The flow's own end sentence, which
+    /// interrupts, comes first; the notice that the switch is still on follows it, queued, so neither cuts the other off.
+    /// </summary>
+    [Theory]
+    [InlineData("fuel and ignition refused", "Engine 2 fuel and ignition: on")]
+    [InlineData("light-off timed out", "Engine 2 N3 twenty percent")]
+    public async Task A_stopped_engine_start_says_its_ground_start_is_still_on_after_its_end_sentence(string how, string failed)
+    {
+        var ac = BeforeStartLeaves();
+        ac.Unset(FuelIgnition(2));
+        var exec = new X();
+        exec.SetTransport(ac);
+        var state = StateOf(ac);
+        var speech = new GatedSpeechCapture();
+        var flows = new FlowManager<X, L1011FoStateEvaluator>(state, exec,
+            new ChecklistManager<X, L1011FoStateEvaluator>(state, exec, new List<ChecklistGroup<X, L1011FoStateEvaluator>>()), speech);
+        if (how == "light-off timed out")
+            flows.StepStarted += (_, step, _) => { if (step.Id == "ES_E2_N3_20") ac.NeverDeliver(N3(2)); };
+
+        flows.StartFlow(new FlowDefinition<L1011FoStateEvaluator>
+        {
+            Id = "ENGINE_START", Name = "Engine Start",
+            Steps = new() { Of("ES_E2_GND_START"), Of("ES_E2_N3_20"), Of("ES_E2_FUEL_IGN") },
+        });
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
+        while (flows.IsRunning && DateTime.UtcNow < deadline)
+            await Task.Delay(20);
+
+        Assert.False(flows.IsRunning);
+        Assert.Equal(new[]
+        {
+            $"Engine Start flow stopped. Unable to complete: {failed}",
+            "Engine 2 ground start switch still on: release it.",
+        }, speech.All.TakeLast(2));
+        Assert.Equal(1, ac.Get(GroundStartSwitch(2)));
+        Assert.DoesNotContain(ac.Writes, w => w.Key == FuelIgnition(2));
+        Assert.Null(exec.TakeStoppedRunNotice());   // spoken once: taken by the flow's end
+    }
+
     // ================================================================== the checklists
 
     [Fact]
