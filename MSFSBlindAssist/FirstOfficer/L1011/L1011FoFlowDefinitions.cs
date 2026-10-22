@@ -68,6 +68,11 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// First Officer), strobe and landing lights, continuous ignition, probe heat, the transponder read at TA/RA and the
 /// weather radar on. Its one cut, packs 1 and 3 off, is left alone off the ground, as its tick is ([FO-25]). The
 /// anti-skid carries a toggle: its single-switch step reads its own position first.
+///
+/// After Takeoff puts the gear lever up (the aircraft refuses it on the ground, and the lever's read-back then reports
+/// the step not done), reminds the Captain of the flap schedule, sets the climb (autobrake, nose, taxi and turnoff
+/// lights, continuous ignition off, packs on), waits up to five minutes, read only, for the Captain's flaps up, and
+/// confirms the gear up last ([FO-13]): a read-only 20 s wait on the lever and the legs that never writes.
 /// </summary>
 public static class L1011FoFlowDefinitions
 {
@@ -79,6 +84,7 @@ public static class L1011FoFlowDefinitions
         BuildEngineStart(),
         BuildAfterStart(),
         BuildBeforeTakeoff(),
+        BuildAfterTakeoff(),
     };
 
     // ------------------------------------------------------------------ Power Up (the manual's cockpit entry and power-up)
@@ -820,6 +826,47 @@ public static class L1011FoFlowDefinitions
                 CheckSeconds, "BTC_XPDR"),
             Also(Done(Skip(SW("BT_RADAR", "Weather radar: on", "SWITCH_WX_WX", 1),
                 s => s.IsPosition("SWITCH_WX_WX", 1)), "BT_RADAR"), "BTC_RADAR"),
+        }
+    };
+
+    // ------------------------------------------------------------------ After Takeoff (the manual's take-off and climb)
+
+    /// <summary>The gear lever's up position (0 down, 50 off).</summary>
+    private const int GearUp = 100;
+
+    /// <summary>The autobrake selector's OFF position.</summary>
+    private const int AutobrakeOff = 1;
+
+    private static readonly string[] GroundLightKeys = { "TOGGLE_LANDING_NOSE", "TOGGLE_TAXI_LIGHT", "TOGGLE_RWY_TURNOFF" };
+
+    private static Flow BuildAfterTakeoff() => new()
+    {
+        Id = "AFTER_TAKEOFF", Name = "After Takeoff",
+        Description = "Gear up; the Captain's flap schedule; autobrake off, nose, taxi and turnoff lights off, continuous "
+            + "ignition off, packs on; then the flaps and the gear confirmed up.",
+        RelatedChecklistGroupIds = new[] { "AFTER_TAKEOFF", "AFTER_TAKEOFF_CL", "CLIMB_CL" },
+        Steps = new()
+        {
+            // Already set once the lever reads up. On the ground the aircraft refuses it: the lever stays down, the
+            // read-back reports the step not done, and the flow says so and goes on. Its read-back line is the legs',
+            // which the gear check last delivers.
+            Done(Skip(SW("AT_GEAR", "Landing gear: up", L1011Levers.GearLeverKey, GearUp),
+                s => s.IsOn("FO_GEAR_LEVER_UP")), "AT_GEAR"),
+            // The flaps stay the Captain's in flight.
+            Done(Captain("AT_CPT_FLAPS", "Flaps up on schedule",
+                "Retract the flaps on schedule: 10 at V2 plus 10, 4 at V2 plus 20, up at V2 plus 60."), "AT_CPT_FLAPS"),
+            Also(Done(Skip(SW("AT_AUTOBRAKE", "Autobrake: off", "ROTARY_AUTO_BRAKE_MODE", AutobrakeOff),
+                s => s.IsPosition("ROTARY_AUTO_BRAKE_MODE", AutobrakeOff)), "AT_AUTOBRAKE"), "CLC_AUTOBRAKE"),
+            Also(Done(Skip(Multi("AT_GROUND_LIGHTS", "Nose, taxi and runway turnoff lights: off", AllTo(0, GroundLightKeys)),
+                s => s.IsOn("FO_GROUND_LIGHTS_OFF")), "AT_GROUND_LIGHTS"), "CLC_GROUND_LIGHTS"),
+            Also(Done(Skip(SW("AT_CONT_IGN", "Continuous ignition: off", "SWITCH_CONT_IGNITION", 0),
+                s => s.IsPosition("SWITCH_CONT_IGNITION", 0)), "AT_CONT_IGN"), "CLC_CONT_IGN"),
+            Also(Done(Skip(Multi("AT_PACKS_ON", "Packs: on", AllTo(1, PackKeys)),
+                s => s.IsOn("FO_PACKS_ON")), "AT_PACKS_ON"), "CLC_PACKS"),
+            // The Captain's flaps, read only: up to five minutes, then skipped aloud.
+            Check("AT_CHK_FLAPS_UP", "Flaps: up", "FO_FLAPS_UP", On, FlapsUpCheckSeconds, "ATC_FLAPS"),
+            // LAST (FO-13): the gear confirmed up, the lever and every leg, read only. 20 s, then skipped aloud.
+            Check("AT_GEAR_UP_CHECK", "Landing gear: up", L1011GearConfirmation.UpField, On, GearCheckSeconds, "ATC_GEAR"),
         }
     };
 

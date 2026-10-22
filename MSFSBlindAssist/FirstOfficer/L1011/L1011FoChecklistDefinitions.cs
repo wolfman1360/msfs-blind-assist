@@ -61,6 +61,11 @@ using CheckFn = System.Func<L1011FoActionExecutor, L1011FoStateEvaluator, System
 /// Before Takeoff has one action group (<c>BEFORE_TAKEOFF</c>: the flow's eight writes) and one read-back, the
 /// aircraft's line-up page. The pack 2 line switches packs 1 and 3 off, so its tick is left alone off the ground, as
 /// Before Start's is.
+///
+/// After Takeoff has one action group (<c>AFTER_TAKEOFF</c>: the gear lever up, the Captain's flap schedule, then the
+/// climb's writes) and two read-backs, the aircraft's take-off page (the gear confirmed up by the lever and every leg,
+/// the flaps up) and its climb page. The page's fuel balance, 10,000 ft and transition lines are the Captain's and the
+/// phase monitor's and are left out.
 /// </summary>
 public static class L1011FoChecklistDefinitions
 {
@@ -72,6 +77,7 @@ public static class L1011FoChecklistDefinitions
         EngineStart(), EngineStartCL(),
         AfterStart(), AfterStartCL(), TaxiCL(),
         BeforeTakeoff(), BeforeTakeoffCL(),
+        AfterTakeoff(), AfterTakeoffCL(), ClimbCL(),
     };
 
     private const string ContIgnition = "SWITCH_CONT_IGNITION";
@@ -873,6 +879,72 @@ public static class L1011FoChecklistDefinitions
         };
     }
 
+    // ================================================================== After Takeoff
+
+    private static readonly string[] GroundLights = { "TOGGLE_LANDING_NOSE", "TOGGLE_TAXI_LIGHT", "TOGGLE_RWY_TURNOFF" };
+
+    /// <summary>The gear lever's up position (0 down, 50 off).</summary>
+    private const int GearUp = 100;
+
+    /// <summary>
+    /// The After Takeoff flow's writes and its Captain's flap schedule, in its order and with its labels: the gear line
+    /// reads the lever up (the read-back's gear line reads the legs too), a single switch its key at the target, a
+    /// multi-switch line its synthetic.
+    /// </summary>
+    private static Group AfterTakeoff()
+    {
+        const string G = "AFTER_TAKEOFF";
+        return new Group
+        {
+            Id = G, Name = "After Takeoff",
+            Items = new()
+            {
+                Auto("AT_GEAR", G, "Landing gear: up", "FO_GEAR_LEVER_UP", On, Set(L1011Levers.GearLeverKey, GearUp)),
+                Reminder("AT_CPT_FLAPS", G,
+                    "Retract the flaps on schedule: 10 at V2 plus 10, 4 at V2 plus 20, up at V2 plus 60.",
+                    label: "Flaps up on schedule"),
+                Auto("AT_AUTOBRAKE", G, "Autobrake: off", Autobrake, v => Is(v, AutobrakeOff), Set(Autobrake, AutobrakeOff)),
+                Auto("AT_GROUND_LIGHTS", G, "Nose, taxi and runway turnoff lights: off", "FO_GROUND_LIGHTS_OFF", On,
+                    SetAll(All(0, GroundLights))),
+                Auto("AT_CONT_IGN", G, "Continuous ignition: off", ContIgnition, v => Is(v, 0), Set(ContIgnition, 0)),
+                Auto("AT_PACKS_ON", G, "Packs: on", "FO_PACKS_ON", On, SetAll(All(1, PackKeys))),
+            }
+        };
+    }
+
+    /// <summary>The aircraft's take-off page, in its own words: the gear up (lever and every leg), the flaps up.</summary>
+    private static Group AfterTakeoffCL()
+    {
+        const string G = "AFTER_TAKEOFF_CL";
+        return new Group
+        {
+            Id = G, Name = "Take Off",
+            Items = new()
+            {
+                Read("ATC_GEAR", G, "Positive rate of climb: landing gear up", L1011GearConfirmation.UpField, On),
+                Read("ATC_FLAPS", G, "At V2 plus 60: set flaps up", "FO_FLAPS_UP", On),
+            }
+        };
+    }
+
+    /// <summary>The aircraft's climb page, in its own words, without the Captain's fuel balance, 10,000 ft and
+    /// transition lines.</summary>
+    private static Group ClimbCL()
+    {
+        const string G = "CLIMB_CL";
+        return new Group
+        {
+            Id = G, Name = "Climb",
+            Items = new()
+            {
+                Read("CLC_AUTOBRAKE", G, "Autobrake: off", Autobrake, v => Is(v, AutobrakeOff)),
+                Read("CLC_GROUND_LIGHTS", G, "Nose wheel landing, taxi and runway turnoff lights: off", "FO_GROUND_LIGHTS_OFF", On),
+                Read("CLC_CONT_IGN", G, "Continuous ignition: off", ContIgnition, v => Is(v, 0)),
+                Read("CLC_PACKS", G, "Packs: on", "FO_PACKS_ON", On),
+            }
+        };
+    }
+
     // ================================================================== builders (the MD-11's)
 
     /// <summary>A state line; <paramref name="additionalFields"/> must each read done under the same condition too.</summary>
@@ -936,10 +1008,12 @@ public static class L1011FoChecklistDefinitions
     };
 
     /// <summary>A Captain's line; <paramref name="live"/>, when given, is the value the First Officer reads for it,
-    /// spoken on a tick and shown on the status line, never in the tree (the A380's shape).</summary>
-    private static Item Reminder(string id, string groupId, string text, Func<L1011FoStateEvaluator, string?>? live = null) => new()
+    /// spoken on a tick and shown on the status line, never in the tree (the A380's shape). <paramref name="label"/>,
+    /// when given, is its flow step's short label, the reminder being longer.</summary>
+    private static Item Reminder(string id, string groupId, string text, Func<L1011FoStateEvaluator, string?>? live = null,
+        string? label = null) => new()
     {
-        Id = id, GroupId = groupId, Label = text,
+        Id = id, GroupId = groupId, Label = label ?? text,
         Type = ChecklistItemType.CaptainReminder,
         ManualCompletionAllowed = true,
         ReminderText = text,

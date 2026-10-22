@@ -47,6 +47,7 @@ public class L1011FoChecklistStructureTests
             "ENGINE_START", "ENGINE_START_CL",
             "AFTER_START", "AFTER_START_CL", "TAXI_CL",
             "BEFORE_TAKEOFF", "BEFORE_TAKEOFF_CL",
+            "AFTER_TAKEOFF", "AFTER_TAKEOFF_CL", "CLIMB_CL",
         }, Groups.Select(g => g.Id));
 
     [Fact]
