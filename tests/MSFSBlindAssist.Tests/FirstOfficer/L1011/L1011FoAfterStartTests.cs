@@ -689,10 +689,13 @@ public class L1011FoAfterStartTests
 
     private static readonly string[] ApuTail = { "AS_APU_GEN_TRIP", "AS_APU_BLEED_OFF", "AS_APU_STOP", "AS_APU_MASTER_OFF" };
 
+    private const string MasterLeftOnText = "APU master left on: the APU did not stop.";
+
     /// <summary>
     /// The APU is shut down only once all three engine generators read on line: a 30 s wait that, timed out, skips
-    /// every APU step with one sentence saying the APU stays running. The two-minute cool-down follows the stop only
-    /// when this run sent the stop.
+    /// the generator trip, the bleed and the stop with one sentence saying the APU stays running. The master goes off
+    /// only once the stop is done or found done, so it is skipped whenever the stop is, saying the APU did not stop. The
+    /// two-minute cool-down follows the stop only when this run sent the stop.
     /// </summary>
     [Fact]
     public void The_APU_tail_waits_for_the_engine_generators()
@@ -712,11 +715,13 @@ public class L1011FoAfterStartTests
         var ids = AfterStart.Steps.Select(s => s.Id).ToList();
         Assert.Equal(new[] { "AS_GENS_ON_LINE" }.Concat(ApuTail.Take(3)).Append("AS_APU_COOLDOWN").Append("AS_APU_MASTER_OFF"),
             ids.Skip(ids.IndexOf("AS_GENS_ON_LINE")));
-        foreach (var id in ApuTail)
+        foreach (var id in ApuTail.Take(3))
         {
             Assert.Equal("AS_GENS_ON_LINE", Of(id).RequiresStepId);
             Assert.Equal(GeneratorsText, Of(id).RequiresStepSkipText);
         }
+        Assert.Equal("AS_APU_STOP", Of("AS_APU_MASTER_OFF").RequiresStepId);
+        Assert.Equal(MasterLeftOnText, Of("AS_APU_MASTER_OFF").RequiresStepSkipText);
         Assert.Equal(ApuTail, AfterStart.Steps.Where(s => s.RequiresStepId != null).Select(s => s.Id));
 
         var cooldown = Of("AS_APU_COOLDOWN");
@@ -727,6 +732,38 @@ public class L1011FoAfterStartTests
         Assert.Null(cooldown.RequiresStepId);
         Assert.Empty(cooldown.LinkedChecklistItemIds);
         Assert.Equal(new[] { "AS_APU_COOLDOWN" }, AfterStart.Steps.Where(s => s.RunOnlyIfStepSent != null).Select(s => s.Id));
+    }
+
+    private static readonly string[] StopAndMaster = { "AS_APU_STOP", "AS_APU_COOLDOWN", "AS_APU_MASTER_OFF" };
+
+    /// <summary>On a real flow manager: an APU found stopped makes the stop "Already set", not skipped, so the cool-down
+    /// passes silently and the master still goes off.</summary>
+    [Fact]
+    public async Task An_APU_found_stopped_is_already_set_and_the_master_goes_off()
+    {
+        var run = await L1011FoFlowRun.RunAsync("AFTER_START", StopAndMaster, Connected((ApuRpm, 0), ("TOGGLE_APU_POWER", 1)));
+
+        Assert.True(run.Finished);
+        Assert.Contains("Already set: APU: stop", run.Speech);
+        Assert.Empty(run.Skipped);
+        Assert.Contains("AS_APU_COOLDOWN", run.Completed);
+        Assert.DoesNotContain("AS_APU_COOLDOWN", run.Started);
+        Assert.Equal(new[] { "TOGGLE_APU_POWER" }, run.Sent);
+    }
+
+    /// <summary>On a real flow manager: a stop that is not done (the APU still turning after its 90 s) is skipped, and the
+    /// master is left on, aloud, never switched off over a running APU.</summary>
+    [Fact]
+    public async Task A_stop_not_done_leaves_the_master_on_aloud()
+    {
+        var run = await L1011FoFlowRun.RunAsync("AFTER_START", StopAndMaster, Connected((ApuRpm, 100), ("TOGGLE_APU_POWER", 1)),
+            fail: new[] { X.ApuStop });
+
+        Assert.True(run.Finished);
+        Assert.Contains("Skipping: APU: stop", run.Speech);
+        Assert.Contains(MasterLeftOnText, run.Speech);
+        Assert.Equal(new[] { "AS_APU_STOP", "AS_APU_MASTER_OFF" }, run.Skipped);
+        Assert.DoesNotContain("TOGGLE_APU_POWER", run.Sent);
     }
 
     // ------------------------------------------------------------------ every field is served

@@ -318,6 +318,7 @@ public class FoCutGuardSweepTests
         AssertOpensWithGroundAndEnginesGuards(IFly737().Flows, "SECURE", "iFly 737");
         AssertOpensWithGroundAndEnginesGuards(Pmdg777().Flows, "SECURE", "PMDG 777");
         AssertOpensWithGroundAndEnginesGuards(Md11().Flows, "SHUTDOWN", "MD-11");
+        AssertOpensWithGroundAndEnginesGuards(L1011().Flows, "SHUTDOWN", "L-1011");
     }
 
     [Fact]

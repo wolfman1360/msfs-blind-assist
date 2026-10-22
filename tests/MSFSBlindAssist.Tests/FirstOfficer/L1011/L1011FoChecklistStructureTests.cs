@@ -52,6 +52,7 @@ public class L1011FoChecklistStructureTests
             "BEFORE_LANDING", "BEFORE_LANDING_CL",
             "AFTER_LANDING", "AFTER_LANDING_CL",
             "PARKING", "PARKING_CL",
+            "SHUTDOWN", "SHUTDOWN_CL",
         }, Groups.Select(g => g.Id));
 
     [Fact]

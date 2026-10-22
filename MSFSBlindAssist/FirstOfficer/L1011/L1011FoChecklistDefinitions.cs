@@ -86,6 +86,11 @@ using CheckFn = System.Func<L1011FoActionExecutor, L1011FoStateEvaluator, System
 /// and the external power line while the APU generator is on line or no ground power is available, as their steps are.
 /// The fuel and ignition line is an engine cut, left alone off the ground; the INS, the ATMs and AC pumps and the fuel
 /// panel lines are left alone unless the aircraft reads on the ground with every engine stopped ([FO-25]).
+///
+/// Shutdown has one action group (<c>SHUTDOWN</c>: the flow's writes; its guards and APU wait stay flow-only) and one
+/// read-back, the aircraft's securing page. The APU stop line's tick holds until the APU reads stopped ([FO-11]). The
+/// packs line is left alone off the ground; the fuel pump line unless the aircraft reads parked with every engine stopped
+/// and the APU not turning, as Power Up's is; the standby power and battery lines unless parked ([FO-25]).
 /// </summary>
 public static class L1011FoChecklistDefinitions
 {
@@ -102,6 +107,7 @@ public static class L1011FoChecklistDefinitions
         BeforeLanding(), BeforeLandingCL(),
         AfterLanding(), AfterLandingCL(),
         Parking(), ParkingCL(),
+        Shutdown(), ShutdownCL(),
     };
 
     private const string ContIgnition = "SWITCH_CONT_IGNITION";
@@ -1246,6 +1252,74 @@ public static class L1011FoChecklistDefinitions
                 Read("PKC_ATMS_PUMPS", G, "ATMs and AC hyd pumps: off", "FO_ATMS_AC_PUMPS_OFF", On),
                 Read("PKC_TANK_PUMPS", G, "Tank pumps: one on", "FO_ONLY_APU_PUMP_ON", On),
                 Read("PKC_APU_BLEED", G, "APU bleed air shut off valve: on", ApuBleed, v => Is(v, 1)),
+            }
+        };
+    }
+
+    // ================================================================== Shutdown
+
+    private const string StandbyPowerSwitch = "TOGGLE_STBY_POWER";
+
+    /// <summary>
+    /// The Shutdown flow's writes, in its order and with its labels: a single switch reads its key at the target, a
+    /// multi-switch line its synthetic, the emergency lights and standby power their switch alone (the guard is left
+    /// open), the APU generator trip its breaker open, the stop the APU stopped, external power its breaker open. The
+    /// stop's tick holds until the APU reads stopped, a slow condition ([FO-11]).
+    /// </summary>
+    private static Group Shutdown()
+    {
+        const string G = "SHUTDOWN";
+        return new Group
+        {
+            Id = G, Name = "Shutdown",
+            Items = new()
+            {
+                Auto("SD_EMER_LIGHTS", G, "Emergency lights: off", "FO_EMER_LIGHTS_OFF", On,
+                    SetAll(("GUARD_EMER_LIGHTING", 1), ("TOGGLE_EMER_LIGHTING", 0))),
+                Auto("SD_GALLEY", G, "Galley power: off", "FO_GALLEY_OFF", On, SetAll(All(0, GalleyBuses))),
+                Auto("SD_APU_GEN_TRIP", G, "APU generator breaker: trip", "FO_APU_GEN_OFF_LINE", On, Set(X.ApuGenerator, 0)),
+                Auto("SD_APU_BLEED_OFF", G, "APU bleed: off", ApuBleed, v => Is(v, 0), Set(ApuBleed, 0)),
+                // The composite holds until the APU reads stopped, a slow condition (FO-11): about a minute.
+                Auto("SD_APU_STOP", G, "APU: stop", "FO_APU_OFF", On, Set(X.ApuStop, 1)),
+                Auto("SD_APU_MASTER_OFF", G, "APU master: off", ApuMaster, v => Is(v, 0), Set(ApuMaster, 0)),
+                // Off in the air depressurizes the cabin: on the ground only (FO-25).
+                LeaveAlone(Auto("SD_PACKS_OFF", G, "Packs: off", "FO_PACKS_OFF", On, SetAll(All(0, PackKeys))),
+                    NotOnGround, PacksStayText),
+                Auto("SD_EXT_PWR_OFF", G, "External power: off", "FO_EXT_POWER_OFF", On, Set(X.ExternalPower, 0)),
+                // Parked only, and kept while the APU turns: the tank 2 left pump feeds it (FO-25).
+                LeaveAlone(Auto("SD_FUEL_PUMPS", G, "Fuel pumps: all off", "FO_FUEL_PUMPS_OFF", On, SetAll(All(0, FuelPumps))),
+                    s => NotParked(s) || s.IsOn("FO_APU_STARTING_OR_RUNNING"), ParkedApuOffText),
+                LeaveAlone(Auto("SD_STBY_POWER_OFF", G, "Standby power: off", StandbyPowerSwitch, v => Is(v, 0),
+                        SetAll(("GUARD_STBY_POWER", 1), (StandbyPowerSwitch, 0))),
+                    NotParked, ParkedOnlyText),
+                Auto("SD_RADIO_MASTERS_OFF", G, "Radio master switches: off", "FO_RADIO_MASTERS_OFF", On,
+                    SetAll(All(0, "SWITCH_MASTER_RADIO_ESS", "SWITCH_MASTER_RADIO_NO2"))),
+                LeaveAlone(Auto("SD_BATTERY_OFF", G, "Battery: off", Battery, v => Is(v, 0), Set(Battery, 0)),
+                    NotParked, ParkedOnlyText),
+            }
+        };
+    }
+
+    /// <summary>The aircraft's securing page in its own words.</summary>
+    private static Group ShutdownCL()
+    {
+        const string G = "SHUTDOWN_CL";
+        return new Group
+        {
+            Id = G, Name = "Securing",
+            Items = new()
+            {
+                Read("SDC_EMER_LIGHTS", G, "Emergency exit lights: off", "FO_EMER_LIGHTS_OFF", On),
+                Read("SDC_STBY_POWER", G, "Standby power: off", StandbyPowerSwitch, v => Is(v, 0)),
+                Read("SDC_RADIO_MASTERS", G, "Master radio switches: off", "FO_RADIO_MASTERS_OFF", On),
+                Read("SDC_GALLEY", G, "Galley power: off", "FO_GALLEY_OFF", On),
+                Read("SDC_APU_GEN_TRIP", G, "APU generator breaker: trip", "FO_APU_GEN_OFF_LINE", On),
+                Read("SDC_APU_BLEED", G, "APU bleed air shutoff valve: unlatch", ApuBleed, v => Is(v, 0)),
+                Read("SDC_APU_STOP", G, "APU stop button: press", "FO_APU_OFF", On),
+                Read("SDC_APU_MASTER", G, "APU master power: off", ApuMaster, v => Is(v, 0)),
+                Read("SDC_EXT_PWR", G, "External power switch: off", "FO_EXT_POWER_OFF", On),
+                Read("SDC_FUEL_PUMPS", G, "Fuel tank pumps: off", "FO_FUEL_PUMPS_OFF", On),
+                Read("SDC_BATTERY", G, "Battery switch: off", Battery, v => Is(v, 0)),
             }
         };
     }

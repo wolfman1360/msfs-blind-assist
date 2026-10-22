@@ -79,11 +79,16 @@ public class FlowStepDependencyIdTests
         Assert.Equal(2, beforeStart.Count(s => s.Requires == "BS_APU_GEN_AVAIL"));
     }
 
+    /// <summary>The TriStar's APU shutdowns: After Start's trip, bleed and stop hang on the engine generators, and in
+    /// After Start and Shutdown the master hangs on the stop, so a stop skipped or not done leaves the master on.</summary>
     [Fact]
     public void The_audit_sees_the_tristar_apu_shutdown_dependencies()
     {
         var afterStart = Flows("iniBuilds L-1011").Single(f => f.Flow == "AFTER_START").Steps;
-        Assert.Equal(new[] { "AS_APU_GEN_TRIP", "AS_APU_BLEED_OFF", "AS_APU_STOP", "AS_APU_MASTER_OFF" },
+        Assert.Equal(new[] { "AS_APU_GEN_TRIP", "AS_APU_BLEED_OFF", "AS_APU_STOP" },
             afterStart.Where(s => s.Requires == "AS_GENS_ON_LINE").Select(s => s.Id));
+        Assert.Equal(new[] { "AS_APU_MASTER_OFF" }, afterStart.Where(s => s.Requires == "AS_APU_STOP").Select(s => s.Id));
+        var shutdown = Flows("iniBuilds L-1011").Single(f => f.Flow == "SHUTDOWN").Steps;
+        Assert.Equal(new[] { "SD_APU_MASTER_OFF" }, shutdown.Where(s => s.Requires == "SD_APU_STOP").Select(s => s.Id));
     }
 }
