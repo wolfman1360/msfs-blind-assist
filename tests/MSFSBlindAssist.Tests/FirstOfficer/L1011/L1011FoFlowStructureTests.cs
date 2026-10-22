@@ -47,7 +47,8 @@ public class L1011FoFlowStructureTests
     /// <summary>The flows built so far, in the order they are flown.</summary>
     [Fact]
     public void TheFlows_AreInFlightOrder()
-        => Assert.Equal(new[] { "POWER_UP", "PREFLIGHT", "BEFORE_START", "ENGINE_START", "AFTER_START" }, Flows.Select(f => f.Id));
+        => Assert.Equal(new[] { "POWER_UP", "PREFLIGHT", "BEFORE_START", "ENGINE_START", "AFTER_START", "BEFORE_TAKEOFF" },
+            Flows.Select(f => f.Id));
 
     [Fact]
     public void PowerUp_NamesItselfAndItsChecklistGroups()

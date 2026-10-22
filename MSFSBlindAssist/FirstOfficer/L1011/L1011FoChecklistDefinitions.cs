@@ -57,6 +57,10 @@ using CheckFn = System.Func<L1011FoActionExecutor, L1011FoStateEvaluator, System
 /// all three engine generators read on line, as the flow's APU steps wait for them, and the stop line's tick holds until
 /// the APU reads stopped. The ATMs-on line reads no state: the flow puts them to auto right after. The stabilizer trim
 /// line shows the tablet's exported trim as its live value.
+///
+/// Before Takeoff has one action group (<c>BEFORE_TAKEOFF</c>: the flow's eight writes) and one read-back, the
+/// aircraft's line-up page. The pack 2 line switches packs 1 and 3 off, so its tick is left alone off the ground, as
+/// Before Start's is.
 /// </summary>
 public static class L1011FoChecklistDefinitions
 {
@@ -67,6 +71,7 @@ public static class L1011FoChecklistDefinitions
         BeforeStart(), BeforeStartCL(),
         EngineStart(), EngineStartCL(),
         AfterStart(), AfterStartCL(), TaxiCL(),
+        BeforeTakeoff(), BeforeTakeoffCL(),
     };
 
     private const string ContIgnition = "SWITCH_CONT_IGNITION";
@@ -807,6 +812,63 @@ public static class L1011FoChecklistDefinitions
                 Read("TXC_TAXI_LIGHT", G, "Nose wheel taxi light: on", TaxiLight, v => Is(v, 1)),
                 Reminder("TXC_PARKING_BRAKE", G, "Parking brake: release"),
                 Reminder("TXC_BRAKES", G, "Brakes: check"),
+            }
+        };
+    }
+
+    // ================================================================== Before Takeoff
+
+    private const string StrobeLights = "SWITCH_STROBE_LIGHT";
+    private const string ProbeHeat = "SWITCH_PROBE_HEAT";
+    private const string RadarOn = "SWITCH_WX_WX";
+
+    /// <summary>The autobrake selector's TAKEOFF position.</summary>
+    private const int AutobrakeTakeoff = 0;
+
+    /// <summary>The Before Takeoff flow's eight writes, in its order and with its labels: a single switch reads its key at
+    /// the target, a multi-switch line its synthetic.</summary>
+    private static Group BeforeTakeoff()
+    {
+        const string G = "BEFORE_TAKEOFF";
+        return new Group
+        {
+            Id = G, Name = "Before Takeoff",
+            Items = new()
+            {
+                // Packs 1 and 3 off in the air cut two of the three packs: on the ground only (FO-25).
+                LeaveAlone(Auto("BT_PACK_2", G, "Packs: pack 2 on, packs 1 and 3 off", "FO_PACK_2_ONLY", On,
+                        SetAll((PackKeys[0], 0), (PackKeys[1], 1), (PackKeys[2], 0))),
+                    NotOnGround, PacksStayText),
+                Auto("BT_ANTISKID", G, "Anti-skid: on", AntiSkid, v => Is(v, 1), Set(AntiSkid, 1)),
+                Auto("BT_AUTOBRAKE", G, "Autobrake: takeoff", Autobrake, v => Is(v, AutobrakeTakeoff), Set(Autobrake, AutobrakeTakeoff)),
+                Auto("BT_STROBES", G, "Strobe lights: on", StrobeLights, v => Is(v, 1), Set(StrobeLights, 1)),
+                Auto("BT_LANDING_LIGHTS", G, "Landing lights: on", "FO_LANDING_LIGHTS_ON", On,
+                    SetAll(All(1, "TOGGLE_LANDING_LEFT", "TOGGLE_LANDING_RIGHT"))),
+                Auto("BT_CONT_IGN", G, "Continuous ignition: on", ContIgnition, v => Is(v, 1), Set(ContIgnition, 1)),
+                Auto("BT_PROBE_HEAT", G, "Temperature probe heat: on", ProbeHeat, v => Is(v, 1), Set(ProbeHeat, 1)),
+                Auto("BT_RADAR", G, "Weather radar: on", RadarOn, v => Is(v, 1), Set(RadarOn, 1)),
+            }
+        };
+    }
+
+    /// <summary>The aircraft's line-up page in its own words.</summary>
+    private static Group BeforeTakeoffCL()
+    {
+        const string G = "BEFORE_TAKEOFF_CL";
+        return new Group
+        {
+            Id = G, Name = "Line Up",
+            Items = new()
+            {
+                Read("BTC_PACKS", G, "Normal: pack 2 only, packs 1 and 3 off", "FO_PACK_2_ONLY", On),
+                Read("BTC_ANTISKID", G, "Antiskid: on", AntiSkid, v => Is(v, 1)),
+                Read("BTC_AUTOBRAKE", G, "Autobrake: takeoff", Autobrake, v => Is(v, AutobrakeTakeoff)),
+                Read("BTC_STROBES", G, "Strobe lights: on", StrobeLights, v => Is(v, 1)),
+                Read("BTC_LANDING_LIGHTS", G, "Landing lights: on", "FO_LANDING_LIGHTS_ON", On),
+                Read("BTC_CONT_IGN", G, "Continuous ignition: on", ContIgnition, v => Is(v, 1)),
+                Read("BTC_PROBE_HEAT", G, "Temp probe heat: on", ProbeHeat, v => Is(v, 1)),
+                Read("BTC_XPDR", G, "Transponder: TA/RA", Transponder, v => Is(v, TransponderTaRa)),
+                Read("BTC_RADAR", G, "Radar: on", RadarOn, v => Is(v, 1)),
             }
         };
     }

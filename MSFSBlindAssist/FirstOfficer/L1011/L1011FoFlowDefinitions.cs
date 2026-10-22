@@ -63,6 +63,11 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// timed out, skips every APU step with one sentence saying the APU stays running. The stop holds until the APU reads
 /// stopped, and the two-minute cool-down follows it only when this run sent it. The APU bleed carries a toggle: its
 /// single-switch step reads its own position first.
+///
+/// Before Takeoff is the manual's line-up: pack 2 only, anti-skid on, the take-off autobrake ([FO-14] leaves it to the
+/// First Officer), strobe and landing lights, continuous ignition, probe heat, the transponder read at TA/RA and the
+/// weather radar on. Its one cut, packs 1 and 3 off, is left alone off the ground, as its tick is ([FO-25]). The
+/// anti-skid carries a toggle: its single-switch step reads its own position first.
 /// </summary>
 public static class L1011FoFlowDefinitions
 {
@@ -73,6 +78,7 @@ public static class L1011FoFlowDefinitions
         BuildBeforeStart(),
         BuildEngineStart(),
         BuildAfterStart(),
+        BuildBeforeTakeoff(),
     };
 
     // ------------------------------------------------------------------ Power Up (the manual's cockpit entry and power-up)
@@ -774,6 +780,46 @@ public static class L1011FoFlowDefinitions
             Also(Done(Skip(Requires(SW("AS_APU_MASTER_OFF", "APU master: off", "TOGGLE_APU_POWER", 0),
                     "AS_GENS_ON_LINE", ApuStaysText),
                 s => s.IsPosition("TOGGLE_APU_POWER", 0)), "AS_APU_MASTER_OFF"), "ASC_APU_MASTER"),
+        }
+    };
+
+    // ------------------------------------------------------------------ Before Takeoff (the manual's line-up)
+
+    /// <summary>The autobrake selector's TAKEOFF position (1 is OFF).</summary>
+    private const int AutobrakeTakeoff = 0;
+
+    private static Flow BuildBeforeTakeoff() => new()
+    {
+        Id = "BEFORE_TAKEOFF", Name = "Before Takeoff",
+        Description = "Line-up: pack 2 only, anti-skid on, take-off autobrake, strobe and landing lights, continuous "
+            + "ignition and probe heat on, the transponder checked at TA/RA, weather radar on.",
+        RelatedChecklistGroupIds = new[] { "BEFORE_TAKEOFF", "BEFORE_TAKEOFF_CL" },
+        Steps = new()
+        {
+            // Packs 1 and 3 off in the air would cut two of the three packs: left alone off the ground, as its tick is.
+            Also(Done(Skip(LeaveAlone(Multi("BT_PACK_2", "Packs: pack 2 on, packs 1 and 3 off",
+                        (PackKeys[0], 0), (PackKeys[1], 1), (PackKeys[2], 0)),
+                    L1011FoChecklistDefinitions.NotOnGround, L1011FoChecklistDefinitions.PacksStayText),
+                s => s.IsOn("FO_PACK_2_ONLY")), "BT_PACK_2"), "BTC_PACKS"),
+            // A toggle-carrying switch: written only over its own position read (L1011-4).
+            Also(Done(Skip(SW("BT_ANTISKID", "Anti-skid: on", "SWITCH_ANTISKID_ON", 1),
+                s => s.IsPosition("SWITCH_ANTISKID_ON", 1)), "BT_ANTISKID"), "BTC_ANTISKID"),
+            // The take-off setting is the First Officer's (FO-14); the landing setting is the Captain's.
+            Also(Done(Skip(SW("BT_AUTOBRAKE", "Autobrake: takeoff", "ROTARY_AUTO_BRAKE_MODE", AutobrakeTakeoff),
+                s => s.IsPosition("ROTARY_AUTO_BRAKE_MODE", AutobrakeTakeoff)), "BT_AUTOBRAKE"), "BTC_AUTOBRAKE"),
+            Also(Done(Skip(SW("BT_STROBES", "Strobe lights: on", "SWITCH_STROBE_LIGHT", 1),
+                s => s.IsPosition("SWITCH_STROBE_LIGHT", 1)), "BT_STROBES"), "BTC_STROBES"),
+            Also(Done(Skip(Multi("BT_LANDING_LIGHTS", "Landing lights: on", AllTo(1, "TOGGLE_LANDING_LEFT", "TOGGLE_LANDING_RIGHT")),
+                s => s.IsOn("FO_LANDING_LIGHTS_ON")), "BT_LANDING_LIGHTS"), "BTC_LANDING_LIGHTS"),
+            Also(Done(Skip(SW("BT_CONT_IGN", "Continuous ignition: on", "SWITCH_CONT_IGNITION", 1),
+                s => s.IsPosition("SWITCH_CONT_IGNITION", 1)), "BT_CONT_IGN"), "BTC_CONT_IGN"),
+            Also(Done(Skip(SW("BT_PROBE_HEAT", "Temperature probe heat: on", "SWITCH_PROBE_HEAT", 1),
+                s => s.IsPosition("SWITCH_PROBE_HEAT", 1)), "BT_PROBE_HEAT"), "BTC_PROBE_HEAT"),
+            // Before Start set TA/RA: read only.
+            Check("BT_CHK_XPDR", "Transponder: TA/RA", "ROTARY_TCAS_MODE", v => Math.Abs(v - TransponderTaRa) < 0.5,
+                CheckSeconds, "BTC_XPDR"),
+            Also(Done(Skip(SW("BT_RADAR", "Weather radar: on", "SWITCH_WX_WX", 1),
+                s => s.IsPosition("SWITCH_WX_WX", 1)), "BT_RADAR"), "BTC_RADAR"),
         }
     };
 

@@ -60,6 +60,10 @@ public class FoCutGuardSweepTests
         return null;
     }
 
+    /// <summary>The cut the sweep sees in <paramref name="label"/> ("Engine", "Pumps" or "Packs"), or null: for a
+    /// profile's own tests that pin which of its lines the sweep covers.</summary>
+    internal static string? CutKind(string label) => Classify(label)?.ToString();
+
     /// <summary>A profile under test: its checklists, flows, and an evaluator for (on the ground?,
     /// engines running?), and one with nothing read.</summary>
     private sealed record Profile<TE, TS>(

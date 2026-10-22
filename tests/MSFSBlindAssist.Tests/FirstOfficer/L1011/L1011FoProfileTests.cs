@@ -86,7 +86,8 @@ public class L1011FoProfileTests
         var p = Profile();
         Assert.Equal(L1011FoFlowDefinitions.Build().Select(f => f.Id), p.BuildFlows().Select(f => f.Id));
         Assert.Equal(L1011FoChecklistDefinitions.Build().Select(g => g.Id), p.BuildChecklists().Select(g => g.Id));
-        Assert.Equal(new[] { "POWER_UP", "PREFLIGHT", "BEFORE_START", "ENGINE_START", "AFTER_START" }, p.BuildFlows().Select(f => f.Id));
+        Assert.Equal(new[] { "POWER_UP", "PREFLIGHT", "BEFORE_START", "ENGINE_START", "AFTER_START", "BEFORE_TAKEOFF" },
+            p.BuildFlows().Select(f => f.Id));
     }
 
     [Theory]
