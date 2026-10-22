@@ -12,8 +12,9 @@ namespace MSFSBlindAssist.Tests.FirstOfficer.L1011;
 /// watched for rotation, the light-off watch, the idle wait and the generators. A start that times out or is
 /// stopped is released only while that engine's fuel and ignition read off, never by a fuel write, and once: by
 /// whoever takes the run's recorded start out (the watch, the flow's Stop clean-up or the window's close).
-/// Nothing is spoken. Every engine starts cold (N3 1.6, a cold gauge never reads 0), its fuel and ignition and its
-/// ground start off.
+/// Nothing is spoken, but for one sentence: a Stop clean-up that took a start and could not release it tells the
+/// Captain the switch is still on. Every engine starts cold (N3 1.6, a cold gauge never reads 0), its fuel and
+/// ignition and its ground start off.
 /// </summary>
 public class L1011FoEngineStartExecutorTests
 {
@@ -562,7 +563,7 @@ public class L1011FoEngineStartExecutorTests
     }
 
     [Fact]
-    public async Task A_stop_with_fuel_unread_leaves_the_switch_and_logs()
+    public async Task A_stop_with_fuel_unread_leaves_the_switch_logs_and_tells_the_Captain()
     {
         using var stop = new CancellationTokenSource();
         Assert.True(await _exec.ExecuteStepAsync(Flow(GroundStart(2)), stop.Token));
@@ -575,7 +576,93 @@ public class L1011FoEngineStartExecutorTests
         Assert.Equal(new[] { (Switch(2), 1.0) }, _ac.Writes);
         Assert.Equal(1, _ac.Get(Switch(2)));
         Assert.Contains(_logged, line => line.Contains(Fuel(2)) && line.Contains("unread"));
+        Assert.Equal(new[] { StillOn2 }, _spoken);
+    }
+
+    /// <summary>What the Stop clean-up says for engine 2's start it took and could not release.</summary>
+    private const string StillOn2 = "Engine 2 ground start switch still on: release it.";
+
+    /// <summary>
+    /// The Stop clean-up took the run's start but could not release it: its fuel and ignition unread, its switch
+    /// unread, or its click to off refused or never reading off. The starter may still turn a dry engine, which the
+    /// Captain cannot see, so one sentence says so: once, and with flow progress speech off too (a failure).
+    /// </summary>
+    [Theory]
+    [InlineData("fuel unread")]
+    [InlineData("switch unread")]
+    [InlineData("click refused")]
+    [InlineData("click never reads off")]
+    public async Task A_stop_clean_up_that_cannot_release_the_ground_start_says_so_once(string why)
+    {
+        _exec.AttachFlowProgressSpeech(() => false);
+        using var stop = new CancellationTokenSource();
+        Assert.True(await _exec.ExecuteStepAsync(Flow(GroundStart(2)), stop.Token));
+        switch (why)
+        {
+            case "fuel unread": _ac.Unset(Fuel(2)); break;
+            case "switch unread": _ac.Unset(Switch(2)); break;
+            case "click refused": _ac.Refuse(Switch(2)); break;
+            case "click never reads off": _ac.NeverDeliver(Switch(2)); break;
+        }
+        stop.Cancel();
+
+        await _exec.OnFlowStoppedAsync().WaitAsync(Hang);
+        await _exec.OnFlowStoppedAsync().WaitAsync(Hang);   // taken once: nothing left to take or say
+        _exec.ReleaseHeldPresses();
+
+        Assert.Equal(new[] { StillOn2 }, _spoken);
+        Assert.DoesNotContain(_ac.Writes, w => w.Key == Fuel(2));   // never a fuel write
+        if (why != "switch unread")
+            Assert.Equal(1, _ac.Get(Switch(2)));
+    }
+
+    /// <summary>A start the clean-up released, one already off and one whose fuel and ignition are on (the start runs
+    /// on) leave nothing to tell the Captain, with flow progress speech on too.</summary>
+    [Theory]
+    [InlineData("released")]
+    [InlineData("already off")]
+    [InlineData("fuel on")]
+    public async Task A_stop_clean_up_says_nothing_when_the_ground_start_is_released_or_needs_no_release(string how)
+    {
+        _exec.AttachFlowProgressSpeech(() => true);
+        using var stop = new CancellationTokenSource();
+        Assert.True(await _exec.ExecuteStepAsync(Flow(GroundStart(2)), stop.Token));
+        if (how == "already off")
+            _ac.Set(Switch(2), 0);
+        if (how == "fuel on")
+            _ac.Set(Fuel(2), 1);
+        stop.Cancel();
+
+        await _exec.OnFlowStoppedAsync().WaitAsync(Hang);
+
+        Assert.Equal(how == "fuel on" ? 1 : 0, _ac.Get(Switch(2)));
+        Assert.Equal(how == "released", _ac.Writes.Contains((Switch(2), 0.0)));
         Assert.Empty(_spoken);
+    }
+
+    [Theory]
+    [InlineData("de-DE")]
+    [InlineData("sv-SE")]
+    public async Task The_still_on_sentence_names_each_engine_once_under_a_comma_decimal_culture(string culture)
+    {
+        using var stop = new CancellationTokenSource();
+        Assert.True(await _exec.ExecuteStepAsync(Flow(GroundStart(2)), stop.Token));
+        Assert.True(await _exec.ExecuteStepAsync(Flow(GroundStart(3)), stop.Token));
+        _ac.Unset(Fuel(2));
+        _ac.Unset(Fuel(3));
+        stop.Cancel();
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = new CultureInfo(culture);
+            await _exec.OnFlowStoppedAsync().WaitAsync(Hang);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
+
+        Assert.Equal(new[] { StillOn2, "Engine 3 ground start switch still on: release it." }, _spoken);
     }
 
     // ---- The idle wait ---------------------------------------------------------------------------------------------------

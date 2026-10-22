@@ -112,7 +112,7 @@ public class L1011FoPreflightTests
         var (engines, ground) = (steps[0], steps[1]);
 
         Assert.Equal("PF_ENGINES_STOPPED", engines.Id);
-        Assert.Equal("Engines stopped", engines.Label);
+        Assert.Equal("Engines stopped, fuel and ignition off", engines.Label);
         Assert.Equal("FO_ENGINES_STOPPED", engines.ConditionFieldName);
         Assert.Equal("PF_ON_GROUND", ground.Id);
         Assert.Equal("On the ground", ground.Label);
@@ -624,6 +624,66 @@ public class L1011FoPreflightTests
         Assert.False(s(State(("L1011_RO_APU_RPM", 0))));
         Assert.True(s(State(("L1011_RO_APU_RPM", 1))));
         Assert.True(s(State(("L1011_RO_APU_RPM", 100))));
+    }
+
+    // ------------------------------------------------------------------ the APU start requires the master
+
+    private const string ApuMasterNotOnText = "APU not started: the APU master is not on.";
+
+    private static readonly string[] ApuStartSteps = { "PF_APU_MASTER", "PF_APU_START", "PF_APU_RUNNING" };
+
+    /// <summary>The start and the running wait each require the master step: a master that did not come on skips both
+    /// at once, each saying why, instead of a press the start refuses for its master and a two-minute wait.</summary>
+    [Fact]
+    public void The_APU_start_and_its_running_wait_require_the_master()
+    {
+        foreach (var id in new[] { "PF_APU_START", "PF_APU_RUNNING" })
+        {
+            Assert.Equal("PF_APU_MASTER", Of(id).RequiresStepId);
+            Assert.Equal(ApuMasterNotOnText, Of(id).RequiresStepSkipText);
+        }
+        Assert.Equal(new[] { "PF_APU_START", "PF_APU_RUNNING" },
+            Preflight.Steps.Where(s => s.RequiresStepId != null).Select(s => s.Id));
+    }
+
+    /// <summary>On a real flow manager: the master write not done skips the start and the running wait at once, each
+    /// saying the master is not on, with nothing pressed and no wait run.</summary>
+    [Fact]
+    public async Task A_master_not_done_skips_the_APU_start_and_its_wait_at_once_aloud()
+    {
+        var run = await L1011FoFlowRun.RunAsync("PREFLIGHT", ApuStartSteps,
+            Connected(("TOGGLE_APU_POWER", 0), ("L1011_RO_APU_RPM", 0)), fail: new[] { "TOGGLE_APU_POWER" });
+
+        Assert.True(run.Finished, "skipped at once, not a two-minute wait");
+        Assert.Contains("Skipping: APU master: on", run.Speech);
+        Assert.Equal(2, run.Speech.Count(m => m == ApuMasterNotOnText));
+        Assert.Equal(ApuStartSteps, run.Skipped);
+        Assert.DoesNotContain("PF_APU_START", run.Started);
+        Assert.DoesNotContain("PF_APU_RUNNING", run.Started);
+        Assert.Empty(run.Sent);
+    }
+
+    /// <summary>On a real flow manager: a master found on is "Already set", not a skip, so the start is pressed and the
+    /// wait runs until the APU reads running.</summary>
+    [Fact]
+    public async Task A_master_found_on_lets_the_APU_start_and_its_wait_run()
+    {
+        var sim = SeededSimConnectCache.ConnectedWith(("TOGGLE_APU_POWER", 1), ("L1011_RO_APU_RPM", 0));
+        var state = new L1011FoStateEvaluator();
+        state.SetSimConnect(sim);
+        var cache = SeededSimConnectCache.Cache(sim);
+
+        var run = await L1011FoFlowRun.RunAsync("PREFLIGHT", ApuStartSteps, state, onStarted: id =>
+        {
+            if (id == "PF_APU_RUNNING") _ = Task.Delay(500).ContinueWith(_ => cache["L1011_RO_APU_RPM"] = 100);
+        });
+
+        Assert.True(run.Finished);
+        Assert.Contains("Already set: APU master: on", run.Speech);
+        Assert.DoesNotContain(ApuMasterNotOnText, run.Speech);
+        Assert.Empty(run.Skipped);
+        Assert.Equal(new[] { "PF_APU_START", "PF_APU_RUNNING" }, run.Completed.Where(id => id != "PF_APU_MASTER"));
+        Assert.Equal(new[] { X.ApuStart }, run.Sent);
     }
 
     /// <summary>Ignition A or B is already set: the step turns the selector only off both systems.</summary>

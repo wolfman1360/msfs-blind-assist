@@ -624,7 +624,9 @@ public static class L1011FoChecklistDefinitions
                 Read("BSC_SEAT_BELTS", G, "Seatbelt sign: on", SeatBelts, v => Is(v, 1)),
                 Read("BSC_ANTICOL", G, "Anti coll light: on", AntiCollision, v => Is(v, 1)),
                 Read("BSC_IGNITION", G, "Start ignition: A or B", "FO_IGNITION_SELECTED", On),
-                Read("BSC_DOORS", G, "Door lights: out", "FO_DOORS_CLOSED", On),
+                // The page's "Door lights ... OUT": the line reads the four door positions, never the light (it does not
+                // follow the doors), so it is worded on what it reads.
+                Read("BSC_DOORS", G, "Doors: closed", "FO_DOORS_CLOSED", On),
                 Read("BSC_GALLEY", G, "Galley power: off", "FO_GALLEY_OFF", On),
                 Read("BSC_FUEL_PUMP", G, "Fuel pump: minimum one on", "FO_ANY_FUEL_PUMP_ON", On),
                 Read("BSC_APU_MODE", G, "APU: min mode", ApuMode, v => Is(v, 0)),

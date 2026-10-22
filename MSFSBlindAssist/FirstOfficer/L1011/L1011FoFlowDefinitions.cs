@@ -31,9 +31,10 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// Preflight starts the APU, puts the bleed air and packs on it, runs the fire, wheel well and hydraulic
 /// tests and sets the engineer's, overhead, main panel and console switches for departure. It switches the
 /// packs, the AC hydraulic pumps and the power transfer units off on the way, so it opens with the same two
-/// guards ([FO-25]); its packs step is also left alone off the ground, as its tick is. Its toggle-carrying
-/// writes (APU bleed, anti-skid, no smoking) are single switches whose "Already set" reads their own
-/// position: the executor reads first, and from an unknown position the definition refuses the write.
+/// guards ([FO-25]); its packs step is also left alone off the ground, as its tick is. The APU start and its running
+/// wait require the master step: a master that did not come on skips both at once, aloud, instead of a two-minute
+/// wait. Its toggle-carrying writes (APU bleed, anti-skid, no smoking) are single switches whose "Already set" reads
+/// their own position: the executor reads first, and from an unknown position the definition refuses the write.
 ///
 /// Before Start opens with the ground guard (it switches packs 1 and 3 off) and two read-only Stop waits, the APU
 /// running and its generator on line, so external power comes off only once the APU carries the buses, as the
@@ -261,6 +262,9 @@ public static class L1011FoFlowDefinitions
     /// <summary>The AC essential power selector's normal position: bus 3 (generator 1).</summary>
     private const int AcEssNormal = 4;
 
+    /// <summary>What Preflight's APU start and running wait say when the master step was skipped: nothing is pressed.</summary>
+    private const string ApuMasterNotOnText = "APU not started: the APU master is not on.";
+
     private static (string EventName, int? TargetValue)[] AllTo(int target, params string[] keys)
         => keys.Select(k => (k, (int?)target)).ToArray();
 
@@ -285,12 +289,15 @@ public static class L1011FoFlowDefinitions
             Also(Done(Skip(Multi("PF_APU_FUEL", "APU fuel: tank 2 left pump and engine 2 tank valve on",
                     ("SWITCH_FUEL_PUMP_2L_1", 1), ("SWITCH_ENG_2_TANK_VALVE", 1), ("GUARD_ENG_2_TANK_VALVE", 0)),
                 s => s.IsOn("FO_ENG2_FUEL_FEED")), "PF_APU_FUEL"), "PFC_APU_FUEL"),
-            // One press, done once the APU turns: a press while it already turns would be a second start.
-            Done(Skip(SW("PF_APU_START", "APU: start", X.ApuStart, 1), s => s.IsOn("FO_APU_STARTING_OR_RUNNING")), "PF_APU_START"),
+            // One press, done once the APU turns: a press while it already turns would be a second start. Only once
+            // the master went on or was found on ("Already set" is not a skip): the start presses nothing without it.
+            Done(Skip(Requires(SW("PF_APU_START", "APU: start", X.ApuStart, 1), "PF_APU_MASTER", ApuMasterNotOnText),
+                s => s.IsOn("FO_APU_STARTING_OR_RUNNING")), "PF_APU_START"),
             // About 50 s from the press to 100 %. An APU that never runs stops the flow: everything after it
-            // runs on its air and its generator.
-            Done(WaitForField("PF_APU_RUNNING", "APU running", "FO_APU_RUNNING", On, ApuRunningSeconds,
-                onTimeout: FlowStepFailurePolicy.Stop), "PFC_APU_START"),
+            // runs on its air and its generator. A master that did not come on skips it at once, aloud, instead of
+            // the two-minute wait for an APU that cannot start.
+            Done(Requires(WaitForField("PF_APU_RUNNING", "APU running", "FO_APU_RUNNING", On, ApuRunningSeconds,
+                onTimeout: FlowStepFailurePolicy.Stop), "PF_APU_MASTER", ApuMasterNotOnText), "PFC_APU_START"),
             Also(Done(Skip(SW("PF_APU_GEN", "APU generator: on line", X.ApuGenerator, 1), s => s.IsOn("FO_APU_GEN_CLOSED")),
                 "PF_APU_GEN"), "PFC_APU_GEN"),
             Also(Done(Skip(SW("PF_AC_TIES", "AC bus ties: closed", X.AcTies, 1), s => s.IsOn("FO_AC_TIES_CLOSED")),
@@ -537,9 +544,10 @@ public static class L1011FoFlowDefinitions
             Also(Done(Skip(SW("BS_ANTICOL", "Anti-collision lights: on", "SWITCH_ANTICOL_LIGHT", 1),
                 s => s.IsPosition("SWITCH_ANTICOL_LIGHT", 1)), "BS_ANTICOL"), "BSC_ANTICOL"),
             // The doors are the tablet's: the Captain is asked while any door position reads open or unread. The
-            // stock door positions are read because the main panel's door light does not follow the doors.
+            // stock door positions are read because the main panel's door light does not follow the doors, so the
+            // check is worded on the doors, never the light.
             Skip(Captain("BS_DOORS_CPT", "Doors", "Close the doors on the tablet."), s => s.IsOn("FO_DOORS_CLOSED")),
-            Check("BS_CHK_DOORS", "Door lights: out", "FO_DOORS_CLOSED", On, CheckSeconds, "BSC_DOORS"),
+            Check("BS_CHK_DOORS", "Doors: closed", "FO_DOORS_CLOSED", On, CheckSeconds, "BSC_DOORS"),
             Also(Done(Skip(Multi("BS_GALLEY", "Galley power: off", AllTo(0, GalleyKeys)),
                 s => s.IsOn("FO_GALLEY_OFF")), "BS_GALLEY"), "BSC_GALLEY"),
             Check("BS_CHK_FUEL_PUMP", "Fuel pump: at least one on", "FO_ANY_FUEL_PUMP_ON", On, CheckSeconds, "BSC_FUEL_PUMP"),
@@ -1212,7 +1220,7 @@ public static class L1011FoFlowDefinitions
             // so an APU found stopped costs no wait; otherwise it runs, unread included, whether or not this run sent the
             // stop: an APU found coasting between 1 and 5 % (stopped to the stop step) is waited out before the master and
             // the pump cut. Read only; timed out, skipped aloud.
-            Skip(WaitForField("SD_APU_STOPPED", "APU to stop", "L1011_RO_APU_RPM",
+            Skip(WaitForField("SD_APU_STOPPED", "APU at a standstill", "L1011_RO_APU_RPM",
                     v => v < L1011FoStateEvaluator.ApuStartingRpm, ApuStandstillSeconds),
                 s => s.GetValue("L1011_RO_APU_RPM") < L1011FoStateEvaluator.ApuStartingRpm),
             // Only once the stop is done or found done ("Already set" is not a skip).
@@ -1327,10 +1335,11 @@ public static class L1011FoFlowDefinitions
     /// <summary>
     /// Stops a cold-and-dark flow unless every engine reads stopped (<c>FO_ENGINES_STOPPED</c>: every N3 low
     /// and every fuel-and-ignition switch off). An unread state is NaN, which fails the guard rather than
-    /// letting a destructive step through.
+    /// letting a destructive step through. Its label names both halves, so a refusal over stopped engines with a
+    /// fuel and ignition switch left on is spoken truly.
     /// </summary>
     private static Step EnginesStoppedGuard(string id)
-        => WaitForField(id, "Engines stopped", "FO_ENGINES_STOPPED", v => v > 0.5, CheckSeconds,
+        => WaitForField(id, "Engines stopped, fuel and ignition off", "FO_ENGINES_STOPPED", v => v > 0.5, CheckSeconds,
             onTimeout: FlowStepFailurePolicy.Stop);
 
     /// <summary>A fixed wait, spoken with its length; it reads nothing and links no line.</summary>

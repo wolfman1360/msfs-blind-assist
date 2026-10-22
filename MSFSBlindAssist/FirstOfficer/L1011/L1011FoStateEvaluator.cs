@@ -1,3 +1,4 @@
+using System.Globalization;
 using MSFSBlindAssist.Aircraft;
 using MSFSBlindAssist.Aircraft.L1011;
 using MSFSBlindAssist.FirstOfficer.Generic;
@@ -303,7 +304,7 @@ public sealed class L1011FoStateEvaluator : LVarStateEvaluator, IFoEngine3N2Sink
         });
 
     private static string[] Numbered(string format, int count)
-        => Enumerable.Range(1, count).Select(n => string.Format(format, n)).ToArray();
+        => Enumerable.Range(1, count).Select(n => string.Format(format, n.ToString(CultureInfo.InvariantCulture))).ToArray();
 
     private static readonly string[] N3Keys = Numbered("L1011_RO_N3_{0}", 3);
     private static readonly string[] FuelCutoffKeys = Numbered("TOGGLE_CUTOFF_ENG_{0}", 3);

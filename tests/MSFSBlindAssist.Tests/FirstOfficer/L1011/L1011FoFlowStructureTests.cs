@@ -96,6 +96,8 @@ public class L1011FoFlowStructureTests
         var (engines, ground) = (steps[0], steps[1]);
 
         Assert.Equal("PU_ENGINES_STOPPED", engines.Id);
+        // The field also needs every fuel and ignition switch off: the label says so, so a refusal is spoken truly.
+        Assert.Equal("Engines stopped, fuel and ignition off", engines.Label);
         Assert.Equal("FO_ENGINES_STOPPED", engines.ConditionFieldName);
         Assert.Equal("PU_ON_GROUND", ground.Id);
         Assert.Equal("SIM_ON_GROUND", ground.ConditionFieldName);

@@ -39,7 +39,8 @@ namespace MSFSBlindAssist.FirstOfficer.L1011;
 /// recorded with the run's Stop (<see cref="_flowGroundStarts"/>), and a run stopped before that engine's fuel and
 /// ignition are on has it released, only while they read off and never by a fuel write, once: by
 /// <see cref="OnFlowStoppedAsync"/> or the window's close (<see cref="ReleaseHeldPresses"/>), whichever takes it out
-/// first (the MD-11's shape); a watch that timed out, or a click not done, releases it itself. A press still held
+/// first (the MD-11's shape); a watch that timed out, or a click not done, releases it itself. A start the Stop
+/// clean-up took and could not release is said aloud, once (<see cref="GroundStartStillOnText"/>). A press still held
 /// when the definition goes away is released by the definition's own dispose, once.
 /// </summary>
 public sealed class L1011FoActionExecutor : IFoActionExecutor
@@ -388,7 +389,8 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
 
     public void SetTransport(IL1011FoTransport? io) => _io = io;
 
-    /// <summary>The announcer's queued <c>Announce</c>: a composite's verdict of its own ([FO-26]).</summary>
+    /// <summary>The announcer's queued <c>Announce</c>: a composite's verdict of its own, and the Stop clean-up's word on
+    /// a ground start it could not release ([FO-26]).</summary>
     public void SetSpeech(Action<string>? say) => _say = say;
 
     public bool IsAvailable => _io is { Ready: true };
@@ -1520,28 +1522,31 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     /// <summary>
     /// Under the gate: engine <paramref name="n"/>'s start released on <paramref name="io"/>, the transport read
     /// under the gate. Detached (the window closed, and its close released what it could, <see cref="ReleaseHeldPresses"/>)
-    /// or unable to reach the aircraft, left as it is and logged; a throw is logged. Nothing is spoken.
+    /// or unable to reach the aircraft, left as it is and logged; a throw is logged. Nothing is spoken. True when the
+    /// release was tried and could not be done (<see cref="ReleaseGroundStartAsync"/>, or a throw): the switch may still
+    /// be on.
     /// </summary>
-    private async Task ReleaseOnAsync(IL1011FoTransport? io, int n, string why)
+    private async Task<bool> ReleaseOnAsync(IL1011FoTransport? io, int n, string why)
     {
         string engine = $"engine {n.ToString(CultureInfo.InvariantCulture)}";
         if (io is null)
         {
             Note($"{engine}: {why} with its ground start on; the First Officer is detached, so it is left as it is");
-            return;
+            return false;
         }
         if (!io.Ready)
         {
             Note($"{engine}: {why} with its ground start on; the aircraft cannot be reached, so it is left as it is", warn: true);
-            return;
+            return false;
         }
         try
         {
-            await ReleaseGroundStartAsync(io, n).ConfigureAwait(false);
+            return await ReleaseGroundStartAsync(io, n).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             Note($"{engine}: {why}: the ground start release threw: {ex.Message}", warn: true);
+            return true;
         }
     }
 
@@ -1551,38 +1556,45 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     /// aircraft releases the switch itself past about 55 % N3. Off, the switch read fresh: unread, never clicked
     /// (its click carries the same <c>H:STARTER</c> events either way, so it is sent only from a known position);
     /// already off, nothing sent; on, the switch row's own click to 0 (<c>L:SWITCH_GND_START_ENG_n</c> 0 with its
-    /// <c>H:STARTER</c> events) read back off. Each case logged. Under the caller's gate.
+    /// <c>H:STARTER</c> events) read back off. Each case logged. Under the caller's gate. True when the start could not
+    /// be released: its fuel and ignition or its switch unread, or its click not done or not reading off.
     /// </summary>
-    private async Task ReleaseGroundStartAsync(IL1011FoTransport io, int n)
+    private async Task<bool> ReleaseGroundStartAsync(IL1011FoTransport io, int n)
     {
         string engine = $"engine {n.ToString(CultureInfo.InvariantCulture)}";
         string fuelKey = FuelIgnitionKey(n), switchKey = GroundStartKey(n);
         if (await ReadAsync(io, fuelKey).ConfigureAwait(false) is not double fuel)
         {
             Note($"{engine}: {fuelKey} unread, its ground start left as it is", warn: true);
-            return;
+            return true;
         }
         if (fuel >= PositionTolerance)
         {
             Note($"{engine}: fuel on, the start runs on");
-            return;
+            return false;
         }
         if (await ReadAsync(io, switchKey).ConfigureAwait(false) is not double reading)
         {
             Note($"{engine}: fuel off, {switchKey} unread: not clicked, its ground start left as it is", warn: true);
-            return;
+            return true;
         }
         if (reading < PositionTolerance)
         {
             Note($"{engine}: fuel off, its ground start already reads off: nothing sent");
-            return;
+            return false;
         }
         bool off = await WriteAsync(io, switchKey, 0, readJustNow: true).ConfigureAwait(false);
         Note(off
             ? $"{engine}: fuel off, its ground start released and read back off"
             : $"{engine}: fuel off, its ground start does not read off after its release: the starter may still be engaged",
             warn: !off);
+        return !off;
     }
+
+    /// <summary>What the Stop clean-up says for engine <paramref name="n"/>'s start it took and could not release: the
+    /// starter may still turn a dry engine on APU air, which the Captain cannot see.</summary>
+    internal static string GroundStartStillOnText(int n) =>
+        $"Engine {n.ToString(CultureInfo.InvariantCulture)} ground start switch still on: release it.";
 
     /// <summary>
     /// A flow was stopped part-way (Stop Flow, another flow started, the window closed, a step whose failure stops
@@ -1592,7 +1604,9 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     /// engine whose fuel and ignition are on (forgotten when they went on), never a start a checklist tick or the
     /// pilot made, never on an unread value. Detached (the window closed), there is no aircraft to write to and the
     /// window's close already released it (<see cref="ReleaseHeldPresses"/>); unable to reach the aircraft, it is
-    /// left and logged. Nothing is spoken: the flow says how it ended.
+    /// left and logged. The flow says how it ended; a start taken here and not released (its fuel and ignition or its
+    /// switch unread, its click not done or not reading off) is also said, once per engine and whatever the progress
+    /// speech, through the announcer (<see cref="GroundStartStillOnText"/>, [FO-26]: a failure always speaks).
     /// </summary>
     public async Task OnFlowStoppedAsync()
     {
@@ -1605,7 +1619,8 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
             foreach (var start in stopped)
             {
                 if (!_flowGroundStarts.TryRemove(start)) continue;   // taken: whoever took it releases it
-                await ReleaseOnAsync(io, start.Key, "flow stopped").ConfigureAwait(false);
+                if (await ReleaseOnAsync(io, start.Key, "flow stopped").ConfigureAwait(false))
+                    _say?.Invoke(GroundStartStillOnText(start.Key));
             }
         }
         finally

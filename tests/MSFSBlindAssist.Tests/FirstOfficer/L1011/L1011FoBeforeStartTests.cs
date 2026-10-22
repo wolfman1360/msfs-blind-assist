@@ -296,7 +296,8 @@ public class L1011FoBeforeStartTests
 
     private static readonly (string Id, string Label, string Field, int Seconds, string Line)[] Checks =
     {
-        ("BS_CHK_DOORS", "Door lights: out", "FO_DOORS_CLOSED", 5, "BSC_DOORS"),
+        // The four door positions, never the light, which does not follow the doors: the label says what is read.
+        ("BS_CHK_DOORS", "Doors: closed", "FO_DOORS_CLOSED", 5, "BSC_DOORS"),
         ("BS_CHK_FUEL_PUMP", "Fuel pump: at least one on", "FO_ANY_FUEL_PUMP_ON", 5, "BSC_FUEL_PUMP"),
         ("BS_CHK_IGNITION", "Ignition selector: system A or B", "FO_IGNITION_SELECTED", 5, "BSC_IGNITION"),
         ("BS_CHK_INS_NAV", "INS 1, 2 and 3: navigating", "FO_INS_NAVIGATING", 15, "BSC_INS_NAV"),
@@ -838,7 +839,9 @@ public class L1011FoBeforeStartTests
         new("BSC_SEAT_BELTS", "Seatbelt sign: on", "SWITCH_SEATBELT_LIGHT"),
         new("BSC_ANTICOL", "Anti coll light: on", "SWITCH_ANTICOL_LIGHT"),
         new("BSC_IGNITION", "Start ignition: A or B", "FO_IGNITION_SELECTED"),
-        new("BSC_DOORS", "Door lights: out", "FO_DOORS_CLOSED"),
+        // The page says "Door lights ... OUT"; the line reads the four door positions, not the light (it does not follow
+        // the doors), so it says what it reads.
+        new("BSC_DOORS", "Doors: closed", "FO_DOORS_CLOSED"),
         new("BSC_GALLEY", "Galley power: off", "FO_GALLEY_OFF"),
         new("BSC_FUEL_PUMP", "Fuel pump: minimum one on", "FO_ANY_FUEL_PUMP_ON"),
         new("BSC_APU_MODE", "APU: min mode", "SWITCH_APU_MODE", 0),

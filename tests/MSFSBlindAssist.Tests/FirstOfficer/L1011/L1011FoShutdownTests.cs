@@ -133,7 +133,7 @@ public class L1011FoShutdownTests
     {
         var (ground, engines) = (Shutdown.Steps[0], Shutdown.Steps[1]);
         Assert.Equal(("SD_ON_GROUND", "On the ground", "SIM_ON_GROUND"), (ground.Id, ground.Label, ground.ConditionFieldName));
-        Assert.Equal(("SD_ENGINES_STOPPED", "Engines stopped", "FO_ENGINES_STOPPED"),
+        Assert.Equal(("SD_ENGINES_STOPPED", "Engines stopped, fuel and ignition off", "FO_ENGINES_STOPPED"),
             (engines.Id, engines.Label, engines.ConditionFieldName));
         foreach (var guard in new[] { ground, engines })
         {
@@ -321,7 +321,8 @@ public class L1011FoShutdownTests
     public void The_APU_wait_is_already_set_only_below_one_percent()
     {
         var wait = Of("SD_APU_STOPPED");
-        Assert.Equal("APU to stop", wait.Label);
+        // Its own words, never an echo of the stop's "APU: stop" before it.
+        Assert.Equal("APU at a standstill", wait.Label);
         Assert.Equal(FlowStepActionType.WaitForCondition, wait.ActionType);
         Assert.Equal(ApuRpm, wait.ConditionFieldName);
         Assert.Equal(150, wait.TimeoutSeconds);
@@ -392,7 +393,7 @@ public class L1011FoShutdownTests
 
         Assert.True(run.Finished);
         Assert.Contains("Already set: APU: stop", run.Speech);
-        Assert.Contains("Already set: APU to stop", run.Speech);
+        Assert.Contains("Already set: APU at a standstill", run.Speech);
         Assert.Empty(run.Skipped);
         Assert.Contains("SD_APU_STOPPED", run.Completed);
         Assert.DoesNotContain("SD_APU_STOPPED", run.Started);

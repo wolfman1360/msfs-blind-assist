@@ -79,12 +79,19 @@ public class FlowStepDependencyIdTests
         Assert.Equal(2, beforeStart.Count(s => s.Requires == "BS_APU_GEN_AVAIL"));
     }
 
-    /// <summary>The TriStar's APU shutdowns: After Start's trip, bleed and stop hang on the engine generators, and in
-    /// After Start and Shutdown the master hangs on the stop, so a stop skipped or not done leaves the master on; in
-    /// Shutdown the battery hangs on the master, so a master left on leaves the battery on.</summary>
+    /// <summary>The TriStar's APU: Preflight's start and its running wait hang on the master, so a master that did not
+    /// come on skips both at once, aloud, instead of a two-minute wait. Its shutdowns: After Start's trip, bleed and
+    /// stop hang on the engine generators, and in After Start and Shutdown the master hangs on the stop, so a stop
+    /// skipped or not done leaves the master on; in Shutdown the battery hangs on the master, so a master left on
+    /// leaves the battery on.</summary>
     [Fact]
-    public void The_audit_sees_the_tristar_apu_shutdown_dependencies()
+    public void The_audit_sees_the_tristar_apu_dependencies()
     {
+        var preflight = Flows("iniBuilds L-1011").Single(f => f.Flow == "PREFLIGHT").Steps;
+        Assert.Equal(new[] { "PF_APU_START", "PF_APU_RUNNING" },
+            preflight.Where(s => s.Requires == "PF_APU_MASTER").Select(s => s.Id));
+        Assert.All(preflight.Where(s => s.Requires == "PF_APU_MASTER"),
+            s => Assert.Equal("APU not started: the APU master is not on.", s.SkipText));
         var afterStart = Flows("iniBuilds L-1011").Single(f => f.Flow == "AFTER_START").Steps;
         Assert.Equal(new[] { "AS_APU_GEN_TRIP", "AS_APU_BLEED_OFF", "AS_APU_STOP" },
             afterStart.Where(s => s.Requires == "AS_GENS_ON_LINE").Select(s => s.Id));
