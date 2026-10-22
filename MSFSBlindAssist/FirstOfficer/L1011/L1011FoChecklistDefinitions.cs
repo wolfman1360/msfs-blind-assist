@@ -189,6 +189,10 @@ public static class L1011FoChecklistDefinitions
                 // by its label: the same guard as the pumps ([FO-25]). Judged by no state; the check is the point.
                 LeaveAlone(ActionManual("PU_STBY_CHECK", G, "Standby power check", Set(X.StandbyPowerCheck, 1)),
                     NotParked, ParkedOnlyText),
+                // The check's own end state as lines a pilot can tick without the check. Neither is a cut.
+                Auto("PU_BATTERY", G, "Battery: on", Battery, v => Is(v, 1), Set(Battery, 1)),
+                Auto("PU_STBY_ARMED", G, "Standby power: armed", "FO_STBY_ARMED", On,
+                    SetAll(("GUARD_STBY_POWER", 1), ("TOGGLE_STBY_POWER", 1), ("GUARD_STBY_POWER", 0))),
                 Auto("PU_AC_ESS", G, "AC essential bus selector: bus 3, generator 1", AcEssBus, v => Is(v, AcEssNormal),
                     Set(AcEssBus, AcEssNormal)),
                 Auto("PU_EXT_PWR", G, "External power: on", "FO_EXT_POWER_ON", On, Set(X.ExternalPower, 1)),
@@ -224,7 +228,8 @@ public static class L1011FoChecklistDefinitions
                 Read("PUC_FUEL_PUMPS", G, "Fuel tank pump switches: unlatched", "FO_FUEL_PUMPS_OFF", On),
                 Read("PUC_JETTISON", G, "Master jettison and dump switches: unlatched", "FO_JETTISON_SAFE", On),
                 Read("PUC_PAX_OXY", G, "Passenger oxygen manual switch: guarded and unlatched", "FO_PAX_OXY_SAFE", On),
-                // Judged by no state: the flow's standby power check delivers it, with the two lines after it.
+                // Judged by no state: the flow's standby power check delivers it; the two lines after it, its own
+                // steps.
                 Manual("PUC_STBY_CHECK", G, "Standby power check: complete"),
                 Read("PUC_BATTERY", G, "Battery: on", Battery, v => Is(v, 1)),
                 Read("PUC_STBY_ARMED", G, "Standby power: armed", "FO_STBY_ARMED", On),

@@ -19,8 +19,9 @@ using Step = Models.FlowStep<L1011FoStateEvaluator>;
 /// standby power check, turns the battery off for a moment ([FO-25]): it opens with BOTH guards, engines
 /// stopped and on the ground, each a read-only Stop that links no line and fails unread, so a flow started
 /// with an engine turning or in flight stops whole instead of working through its steps one by one. The
-/// guards stay first; the standby power check stays linked to the four lines it delivers and never to the
-/// electrical meter selector lines, which are the pilot's ([FO-7]).
+/// guards stay first; the standby power check stays linked to its own two lines and never to the electrical
+/// meter selector lines, which are the pilot's ([FO-7]); the battery on and standby power armed follow it as
+/// steps and lines of their own, so the action group ticked line by line still turns the battery on.
 ///
 /// Every read-back (PUC_*) line the flow latches has a delivering step ([FO-6], [FO-7]): a write completes
 /// its own action line and the read-back line it sets (<see cref="Also"/>), and a read-only
@@ -207,9 +208,19 @@ public static class L1011FoFlowDefinitions
 
             // The aircraft's checklist lines 18 to 32 in one composite: battery off, standby power On, the
             // lights read, battery on, standby power armed, the lights read again. No SkipCondition: the check
-            // is the point. Linked to the four lines it delivers and nothing else (FO-7, never the meter selectors).
+            // is the point. Linked to its own two lines (FO-7, never the meter selectors): the battery and the
+            // armed standby power are the next two steps', so a pilot ticking the action group line by line,
+            // without the check, still turns the battery on.
             Also(Done(SW("PU_STBY_CHECK", "Standby power check", X.StandbyPowerCheck, 1), "PU_STBY_CHECK"),
-                "PUC_STBY_CHECK", "PUC_BATTERY", "PUC_STBY_ARMED"),
+                "PUC_STBY_CHECK"),
+            Also(Done(Skip(SW("PU_BATTERY", "Battery: on", "TOGGLE_BATTERY", 1),
+                s => s.IsPosition("TOGGLE_BATTERY", 1)), "PU_BATTERY"), "PUC_BATTERY"),
+            // Armed is the switch at Arm under its closed guard, in the check's order: the guard opened (already
+            // open, nothing is sent), the switch to Arm, the guard closed. Armed by hand with the guard left open,
+            // only the guard is written.
+            Also(Done(Skip(Multi("PU_STBY_ARMED", "Standby power: armed",
+                    ("GUARD_STBY_POWER", 1), ("TOGGLE_STBY_POWER", 1), ("GUARD_STBY_POWER", 0)),
+                s => s.IsOn("FO_STBY_ARMED")), "PU_STBY_ARMED"), "PUC_STBY_ARMED"),
             Also(Done(Skip(SW("PU_AC_ESS", "AC essential bus selector: bus 3, generator 1", "ROTARY_AC_ESS_BUS", 4),
                 s => s.IsPosition("ROTARY_AC_ESS_BUS", 4)), "PU_AC_ESS"), "PUC_AC_ESS"),
             Done(Skip(SW("PU_EXT_PWR", "External power: on", X.ExternalPower, 1), s => s.IsOn("FO_EXT_POWER_ON")), "PU_EXT_PWR"),

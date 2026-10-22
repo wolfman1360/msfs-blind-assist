@@ -212,8 +212,8 @@ public class L1011FoChecklistStructureTests
         Assert.Equal(new[]
         {
             "PU_CONT_IGN", "PU_RADIO_MASTERS", "PU_XPDR", "PU_RADAR", "PU_ATMS", "PU_AC_PUMPS", "PU_FUEL_PUMPS",
-            "PU_JETTISON", "PU_PAX_OXY", "PU_GALLEY", "PU_STBY_CHECK", "PU_AC_ESS", "PU_EXT_PWR", "PU_INS_ALIGN",
-            "PU_INS_POSITION",
+            "PU_JETTISON", "PU_PAX_OXY", "PU_GALLEY", "PU_STBY_CHECK", "PU_BATTERY", "PU_STBY_ARMED", "PU_AC_ESS",
+            "PU_EXT_PWR", "PU_INS_ALIGN", "PU_INS_POSITION",
         }, Group("POWER_UP").Items.Select(i => i.Id));
         Assert.DoesNotContain(Groups.SelectMany(g => g.Items), i => i.Id == "PU_EXT_PWR_CPT");
     }
@@ -268,6 +268,8 @@ public class L1011FoChecklistStructureTests
     [InlineData("PU_JETTISON", "FO_JETTISON_SAFE")]
     [InlineData("PU_PAX_OXY", "FO_PAX_OXY_SAFE")]
     [InlineData("PU_GALLEY", "FO_GALLEY_OFF")]
+    [InlineData("PU_BATTERY", "TOGGLE_BATTERY")]
+    [InlineData("PU_STBY_ARMED", "FO_STBY_ARMED")]
     [InlineData("PU_AC_ESS", "ROTARY_AC_ESS_BUS")]
     [InlineData("PU_EXT_PWR", "FO_EXT_POWER_ON")]
     [InlineData("PU_INS_ALIGN", "FO_INS_ALIGN_OR_NAV")]
@@ -518,9 +520,10 @@ public class L1011FoChecklistStructureTests
     /// <summary>
     /// A cold aircraft for the fake: every key the flow writes reads the other way from its target, the
     /// battery on with standby power Off under its closed guard, and ground power available but not
-    /// connected (its ties closed, as on a cold aircraft).
+    /// connected (its ties closed, as on a cold aircraft). For the battery's own line
+    /// (<paramref name="line"/> PU_BATTERY) the battery is off, so that line has something to do.
     /// </summary>
-    private static FakeL1011Aircraft ColdAircraft()
+    private static FakeL1011Aircraft ColdAircraft(string? line = null)
     {
         var ac = new FakeL1011Aircraft();
         foreach (var step in PowerUpFlow.Steps)
@@ -537,7 +540,7 @@ public class L1011FoChecklistStructureTests
         // The INS align composite reads each mode selector itself: all three off.
         foreach (int n in new[] { 1, 2, 3 })
             ac.Set($"ROTARY_INS_MODE_{n}", 0);
-        ac.Set("TOGGLE_BATTERY", 1);
+        ac.Set("TOGGLE_BATTERY", line == "PU_BATTERY" ? 0 : 1);
         ac.Set("TOGGLE_STBY_POWER", 0);
         ac.Set("GUARD_STBY_POWER", 0);
         ac.Set("LAMP_EXTERNAL_POWER_AVAILABLE", 1);
@@ -563,12 +566,12 @@ public class L1011FoChecklistStructureTests
     [MemberData(nameof(ActionLinesWithACheckAction))]
     public async Task HandTick_WritesExactlyWhatItsFlowStepWrites(string id)
     {
-        var byStep = ColdAircraft();
+        var byStep = ColdAircraft(id);
         var stepExec = new X();
         stepExec.SetTransport(byStep);
         Assert.True(await stepExec.ExecuteStepAsync(FlowStep(id)).WaitAsync(TimeSpan.FromSeconds(10)), $"{id}: the flow step was not done");
 
-        var byTick = ColdAircraft();
+        var byTick = ColdAircraft(id);
         var tickExec = new X();
         tickExec.SetTransport(byTick);
         await Line(id).CheckAction!(tickExec, new L1011FoStateEvaluator()).WaitAsync(TimeSpan.FromSeconds(10));

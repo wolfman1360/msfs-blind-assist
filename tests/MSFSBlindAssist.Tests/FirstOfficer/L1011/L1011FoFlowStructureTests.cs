@@ -69,7 +69,8 @@ public class L1011FoFlowStructureTests
             "PU_CHK_FIRE_HANDLES", "PU_CHK_GEAR", "PU_CHK_SPEED_BRAKE", "PU_CHK_FLAPS", "PU_CHK_FUEL_IGN",
             "PU_CONT_IGN", "PU_RADIO_MASTERS", "PU_XPDR", "PU_RADAR", "PU_ATMS", "PU_AC_PUMPS", "PU_FUEL_PUMPS",
             "PU_JETTISON", "PU_PAX_OXY", "PU_GALLEY",
-            "PU_STBY_CHECK", "PU_AC_ESS", "PU_EXT_PWR", "PU_EXT_PWR_CPT", "PU_INS_ALIGN", "PU_INS_POSITION",
+            "PU_STBY_CHECK", "PU_BATTERY", "PU_STBY_ARMED", "PU_AC_ESS", "PU_EXT_PWR", "PU_EXT_PWR_CPT", "PU_INS_ALIGN",
+            "PU_INS_POSITION",
         }, PowerUp.Steps.Select(s => s.Id));
 
     [Fact]
@@ -201,6 +202,10 @@ public class L1011FoFlowStructureTests
         ("PU_PAX_OXY", "Passenger oxygen: off and guarded", new[] { ("SWITCH_PAX_OXY_MANUAL", 0), ("GUARD_PAX_OXY_MANUAL", 0) }),
         ("PU_GALLEY", "Galley power: off", new[] { ("SWITCH_GALLEY_BUS_1", 0), ("SWITCH_GALLEY_BUS_2", 0), ("SWITCH_GALLEY_BUS_3", 0) }),
         ("PU_STBY_CHECK", "Standby power check", new[] { (X.StandbyPowerCheck, 1) }),
+        ("PU_BATTERY", "Battery: on", new[] { ("TOGGLE_BATTERY", 1) }),
+        // The standby power check's arming order: the guard opened (already open, nothing is sent), the switch to Arm,
+        // the guard closed.
+        ("PU_STBY_ARMED", "Standby power: armed", new[] { ("GUARD_STBY_POWER", 1), ("TOGGLE_STBY_POWER", 1), ("GUARD_STBY_POWER", 0) }),
         ("PU_AC_ESS", "AC essential bus selector: bus 3, generator 1", new[] { ("ROTARY_AC_ESS_BUS", 4) }),
         ("PU_EXT_PWR", "External power: on", new[] { (X.ExternalPower, 1) }),
         // One composite: it writes ALIGN to each unit not already at ALIGN or NAV.
@@ -247,7 +252,7 @@ public class L1011FoFlowStructureTests
         foreach (var id in new[]
         {
             "PU_CONT_IGN", "PU_RADIO_MASTERS", "PU_XPDR", "PU_RADAR", "PU_ATMS", "PU_AC_PUMPS", "PU_FUEL_PUMPS",
-            "PU_JETTISON", "PU_PAX_OXY",
+            "PU_JETTISON", "PU_PAX_OXY", "PU_BATTERY", "PU_STBY_ARMED",
         })
         {
             string readBack = "PUC_" + id["PU_".Length..];
@@ -270,15 +275,93 @@ public class L1011FoFlowStructureTests
         Assert.DoesNotContain(PowerUp.Steps.SelectMany(x => x.LinkedChecklistItemIds), id => id == "PUC_GALLEY");
     }
 
+    /// <summary>The check links only its own two lines: the battery and the armed standby power have steps of their own,
+    /// which a pilot working the action group line by line can tick.</summary>
     [Fact]
-    public void TheStandbyPowerCheck_LinksExactlyTheFourLinesItDelivers()
+    public void TheStandbyPowerCheck_LinksOnlyItsOwnLines()
     {
         var s = Of("PU_STBY_CHECK");
         Assert.Equal(X.StandbyPowerCheck, s.EventName);
-        Assert.Equal(new[] { "PU_STBY_CHECK", "PUC_STBY_CHECK", "PUC_BATTERY", "PUC_STBY_ARMED" }, s.LinkedChecklistItemIds);
+        Assert.Equal(new[] { "PU_STBY_CHECK", "PUC_STBY_CHECK" }, s.LinkedChecklistItemIds);
         // The electrical meter selector lines are the pilot's (FO-7): no step of the flow links them.
         Assert.DoesNotContain(PowerUp.Steps.SelectMany(x => x.LinkedChecklistItemIds),
             id => id.Contains("METER", StringComparison.OrdinalIgnoreCase) || id.Contains("SELECTOR", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>The battery on and standby power armed follow the check, each its own step and line, so a pilot ticking
+    /// Power Up line by line turns the battery on. Neither is a cut, so neither is left alone.</summary>
+    [Fact]
+    public void The_battery_and_standby_armed_steps_follow_the_check_on_their_own_lines()
+    {
+        var ids = PowerUp.Steps.Select(s => s.Id).ToList();
+        Assert.Equal(new[] { "PU_STBY_CHECK", "PU_BATTERY", "PU_STBY_ARMED" }, ids.Skip(ids.IndexOf("PU_STBY_CHECK")).Take(3));
+        foreach (var id in new[] { "PU_BATTERY", "PU_STBY_ARMED" })
+        {
+            Assert.Null(Of(id).LeaveAloneWhen);
+            Assert.Null(FoCutGuardSweepTests.CutKind(Of(id).Label));
+        }
+
+        var battery = Of("PU_BATTERY").SkipCondition!;
+        Assert.True(battery(State(("TOGGLE_BATTERY", 1))));
+        Assert.False(battery(State(("TOGGLE_BATTERY", 0))));
+        Assert.False(battery(State()));
+
+        // Armed is the switch at Arm AND the guard closed: armed by hand with the guard left open is not done.
+        var armed = Of("PU_STBY_ARMED").SkipCondition!;
+        Assert.True(armed(State(("TOGGLE_STBY_POWER", 1), ("GUARD_STBY_POWER", 0))));
+        Assert.False(armed(State(("TOGGLE_STBY_POWER", 1), ("GUARD_STBY_POWER", 1))), "the guard left open");
+        Assert.False(armed(State(("TOGGLE_STBY_POWER", 2), ("GUARD_STBY_POWER", 1))), "standby power on");
+        Assert.False(armed(State()));
+    }
+
+    /// <summary>On the fake TriStar, the step and its tick alike: standby power armed by hand with the guard left open
+    /// (as found live) ends armed with the guard closed; from On it is armed first.</summary>
+    [Theory]
+    [InlineData(1.0, 1.0, false)]
+    [InlineData(1.0, 1.0, true)]
+    [InlineData(2.0, 1.0, false)]
+    [InlineData(2.0, 1.0, true)]
+    public async Task Standby_power_armed_closes_the_guard_over_the_switch_at_arm(double standby, double guard, bool tick)
+    {
+        var ac = new FakeL1011Aircraft();
+        ac.Set("TOGGLE_STBY_POWER", standby);
+        ac.Set("GUARD_STBY_POWER", guard);
+        var exec = new X();
+        exec.SetTransport(ac);
+
+        if (tick)
+        {
+            var line = L1011FoChecklistDefinitions.Build().SelectMany(g => g.Items).Single(i => i.Id == "PU_STBY_ARMED");
+            await line.CheckAction!(exec, State()).WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        else
+            Assert.True(await exec.ExecuteStepAsync(Of("PU_STBY_ARMED"), CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10)));
+
+        Assert.Equal(1, ac.Get("TOGGLE_STBY_POWER"));
+        Assert.Equal(0, ac.Get("GUARD_STBY_POWER"));
+        Assert.Equal(("GUARD_STBY_POWER", 0.0), ac.Writes[^1]);   // ends with the guard closed
+    }
+
+    /// <summary>The battery on, step and tick alike, from off.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Battery_on_turns_the_battery_on(bool tick)
+    {
+        var ac = new FakeL1011Aircraft();
+        ac.Set("TOGGLE_BATTERY", 0);
+        var exec = new X();
+        exec.SetTransport(ac);
+
+        if (tick)
+        {
+            var line = L1011FoChecklistDefinitions.Build().SelectMany(g => g.Items).Single(i => i.Id == "PU_BATTERY");
+            await line.CheckAction!(exec, State()).WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        else
+            Assert.True(await exec.ExecuteStepAsync(Of("PU_BATTERY"), CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10)));
+
+        Assert.Equal(new[] { ("TOGGLE_BATTERY", 1.0) }, ac.Writes);
     }
 
     // The tank 2 left pump feeds the APU from the moment it starts turning, not only once it is up to speed.
@@ -360,6 +443,8 @@ public class L1011FoFlowStructureTests
     {
         if (s.EventName == X.ExternalPower) return new[] { (ExtPowerBreaker, 1.0) };
         if (s.EventName == X.InsAlign) return InsModeKeys.Select(k => (k, 2.0)).ToArray();
+        // The guard is written twice (opened, then closed): done is the switch at Arm under the closed guard.
+        if (s.Id == "PU_STBY_ARMED") return new[] { ("TOGGLE_STBY_POWER", 1.0), ("GUARD_STBY_POWER", 0.0) };
         return Actions(s).Select(a => (a.Key, (double)a.Target)).ToArray();
     }
 

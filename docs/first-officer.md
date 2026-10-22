@@ -605,7 +605,11 @@ standby bus fail lights out). The unarmed light means the switch is Off, so it i
 with standby power On. A light that reads wrong is spoken in one sentence naming it, and the check
 carries on, so it always ends with the battery on and standby power armed; a write that is not done
 ends it at once with those three put back. "Standby power check: pass" is spoken only with flow
-progress on.
+progress on. Two steps and lines of their own follow it, "Battery: on" and "Standby power: armed" (the
+switch at Arm under its closed guard, written in the check's order: the guard opened, the switch to Arm,
+the guard closed), so a pilot who ticks the action group line by line, without the check, still turns
+the battery on, and standby power armed by hand with its guard left open gets the guard closed. Neither
+is a cut, so neither is left alone.
 
 Power Up writes no lever, no typed value and no control whose click carries a toggle K: event. A hand
 tick on an action line runs the same write as its flow step; the ATM, AC hydraulic pump and fuel pump
