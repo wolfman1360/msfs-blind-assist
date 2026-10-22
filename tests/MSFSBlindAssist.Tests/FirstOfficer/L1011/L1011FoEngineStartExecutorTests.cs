@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using MSFSBlindAssist.Aircraft.L1011;
 using MSFSBlindAssist.FirstOfficer;
 using MSFSBlindAssist.FirstOfficer.L1011;
 using MSFSBlindAssist.FirstOfficer.Models;
@@ -53,6 +54,90 @@ public class L1011FoEngineStartExecutorTests
     }
 
     private static Step Flow(string key, int target = 1) => new() { EventName = key, TargetValue = target };
+
+    /// <summary>
+    /// Runs <paramref name="act"/> with no synchronization context, so a wait it cancels resumes inline, inside the
+    /// cancel, before the next line runs. On the UI thread that wait resumes on the thread pool instead and races the
+    /// next line: this is the order in which the watch gets there first.
+    /// </summary>
+    private static void WithTheWatchResumingFirst(Action act)
+    {
+        var previous = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(null);
+        try
+        {
+            act();
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+    }
+
+    /// <summary>
+    /// The fake behind a live transport's timing. <see cref="YieldOnRead"/>: a fresh read completes later, never
+    /// inline (SimConnect delivers on the next batch). <see cref="HoldRead"/>: the next fresh read of a key waits for
+    /// the returned door, so a write reading it first holds the gate until then (a held write would not: the
+    /// executor's write time-out ends at once on the fake's clock). <see cref="LandLate"/>: the next click of a key
+    /// to 1 is sent, but reads on only once <c>landsOnReadOf</c> is next read fresh. Everything else is the fake's.
+    /// </summary>
+    private sealed class LiveTimingTransport : IL1011FoTransport
+    {
+        private readonly FakeL1011Aircraft _ac;
+        private readonly ConcurrentDictionary<string, TaskCompletionSource> _held = new(StringComparer.Ordinal);
+        private (string Key, string LandsOnReadOf)? _late;
+        private string? _landing;
+
+        public LiveTimingTransport(FakeL1011Aircraft ac) => _ac = ac;
+
+        public bool YieldOnRead { get; init; }
+
+        public TaskCompletionSource HoldRead(string key)
+        {
+            var door = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _held[key] = door;
+            return door;
+        }
+
+        public void LandLate(string key, string landsOnReadOf) => _late = (key, landsOnReadOf);
+
+        public bool Ready => _ac.Ready;
+        public long NowMs => _ac.NowMs;
+
+        public async Task<double?> ReadFreshAsync(string key, int timeoutMs)
+        {
+            if (YieldOnRead)
+                await Task.Yield();
+            if (_held.TryRemove(key, out var door))
+                await door.Task.ConfigureAwait(false);
+            if (_late is { } late && _landing == late.Key && key == late.LandsOnReadOf)
+            {
+                _ac.Set(late.Key, 1);   // the late click lands
+                _late = null;
+                _landing = null;
+            }
+            return await _ac.ReadFreshAsync(key, timeoutMs).ConfigureAwait(false);
+        }
+
+        public async Task<L1011FoResult> SetAsync(string key, double value)
+        {
+            var result = await _ac.SetAsync(key, value).ConfigureAwait(false);
+            if (_late is { } late && late.Key == key && value == 1 && _landing is null)
+            {
+                _ac.Set(key, 0);   // sent, but not delivered yet
+                _landing = key;
+            }
+            return result;
+        }
+
+        public Task<L1011FoResult> SetAltimetersAsync(double millibars) => _ac.SetAltimetersAsync(millibars);
+        public Task<L1011FoResult> SetCabinBaroAsync(double millibars) => _ac.SetCabinBaroAsync(millibars);
+        public Task<L1011FoResult> SetCabinAltitudeSelectorAsync(int step) => _ac.SetCabinAltitudeSelectorAsync(step);
+        public bool CanReadBack(string key) => _ac.CanReadBack(key);
+        public double? ReadCached(string key) => _ac.ReadCached(key);
+        public void MuteLampSpeech(int ms) => _ac.MuteLampSpeech(ms);
+        public Task DelayAsync(int ms) => _ac.DelayAsync(ms);
+    }
 
     private static string Switch(int n) => $"SWITCH_GND_START_ENG_{n}";
     private static string Fuel(int n) => $"TOGGLE_CUTOFF_ENG_{n}";
@@ -256,6 +341,93 @@ public class L1011FoEngineStartExecutorTests
         Assert.Empty(_spoken);
     }
 
+    [Fact]
+    public async Task A_ground_start_switch_that_cannot_be_read_is_never_clicked()
+    {
+        _ac.Unset(Switch(2));
+        using var stop = new CancellationTokenSource();
+
+        Assert.False(await _exec.ExecuteStepAsync(Flow(GroundStart(2)), stop.Token));
+
+        Assert.Empty(_ac.Writes);
+        Assert.Contains(_logged, line => line.StartsWith(GroundStart(2), StringComparison.Ordinal)
+            && line.Contains(Switch(2)) && line.Contains("unread"));
+        stop.Cancel();
+        await _exec.OnFlowStoppedAsync();
+        Assert.Equal(0, FreshReadsOf(Fuel(2)));   // nothing clicked: nothing recorded, nothing to release
+        Assert.Empty(_spoken);
+    }
+
+    [Theory]
+    [InlineData(false)]   // a hand tick
+    [InlineData(true)]    // a flow step
+    public async Task A_ground_start_click_that_never_reads_on_is_not_done_and_its_release_reads_the_switch(bool flowStep)
+    {
+        _ac.NeverDeliver(Switch(2));   // sent, but it never reads on
+        using var stop = new CancellationTokenSource();
+
+        bool done = flowStep
+            ? await _exec.ExecuteStepAsync(Flow(GroundStart(2)), stop.Token)
+            : await _exec.Set(GroundStart(2), 1);
+
+        Assert.False(done);
+        Assert.Equal(new[] { (Switch(2), 1.0) }, _ac.Writes);   // it still reads off: nothing more sent
+        var io = IoKinds();
+        Assert.Equal(new[]
+        {
+            (FakeL1011IoKind.FreshRead, Fuel(2)),     // the release ran: the fuel off
+            (FakeL1011IoKind.FreshRead, Switch(2)),   // and the switch read before any click
+        }, io.Skip(io.Count - 2));
+        Assert.Contains(_logged, line => line.Contains("engine 2") && line.Contains("already reads off"));
+        Assert.DoesNotContain(_logged, line => line.Contains("read back off"));
+
+        stop.Cancel();
+        await _exec.OnFlowStoppedAsync();   // released once: nothing recorded is left
+        _exec.ReleaseHeldPresses();
+        Assert.Equal(1, FreshReadsOf(Fuel(2)));
+        Assert.Empty(_spoken);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_ground_start_click_that_lands_after_its_read_back_is_released(bool flowStep)
+    {
+        // The click goes out, reads on only after the 4 s read-back gave up, and has landed by the time the
+        // release reads the fuel: the starter it engaged is released.
+        var io = new LiveTimingTransport(_ac);
+        io.LandLate(Switch(2), landsOnReadOf: Fuel(2));
+        _exec.SetTransport(io);
+        using var stop = new CancellationTokenSource();
+
+        bool done = flowStep
+            ? await _exec.ExecuteStepAsync(Flow(GroundStart(2)), stop.Token).WaitAsync(Hang)
+            : await _exec.Set(GroundStart(2), 1).WaitAsync(Hang);
+
+        Assert.False(done);
+        Assert.Equal(new[] { (Switch(2), 1.0), (Switch(2), 0.0) }, _ac.Writes);
+        Assert.Equal(0, _ac.Get(Switch(2)));
+        Assert.Contains(_logged, line => line.Contains("engine 2") && line.Contains("released and read back off"));
+
+        stop.Cancel();
+        await _exec.OnFlowStoppedAsync();
+        _exec.ReleaseHeldPresses();
+        Assert.Equal(1, FreshReadsOf(Fuel(2)));
+        Assert.Equal(2, _ac.Writes.Count);
+    }
+
+    [Fact]
+    public async Task A_release_never_clicks_a_ground_start_switch_that_cannot_be_read()
+    {
+        _ac.GroundStartN3PerSecond = 0;   // no rotation: the watch gives up at 30 s
+        _ac.OnClock = ac => { if (ac.NowMs >= 10_000) ac.Unset(Switch(2)); };
+
+        Assert.False(await _exec.Set(GroundStart(2), 1));
+
+        Assert.Equal(new[] { (Switch(2), 1.0) }, _ac.Writes);   // no blind click to off
+        Assert.Contains(_logged, line => line.Contains("engine 2") && line.Contains(Switch(2)) && line.Contains("unread"));
+    }
+
     [Theory]
     [InlineData("de-DE")]
     [InlineData("sv-SE")]
@@ -300,8 +472,10 @@ public class L1011FoEngineStartExecutorTests
     }
 
     [Fact]
-    public async Task The_light_off_watch_is_false_on_stop_with_the_switch_released()
+    public async Task The_light_off_watch_is_false_on_stop_and_the_stop_clean_up_releases_the_switch()
     {
+        // The watch ends on the Stop and leaves its run's start to the clean-up FlowManager runs after the step
+        // (or to the window's close): it never takes the start itself.
         using var stop = new CancellationTokenSource();
         Assert.True(await _exec.ExecuteStepAsync(Flow(GroundStart(2)), stop.Token));
         var stoppedAt = StopAt(stop, 2, 10);
@@ -309,12 +483,17 @@ public class L1011FoEngineStartExecutorTests
         Assert.False(await _exec.ExecuteStepAsync(Flow(LightOff(2)), stop.Token).WaitAsync(Hang));
 
         Assert.InRange(_ac.NowMs - stoppedAt(), 0, Poll);   // within a poll of the Stop
+        Assert.Equal(new[] { (Switch(2), 1.0) }, _ac.Writes);
+        Assert.Contains(_logged, line => line.StartsWith(LightOff(2), StringComparison.Ordinal)
+            && line.Contains("left to the stop clean-up"));
+
+        await _exec.OnFlowStoppedAsync();
+
         Assert.Equal(new[] { (Switch(2), 1.0), (Switch(2), 0.0) }, _ac.Writes);
         Assert.Equal(0, _ac.Get(Switch(2)));
         Assert.True(_ac.Get(N3(2)) < 11);                   // no longer turning
 
-        // The release went out once: the run's Stop clean-up, called again, and the window's close find nothing.
-        await _exec.OnFlowStoppedAsync();
+        // The release went out once: the clean-up again, and the window's close, find nothing.
         await _exec.OnFlowStoppedAsync();
         _exec.ReleaseHeldPresses();
         Assert.Equal(1, FreshReadsOf(Fuel(2)));
@@ -331,12 +510,10 @@ public class L1011FoEngineStartExecutorTests
         StopAt(stop, 2, 10, _exec.ReleaseHeldPresses);
 
         Assert.False(await _exec.ExecuteStepAsync(Flow(LightOff(2)), stop.Token).WaitAsync(Hang));
+        await _exec.OnFlowStoppedAsync();
 
         Assert.Equal(new[] { (Switch(2), 1.0), (Switch(2), 0.0) }, _ac.Writes);
-        Assert.Equal(0, FreshReadsOf(Fuel(2)));   // the close released it over the cache; the watch did not again
-        Assert.Contains(_logged, line => line.StartsWith(LightOff(2), StringComparison.Ordinal) && line.Contains("already released"));
-        await _exec.OnFlowStoppedAsync();
-        Assert.Equal(2, _ac.Writes.Count);
+        Assert.Equal(0, FreshReadsOf(Fuel(2)));   // the close released it over the cache; nothing released it again
     }
 
     [Fact]
@@ -555,6 +732,123 @@ public class L1011FoEngineStartExecutorTests
         await _exec.OnFlowStoppedAsync();   // the run's own clean-up, later: nothing left
         _exec.ReleaseHeldPresses();
         Assert.Single(_ac.Io.Skip(ioBefore));
+    }
+
+    [Fact]
+    public async Task The_windows_close_logs_what_its_release_came_to()
+    {
+        using var stop = new CancellationTokenSource();
+        Assert.True(await _exec.ExecuteStepAsync(Flow(GroundStart(2)), stop.Token));
+        Assert.True(await _exec.ExecuteStepAsync(Flow(GroundStart(3)), stop.Token));
+        _ac.Refuse(Switch(3));
+        stop.Cancel();
+
+        _exec.ReleaseHeldPresses();
+
+        Assert.Contains(_logged, line => line.Contains("engine 2") && line.Contains("release: Sent"));
+        Assert.Contains(_logged, line => line.Contains("engine 3") && line.Contains("release: Refused")
+            && line.Contains(FakeL1011Aircraft.RefusalReason));
+    }
+
+    /// <summary>The window's close: the flow cancelled, the held presses released, the First Officer detached, then
+    /// the aircraft gone (an aircraft switch, an app exit), with a paused watch resuming inside the cancel.</summary>
+    private void CloseWindowWithTheWatchResumingFirst(CancellationTokenSource stop) =>
+        WithTheWatchResumingFirst(() =>
+        {
+            stop.Cancel();
+            _exec.ReleaseHeldPresses();
+            _exec.SetTransport(null);
+            _ac.Ready = false;
+        });
+
+    [Fact]
+    public async Task A_window_closing_on_a_paused_light_off_watch_releases_once_over_the_cache()
+    {
+        // The cancel ends the Pause at once, and the watch may get there before the window's close. It must leave
+        // the start to the close, which releases it over the cache while the aircraft still takes writes: a watch
+        // that took it would find the aircraft gone before its click.
+        var io = new LiveTimingTransport(_ac) { YieldOnRead = true };
+        _exec.SetTransport(io);
+        using var stop = new CancellationTokenSource();
+        Assert.True(await _exec.ExecuteStepAsync(Flow(GroundStart(2)), stop.Token).WaitAsync(Hang));
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _exec.AttachFlowPause(ct => held.Task.WaitAsync(ct));
+        var watch = _exec.ExecuteStepAsync(Flow(LightOff(2)), stop.Token);
+        Assert.False(watch.IsCompleted);   // paused
+        int ioBefore = _ac.Io.Count;
+
+        CloseWindowWithTheWatchResumingFirst(stop);
+
+        Assert.False(await watch.WaitAsync(Hang));
+        await _exec.OnFlowStoppedAsync();   // the run's clean-up, after the step: detached, nothing left
+        var release = Assert.Single(_ac.Io.Skip(ioBefore));   // one click, over the cache: nothing read fresh
+        Assert.Equal((FakeL1011IoKind.Write, Switch(2), (double?)0), (release.Kind, release.Key, release.Value));
+        Assert.Equal(0, _ac.Get(Switch(2)));   // the starter does not stay on
+    }
+
+    [Fact]
+    public async Task A_window_closing_while_the_gate_is_busy_releases_once_over_the_cache()
+    {
+        // A hand tick holds the gate when the window closes. A watch that took the start and then waited for the gate
+        // would leave the close nothing to release, and then find the First Officer detached.
+        var io = new LiveTimingTransport(_ac);
+        _exec.SetTransport(io);
+        using var stop = new CancellationTokenSource();
+        Assert.True(await _exec.ExecuteStepAsync(Flow(GroundStart(2)), stop.Token));
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _exec.AttachFlowPause(ct => held.Task.WaitAsync(ct));
+        var watch = _exec.ExecuteStepAsync(Flow(LightOff(2)), stop.Token);
+        Assert.False(watch.IsCompleted);
+        const string ContinuousIgnition = "SWITCH_CONT_IGNITION";
+        _ac.Set(ContinuousIgnition, 0);
+        var door = io.HoldRead(ContinuousIgnition);
+        var tick = _exec.Set(ContinuousIgnition, 1);   // holds the gate, reading first, until the door opens
+        Assert.False(tick.IsCompleted);
+
+        WithTheWatchResumingFirst(() =>
+        {
+            stop.Cancel();
+            _exec.ReleaseHeldPresses();
+            _exec.SetTransport(null);
+        });
+        door.SetResult();
+
+        Assert.True(await tick.WaitAsync(Hang));
+        Assert.False(await watch.WaitAsync(Hang));
+        await _exec.OnFlowStoppedAsync();
+        // The close's click goes out at once, without the gate, while the tick is still reading.
+        Assert.Equal(new[] { (Switch(2), 1.0), (Switch(2), 0.0), (ContinuousIgnition, 1.0) }, _ac.Writes);
+        Assert.Equal(0, _ac.Get(Switch(2)));
+        Assert.Equal(0, FreshReadsOf(Fuel(2)));   // released over the cache, once
+    }
+
+    [Fact]
+    public async Task A_timed_out_watch_takes_its_start_only_once_it_holds_the_gate()
+    {
+        // No Stop: the light-off watch times out while a hand tick holds the gate, and the window closes before the
+        // gate frees. The close takes the start and releases it; the watch, once it has the gate, finds it gone.
+        var io = new LiveTimingTransport(_ac);
+        _exec.SetTransport(io);
+        using var stop = new CancellationTokenSource();
+        Assert.True(await _exec.ExecuteStepAsync(Flow(GroundStart(2)), stop.Token));
+        _ac.NeverDeliver(N3(2));   // stuck short of 20 %: the watch times out
+        const string ContinuousIgnition = "SWITCH_CONT_IGNITION";
+        _ac.Set(ContinuousIgnition, 0);
+        var door = io.HoldRead(ContinuousIgnition);
+        var tick = _exec.Set(ContinuousIgnition, 1);   // holds the gate, reading first, until the door opens
+        Assert.False(tick.IsCompleted);
+
+        var watch = _exec.ExecuteStepAsync(Flow(LightOff(2)), stop.Token);   // times out at once on the fake's clock
+        Assert.False(watch.IsCompleted);                                       // waiting for the gate
+        stop.Cancel();
+        _exec.ReleaseHeldPresses();
+        door.SetResult();
+
+        Assert.True(await tick.WaitAsync(Hang));
+        Assert.False(await watch.WaitAsync(Hang));
+        Assert.Equal(new[] { (Switch(2), 1.0), (Switch(2), 0.0), (ContinuousIgnition, 1.0) }, _ac.Writes);
+        Assert.Equal(0, FreshReadsOf(Fuel(2)));   // the close's release, over the cache; none from the watch
+        Assert.Contains(_logged, line => line.StartsWith(LightOff(2), StringComparison.Ordinal) && line.Contains("already released"));
     }
 
     [Theory]

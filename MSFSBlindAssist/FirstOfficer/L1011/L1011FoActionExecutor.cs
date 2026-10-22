@@ -37,10 +37,10 @@ namespace MSFSBlindAssist.FirstOfficer.L1011;
 ///
 /// The engine start is the one step a stopped flow must not leave half done: a ground start a flow turned on is
 /// recorded with the run's Stop (<see cref="_flowGroundStarts"/>), and a run stopped before that engine's fuel and
-/// ignition are on has it released, only while they read off and never by a fuel write, once: by the watch that
-/// gave up, <see cref="OnFlowStoppedAsync"/>, or the window's close (<see cref="ReleaseHeldPresses"/>), whichever
-/// takes it out first (the MD-11's shape). A press still held when the definition goes away is released by the
-/// definition's own dispose, once.
+/// ignition are on has it released, only while they read off and never by a fuel write, once: by
+/// <see cref="OnFlowStoppedAsync"/> or the window's close (<see cref="ReleaseHeldPresses"/>), whichever takes it out
+/// first (the MD-11's shape); a watch that timed out, or a click not done, releases it itself. A press still held
+/// when the definition goes away is released by the definition's own dispose, once.
 /// </summary>
 public sealed class L1011FoActionExecutor : IFoActionExecutor
 {
@@ -359,12 +359,13 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
 
     /// <summary>
     /// The ground starts a flow had this executor turn on, by engine, with that run's Stop (the MD-11's
-    /// <c>_flowStarterPulls</c>): the starts a stopped run could leave turning a dry engine. Recorded once the
-    /// switch's write is done, and only for a flow step: a checklist tick's start, the pilot's own and a switch
-    /// found already on are never here. Forgotten once that engine's fuel and ignition write is done
-    /// (<see cref="SetCoreAsync"/>), and taken out by whoever releases it: the watch that gave up
-    /// (<see cref="GiveUpGroundStartAsync"/>), <see cref="OnFlowStoppedAsync"/> or <see cref="ReleaseHeldPresses"/>,
-    /// so its release goes out once.
+    /// <c>_flowStarterPulls</c>): the starts a stopped run could leave turning a dry engine. Recorded before the
+    /// switch's click goes out (a click that lands late is still one to release), and only for a flow step: a
+    /// checklist tick's start, the pilot's own and a switch found already on are never here. Forgotten once that
+    /// engine's fuel and ignition write is done (<see cref="SetCoreAsync"/>), and taken out by whoever releases it,
+    /// so its release goes out once: after a Stop, <see cref="OnFlowStoppedAsync"/> or the window's close
+    /// (<see cref="ReleaseHeldPresses"/>); after a time-out or a click not done, the give-up under the gate
+    /// (<see cref="GiveUpGroundStartAsync"/>).
     /// </summary>
     private readonly ConcurrentDictionary<int, CancellationToken> _flowGroundStarts = new();
 
@@ -1234,15 +1235,19 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     /// phase under the gate (<see cref="UnderGateAsync"/>, never begun after the flow's Stop): N3
     /// read fresh, unread, not done and nothing written; at or above
     /// <see cref="L1011FoStateEvaluator.EngineRunningN3"/>, done with nothing written (a starter is never engaged on
-    /// a running engine). Then the switch read fresh: already on, not clicked again (a second call while the first
-    /// still watches, the pilot's own start) and not recorded, but the rotation is still watched; otherwise, the
-    /// Stop checked once more, the row's click (<c>L:SWITCH_GND_START_ENG_n</c> 1 with <c>H:STARTER</c>,
-    /// <c>H:STARTER_n</c>) read back on, and, for a flow step, recorded with the run's Stop
-    /// (<see cref="_flowGroundStarts"/>). Then, the gate released, done once N3 reads
-    /// <see cref="RotationRiseN3"/> above what it first read, within <see cref="RotationWaitMs"/>
-    /// (<see cref="WaitUntilAsync"/>, read-only: a flow's Pause holds it, its Stop ends it). On the time-out or the
-    /// Stop the start is released over fuel off (<see cref="GiveUpGroundStartAsync"/>) and the step is not done.
-    /// The switch is left on once turning: the aircraft releases it itself past about 55 % N3. Speaks nothing.
+    /// a running engine). Then the switch read fresh: unread, not done and never clicked; already on, not clicked
+    /// again (a second call while the first still watches, the pilot's own start) and not recorded, but the
+    /// rotation is still watched; otherwise, the Stop checked once more, then, for a flow step, the start recorded
+    /// with the run's Stop (<see cref="_flowGroundStarts"/>) BEFORE the click goes out, since a click that lands
+    /// late or reads back late is still one to release, then the row's click (<c>L:SWITCH_GND_START_ENG_n</c> 1 with
+    /// <c>H:STARTER</c> and <c>H:STARTER_1</c>, the event the generated map sends for all three engines) read back
+    /// on. A click not done (refused, not completed in time, not reading on, or a throw) is not done, and the start
+    /// is then released over fuel off (<see cref="GiveUpGroundStartAsync"/>, the switch read first, so a switch
+    /// still off costs a read). Then, the gate released, done once N3 reads <see cref="RotationRiseN3"/> above what
+    /// it first read, within <see cref="RotationWaitMs"/> (<see cref="WaitUntilAsync"/>, read-only: a flow's Pause
+    /// holds it, its Stop ends it). On the time-out or the Stop the start is given up the same way and the step is
+    /// not done. The switch is left on once turning: the aircraft releases it itself past about 55 % N3. Speaks
+    /// nothing.
     /// </summary>
     private async Task<bool> GroundStartAsync(int n, int target, CancellationToken stop)
     {
@@ -1254,7 +1259,7 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
         }
         string n3Key = N3Key(n), switchKey = GroundStartKey(n);
         double from = 0;
-        bool running = false, ownStart = false;
+        bool running = false, ownStart = false, clickNotDone = false;
         IL1011FoTransport? turnedOn = null;
         bool watched = await UnderGateAsync(what, stop, async io =>
         {
@@ -1270,7 +1275,12 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
                 return true;
             }
             from = n3;
-            if (await ReadAsync(io, switchKey).ConfigureAwait(false) is double s && s >= PositionTolerance)
+            if (await ReadAsync(io, switchKey).ConfigureAwait(false) is not double s)
+            {
+                Note($"{what}: not done, {switchKey} unread, not clicked");
+                return false;
+            }
+            if (s >= PositionTolerance)
             {
                 Note($"{what}: {switchKey} already reads on: not clicked again, the rotation still watched");
                 ownStart = OwnsStart(n, stop);   // this run's own, from an earlier call
@@ -1279,17 +1289,35 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
             {
                 if (stop.IsCancellationRequested)   // a Stop while the reads above decided: no write
                     return Stopped(what);
-                if (!await WriteAsync(io, switchKey, 1, readJustNow: true).ConfigureAwait(false))
-                    return false;
                 if (stop.CanBeCanceled)
                 {
                     _flowGroundStarts[n] = stop;
                     ownStart = true;
                 }
+                bool clicked;
+                try
+                {
+                    clicked = await WriteAsync(io, switchKey, 1, readJustNow: true).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    Note($"{what}: {switchKey} -> 1 threw: {ex.Message}", warn: true);
+                    clicked = false;
+                }
+                if (!clicked)
+                {
+                    clickNotDone = true;
+                    return false;
+                }
             }
             turnedOn = io;
             return true;
         }).ConfigureAwait(false);
+        if (clickNotDone)
+        {
+            await GiveUpGroundStartAsync(n, stop, ownStart, what).ConfigureAwait(false);
+            return false;
+        }
         if (!watched) return false;
         if (running) return true;
 
@@ -1309,9 +1337,9 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     /// write phase of its own (the MD-11's light-up watch): done once N3 reads at least <see cref="FuelOnN3"/>,
     /// the point the fuel and ignition go on, within <see cref="LightOffWaitMs"/> (<see cref="WaitUntilAsync"/>,
     /// read-only; already there, done at once: a resumed flow). On the time-out or the flow's Stop the start is
-    /// released over fuel off (<see cref="GiveUpGroundStartAsync"/>), once: a start this run recorded is released
-    /// only by whoever takes it out of <see cref="_flowGroundStarts"/>, so one the window's close already released
-    /// is not sent again. Speaks nothing.
+    /// given up (<see cref="GiveUpGroundStartAsync"/>): released over fuel off, once, by whoever takes it out of
+    /// <see cref="_flowGroundStarts"/>; after a Stop that is the run's Stop clean-up or the window's close, never
+    /// this watch. Speaks nothing.
     /// </summary>
     private async Task<bool> EngineLightOffAsync(int n, CancellationToken stop)
     {
@@ -1363,22 +1391,37 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
         stop.CanBeCanceled && _flowGroundStarts.TryGetValue(n, out var recordedFor) && recordedFor == stop;
 
     /// <summary>
-    /// A ground start's watch gave up (its time-out, or the flow's Stop): the start released over fuel off
-    /// (<see cref="ReleaseGroundStartAsync"/>), under the gate whatever the Stop, since it is the clean-up, never a
-    /// new step. A start this run recorded (<paramref name="ownStart"/>) is released only by whoever takes it out
-    /// of <see cref="_flowGroundStarts"/>: taken already, the window's close or the flow's Stop clean-up released
-    /// it, or its fuel and ignition went on, and nothing is sent.
+    /// A ground start given up: its watch timed out or was stopped, or its click was not done. The start is released
+    /// over fuel off (<see cref="ReleaseGroundStartAsync"/>), once, by whoever takes it out of
+    /// <see cref="_flowGroundStarts"/>:
+    /// <list type="bullet">
+    /// <item>A start this run recorded (<paramref name="ownStart"/>), on the flow's Stop: left where it is. The run's
+    /// Stop clean-up (<see cref="OnFlowStoppedAsync"/>, which FlowManager runs once the step has returned) or the
+    /// window's close (<see cref="ReleaseHeldPresses"/>, on the UI thread while the aircraft still takes writes) takes
+    /// it. The watch resumes from the cancel on another thread, so taking it here could beat the window's close to it
+    /// and then find the First Officer detached, or the aircraft gone, before its click.</item>
+    /// <item>A start this run recorded, with no Stop (a time-out, a click not done): taken out under the gate, so
+    /// whoever holds the record also holds the means to release it. Gone already (the window's close released it, or
+    /// its fuel and ignition went on): nothing is sent.</item>
+    /// <item>A start not recorded (a checklist tick's, a switch found already on): released under the gate.</item>
+    /// </list>
+    /// The release runs under the gate whatever the Stop: it is the clean-up, never a new step.
     /// </summary>
     private async Task GiveUpGroundStartAsync(int n, CancellationToken stop, bool ownStart, string what)
     {
-        if (ownStart && !_flowGroundStarts.TryRemove(new KeyValuePair<int, CancellationToken>(n, stop)))
+        if (ownStart && stop.IsCancellationRequested)
         {
-            Note($"{what}: its ground start was already released, or its fuel and ignition went on: nothing sent");
+            Note($"{what}: stopped; its ground start left to the stop clean-up or the window's close");
             return;
         }
         await _gate.WaitAsync().ConfigureAwait(false);
         try
         {
+            if (ownStart && !_flowGroundStarts.TryRemove(new KeyValuePair<int, CancellationToken>(n, stop)))
+            {
+                Note($"{what}: its ground start was already released, or its fuel and ignition went on: nothing sent");
+                return;
+            }
             await ReleaseOnAsync(_io, n, $"{what} gave up").ConfigureAwait(false);
         }
         finally
@@ -1418,14 +1461,15 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     /// <summary>
     /// Engine <paramref name="n"/>'s ground start released, never a fuel write: its fuel and ignition read fresh
     /// first (the row: the stock fuel valve). Unread, the switch is left as it is; on, the start runs on, and the
-    /// aircraft releases the switch itself past about 55 % N3; off, the switch row's own click to 0
-    /// (<c>L:SWITCH_GND_START_ENG_n</c> 0 with its <c>H:STARTER</c> events), read first and back. Each case logged.
-    /// Under the caller's gate.
+    /// aircraft releases the switch itself past about 55 % N3. Off, the switch read fresh: unread, never clicked
+    /// (its click carries the same <c>H:STARTER</c> events either way, so it is sent only from a known position);
+    /// already off, nothing sent; on, the switch row's own click to 0 (<c>L:SWITCH_GND_START_ENG_n</c> 0 with its
+    /// <c>H:STARTER</c> events) read back off. Each case logged. Under the caller's gate.
     /// </summary>
     private async Task ReleaseGroundStartAsync(IL1011FoTransport io, int n)
     {
         string engine = $"engine {n.ToString(CultureInfo.InvariantCulture)}";
-        string fuelKey = FuelIgnitionKey(n);
+        string fuelKey = FuelIgnitionKey(n), switchKey = GroundStartKey(n);
         if (await ReadAsync(io, fuelKey).ConfigureAwait(false) is not double fuel)
         {
             Note($"{engine}: {fuelKey} unread, its ground start left as it is", warn: true);
@@ -1436,7 +1480,17 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
             Note($"{engine}: fuel on, the start runs on");
             return;
         }
-        bool off = await WriteAsync(io, GroundStartKey(n), 0).ConfigureAwait(false);
+        if (await ReadAsync(io, switchKey).ConfigureAwait(false) is not double reading)
+        {
+            Note($"{engine}: fuel off, {switchKey} unread: not clicked, its ground start left as it is", warn: true);
+            return;
+        }
+        if (reading < PositionTolerance)
+        {
+            Note($"{engine}: fuel off, its ground start already reads off: nothing sent");
+            return;
+        }
+        bool off = await WriteAsync(io, switchKey, 0, readJustNow: true).ConfigureAwait(false);
         Note(off
             ? $"{engine}: fuel off, its ground start released and read back off"
             : $"{engine}: fuel off, its ground start does not read off after its release: the starter may still be engaged",
@@ -1479,7 +1533,8 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
     /// released now, while the sim still takes writes, on the UI thread: each recorded with a cancelled Stop taken
     /// out first, so it is released once, and released only over the CACHE reading its fuel and ignition off and its
     /// switch on (<see cref="ShouldReleaseGroundStart"/>; the window reads both each second), by the switch row's
-    /// click to 0, not awaited and not read back. Anything else is logged and left. Nothing is spoken.
+    /// click to 0, not awaited and not read back; what the click came to (sent, refused, unavailable) is logged when
+    /// it completes. Anything else is logged and left. Nothing is spoken.
     /// </summary>
     public void ReleaseHeldPresses()
     {
@@ -1503,10 +1558,15 @@ public sealed class L1011FoActionExecutor : IFoActionExecutor
             try
             {
                 // Not awaited: the window is closing, and MainForm may disconnect right after.
-                var release = io.SetAsync(key, 0);
-                _ = release.ContinueWith(t => _ = t.Exception, CancellationToken.None,
-                    TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
                 Note($"{engine}: window closing with its ground start on and the fuel off; releasing it, not read back");
+                _ = io.SetAsync(key, 0).ContinueWith(t =>
+                {
+                    if (t.IsCompletedSuccessfully)
+                        Note($"{engine}: window closing; its ground start release: {Describe(t.Result)}",
+                            warn: t.Result.Outcome is not (L1011FoOutcome.Sent or L1011FoOutcome.AlreadyThere));
+                    else
+                        Note($"{engine}: window closing; its ground start release did not complete: {t.Exception?.GetBaseException().Message ?? "cancelled"}", warn: true);
+                }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
             }
             catch (Exception ex)
             {
