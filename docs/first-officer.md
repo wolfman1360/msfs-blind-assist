@@ -559,21 +559,26 @@ in the sim with the rest of PR #160 (owner, 2026-10-20).
 shape: `L1011FoProfile`, `L1011FoActionExecutor`, `L1011FoStateEvaluator`, the flow and checklist
 definitions, `L1011FoFlightPhaseMonitor`, and an `L1011FoAutoManager` that stores the auto-flaps
 setting and ignores it. Its window is "First Officer — iniBuilds L-1011", and the File menu item
-"iniBuilds L-1011 First Officer" (`FirstOfficerWindows`, `INI_L1011`). So far it has one flow,
-**Power Up**, and its two checklists: the **Power Up** action group, in the flow's order and words,
-and the **Cockpit Safety Inspection** read-back, the aircraft's own page condensed to the lines BA
-can read. Preflight to Shutdown, the other audible tests and the engine start are still to come.
-Rules: `.claude/rules/first-officer-l1011.md` (FOL-1 to FOL-3); the aircraft's write rules are in
-[docs/l1011.md](l1011.md).
+"iniBuilds L-1011 First Officer" (`FirstOfficerWindows`, `INI_L1011`). It has the fleet's twelve
+flows: **Power Up**, **Preflight**, **Before Start**, **Engine Start**, **After Start**, **Before
+Takeoff**, **After Takeoff**, **Descent**, **Before Landing**, **After Landing**, **Parking** and
+**Shutdown**. Each has an action group in the flow's order and words, and read-backs that are the
+aircraft's own checklist pages in its own words, condensed to the lines BA can read: Cockpit Safety
+Inspection for Power Up; Flight Engineer Station, Overhead, Main Panel and Center Console Preparation
+for Preflight; then Before Engine Start, Engine Start, After Start and Taxi, Line Up, Take Off and
+Climb, Descent, Approach, After Landing, Parking and Securing. Every group is classified in
+`FoDepartureGroups` (FO-22). Rules: `.claude/rules/first-officer-l1011.md` (FOL-1 to FOL-8); the
+aircraft's write rules are in [docs/l1011.md](l1011.md).
 
 Every write goes through the definition's First Officer entry (`IniL1011Definition.FirstOfficer.cs`:
-`FoSetAsync`, `FoSetAltimetersAsync`), which share the panels' own write paths, so a flow step writes a
-control exactly as a panel pick does: the click replay (L1011-1), a toggle refused from an unknown
-position (L1011-4) and the engage paddle's CWS notch (L1011-21) included. The entry speaks nothing
-and returns `L1011FoResult`; the executor reads every readable write back before it counts as done
-(FOL-1). A lever the First Officer moves is recorded as its own, so the aircraft's lever call-out
-does not speak it on top of the flow's line, while a lever the pilot moves is still spoken; the
-standby power check mutes the warning-light call-outs while it runs (FOL-2).
+`FoSetAsync`, `FoSetAltimetersAsync`, `FoSetCabinBaroAsync`, `FoSetCabinAltitudeSelectorAsync`), which
+share the panels' own write paths, so a flow step writes a control exactly as a panel pick does: the
+click replay (L1011-1), a toggle refused from an unknown position (L1011-4) and the engage paddle's
+CWS notch (L1011-21) included. The entry speaks nothing and returns `L1011FoResult`; the executor
+reads every readable write back before it counts as done (FOL-1). A lever the First Officer moves is
+recorded as its own, so the aircraft's lever call-out does not speak it on top of the flow's line,
+while a lever the pilot moves is still spoken; every test mutes the warning-light call-outs while it
+runs (FOL-2).
 
 Power Up opens with two read-only guards, engines stopped and on the ground, each a Stop that fails
 when unread (FO-25). The engines are read on N3, never the window's N2 feed (FOL-3): running at 50 %
@@ -581,7 +586,8 @@ or above, stopped when every N3 is below 5 % and every fuel and ignition switch 
 checks, without moving anything, that the fire handles are in, the gear lever is down, the speed
 brake is forward, the flaps agree with their handle and the fuel and ignition switches are off. It
 sets continuous ignition off, the essential and no. 2 radio masters on, the transponder to standby, the weather radar
-off, both ATM switches and both AC hydraulic pumps off, all eight fuel pumps off, the jettison master
+off, both ATM switches and both AC hydraulic pumps off, all eight fuel pumps off (left alone, aloud,
+while an APU started by hand turns: "Fuel pumps left on: the APU is running.", FOL-6), the jettison master
 and dump switches off with their guards closed, passenger oxygen off and guarded, and galley power
 off. It runs the standby power check, sets the AC essential bus selector to bus 3 (generator 1),
 connects external power and closes any AC tie that reads open when the external power available
@@ -602,9 +608,111 @@ progress on.
 Power Up writes no lever, no typed value and no control whose click carries a toggle K: event. A hand
 tick on an action line runs the same write as its flow step; the ATM, AC hydraulic pump and fuel pump
 lines and the standby power check are left alone unless the aircraft reads on the ground with every
-engine stopped (FO-25). The universal autopilot engage presses engage paddle A to Command through the
+engine stopped (FO-25), and the fuel pump line also while the APU turns (FOL-6). The universal autopilot engage presses engage paddle A to Command through the
 same entry, CWS notch included, and works closed loop on the two paddles (`IsAutopilotEngaged`,
 FO-18); it never sends the stock `AUTOPILOT_ON`, which the paddle-driven autopilot ignores.
+
+Preflight opens with the same two guards, since it switches the packs, the AC hydraulic pumps and the
+power transfer units off on the way. It starts the APU: the master on, minimum compressor load, the
+tank 2 left pump and the engine 2 tank valve for its fuel, then one press of the start button
+(`FO_APU_START`, Stop-aware: done once the APU turns, never a second press while it spins up) and a
+read-only Stop wait of up to two minutes for it to run. It puts the APU generator on line (the field,
+then the breaker, each verified on its relay, never on the button) and closes the AC ties, puts the
+bleed air and packs on the APU, runs the engine and APU fire test and the wheel well fire test, sets
+the engine hydraulic pumps and runs the hydraulic check, then sets the meters, the fuel panel (transfers
+off, crossfeeds closed, tank valves on, only the APU's pump running), the rest of the engineer's
+station, the pressurization mode and the cabin altitude selector for the cruise, and the overhead, main
+panel and centre console. It checks, read only, what Power Up left, and ends with the Captain's items:
+the INS route, the PMS, the NAV radios (Ctrl+N), the altimeters (Ctrl+B), the autopilot, the take-off
+data and the radios.
+
+The tests are the ones whose result BA can read (FOL-7): Power Up's standby power check, and
+Preflight's engine and APU fire test (the loop selectors to Both, tests A and B on together: A alone
+lit nothing), wheel well fire test (A and B together) and hydraulic check (B's AC pump, C's, both power
+transfer units, each pressure read up, then everything off and read down). Each keeps the dispatch gate
+for its whole run, re-arms the lamp mute before every phase and always puts its switches back. It
+speaks one verdict: the first wrong light or pressure always ("Hydraulic check: system B pressure did
+not reach 2,000 psi"), a pass only with flow progress on. A failed test never stops the flow. The
+turbine overheat and area overheat tests are never run or listed: their lights never lit. The drain
+mast heaters are in no flow or checklist either: on the ground the aircraft puts both switches back to
+off within about 4 s.
+
+Before Start opens with the ground guard and two read-only Stop waits, the APU running and its
+generator on line, so external power comes off only once the APU carries the buses. It sets the seat
+belts and anti-collision lights; asks the Captain to close the doors on the tablet while any of the
+four exits' stock positions (`EXIT OPEN:0` to `:3`) reads open, since the main panel's door light does
+not follow the doors; turns the galley off; sets up APU air for the start (minimum compressor load, pack
+2 only, the engine isolation and crossbleed valves, the APU bleed); and copies the captain's altimeter
+into the cabin barometric setting. It turns each INS unit from ALIGN to NAV once that unit reads aligned
+(never a unit the pilot left at OFF or STBY: a unit not ready gets the Captain's "INS n is not in NAV"
+reminder), checks all three navigating, sets the transponder to TA/RA, and ends with the fleet's "Start
+ACARS" and "Obtain pushback and start clearance".
+
+Engine Start starts engines 2, 1 and 3 on APU air, the MD-11's shape. After the ground guard and four
+read-only Stop waits (engine data, the APU running, its bleed, the crossbleeds), each engine gets: the
+previous engine's isolation valve off (engines 1 and 3), its own tank pump and tank valve, its isolation
+valve read on, the ground start (`FO_GROUND_START_n`: the switch on, done once N3 rises), the light-off
+watch to 20 % N3 (`FO_ENGINE_LIGHT_OFF_n`), the fuel and ignition on, the aircraft's own release of the
+ground start switch past about 55 % N3 (a read-only wait: a switch that never releases is a hung start,
+the Captain's), and a stable idle (`FO_ENGINE_IDLE_n`). From the feed on, every step stops the flow when
+it is not done. Then the engine generator fields and breakers are closed; a field that closed by itself
+at idle is not pressed. A flow stopped with a ground start on and that engine's fuel off has the start
+released once, by the Stop clean-up or the window's close, by the row's own click to 0 and never by a
+fuel write (FOL-4). The three "Engine n ground start switch: on" lines are the profile's only
+`StayComplete` lines: each latches on its engine running, and no flow step links it.
+
+After Start sets the aircraft up for taxi on engine air and power: the bleeds and packs, the ATMs on
+then to auto, the galley, read-only electrical checks, the meters, all fuel pumps, the 1A and 3A
+transfers only with fuel in both tanks (left alone aloud otherwise), probe heat, ignition on both, the
+take-off flaps and the taxi light. The flap index is the tablet's (`L:PERF_SELECTED_FLAPS`, which the
+Takeoff performance page's Set bugs and EPR exports), else SimBrief's; with neither, nothing is sent or
+spoken and a Captain step asks (FO-20); the flaps move on the ground only. The stabilizer trim stays the
+Captain's: its reminder names the tablet's exported trim (`L:PERF_STAB_TRIM`). The tablet is read, never
+written. The APU is shut down last, and only once all three engine generators read on line: the
+generator breaker tripped, the bleed off, the stop (`FO_APU_STOP`), the manual's two-minute cool-down
+only after a stop this run sent, and the master off only once the stop is done or found done, else "APU
+master left on: the APU did not stop." The stop presses once and then holds, outside the dispatch gate,
+until the APU reads below 5 %, up to 90 s: the APU takes about half a minute to a minute to stop, longer
+than a checklist tick's grace (FOL-8, FO-11).
+
+Before Takeoff is the manual's line-up: pack 2 only (left alone off the ground), anti-skid, the take-off
+autobrake, strobe and landing lights, continuous ignition, probe heat, the transponder read at TA/RA and
+the weather radar. After Takeoff puts the gear lever up (the aircraft refuses it on the ground, and the
+step reads not done there), reminds the Captain of the flap schedule, sets the climb, waits up to five
+minutes, read only, for the flaps up, and confirms the gear up last (FO-13). Descent puts the seat belt
+signs on, reminds the Captain of the landing data, the landing autobrake (the panel named, no setting:
+FO-14) and the QNH, and turns the cabin altitude selector to the plan's destination elevation. Before
+Landing copies the captain's altimeter, by now the destination QNH, into the cabin barometric setting,
+sets the fuel for landing, the ground lights and continuous ignition, puts the gear lever down, reminds
+the Captain of the flap schedule and confirms the gear down last. After Landing turns the anti-skid,
+autobrake, landing and strobe lights, continuous ignition, air data heat and side window heat off and
+the windshield heat to idle, zeroes the
+stabilizer trim (verified on its readout), stows the speed brake, raises the flaps (on the ground only),
+turns the radar and transfers off, and starts the APU: one press, done once it turns.
+
+Parking opens with the aircraft read stopped (ground speed below a knot, read only, Stop), sets the
+parking brake and the ground lights off, waits up to two minutes for the APU After Landing started (left
+alone at once when it is not turning), puts its generator on line, or external power when the APU
+generator is not on line and ground power is there, and confirms one of the two on line (read only, Stop)
+before the fuel and ignition go off. Then the anti-collision lights and seat belts go off, the engines are
+read stopped (read only, up to two minutes, Stop), and only then the INS, the transponder, the ATMs and AC
+pumps and the fuel panel, which keeps the tank 2 left pump and the engine 2 tank valve on for the APU
+(FOL-6); the APU bleed goes on and the Captain is reminded of ground power. Shutdown is the manual's
+securing, behind both guards: emergency lights and galley off; the APU shut down in the manual's order
+(the generator breaker, the bleed, the stop held until it reads stopped, then, after a stop this run
+sent, a wait of up to 150 s for a standstill below 1 %, and the master off only once the stop is done);
+packs off on the ground only, external power off, the fuel pumps off (left alone while the APU turns,
+FOL-6); and standby power, the radio masters and the battery last.
+
+Pressurization is the flight engineer's, so the First Officer sets it. The cabin altitude selector is
+turned by its knob's own click after seeding only the knob's step (FOL-5): Preflight to the cabin
+altitude that holds the maximum differential (8.42 psi) at the plan's cruise, Descent to the destination
+elevation clamped to the selector's end stops (-250 to 8,000 ft), each read back on the selected cabin
+altitude, which arrives in metres, within 150 ft. The cabin barometric setting is Kohlsman setting 4,
+set in one string and read back in hectopascals; the aircraft moves it with the captain's altimeter, so
+Before Landing's step usually reads already set and still catches a cabin baro moved on its own. Without
+a plan, or with a standard or unread altimeter, the step sends and says nothing and a Captain step asks
+(FO-20).
 
 **Architecture — everything aircraft-specific is injected via `IFoProfile<TExec,TState>`.** The form is identical across aircraft; the profile (`FirstOfficer/Pmdg777FoProfile.cs`, `FirstOfficer/PMDG737/Pmdg737FoProfile.cs`) supplies the executor, state evaluator, checklist + flow data, auto/phase managers, window title, and the data-manager binding. Generic engine pieces: `ChecklistManager` (toggle / auto-detect / revert), `FlowManager` (step runner + events), `FlightPhaseMonitor`, `FOAutoManager`; per-aircraft: `AircraftActionExecutor` (PMDG switch dispatch), `AircraftStateEvaluator` (reads PMDG data fields), `PMDG7x7ChecklistDefinitions`, `PMDG7x7FlowDefinitions`. Interfaces live in `FirstOfficer/IFo*.cs`; models in `FirstOfficer/Models/` (`ChecklistItem`, `ChecklistGroup`, `FlowDefinition`, `FlowStep`).
 
@@ -934,7 +1042,7 @@ latched ids explicitly so a third cannot appear silently.
 
 When MSFSBA or the First Officer window starts with the aircraft already flying, or a flight is
 loaded in the air, every checklist from power-up through After Takeoff (action lists and
-read-backs, on all eight profiles) is marked complete and latched, as a finished flow latches it,
+read-backs, on all nine profiles) is marked complete and latched, as a finished flow latches it,
 and the First Officer says "In flight: checklists through After Takeoff marked complete." once,
 queued. Descent onwards stay open (owner: "Through After Takeoff"). A takeoff the window watched
 changes nothing; Reset Section / Reset All still work. `InFlightStartDetector` decides (flying at
