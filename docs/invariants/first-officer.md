@@ -5,7 +5,7 @@ The text is verbatim from PR #160's CLAUDE.md as of `642f48c1`; a trailing "→ 
 
 ## FO-1
 
-- Screen-reader First Officer (flows + checklists) across seven aircraft via `IFoProfile<TExec,TState>`; the form is identical, the profile injects executor/evaluator/data. Full architecture + gotchas in the doc. → [first-officer.md](../first-officer.md)
+- Screen-reader First Officer (flows + checklists) across nine aircraft via `IFoProfile<TExec,TState>`; the form is identical, the profile injects executor/evaluator/data. Full architecture + gotchas in the doc. → [first-officer.md](../first-officer.md)
 
 ## FO-2
 

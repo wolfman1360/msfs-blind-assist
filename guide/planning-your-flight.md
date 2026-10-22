@@ -541,15 +541,15 @@ Before it switches anything that could stop an engine, a flow checks that it is 
 
 On the L-1011 TriStar the First Officer also does the flight engineer's work. Power Up runs the standby power check. Preflight starts the APU, then runs the other tests whose result BA can read: the engine and APU fire test, the wheel well fire test and the hydraulic check. If the APU master does not come on, Preflight stops at once: *"Preflight flow stopped. Unable to complete: APU master: on"*. Each test says one thing when it ends: a failure always, naming the first light or pressure that was wrong, for example *"Hydraulic check: system B pressure did not reach 2,000 psi"*, and a pass, such as *"Engine and APU fire test: pass"*, only with **Speak flow progress** on. A failed test never stops the flow, and the First Officer always puts the test switches and pumps back.
 
-The Engine Start flow starts engines 2, 1 and 3 on APU air, the First Officer working each start for you: the ground start switch, fuel and ignition at 20 percent N3, the ground start switch released by the aircraft, and a stable idle. If you stop the flow before an engine's fuel is on, the First Officer releases that engine's ground start switch; it never turns the fuel off. If it cannot release it, you hear *"Engine 2 ground start switch still on: release it."* right after the flow says it stopped. After Start sets the take-off flaps from the tablet's Takeoff performance page once you have pressed **Set bugs and EPR** there, or else from your SimBrief plan; with neither, it asks you to set them. It reminds you to set the take-off stabilizer trim, naming the tablet's figure once there is one, and shuts the APU down once all three engine generators are on line.
+The Engine Start flow starts engines 2, 1 and 3 on APU air, the First Officer working each start for you: the ground start switch, fuel and ignition at 20 percent N3, the ground start switch released by the aircraft, and a stable idle. If you stop the flow before an engine's fuel is on, the First Officer releases that engine's ground start switch; it never turns the fuel off. If it cannot release it, you hear *"Engine 2 ground start switch still on: release it."* right after the flow says it stopped or was cancelled. After Start sets the take-off flaps from the tablet's Takeoff performance page once you have pressed **Set bugs and EPR** there, or else from your SimBrief plan; with neither, it asks you to set them. It reminds you to set the take-off stabilizer trim, naming the tablet's figure once there is one, and shuts the APU down once all three engine generators are on line.
 
-Some TriStar steps are done only at the right moment, by the flow and by a tick alike. Ticked too early, these checklist lines are refused, saying why:
+Some TriStar steps are done only at the right moment, by the flow and by a tick alike. Ticked too early, their checklist lines are refused, saying why. Among them:
 
 - After Takeoff's gear line, until the aircraft reads in the air: *"Gear left down: on the ground."*
 - After Landing's anti-skid, air data heat, stabilizer trim, speed brake and flaps lines, until the aircraft reads on the ground.
 - Parking's fuel and ignition line, until the aircraft reads on the ground with the APU generator or external power on line, so the aircraft never drops to its battery.
 - The APU master lines of After Start and Shutdown, until the APU reads stopped.
-- Shutdown's battery line, while the APU still turns.
+- Shutdown's battery line, while the APU still turns or the aircraft is not parked.
 
 The Parking flow also turns the anti-collision lights off only once the engines have stopped; that is the flow's order, and their checklist line is not refused.
 

@@ -211,8 +211,9 @@ public partial class IniL1011Definition
     }
 
     /// <summary>What follows a lever write that was sent, for a panel pick and the First Officer alike:
-    /// the gear lever is read again once its gauge has settled. The lever's own gauge refuses "up" on the
-    /// ground: the write lands and nothing moves, so no delivery comes to put an open panel's combo back.</summary>
+    /// the gear lever is read again once its gauge has settled. The gauge's script refuses gear up on the
+    /// ground, but no live check has seen it: such a write would land and move nothing, so no delivery would
+    /// come to put an open panel's combo back.</summary>
     private void AfterLeverSent(string key, SimConnectManager sim)
     {
         if (key == L1011Levers.GearLeverKey)

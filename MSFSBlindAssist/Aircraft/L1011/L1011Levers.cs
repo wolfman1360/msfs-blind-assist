@@ -87,13 +87,14 @@ public static class L1011Levers
     public static double GearDescriptionKey(double value) => value < 25 ? 0 : value > 75 ? 100 : 50;
 
     /// <summary>Down and up go through the stock gear events, which the HANDLING gauge intercepts
-    /// and turns into its own lever logic (and refuses "up" on the ground); off writes the lever.</summary>
+    /// and turns into its own lever logic (the gauge's script refuses gear up on the ground, but no live
+    /// check has seen it); off writes the lever.</summary>
     public static string GearRpn(double target) =>
         target < 25 ? "(>K:GEAR_DOWN)" : target > 75 ? "(>K:GEAR_UP)" : "50 (>L:LEVER_LANDING_GEAR)";
 
-    /// <summary>How long after a gear-lever write the lever is read again, so the combo follows a
-    /// refusal by the aircraft's own gauge ("up" on the ground): the settle every Set row's re-read
-    /// waits (<see cref="L1011WritePlan.ReReadSettleMs"/>).</summary>
+    /// <summary>How long after a gear-lever write the lever is read again, so the combo follows any
+    /// refusal by the aircraft's own gauge (its script refuses "up" on the ground, though no live check
+    /// has seen it): the settle every Set row's re-read waits (<see cref="L1011WritePlan.ReReadSettleMs"/>).</summary>
     public const int GearSettleMs = L1011WritePlan.ReReadSettleMs;
 
     // ---- Speed brake, ground spoilers, parking brake --------------------------------------

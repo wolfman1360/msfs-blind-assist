@@ -577,6 +577,43 @@ public class FlowManagerCancelAndVerifyTests
         Assert.Equal(1, h.Executor.NoticeCalls);
     }
 
+    // A failure always speaks (FO-26): the notice is no progress line, so "Speak flow progress" off keeps it.
+    [Fact]
+    public async Task A_stopped_runs_notice_is_spoken_with_flow_progress_off()
+    {
+        var h = new Harness();
+        h.Flows.SpeakProgress = false;
+        h.Executor.Notice = Notice;
+
+        string end = await EndPartWayAsync(h, "stop-policy failure");
+
+        Assert.Equal(new[] { end, Notice }, h.Speech.All.TakeLast(2));
+    }
+
+    // The speech capture records every entry point in one list, so it sees the order but not HOW the notice is spoken.
+    // Pinned on the source text, as FO-4's "flow complete": QUEUED (Announce), never AnnounceImmediate, which would cut
+    // off the end sentence it follows (or be cut off itself), and never AnnounceProgress, which "Speak flow progress"
+    // silences; and taken on each of the three part-way ends.
+    [Fact]
+    public void FlowManager_StoppedRunNotice_IsQueuedAndNeverAProgressLine()
+    {
+        string source = System.IO.File.ReadAllText(FlowManagerSourcePath());
+        int start = source.IndexOf("private void AnnounceStoppedRunNotice(", StringComparison.Ordinal);
+        Assert.True(start >= 0, "AnnounceStoppedRunNotice not found");
+        int end = source.IndexOf("\n    }", start, StringComparison.Ordinal);
+        string body = source[start..end];
+
+        Assert.Contains("_announcer.Announce(notice);", body);
+        Assert.DoesNotContain("AnnounceImmediate", body);
+        Assert.DoesNotContain("AnnounceProgress", body);
+        Assert.Equal(3, System.Text.RegularExpressions.Regex.Matches(source, @"\bAnnounceStoppedRunNotice\(flow\);").Count);
+    }
+
+    private static string FlowManagerSourcePath([System.Runtime.CompilerServices.CallerFilePath] string thisTestFilePath = "") =>
+        System.IO.Path.GetFullPath(System.IO.Path.Combine(
+            System.IO.Path.GetDirectoryName(thisTestFilePath)!,
+            "..", "..", "..", "MSFSBlindAssist", "FirstOfficer", "FlowManager.cs"));
+
     // A run that completes leaves nothing to say, and never asks.
     [Fact]
     public async Task A_completed_flow_never_asks_for_a_notice()

@@ -406,8 +406,8 @@ public class IniL1011FirstOfficerEntryTests
     [Fact]
     public async Task A_gear_lever_write_is_read_again_after_the_settle_as_a_panel_pick_is()
     {
-        // The lever's own gauge refuses "up" on the ground: the write lands, nothing moves, and no
-        // delivery comes to put an open panel's combo back.
+        // The gauge's script refuses gear up on the ground, but no live check has seen it: such a write
+        // would land, move nothing, and no delivery would come to put an open panel's combo back.
         await _def.FoSetAsync(L1011Levers.GearLeverKey, 100);
 
         Assert.Equal(new[] { L1011Levers.GearLeverKey }, _reReads);

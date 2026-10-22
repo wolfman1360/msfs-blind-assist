@@ -596,7 +596,6 @@ public class L1011FoEngineStartExecutorTests
     [InlineData("click never reads off")]
     public async Task A_stop_clean_up_that_cannot_release_the_ground_start_leaves_one_notice(string why)
     {
-        _exec.AttachFlowProgressSpeech(() => false);
         using var stop = new CancellationTokenSource();
         Assert.True(await _exec.ExecuteStepAsync(Flow(GroundStart(2)), stop.Token));
         switch (why)
@@ -628,7 +627,6 @@ public class L1011FoEngineStartExecutorTests
     [InlineData("fuel on")]
     public async Task A_stop_clean_up_leaves_no_notice_when_the_ground_start_is_released_or_needs_no_release(string how)
     {
-        _exec.AttachFlowProgressSpeech(() => true);
         using var stop = new CancellationTokenSource();
         Assert.True(await _exec.ExecuteStepAsync(Flow(GroundStart(2)), stop.Token));
         if (how == "already off")

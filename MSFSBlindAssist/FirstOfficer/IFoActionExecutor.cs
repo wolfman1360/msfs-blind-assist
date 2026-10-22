@@ -41,7 +41,10 @@ public interface IFoActionExecutor
     /// </summary>
     Task OnFlowStoppedAsync() => Task.CompletedTask;
 
-    /// <summary>What a stopped run left that the pilot must hear, taken once (then cleared) and queued after the run's own end sentence; null for nothing. Default: null.</summary>
+    /// <summary>
+    /// What a stopped run left that the pilot must hear, taken once (then cleared) and queued after
+    /// the run's own end sentence; null for nothing. Default: null.
+    /// </summary>
     string? TakeStoppedRunNotice() => null;
 
     /// <summary>

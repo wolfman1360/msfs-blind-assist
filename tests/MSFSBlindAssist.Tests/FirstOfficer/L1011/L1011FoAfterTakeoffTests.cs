@@ -297,8 +297,8 @@ public class L1011FoAfterTakeoffTests
     private const string GearText = "Gear left down: on the ground.";
 
     /// <summary>Gear up goes ahead only with the aircraft read airborne: the step and its tick are left alone, aloud, on
-    /// the ground or with the on-ground flag unread, and nothing is written. Whether the aircraft itself refuses gear up on
-    /// the ground has not been seen live, so the First Officer never relies on it.</summary>
+    /// the ground or with the on-ground flag unread, and nothing is written. The gauge's script refuses gear up on the
+    /// ground, but no live check has seen it, so the First Officer never relies on it.</summary>
     [Fact]
     public void Gear_up_is_left_alone_unless_read_airborne()
     {
