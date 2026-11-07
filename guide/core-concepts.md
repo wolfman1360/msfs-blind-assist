@@ -36,7 +36,7 @@ You start the simulator with the aircraft parked at a stand. BA announces *"Conn
 
 You plan first. If you use SimBrief, Output Shift+B opens the SimBrief briefing, and the [SimBrief](planning-your-flight.md#simbrief) section explains how to load your plan and hear an AI route briefing. The [Flight Planning Window](planning-your-flight.md#flight-planning-efb) (Output Shift+E) lets you look at your route, SID, STAR and approach, and look up runways and frequencies. You check the weather with the METAR report (Output Shift+M) and the [Weather Radar](weather.md#weather-radar) (Output Shift+R).
 
-Then you set up the aircraft: its panels in the main window, its flight computer (Input Shift+M opens the MCDU, CDU or FMC on every aircraft), and its own tablet through [Aircraft EFBs](planning-your-flight.md#aircraft-efb) (Input Shift+T on most aircraft) for fuel, payload and takeoff performance. The [First Officer](planning-your-flight.md#checklists) (Output Shift+C on most aircraft) runs the flows with you and keeps you from missing a step on the checklists. If you use GSX for ground services, the accessible GSX window is covered in [Gates, GSX and Docking](gates-gsx-and-docking.md).
+Then you set up the aircraft: its panels in the main window, its flight computer (Input Shift+M opens the MCDU, CDU or FMC on every aircraft), and its own tablet through [Aircraft EFBs](planning-your-flight.md#aircraft-efb) (Input Shift+T on most aircraft) for fuel, payload and takeoff performance. The [First Officer](first-officer.md) (Output Shift+C on most aircraft) runs the flows with you and keeps you from missing a step on the checklists. If you use GSX for ground services, the accessible GSX window is covered in [Gates, GSX and Docking](gates-gsx-and-docking.md).
 
 ### Pushback and taxi out {#pushback-and-taxi-out}
 
@@ -156,7 +156,7 @@ Each time you open the Monitor Manager it starts fresh, with an empty search and
 
 <div class="callout tip" role="note" markdown="1">
 
-**Tip:** On the aircraft where BA calls the take-off speeds (the FlyByWire Airbuses, the iFly 737 MAX8 and the MD-11), V1, Rotate and V2 each have their own row (V1, VR, V2), so you can keep some and mute others. The FlyByWire aircraft also have a separate quick toggle for their ECAM call-outs, Output Ctrl+E. See your aircraft's chapter.
+**Tip:** On the aircraft where BA calls the take-off speeds (the FlyByWire Airbuses, the Fenix A320, the iFly 737 MAX8 and the MD-11), V1, Rotate and V2 each have their own row (V1, VR, V2; on the Fenix, "MCDU V1 Speed", "MCDU VR Speed" and "MCDU V2 Speed"), so you can keep some and mute others. The FlyByWire aircraft also have a separate quick toggle for their ECAM call-outs, Output Ctrl+E. See your aircraft's chapter.
 
 </div>
 
@@ -230,10 +230,10 @@ The local time is worked out from where the aircraft is on the globe, including 
 
 | Key | What it reads |
 |---|---|
-| Output D | Distance to destination, from the aircraft's FMS (not on the Fenix or the MD-11) |
-| Output Shift+D | Distance and time to top of descent, once the FMS has worked it out in flight (not on the Fenix or the MD-11) |
+| Output D | Distance to destination, from the aircraft's FMS (not on the MD-11; on the Fenix, worked out from its flight plan) |
+| Output Shift+D | Distance and time to top of descent, once the FMS has worked it out in flight (not on the MD-11; on the Fenix, worked out from its flight plan) |
 | Output N | NAV 1 and NAV 2: frequency, station ident, localiser, glideslope and DME |
-| Output Ctrl+W | The active waypoint on the navigation display: name, distance and bearing (FlyByWire aircraft) |
+| Output Ctrl+W | The active waypoint on the navigation display: name, distance and bearing (FlyByWire aircraft and the Fenix) |
 | Output C | Nearest city or town, or the water you are over (see [Location Info and Nearest City](#location-info)) |
 
 </div>
@@ -245,6 +245,7 @@ Top of descent is spoken like *"145 miles to top of descent: 00:16:58"*. Once yo
 The Shift+number keys read the speeds your aircraft cares about. What they mean depends on the aircraft:
 
 - **Airbus (FlyByWire A320, A330, A380):** Shift+1 Green Dot, Shift+2 S speed, Shift+3 F speed, Shift+4 VLS, Shift+5 VS (stall), Shift+6 VFE Next.
+- **Fenix A320:** the same keys, from its PFD's speed tape, with Shift+5 alpha prot, or VSW while the tape draws one.
 - **PMDG 737, PMDG 777 and iFly 737 MAX:** the flap manoeuvring speeds, from flaps up on Shift+1 upward. The exact flap settings differ between types.
 - **MD-11:** Shift+1 slat retraction speed, Shift+2 flap retraction speed.
 
@@ -335,7 +336,7 @@ You choose between two AI services: **Google Gemini** or **Anthropic Claude**. Y
 ### What it can read {#what-it-can-read}
 
 - **Alt+D, scene description:** on every aircraft, Output Alt+D describes the outside scene: what the simulator window is showing.
-- **Cockpit displays:** on the aircraft whose screens cannot be read as text, Output Alt+P, Alt+N, Alt+E, Alt+S and Alt+I read the PFD, the navigation display, the engine/warning display, the lower or system display, and the standby instruments. Which keys exist depends on the aircraft: the Fenix A320, PMDG 737 and 777, iFly 737 MAX, HorizonSim 787 and TFDi MD-11 have AI display reads. The FlyByWire aircraft read their displays as text instead, from the Panels list, and need no AI. See your aircraft's chapter for exactly what each key reads.
+- **Cockpit displays:** on the aircraft whose screens cannot be read as text, Output Alt+P, Alt+N, Alt+E, Alt+S and Alt+I read the PFD, the navigation display, the engine/warning display, the lower or system display, and the standby instruments. Which keys exist depends on the aircraft: the PMDG 737 and 777, iFly 737 MAX, HorizonSim 787 and TFDi MD-11 have AI display reads. The Fenix A320 opens live windows of its displays and uses the AI read only when it cannot read a display directly. The FlyByWire aircraft read their displays as text instead, from the Panels list, and need no AI. See your aircraft's chapter for exactly what each key reads.
 
 The AI is also used for the route briefing in the flight planning window; see [The Flight Planning Window](planning-your-flight.md#flight-planning-efb).
 
@@ -468,7 +469,7 @@ The ranges are capped at 310 miles (500 kilometres), and the Coast Range at 1,00
 <nav class="guide-nav" aria-label="Guide chapters" markdown="1">
 
 - [Previous chapter: Getting Started](getting-started.md)
-- [Next chapter: Planning Your Flight](planning-your-flight.md)
+- [Next chapter: The First Officer and Checklists](first-officer.md)
 - [Guide contents](index.md)
 
 </nav>
